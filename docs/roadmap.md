@@ -59,7 +59,7 @@ Kapsamın tamamı ve maddelerin açıklamaları: [proje dokümanı, Ek G](proje-
 - [x] P1-34 US-25 Duyurular
 
 ### Sürüm hazırlığı
-- [ ] P1-35 Tenant izolasyon test paketi
+- [x] P1-35 Tenant izolasyon test paketi
 - [ ] P1-36 Uçtan uca testler (Playwright)
 - [ ] P1-37 MVP güvenlik kontrol listesi
 - [ ] P1-38 Demo verisi seed betiği
