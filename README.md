@@ -17,7 +17,7 @@ Spor okulları için çok kiracılı (multi-tenant) yönetim platformu: okullar,
 
 ```bash
 bash scripts/setup-env.sh          # .env'i rastgele şifrelerle oluşturur (bir kez)
-docker compose up -d --wait        # PostgreSQL ve Seq
+docker compose up -d --wait        # PostgreSQL, Valkey (cache) ve Seq
 dotnet tool restore
 bash scripts/ef.sh database update # migration'ları migrator rolüyle uygular
 bash scripts/run-api.sh            # API: http://127.0.0.1:5080
@@ -33,6 +33,17 @@ npm start                          # http://localhost:4200 (/api proxy'si API'ye
 
 - Sağlık kontrolleri: `/health/live`, `/health/ready`
 - Loglar (Seq): http://127.0.0.1:5341
+
+### Cache (P2-F7)
+
+Branş ve tesis listeleri, okulun saat dilimi ve dashboard `HybridCache` ile cache'lenir (DEC-310 – DEC-316). L2 olarak Valkey kullanılır: `run-api.sh`, `.env`'de `VALKEY_PASSWORD` varsa `ConnectionStrings__Cache`'i `127.0.0.1:${VALKEY_HOST_PORT:-56379}` için ayarlar. `ConnectionStrings:Cache` yoksa (ör. testlerde) sadece bellek içi cache kullanılır; Valkey kapalıysa API veritabanından çalışmaya devam eder.
+
+`.env` dosyanız bu özellikten önce oluşturulduysa `docker compose up` eksik `VALKEY_PASSWORD` yüzünden durur. `.env`'e iki satır ekleyin (değeri kendiniz üretin, ör. `openssl rand -hex 24`):
+
+```text
+VALKEY_PASSWORD=<rastgele harf ve rakamlar>
+VALKEY_HOST_PORT=56379
+```
 
 ### Demo verisi (P1-38)
 

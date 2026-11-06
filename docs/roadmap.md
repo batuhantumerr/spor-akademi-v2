@@ -65,3 +65,14 @@ Kapsamın tamamı ve maddelerin açıklamaları: [proje dokümanı, Ek G](proje-
 - [x] P1-38 Demo verisi seed betiği
 - [x] P1-39 CHANGELOG (etiket sahipte)
 - [ ] P1-40 Faz 1 geçişi (sahip)
+
+## Faz 2 — İş mantığı derinliği (`v0.2.0`)
+
+- [ ] P2-F1 Online aidat ödemesi (iyzico sandbox, webhook'lar, idempotency)
+- [ ] P2-F2 Hangfire ile arka plan işleri ve iş paneli
+- [ ] P2-F3 Transactional outbox
+- [ ] P2-F4 E-posta bildirimleri
+- [ ] P2-F5 Otomatik anonimleştirme işi
+- [ ] P2-F6 Belge yükleme (MinIO)
+- [x] P2-F7 Redis ve `HybridCache` ile cache (Valkey; DEC-310 – DEC-316)
+- [ ] P2-F8 Aidat kuralları (kardeş indirimi, dönem ortası değişiklik)

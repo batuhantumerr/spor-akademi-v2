@@ -27,5 +27,8 @@ Bu dosya [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) biçimini ve [
 - **Demo verisi:** `bash scripts/seed-demo.sh` iki sentetik okul ve ~92 günlük geçmiş üretir; yalnızca yerel veritabanında ve Production dışı ortamda çalışır.
 - **Güvenlik:** MVP güvenlik kontrol listesi ve otomatik kontroller (gitleaks taraması, `Cache-Control: no-store`, giriş/refresh/şifre değiştirme için IP + yol başına dakikada 10 istek sınırı, log gizliliği, CORS'un kapalı olduğunu doğrulayan test), Trivy imaj taraması. CSP/güvenlik başlıkları (NFR-SEC-13) ve HTTPS/HSTS (NFR-SEC-02) MVP'de yoktur; Faz 4 / Deploy bloğunda yapılacak.
 
+#### Faz 2 — İş mantığı derinliği
+- **Cache (P2-F7):** okuma ağırlıklı ve seyrek değişen okumalar (branş ve tesis listeleri, okulun saat dilimi, School Admin dashboard'u) `HybridCache` ile cache'lenir: L1 bellekte, L2 isteğe bağlı olarak Valkey'de (`ConnectionStrings:Cache`; yoksa sadece bellek). Her anahtar ve etiket okul ID'sini taşır, yazmalar commit'ten sonra otomatik invalidation yapar, Valkey çökerse istekler veritabanından devam eder. Docker Compose'a `valkey` servisi eklendi; mevcut `.env` dosyalarına `VALKEY_PASSWORD` eklenmeli (DEC-310 – DEC-316).
+
 ### Security
 - Admin imajında zlib ve musl güvenlik yükseltmeleri (DEC-104, DEC-202; öneri aşamasında).
