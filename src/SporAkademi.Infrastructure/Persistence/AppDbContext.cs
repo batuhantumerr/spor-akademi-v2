@@ -34,6 +34,7 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options, ICurren
         configurationBuilder.ComplexProperties<BirthYearRange>();
         configurationBuilder.ComplexProperties<TimeRange>();
         configurationBuilder.ComplexProperties<ScheduleSlot>();
+        configurationBuilder.ComplexProperties<Money>();
 
         // Every strongly typed id is stored as its Guid; every domain enum as its name.
         foreach (var type in typeof(IEntityId<>).Assembly.GetTypes())

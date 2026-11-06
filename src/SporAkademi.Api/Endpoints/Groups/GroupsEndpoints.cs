@@ -14,6 +14,9 @@ internal sealed record UpdateGroupRequest(string Name, BirthYearRangeDto BirthYe
 
 internal sealed record ReplaceScheduleRequest(IReadOnlyList<SlotInput> Slots, uint Version);
 
+/// <summary>US-22: <c>effectiveFrom</c> is <c>YYYY-MM</c>; the amount is money as text (DEC-066).</summary>
+internal sealed record DefineFeeRequest(string EffectiveFrom, MoneyDto Amount);
+
 /// <summary>A non-blocking notice in a successful response (appendix D §1.8); the client builds the text from the code and args.</summary>
 internal sealed record WarningDto(string Code, Guid? RelatedId, IReadOnlyDictionary<string, object?> Args)
 {
@@ -34,6 +37,8 @@ internal static class GroupsEndpoints
         admin.MapPut("/{id:guid}", UpdateGroup).Produces<GroupDto>().ProducesProblems(400, 404, 409, 422);
         admin.MapPut("/{id:guid}/schedule", ReplaceSchedule).Produces<ScheduleResponse>().ProducesProblems(400, 404, 409, 422);
         admin.MapPost("/{id:guid}/archive", ArchiveGroup).Produces<GroupDto>().ProducesProblems(404, 409, 422);
+        admin.MapGet("/{id:guid}/fees", ListFees).Produces<IReadOnlyList<GroupFeeDto>>().ProducesProblems(404);
+        admin.MapPost("/{id:guid}/fees", DefineFee).Produces<IReadOnlyList<GroupFeeDto>>(StatusCodes.Status201Created).ProducesProblems(400, 404, 409, 422);
 
         // A coach reaches only own active groups here; any other id is 404 (US-12).
         var shared = app.MapGroup("/api/v1/groups").WithTags("Groups").RequireRole(Role.SchoolAdmin, Role.Coach);
@@ -117,6 +122,27 @@ internal static class GroupsEndpoints
 
         return TypedResults.Ok(new ScheduleResponse(
             group.Value.Id, group.Value.Slots, group.Value.Version, [.. replaced.Value.Select(WarningDto.From)]));
+    }
+
+    private static async Task<IResult> ListFees(Guid id, IQueryHandler<ListGroupFeesQuery, IReadOnlyList<GroupFeeDto>> reader, CancellationToken cancellationToken) =>
+        (await reader.Handle(new ListGroupFeesQuery(GroupId.From(id)), cancellationToken)).OkOrProblem();
+
+    /// <summary>US-22: answers with the whole fee history, so the client sees which periods the new fee covers.</summary>
+    private static async Task<IResult> DefineFee(
+        Guid id,
+        DefineFeeRequest request,
+        ICommandHandler<DefineGroupFeeCommand, Unit> handler,
+        IQueryHandler<ListGroupFeesQuery, IReadOnlyList<GroupFeeDto>> reader,
+        CancellationToken cancellationToken)
+    {
+        var defined = await handler.Handle(new DefineGroupFeeCommand(GroupId.From(id), request.EffectiveFrom, request.Amount), cancellationToken);
+        if (defined.IsFailure)
+        {
+            return ProblemResults.Problem(defined.Error);
+        }
+
+        var fees = await reader.Handle(new ListGroupFeesQuery(GroupId.From(id)), cancellationToken);
+        return TypedResults.Created($"/api/v1/groups/{id}/fees", fees.Value);
     }
 
     private static async Task<IResult> ArchiveGroup(
