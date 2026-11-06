@@ -17,6 +17,8 @@ import { formatPhone } from '../../core/format/format';
 import { errorMessages, ui } from '../../core/i18n/tr';
 import { focusFirstInvalid } from '../../shared/forms/focus-first-invalid';
 import { ServerFieldErrors } from '../../shared/forms/server-field-errors';
+import { ConflictState } from '../../shared/data/conflict-state';
+import { ConflictNoticeComponent } from '../../shared/ui/conflict-notice.component';
 import { optionalTurkishPhone } from '../../shared/forms/validators';
 
 export const COACH_FORM_TITLE_ID = 'coach-form-title';
@@ -34,11 +36,14 @@ const ids: Record<Field, string> = {
   phone: 'c-phone',
 };
 
-/** Create (US-04) or edit a coach. Edits send the row version; a conflict reloads the coach. */
+/**
+ * Create (US-04) or edit a coach. Edits send the row version; on a conflict the typed values stay
+ * and the user chooses between applying them to the fresh version or taking the server's.
+ */
 @Component({
   selector: 'app-coach-form-dialog',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [ReactiveFormsModule],
+  imports: [ReactiveFormsModule, ConflictNoticeComponent],
   template: `
     <form
       class="max-h-[calc(100dvh-2rem)] w-[min(32rem,calc(100vw-2rem))] overflow-y-auto rounded-lg border border-border bg-background p-6 shadow-lg"
@@ -50,16 +55,23 @@ const ids: Record<Field, string> = {
         {{ coach() ? text.edit : text.add }}
       </h2>
       @if (error()) {
-        <div
+        <p
           role="alert"
-          class="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive"
+          class="mt-3 rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive"
         >
-          <span>{{ error() }}</span>
-          @if (blocked() === 'reloadFailed') {
-            <button type="button" class="btn btn-secondary btn-sm" (click)="retryReload()">
-              {{ common.retry }}
-            </button>
-          }
+          {{ error() }}
+        </p>
+      }
+      @if (conflictState.open()) {
+        <div class="mt-3">
+          <app-conflict-notice
+            [ready]="conflictState.fresh() !== null"
+            [loadError]="conflictState.error()"
+            [busy]="saving()"
+            (applyMine)="applyMine()"
+            (loadServer)="loadServer()"
+            (retry)="loadFresh()"
+          />
         </div>
       }
       <div class="mt-4 grid gap-4 sm:grid-cols-2">
@@ -150,7 +162,11 @@ const ids: Record<Field, string> = {
         <button type="button" class="btn btn-secondary" (click)="ref.close()">
           {{ actions.cancel }}
         </button>
-        <button type="submit" class="btn btn-primary" [disabled]="saving() || blocked() !== null">
+        <button
+          type="submit"
+          class="btn btn-primary"
+          [disabled]="saving() || conflictState.open() || inactive()"
+        >
           {{ coach() ? actions.save : text.add }}
         </button>
       </div>
@@ -170,12 +186,13 @@ export class CoachFormDialog {
   protected readonly titleId = COACH_FORM_TITLE_ID;
   protected readonly saving = signal(false);
   protected readonly error = signal<string | null>(null);
-  protected readonly common = ui.common;
-  /**
-   * Saving is blocked after a conflict when the fresh copy could not be loaded (a retry would
-   * only hit 409 again) or when the coach has been deactivated meanwhile.
-   */
-  protected readonly blocked = signal<'reloadFailed' | 'inactive' | null>(null);
+  /** After a 409 the form keeps the typed values; the server's version loads aside. */
+  protected readonly conflictState = new ConflictState<CoachDto>(
+    () => this.fetchFresh(),
+    () => this.text.reloadFailed,
+  );
+  /** The coach was deactivated meanwhile: nothing can be saved any more. */
+  protected readonly inactive = signal(false);
   private readonly server = new ServerFieldErrors<Field>(
     { firstName: 'firstName', lastName: 'lastName', email: 'email', phone: 'phone' },
     { 'User.EmailTaken': 'email' },
@@ -231,7 +248,7 @@ export class CoachFormDialog {
   }
 
   protected async save(): Promise<void> {
-    if (this.saving() || this.blocked()) {
+    if (this.saving() || this.conflictState.open() || this.inactive()) {
       return;
     }
     this.trimEmail();
@@ -267,50 +284,60 @@ export class CoachFormDialog {
       }
     } catch (err) {
       const problem = toProblem(err);
+      this.saving.set(false);
       if (problem.code === 'Concurrency.Conflict' && coach) {
-        await this.reload(coach.id);
-      } else {
-        this.server.apply(problem);
-        this.error.set(problemMessage(problem));
-        this.focusFirstInvalid();
-      }
-      this.saving.set(false);
-    }
-  }
-
-  protected async retryReload(): Promise<void> {
-    const coach = this.coach();
-    if (coach && !this.saving()) {
-      this.saving.set(true);
-      await this.reload(coach.id);
-      this.saving.set(false);
-    }
-  }
-
-  /** Someone else saved first: show their version so the next save carries the fresh version. */
-  private async reload(id: string): Promise<void> {
-    try {
-      const fresh = await this.api.invoke(apiV1CoachesIdGet, { id });
-      this.coach.set(fresh);
-      this.fill(fresh);
-      if (fresh.status !== 'Active') {
-        this.block('inactive');
-        this.error.set(this.text.inactiveNow);
+        await this.conflictState.start();
+        this.blockIfInactive();
         return;
       }
-      this.blocked.set(null);
-      this.form.enable();
-      this.form.controls.email.disable();
-      this.error.set(ui.common.conflictReloaded);
-    } catch {
-      this.block('reloadFailed');
-      this.error.set(this.text.reloadFailed);
+      this.server.apply(problem);
+      this.error.set(problemMessage(problem));
+      this.focusFirstInvalid();
     }
   }
 
-  private block(reason: 'reloadFailed' | 'inactive'): void {
-    this.blocked.set(reason);
-    this.form.disable();
+  /** Re-send the typed values on top of the fresh version. */
+  protected async applyMine(): Promise<void> {
+    const fresh = this.conflictState.fresh();
+    if (!fresh || this.saving()) {
+      return;
+    }
+    this.coach.set(fresh);
+    this.conflictState.close();
+    await this.save();
+  }
+
+  /** Discard the typed values and show the server's version. */
+  protected loadServer(): void {
+    const fresh = this.conflictState.fresh();
+    if (!fresh) {
+      return;
+    }
+    this.coach.set(fresh);
+    this.fill(fresh);
+    this.conflictState.close();
+  }
+
+  /** Retry after a failed load of the server version. */
+  protected async loadFresh(): Promise<void> {
+    await this.conflictState.load();
+    this.blockIfInactive();
+  }
+
+  /** A coach deactivated meanwhile cannot be edited: show it and block saving. */
+  private blockIfInactive(): void {
+    const fresh = this.conflictState.fresh();
+    if (fresh && fresh.status !== 'Active') {
+      this.conflictState.close();
+      this.coach.set(fresh);
+      this.inactive.set(true);
+      this.form.disable();
+      this.error.set(this.text.inactiveNow);
+    }
+  }
+
+  private fetchFresh(): Promise<CoachDto> {
+    return this.api.invoke(apiV1CoachesIdGet, { id: this.coach()!.id });
   }
 
   private fill(coach: CoachDto | null): void {

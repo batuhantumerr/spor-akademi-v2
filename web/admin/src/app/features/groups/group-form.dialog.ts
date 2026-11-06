@@ -23,6 +23,7 @@ import { problemMessage, toProblem } from '../../core/api/problem';
 import { errorMessages, interpolate, ui } from '../../core/i18n/tr';
 import { focusFirstInvalid } from '../../shared/forms/focus-first-invalid';
 import { ServerFieldErrors } from '../../shared/forms/server-field-errors';
+import { ConflictState } from '../../shared/data/conflict-state';
 import { ConflictNoticeComponent } from '../../shared/ui/conflict-notice.component';
 import { GroupLookups } from './group-lookups';
 
@@ -77,11 +78,11 @@ function birthYearOrder(group: AbstractControl): ValidationErrors | null {
           {{ error() }}
         </p>
       }
-      @if (conflict()) {
+      @if (conflictState.open()) {
         <div class="mt-3">
           <app-conflict-notice
-            [ready]="fresh() !== null"
-            [loadError]="freshError()"
+            [ready]="conflictState.fresh() !== null"
+            [loadError]="conflictState.error()"
             [busy]="saving()"
             (applyMine)="applyMine()"
             (loadServer)="loadServer()"
@@ -267,9 +268,7 @@ export class GroupFormDialog {
   protected readonly saving = signal(false);
   protected readonly error = signal<string | null>(null);
   /** After a 409 the form keeps the user's values; the server's version loads aside. */
-  protected readonly conflict = signal(false);
-  protected readonly fresh = signal<GroupDto | null>(null);
-  protected readonly freshError = signal<string | null>(null);
+  protected readonly conflictState = new ConflictState<GroupDto>(() => this.fetchFresh());
 
   /** Active facilities, plus the group's current one if it has been archived meanwhile. */
   protected readonly facilities = computed(() =>
@@ -401,9 +400,7 @@ export class GroupFormDialog {
       const problem = toProblem(err);
       if (problem.code === 'Concurrency.Conflict' && group) {
         // Keep what the user typed; load the server's version next to it and let them choose.
-        this.conflict.set(true);
-        this.fresh.set(null);
-        await this.loadFresh();
+        await this.conflictState.start();
       } else {
         this.server.apply(problem);
         this.error.set(problemMessage(problem));
@@ -415,43 +412,33 @@ export class GroupFormDialog {
 
   /** Re-send the user's values on top of the fresh version. */
   protected async applyMine(): Promise<void> {
-    const fresh = this.fresh();
+    const fresh = this.conflictState.fresh();
     if (!fresh || this.saving()) {
       return;
     }
     this.group.set(fresh);
-    this.clearConflict();
+    this.conflictState.close();
     await this.save();
   }
 
   /** Discard the user's values and show the server's version. */
   protected loadServer(): void {
-    const fresh = this.fresh();
+    const fresh = this.conflictState.fresh();
     if (!fresh) {
       return;
     }
     this.group.set(fresh);
     this.fill(fresh);
-    this.clearConflict();
+    this.conflictState.close();
   }
 
-  async loadFresh(): Promise<void> {
-    const group = this.group();
-    if (!group) {
-      return;
-    }
-    this.freshError.set(null);
-    try {
-      this.fresh.set(await this.api.invoke(apiV1GroupsIdGet, { id: group.id }));
-    } catch (err) {
-      this.freshError.set(problemMessage(toProblem(err)));
-    }
+  /** Retry after a failed load of the server version. */
+  protected async loadFresh(): Promise<void> {
+    await this.conflictState.load();
   }
 
-  private clearConflict(): void {
-    this.conflict.set(false);
-    this.fresh.set(null);
-    this.freshError.set(null);
+  private fetchFresh(): Promise<GroupDto> {
+    return this.api.invoke(apiV1GroupsIdGet, { id: this.group()!.id });
   }
 
   private fill(group: GroupDto | null): void {
