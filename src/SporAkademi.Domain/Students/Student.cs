@@ -281,4 +281,5 @@ public static class StudentErrors
     public static readonly Error EmergencyContactRequired = Error.Validation("Student.EmergencyContactRequired", "The emergency contact is required.");
     public static readonly Error AlreadyLeft = Error.BusinessRule("Student.AlreadyLeft", "The student has already left.");
     public static readonly Error NotLeft = Error.BusinessRule("Student.NotLeft", "Only students who left can be reactivated.");
+    public static readonly Error InvalidLeaveDate = Error.BusinessRule("Student.InvalidLeaveDate", "The leave date is before the start of an active enrollment.");
 }
