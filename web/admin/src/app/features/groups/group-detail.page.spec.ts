@@ -78,7 +78,7 @@ describe('GroupDetailPage', () => {
 
   afterEach(() => {
     // The students section loads on its own; it has its own tests.
-    backend.match((r) => r.url.includes('/enrollments'));
+    backend.match((r) => /\/(enrollments|fees)/.test(r.url));
     backend.verify();
   });
 

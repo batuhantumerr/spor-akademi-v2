@@ -27,6 +27,7 @@ import { ConflictState } from '../../shared/data/conflict-state';
 import { ConflictNoticeComponent } from '../../shared/ui/conflict-notice.component';
 import { PageHeaderComponent } from '../../shared/ui/page-header.component';
 import { ToastService } from '../../shared/ui/toast.service';
+import { GroupFeesComponent } from '../billing/group-fees.component';
 import { GroupStudentsComponent } from '../enrollments/group-students.component';
 import { ScheduleEditorComponent } from './schedule-editor.component';
 
@@ -42,6 +43,7 @@ const UPCOMING_DAYS = 14;
     ScheduleEditorComponent,
     ConflictNoticeComponent,
     GroupStudentsComponent,
+    GroupFeesComponent,
     LucideArrowLeft,
     LucideCalendarClock,
   ],
@@ -183,6 +185,10 @@ const UPCOMING_DAYS = 14;
             </ul>
           }
         </section>
+      </div>
+
+      <div class="mt-4">
+        <app-group-fees [group]="g" />
       </div>
 
       <div class="mt-4">
