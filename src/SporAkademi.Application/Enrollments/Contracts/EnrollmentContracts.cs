@@ -11,14 +11,19 @@ public interface IEnrollmentCounts
 }
 
 /// <summary>
-/// A student's membership period in a group. The student counts as enrolled on every day from
-/// <see cref="StartDate"/> to <see cref="EndDate"/>, both inclusive (DEC-170).
+/// A student's membership period in a group, for attendance (DEC-170). The student counts as enrolled
+/// from <see cref="StartDate"/> through <see cref="LastDay"/>: the end date itself, unless the student
+/// starts another enrollment on that date (<paramref name="HandsOverOnEndDate"/>); a same-day transfer
+/// belongs to the new enrollment only, so the student is never listed in two groups on one day.
 /// </summary>
-public sealed record EnrollmentPeriod(StudentId StudentId, GroupId GroupId, DateOnly StartDate, DateOnly? EndDate)
+public sealed record EnrollmentPeriod(StudentId StudentId, GroupId GroupId, DateOnly StartDate, DateOnly? EndDate, bool HandsOverOnEndDate = false)
 {
-    public bool Covers(DateOnly date) => StartDate <= date && (EndDate is not { } end || date <= end);
+    /// <summary>The last day enrolled, or null while the enrollment is open. Before the start for a same-day hand-over.</summary>
+    public DateOnly? LastDay => EndDate is { } end && HandsOverOnEndDate ? end.AddDays(-1) : EndDate;
 
-    public bool Overlaps(DateOnly firstDay, DateOnly lastDay) => StartDate <= lastDay && (EndDate is not { } end || end >= firstDay);
+    public bool Covers(DateOnly date) => StartDate <= date && (LastDay is not { } last || date <= last);
+
+    public bool Overlaps(DateOnly firstDay, DateOnly lastDay) => StartDate <= lastDay && (LastDay is not { } last || last >= firstDay);
 }
 
 /// <summary>Read contract of the Enrollments module: who was enrolled when (attendance, US-19, US-21).</summary>

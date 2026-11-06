@@ -261,6 +261,43 @@ public static class AttendanceConflicts
     }
 }
 
+/// <summary>A session of a group on a date: a stored one (snapshot time) or one the schedule plans.</summary>
+internal sealed record SessionSlot(DateOnly Date, TimeOnly Start, TimeOnly End, Session? Stored)
+{
+    public string Key => new SessionKey(Date, Start).ToString();
+
+    /// <summary>
+    /// DEC-174: the group's sessions between the dates. Every stored session is shown with its snapshot
+    /// time and replaces one planned session of its date: the one with the same start, otherwise the
+    /// earliest one not yet replaced. So a schedule changed after recording never adds a second,
+    /// never-recorded copy of a held session, while a second training of the same day still shows.
+    /// </summary>
+    public static List<SessionSlot> Of(GroupInfo group, IEnumerable<Session> stored, DateOnly firstDay, DateOnly lastDay)
+    {
+        var storedByDate = stored
+            .Where(s => s.GroupId.Value == group.Id && s.Date >= firstDay && s.Date <= lastDay)
+            .ToLookup(s => s.Date);
+        var slots = new List<SessionSlot>();
+        foreach (var plannedOfDate in group.PlannedBetween(firstDay, lastDay).GroupBy(p => p.Date))
+        {
+            var unmatched = plannedOfDate.OrderBy(p => p.Time.Start).ToList();
+            foreach (var session in storedByDate[plannedOfDate.Key])
+            {
+                var replaced = unmatched.Find(p => p.Time.Start == session.StartTime) ?? unmatched.FirstOrDefault();
+                if (replaced is not null)
+                {
+                    unmatched.Remove(replaced);
+                }
+            }
+
+            slots.AddRange(unmatched.Select(p => new SessionSlot(p.Date, p.Time.Start, p.Time.End, null)));
+        }
+
+        slots.AddRange(storedByDate.SelectMany(s => s).Select(s => new SessionSlot(s.Date, s.StartTime, s.EndTime, s)));
+        return [.. slots.OrderBy(s => s.Date).ThenBy(s => s.Start)];
+    }
+}
+
 internal sealed class GetStudentAttendanceHandler(
     ISessionRepository sessions,
     IGroupDirectory groups,
@@ -279,52 +316,42 @@ internal sealed class GetStudentAttendanceHandler(
         }
 
         var periods = await enrollments.ListOfStudentAsync(query.StudentId, cancellationToken);
-        var recorded = await sessions.ListOfStudentAsync(query.StudentId, from, to, cancellationToken);
         if (currentUser.Role == Role.Coach)
         {
             // A coach sees the student only through own groups (US-21); without one the student is "not found".
             var own = (await groups.ListActiveIdsOfCoachAsync(currentUser.UserId!.Value, cancellationToken)).ToHashSet();
             periods = [.. periods.Where(p => own.Contains(p.GroupId))];
-            recorded = [.. recorded.Where(r => own.Contains(r.GroupId))];
             if (periods.Count == 0)
             {
                 return Result.Failure<StudentAttendanceDto>(StudentErrors.NotFound);
             }
         }
 
-        var groupInfos = await groups.GetManyAsync([.. periods.Select(p => p.GroupId.Value).Union(recorded.Select(r => r.GroupId.Value))], cancellationToken);
+        // Records can only exist in groups the student was enrolled in, so the periods name every group.
+        var groupIds = periods.Select(p => p.GroupId).Distinct().ToList();
+        var groupInfos = await groups.GetManyAsync([.. groupIds.Select(g => g.Value)], cancellationToken);
+        var stored = await sessions.ListOfGroupsAsync(groupIds, from, to, cancellationToken);
         var localNow = await tenancy.LocalNowAsync(currentUser.RequireTenant(), cancellationToken);
 
-        // Planned sessions while enrolled that have started, then recorded sessions on top (they win).
-        var rows = new Dictionary<(Guid Group, DateOnly Date, TimeOnly Start), StudentSessionDto>();
-        foreach (var period in periods.Where(p => p.Overlaps(from, to)))
+        var rows = new List<StudentSessionDto>();
+        foreach (var group in groupInfos.Values)
         {
-            if (!groupInfos.TryGetValue(period.GroupId.Value, out var group))
+            var ofGroup = periods.Where(p => p.GroupId.Value == group.Id).ToList();
+            foreach (var slot in SessionSlot.Of(group, stored, from, to))
             {
-                continue;
-            }
-
-            var first = period.StartDate > from ? period.StartDate : from;
-            var last = period.EndDate is { } end && end < to ? end : to;
-            foreach (var planned in group.PlannedBetween(first, last).Where(p => p.Date.ToDateTime(p.Time.Start) <= localNow))
-            {
-                rows[(group.Id, planned.Date, planned.Time.Start)] = Row(group, planned.Date, planned.Time.Start, planned.Time.End, null);
+                var status = slot.Stored?.Records.FirstOrDefault(r => r.StudentId == query.StudentId)?.Status;
+                var held = slot.Date.ToDateTime(slot.Start) <= localNow;
+                // A recorded status always shows; otherwise the session counts if it was held while enrolled.
+                if (status is not null || (held && ofGroup.Any(p => p.Covers(slot.Date))))
+                {
+                    rows.Add(new StudentSessionDto(
+                        group.Id, group.Name, slot.Key, slot.Date, AttendanceViews.Format(slot.Start), AttendanceViews.Format(slot.End), status));
+                }
             }
         }
 
-        foreach (var record in recorded)
-        {
-            var name = groupInfos.TryGetValue(record.GroupId.Value, out var group) ? group.Name : string.Empty;
-            rows[(record.GroupId.Value, record.Date, record.Start)] = new StudentSessionDto(
-                record.GroupId.Value, name, new SessionKey(record.Date, record.Start).ToString(), record.Date,
-                AttendanceViews.Format(record.Start), AttendanceViews.Format(record.End), record.Status);
-        }
-
-        var list = rows.OrderBy(r => r.Key.Date).ThenBy(r => r.Key.Start).ThenBy(r => r.Value.GroupName, AttendanceViews.Turkish).Select(r => r.Value).ToList();
+        var list = rows.OrderBy(r => r.Date).ThenBy(r => r.Start, StringComparer.Ordinal).ThenBy(r => r.GroupName, AttendanceViews.Turkish).ToList();
         return Result.Success(new StudentAttendanceDto(student.Id, student.FirstName, student.LastName, from, to, list, Summarize(list)));
-
-        static StudentSessionDto Row(GroupInfo group, DateOnly date, TimeOnly start, TimeOnly end, AttendanceStatus? status) =>
-            new(group.Id, group.Name, new SessionKey(date, start).ToString(), date, AttendanceViews.Format(start), AttendanceViews.Format(end), status);
     }
 
     private static AttendanceSummaryDto Summarize(List<StudentSessionDto> sessions)
@@ -354,30 +381,31 @@ internal sealed class GetGroupAttendanceMonthHandler(
         }
 
         var stored = await sessions.ListOfGroupAsync(query.GroupId, month.FirstDay, month.LastDay, cancellationToken);
-        var columns = group.PlannedBetween(month.FirstDay, month.LastDay)
-            .Select(p => (p.Date, p.Time.Start, p.Time.End))
-            .Where(p => !stored.Any(s => s.Date == p.Date && s.StartTime == p.Start))
-            .Concat(stored.Select(s => (s.Date, Start: s.StartTime, End: s.EndTime)))
-            .OrderBy(c => c.Date).ThenBy(c => c.Start)
+        var columns = SessionSlot.Of(group, stored, month.FirstDay, month.LastDay);
+        var statusesByColumn = columns
+            .Select(c => c.Stored?.Records.ToDictionary(r => r.StudentId.Value, r => r.Status) ?? [])
             .ToList();
-        var byKey = stored.ToDictionary(s => (s.Date, s.StartTime));
 
-        var enrolled = (await enrollments.ListOfGroupAsync(query.GroupId, month.FirstDay, month.LastDay, cancellationToken)).Select(p => p.StudentId.Value);
-        var recordedStudents = stored.SelectMany(s => s.Records).Select(r => r.StudentId.Value);
-        var infos = await students.GetManyAsync([.. enrolled.Union(recordedStudents)], cancellationToken);
+        var periods = (await enrollments.ListOfGroupAsync(query.GroupId, month.FirstDay, month.LastDay, cancellationToken))
+            .Where(p => p.Overlaps(month.FirstDay, month.LastDay))
+            .ToLookup(p => p.StudentId.Value);
+        var recordedStudents = statusesByColumn.SelectMany(s => s.Keys);
+        var infos = await students.GetManyAsync([.. periods.Select(p => p.Key).Union(recordedStudents)], cancellationToken);
 
         var rows = infos.Values.SortByName().Select(student => new MonthStudentRowDto(
             student.Id,
             student.FirstName,
             student.LastName,
-            [.. columns.Select(c => byKey.TryGetValue((c.Date, c.Start), out var session)
-                ? session.Records.FirstOrDefault(r => r.StudentId.Value == student.Id)?.Status
-                : null)]));
+            [
+                .. columns.Select((column, i) => new MonthCellDto(
+                    periods[student.Id].Any(p => p.Covers(column.Date)),
+                    statusesByColumn[i].TryGetValue(student.Id, out var status) ? status : null)),
+            ]));
 
         return Result.Success(new GroupAttendanceMonthDto(
             group.Id,
             month.ToString(),
-            [.. columns.Select(c => new MonthSessionDto(new SessionKey(c.Date, c.Start).ToString(), c.Date, AttendanceViews.Format(c.Start), AttendanceViews.Format(c.End), byKey.ContainsKey((c.Date, c.Start))))],
+            [.. columns.Select(c => new MonthSessionDto(c.Key, c.Date, AttendanceViews.Format(c.Start), AttendanceViews.Format(c.End), c.Stored is not null))],
             [.. rows]));
     }
 }

@@ -101,14 +101,53 @@ public sealed class AttendanceHistoryTests(DatabaseFixture database) : Attendanc
         sessions.Count.ShouldBe(12); // 4 Tuesdays + 4 Thursdays × 2
         sessions.Select(s => s.GetProperty("sessionKey").GetString()).Take(3).ShouldBe(["2027-01-05T17:00", "2027-01-07T10:00", "2027-01-07T17:00"]);
         sessions.Count(s => s.GetProperty("isRecorded").GetBoolean()).ShouldBe(3);
-        var rows = month.GetProperty("students").EnumerateArray().ToDictionary(
-            r => r.GetProperty("studentId").GetGuid(),
-            r => r.GetProperty("statuses").EnumerateArray().Select(s => s.ValueKind == JsonValueKind.Null ? null : s.GetString()).ToList());
+        var rows = CellsOf(month);
         rows.Keys.ShouldBe([Veli, Ali], ignoreOrder: false); // Çelik before Yılmaz
-        rows[Ali].Take(5).ShouldBe([null, "Present", null, "Late", "Absent"]);
-        rows[Veli].Take(5).ShouldBe([null, "Absent", null, null, null]);
+        rows[Ali].Select(c => c.Status).Take(5).ShouldBe([null, "Present", null, "Late", "Absent"]);
+        rows[Veli].Select(c => c.Status).Take(5).ShouldBe([null, "Absent", null, null, null]);
         rows[Ali].Count.ShouldBe(12);
+        rows[Ali].ShouldAllBe(c => c.Enrolled);
     }
+
+    [Fact]
+    public async Task Month_cells_show_the_days_a_student_was_not_enrolled()
+    {
+        var can = await RegisterStudentAsync("Can", "Arslan");
+        await EnrollOkAsync(can, GroupId, "2027-01-12");
+
+        var month = await Admin.GetFromJsonAsync<JsonElement>($"/api/v1/groups/{GroupId}/attendance?month=2027-01", Ct);
+
+        // Sessions: 5th, 7th (×2) before the enrollment; 12th onwards while enrolled.
+        CellsOf(month)[can].Select(c => c.Enrolled).Take(5).ShouldBe([false, false, false, true, true]);
+    }
+
+    [Fact]
+    public async Task A_schedule_change_after_recording_adds_no_phantom_session()
+    {
+        await RecordSomeAsync(); // includes this morning's 10:00 session
+        var group = await GetGroupAsync(GroupId);
+        (await PutScheduleAsync(group, null, Slot("Tuesday", "17:00", "18:00"), Slot("Thursday", "09:00", "10:00"), Slot("Thursday", "17:00", "18:00")))
+            .StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        var history = SessionsOf(await Admin.GetFromJsonAsync<JsonElement>($"/api/v1/students/{Ali}/attendance?{January}", Ct));
+        var month = await Admin.GetFromJsonAsync<JsonElement>($"/api/v1/groups/{GroupId}/attendance?month=2027-01", Ct);
+        var keys = month.GetProperty("sessions").EnumerateArray().Select(s => s.GetProperty("sessionKey").GetString()).ToList();
+
+        // Recorded days keep their recorded session in place of the moved one; the evening session stays.
+        history.Where(h => h.Key.StartsWith("2027-01-14", StringComparison.Ordinal)).ShouldBe([("2027-01-14T10:00", "Absent")]);
+        history.Where(h => h.Key.StartsWith("2027-01-07", StringComparison.Ordinal)).ShouldBe([("2027-01-07T10:00", "Present"), ("2027-01-07T17:00", null)]);
+        keys.Where(k => k!.StartsWith("2027-01-14", StringComparison.Ordinal)).ShouldBe(["2027-01-14T10:00", "2027-01-14T17:00"]);
+        keys.Where(k => k!.StartsWith("2027-01-21", StringComparison.Ordinal)).ShouldBe(["2027-01-21T09:00", "2027-01-21T17:00"]);
+        keys.Count.ShouldBe(12);
+        history.Count.ShouldBe(5);
+    }
+
+    private static Dictionary<Guid, List<(bool Enrolled, string? Status)>> CellsOf(JsonElement month) =>
+        month.GetProperty("students").EnumerateArray().ToDictionary(
+            r => r.GetProperty("studentId").GetGuid(),
+            r => r.GetProperty("cells").EnumerateArray()
+                .Select(c => (c.GetProperty("enrolled").GetBoolean(), c.GetProperty("status").ValueKind == JsonValueKind.Null ? null : c.GetProperty("status").GetString()))
+                .ToList());
 
     [Fact]
     public async Task Another_coach_or_school_cannot_see_the_history()

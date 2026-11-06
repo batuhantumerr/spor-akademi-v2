@@ -47,8 +47,15 @@ public sealed record StudentAttendanceDto(
 
 public sealed record MonthSessionDto(string SessionKey, DateOnly Date, string Start, string End, bool IsRecorded);
 
-/// <summary>A student's row of the month table; <see cref="Statuses"/> lines up with the month's sessions.</summary>
-public sealed record MonthStudentRowDto(Guid StudentId, string FirstName, string LastName, IReadOnlyList<AttendanceStatus?> Statuses);
+/// <summary>
+/// One cell of the month table: whether the student was enrolled in the group on the session's date
+/// (DEC-170), and the recorded status, if any. A status may exist while not enrolled when an enrollment
+/// was shortened after the recording.
+/// </summary>
+public sealed record MonthCellDto(bool Enrolled, AttendanceStatus? Status);
+
+/// <summary>A student's row of the month table; <see cref="Cells"/> lines up with the month's sessions.</summary>
+public sealed record MonthStudentRowDto(Guid StudentId, string FirstName, string LastName, IReadOnlyList<MonthCellDto> Cells);
 
 /// <summary>Sessions × students of a group for a month (US-21); <c>month</c> is <c>YYYY-MM</c>.</summary>
 public sealed record GroupAttendanceMonthDto(
@@ -56,9 +63,6 @@ public sealed record GroupAttendanceMonthDto(
     string Month,
     IReadOnlyList<MonthSessionDto> Sessions,
     IReadOnlyList<MonthStudentRowDto> Students);
-
-/// <summary>A recorded status of one student in a stored session.</summary>
-public sealed record StudentSessionRecord(GroupId GroupId, DateOnly Date, TimeOnly Start, TimeOnly End, AttendanceStatus Status);
 
 /// <summary>
 /// Serializes saves of one session (DEC-173): concurrent saves of the same group, date and start time wait
@@ -90,6 +94,6 @@ public interface ISessionRepository
     /// <summary>Untracked stored sessions of the group between the dates (inclusive), with records.</summary>
     Task<IReadOnlyList<Session>> ListOfGroupAsync(GroupId groupId, DateOnly firstDay, DateOnly lastDay, CancellationToken cancellationToken);
 
-    /// <summary>The student's recorded statuses between the dates (inclusive), in any group.</summary>
-    Task<IReadOnlyList<StudentSessionRecord>> ListOfStudentAsync(StudentId studentId, DateOnly firstDay, DateOnly lastDay, CancellationToken cancellationToken);
+    /// <summary>Untracked stored sessions of the groups between the dates (inclusive), with records.</summary>
+    Task<IReadOnlyList<Session>> ListOfGroupsAsync(IReadOnlyCollection<GroupId> groupIds, DateOnly firstDay, DateOnly lastDay, CancellationToken cancellationToken);
 }

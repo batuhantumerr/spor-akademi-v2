@@ -183,6 +183,44 @@ public sealed class TakeAttendanceTests(DatabaseFixture database) : AttendanceTe
     }
 
     [Fact]
+    public async Task A_same_day_transfer_lists_the_student_only_in_the_new_group()
+    {
+        var u10Enrollment = (await StudentEnrollmentsAsync(Veli))[0].GetProperty("id").GetGuid();
+        (await EndAsync(u10Enrollment, Today)).StatusCode.ShouldBe(HttpStatusCode.OK);
+        var swimming = IdOf(await GroupAsync("Yüzme", 20, null, Slot("Thursday", "12:00", "13:00")));
+        await EnrollOkAsync(Veli, swimming, Today);
+
+        var u10Today = StatusesOf(await Admin.GetFromJsonAsync<System.Text.Json.JsonElement>(SessionUrl(ThisMorning), Ct));
+        var swimmingToday = StatusesOf(await Admin.GetFromJsonAsync<System.Text.Json.JsonElement>(SessionUrl("2027-01-14T12:00", swimming), Ct));
+        var u10Tuesday = StatusesOf(await Admin.GetFromJsonAsync<System.Text.Json.JsonElement>(SessionUrl(LastTuesday), Ct));
+        var put = await SaveAsync(Admin, ThisMorning, (Veli, "Present"));
+        var history = await Admin.GetFromJsonAsync<System.Text.Json.JsonElement>($"/api/v1/students/{Veli}/attendance?from={Today}&to={Today}", Ct);
+
+        u10Today.Keys.ShouldNotContain(Veli);
+        swimmingToday.Keys.ShouldBe([Veli]);
+        u10Tuesday.Keys.ShouldContain(Veli); // the earlier days of the old enrollment stay
+        put.StatusCode.ShouldBe(HttpStatusCode.UnprocessableEntity);
+        (await CodeOf(put)).ShouldBe("Attendance.StudentNotEnrolled");
+        history.GetProperty("sessions").EnumerateArray().Select(s => s.GetProperty("groupName").GetString()).ShouldBe(["Yüzme"]);
+    }
+
+    [Fact]
+    public async Task On_an_end_day_without_transfer_the_list_may_exceed_the_capacity()
+    {
+        // DEC-170: the seat is free from the end date (US-18), but the leaving student still trains that day.
+        var mini = IdOf(await GroupAsync("Mini", 2, null, Slot("Thursday", "12:00", "13:00")));
+        var (first, second, newcomer) = (await RegisterStudentAsync("Bir", "Deneme"), await RegisterStudentAsync("İki", "Deneme"), await RegisterStudentAsync("Üç", "Deneme"));
+        await EnrollOkAsync(first, mini, "2027-01-04");
+        var leaving = (await EnrollOkAsync(second, mini, "2027-01-04")).GetProperty("id").GetGuid();
+        (await EndAsync(leaving, Today)).StatusCode.ShouldBe(HttpStatusCode.OK);
+        await EnrollOkAsync(newcomer, mini, Today);
+
+        var list = StatusesOf(await Admin.GetFromJsonAsync<System.Text.Json.JsonElement>(SessionUrl("2027-01-14T12:00", mini), Ct));
+
+        list.Keys.ShouldBe([first, second, newcomer], ignoreOrder: true);
+    }
+
+    [Fact]
     public async Task Invalid_records_are_field_errors()
     {
         using var coach = CoachClient(Ayse);

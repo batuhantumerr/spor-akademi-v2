@@ -105,6 +105,36 @@ public sealed class SessionTests
         }
     }
 
+    [Theory]
+    [Trait("Story", "US-20")]
+    [InlineData(1, 31, 22, 59, "SessionInFuture")] // a minute before the 23:00 start
+    [InlineData(1, 31, 23, 0, null)]
+    [InlineData(2, 2, 23, 59, null)] // exactly 48 hours after the 23:59 end, two days into February
+    [InlineData(2, 3, 0, 0, "EditWindowExpired")]
+    public void A_late_night_session_rolls_its_window_over_midnight_and_the_month_end(int month, int day, int hour, int minute, string? error)
+    {
+        var lateNight = Session.Open(School, Group, new DateOnly(2027, 1, 31), TimeRange.Create(new TimeOnly(23, 0), new TimeOnly(23, 59)).Value);
+
+        var saved = lateNight.Save(Marks((Ali, AttendanceStatus.Present)), new Recorder(Coach, false), new DateTime(2027, month, day, hour, minute, 0), At);
+
+        saved.IsSuccess.ShouldBe(error is null);
+        if (error is not null)
+        {
+            saved.Error.Code.ShouldBe($"Attendance.{error}");
+        }
+    }
+
+    [Fact]
+    [Trait("Story", "US-20")]
+    public void After_the_window_an_unchanged_coach_save_is_still_refused()
+    {
+        var session = NewSession();
+        session.Save(Marks((Ali, AttendanceStatus.Present)), new Recorder(Coach, false), Local(14, 12), At);
+
+        session.Save(Marks((Ali, AttendanceStatus.Present)), new Recorder(Coach, false), Local(16, 11, 1), At.AddDays(2))
+            .Error.ShouldBe(AttendanceErrors.EditWindowExpired);
+    }
+
     [Fact]
     [Trait("Story", "US-20")]
     public void An_admin_may_edit_at_any_time()

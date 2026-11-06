@@ -55,6 +55,23 @@ public sealed class CorrectAttendanceTests(DatabaseFixture database) : Attendanc
     }
 
     [Fact]
+    public async Task After_the_window_even_an_identical_coach_save_is_forbidden()
+    {
+        // DEC-171: the window is checked before comparing statuses, so a resent unchanged PUT is 403 too.
+        using (var coach = CoachClient(Ayse))
+        {
+            await SaveOkAsync(coach, ThisMorning, (Ali, "Present"));
+        }
+
+        AdvanceTo(WindowEnd.AddMinutes(1));
+        using var late = CoachClient(Ayse);
+        var response = await SaveAsync(late, ThisMorning, (Ali, "Present"));
+
+        response.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+        (await CodeOf(response)).ShouldBe("Attendance.EditWindowExpired");
+    }
+
+    [Fact]
     public async Task After_48_hours_only_a_school_admin_can_change_attendance()
     {
         AdvanceTo(WindowEnd.AddDays(30));

@@ -119,12 +119,12 @@ internal sealed class SessionRepository(AppDbContext db) : ISessionRepository
             .OrderBy(s => s.Date).ThenBy(s => s.StartTime)
             .ToListAsync(cancellationToken);
 
-    public async Task<IReadOnlyList<StudentSessionRecord>> ListOfStudentAsync(StudentId studentId, DateOnly firstDay, DateOnly lastDay, CancellationToken cancellationToken) =>
-        await (
-                from record in db.Set<AttendanceRecord>().AsNoTracking()
-                join session in db.Set<Session>().AsNoTracking() on record.SessionId equals session.Id
-                where record.StudentId == studentId && session.Date >= firstDay && session.Date <= lastDay
-                orderby session.Date, session.StartTime
-                select new StudentSessionRecord(session.GroupId, session.Date, session.StartTime, session.EndTime, record.Status))
+    public async Task<IReadOnlyList<Session>> ListOfGroupsAsync(IReadOnlyCollection<GroupId> groupIds, DateOnly firstDay, DateOnly lastDay, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(groupIds);
+        var ids = groupIds.ToList();
+        return await db.Set<Session>().AsNoTracking().Include(s => s.Records)
+            .Where(s => ids.Contains(s.GroupId) && s.Date >= firstDay && s.Date <= lastDay)
             .ToListAsync(cancellationToken);
+    }
 }
