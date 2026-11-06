@@ -254,6 +254,11 @@
     @apply h-10 px-4 font-mono text-xs font-semibold tracking-wider whitespace-nowrap text-muted-foreground uppercase;
   }
 
+  /* Row headers (first column) read like body text, not like the uppercase column headers. */
+  .data-table th[scope='row'] {
+    @apply h-auto py-3 font-sans text-sm font-semibold tracking-normal whitespace-normal text-foreground normal-case;
+  }
+
   .data-table td {
     @apply px-4 py-3 font-medium;
   }
