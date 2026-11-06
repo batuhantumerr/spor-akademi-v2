@@ -72,6 +72,8 @@ describe('StudentDetailPage', () => {
 
   afterEach(() => {
     TestBed.inject(Dialog).closeAll();
+    // The enrollments section loads on its own; it has its own tests.
+    backend.match((r) => r.url.endsWith('/enrollments'));
     backend.verify();
   });
 
@@ -87,7 +89,7 @@ describe('StudentDetailPage', () => {
     expect(root.textContent).toContain('Anne');
     expect(root.textContent).toContain('0532 123 45 67');
     expect(root.textContent).toContain('Ali Kaya');
-    expect(root.textContent).toContain(ui.studentDetail.enrollmentsSoon);
+    expect(root.textContent).toContain(ui.enrollments.title);
   });
 
   it('marks the student as left on a chosen date', async () => {

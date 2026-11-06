@@ -63,6 +63,12 @@ export const routes: Routes = [
             loadComponent: () =>
               import('./features/coach/coach-groups.page').then((m) => m.CoachGroupsPage),
           },
+          {
+            path: 'groups/:id',
+            title: ui.roster.title,
+            loadComponent: () =>
+              import('./features/coach/coach-roster.page').then((m) => m.CoachRosterPage),
+          },
         ],
       },
       {
