@@ -1,9 +1,16 @@
-import { HttpClient, HttpContext, HttpContextToken, HttpHeaders } from '@angular/common/http';
+import {
+  HttpClient,
+  HttpContext,
+  HttpContextToken,
+  HttpErrorResponse,
+  HttpHeaders,
+} from '@angular/common/http';
 import { Injectable, computed, inject, signal } from '@angular/core';
 import { Router } from '@angular/router';
 import {
   Observable,
   catchError,
+  defer,
   finalize,
   map,
   of,
@@ -46,6 +53,11 @@ export class AuthService {
   private readonly accessToken = signal<string | null>(null);
   private readonly currentUser = signal<CurrentUser | null>(null);
   private refreshInFlight: Observable<string | null> | null = null;
+  /**
+   * Bumped whenever the session is ended on purpose (logout, expiry). Refresh and /me results
+   * that started under an older epoch are dropped, so a slow refresh cannot revive a session.
+   */
+  private sessionEpoch = 0;
 
   readonly user = this.currentUser.asReadonly();
   readonly isAuthenticated = computed(() => this.currentUser() !== null);
@@ -56,41 +68,72 @@ export class AuthService {
     return this.accessToken();
   }
 
+  /** Identifies the current session; changes on logout and expiry. */
+  epoch(): number {
+    return this.sessionEpoch;
+  }
+
   login(email: string, password: string): Observable<CurrentUser> {
     return this.http
       .post<TokenResponse>('/api/v1/auth/login', { email, password }, { context: skipAuth() })
       .pipe(
         tap((response) => this.accessToken.set(response.accessToken)),
-        switchMap(() => this.loadMe()),
+        switchMap(() => this.loadMe(this.sessionEpoch)),
       );
   }
 
   /** Restores the session at startup; resolves to false when there is no valid refresh cookie. */
   restore(): Observable<boolean> {
-    return this.refresh().pipe(
-      switchMap((token) => (token ? this.loadMe().pipe(map(() => true)) : of(false))),
-      catchError(() => of(false)),
-    );
+    return defer(() => {
+      const epoch = this.sessionEpoch;
+      return this.refresh().pipe(
+        switchMap((token) => (token ? this.loadMe(epoch).pipe(map(() => true)) : of(false))),
+        catchError(() => of(false)),
+      );
+    });
   }
 
-  /** One refresh at a time; concurrent 401s wait for the same call. */
+  /**
+   * One refresh at a time; concurrent 401s wait for the same call. Emits the new token, or null
+   * when the refresh cookie was rejected (401/403: the session is over). Network and server errors
+   * are re-thrown without touching the session, so a flaky connection does not log the user out.
+   */
   refresh(): Observable<string | null> {
-    this.refreshInFlight ??= this.http
+    if (this.refreshInFlight) {
+      return this.refreshInFlight;
+    }
+    const epoch = this.sessionEpoch;
+    const call: Observable<string | null> = this.http
       .post<TokenResponse>('/api/v1/auth/refresh', null, {
         headers: ajaxHeaders(),
         context: skipAuth(),
       })
       .pipe(
-        map((response) => response.accessToken),
-        tap((token) => this.accessToken.set(token)),
-        catchError(() => {
-          this.clear();
+        map((response) => {
+          if (epoch !== this.sessionEpoch) {
+            return null; // Logged out while the refresh was in flight.
+          }
+          this.accessToken.set(response.accessToken);
+          return response.accessToken;
+        }),
+        catchError((error: unknown) => {
+          if (!endsSession(error)) {
+            return throwError(() => error);
+          }
+          if (epoch === this.sessionEpoch) {
+            this.clear();
+          }
           return of(null);
         }),
-        finalize(() => (this.refreshInFlight = null)),
-        shareReplay(1),
+        finalize(() => {
+          if (this.refreshInFlight === call) {
+            this.refreshInFlight = null;
+          }
+        }),
+        shareReplay({ bufferSize: 1, refCount: true }),
       );
-    return this.refreshInFlight;
+    this.refreshInFlight = call;
+    return call;
   }
 
   changePassword(currentPassword: string, newPassword: string): Observable<CurrentUser> {
@@ -102,27 +145,35 @@ export class AuthService {
           response?.accessToken ? of(response.accessToken) : this.refresh(),
         ),
         tap((token) => token && this.accessToken.set(token)),
-        switchMap(() => this.loadMe()),
+        switchMap(() => this.loadMe(this.sessionEpoch)),
       );
   }
 
   logout(): Observable<void> {
-    return this.http
-      .post<void>('/api/v1/auth/logout', null, { headers: ajaxHeaders(), context: skipAuth() })
-      .pipe(
-        catchError(() => of(undefined)),
-        map(() => undefined),
-        finalize(() => {
-          this.clear();
-          void this.router.navigate(['/login']);
-        }),
-      );
+    return defer(() => {
+      // End the local session first so an in-flight refresh cannot bring it back.
+      this.endSession();
+      return this.http.post<void>('/api/v1/auth/logout', null, {
+        headers: ajaxHeaders(),
+        context: skipAuth(),
+      });
+    }).pipe(
+      catchError(() => of(undefined)),
+      map(() => undefined),
+      finalize(() => {
+        this.clear();
+        void this.router.navigate(['/login']);
+      }),
+    );
   }
 
-  /** Clears local state after an unrecoverable 401. */
+  /** Clears local state after an unrecoverable 401; the user comes back to where they were. */
   expireSession(): void {
-    this.clear();
-    void this.router.navigate(['/login'], { queryParams: { expired: 1 } });
+    this.endSession();
+    const current = this.router.url;
+    const returnUrl =
+      current && current !== '/' && !current.startsWith('/login') ? current : undefined;
+    void this.router.navigate(['/login'], { queryParams: { expired: 1, returnUrl } });
   }
 
   homeFor(role: Role | null): string {
@@ -138,20 +189,37 @@ export class AuthService {
     }
   }
 
-  private loadMe(): Observable<CurrentUser> {
+  private loadMe(epoch: number): Observable<CurrentUser> {
     return this.http.get<CurrentUser>('/api/v1/me').pipe(
-      tap((user) => this.currentUser.set(user)),
+      tap((user) => {
+        if (epoch === this.sessionEpoch) {
+          this.currentUser.set(user);
+        }
+      }),
       catchError((error: unknown) => {
-        this.clear();
+        if (epoch === this.sessionEpoch) {
+          this.clear();
+        }
         return throwError(() => error);
       }),
     );
+  }
+
+  private endSession(): void {
+    this.sessionEpoch++;
+    this.refreshInFlight = null;
+    this.clear();
   }
 
   private clear(): void {
     this.accessToken.set(null);
     this.currentUser.set(null);
   }
+}
+
+/** Only an explicit rejection of the refresh cookie ends the session. */
+function endsSession(error: unknown): boolean {
+  return error instanceof HttpErrorResponse && (error.status === 401 || error.status === 403);
 }
 
 function skipAuth(): HttpContext {
