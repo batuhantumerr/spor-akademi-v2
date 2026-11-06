@@ -6,6 +6,7 @@ using SporAkademi.Application.Abstractions.Authentication;
 using SporAkademi.Application.Abstractions.Data;
 using SporAkademi.Application.Groups.Contracts;
 using SporAkademi.Application.Identity;
+using SporAkademi.Application.Identity.Contracts;
 using SporAkademi.Application.Organization;
 using SporAkademi.Application.Tenancy;
 using SporAkademi.Application.Tenancy.Contracts;
@@ -52,6 +53,7 @@ public static class DependencyInjection
         services.AddSingleton<IPasswordHasher, AspNetPasswordHasher>();
         services.AddSingleton<IRefreshTokenFactory, RefreshTokenFactory>();
         services.AddScoped<ISchoolRepository, SchoolRepository>();
+        services.AddScoped<ICoachDirectory, CoachDirectory>();
         services.AddSingleton<PlatformAdminSeed>();
         services.AddHostedService(provider => provider.GetRequiredService<PlatformAdminSeed>());
         services.AddScoped<ISportRepository, SportRepository>();
