@@ -64,7 +64,11 @@ describe('GroupDetailPage', () => {
     await settle(fixture);
   });
 
-  afterEach(() => backend.verify());
+  afterEach(() => {
+    // The students section loads on its own; it has its own tests.
+    backend.match((r) => r.url.includes('/enrollments'));
+    backend.verify();
+  });
 
   const save = async () => {
     (

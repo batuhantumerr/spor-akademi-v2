@@ -26,6 +26,7 @@ import { SchoolClock } from '../../core/time/school-clock';
 import { ConflictNoticeComponent } from '../../shared/ui/conflict-notice.component';
 import { PageHeaderComponent } from '../../shared/ui/page-header.component';
 import { ToastService } from '../../shared/ui/toast.service';
+import { GroupStudentsComponent } from '../enrollments/group-students.component';
 import { ScheduleEditorComponent } from './schedule-editor.component';
 
 const UPCOMING_DAYS = 14;
@@ -39,6 +40,7 @@ const UPCOMING_DAYS = 14;
     PageHeaderComponent,
     ScheduleEditorComponent,
     ConflictNoticeComponent,
+    GroupStudentsComponent,
     LucideArrowLeft,
     LucideCalendarClock,
   ],
@@ -180,6 +182,10 @@ const UPCOMING_DAYS = 14;
             </ul>
           }
         </section>
+      </div>
+
+      <div class="mt-4">
+        <app-group-students [group]="g" />
       </div>
     }
   `,
