@@ -19,8 +19,10 @@ public static class SessionCalendar
         // An archived group trains up to and including the day it was archived.
         var last = group.ArchivedOn is { } archivedOn && archivedOn < to ? archivedOn : to;
         var sessions = new List<PlannedSession>();
-        for (var date = from; date <= last; date = date.AddDays(1))
+        // Day numbers instead of AddDays: the loop never steps past DateOnly.MaxValue.
+        for (var day = from.DayNumber; day <= last.DayNumber; day++)
         {
+            var date = DateOnly.FromDayNumber(day);
             sessions.AddRange(group.ScheduleSlots
                 .Where(slot => slot.Day == date.DayOfWeek)
                 .OrderBy(slot => slot.Time.Start)

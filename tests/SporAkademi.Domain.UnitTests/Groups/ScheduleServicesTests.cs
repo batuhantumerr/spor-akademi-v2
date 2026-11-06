@@ -141,4 +141,27 @@ public sealed class ScheduleServicesTests
         SessionCalendar.Between(group, new DateOnly(2027, 1, 1), new DateOnly(2027, 1, 31)).Select(s => s.Date)
             .ShouldBe([new DateOnly(2027, 1, 7), new DateOnly(2027, 1, 14)]);
     }
+
+    [Fact]
+    [Trait("Story", "US-11")]
+    public void Archive_day_itself_still_has_its_session()
+    {
+        var group = NewGroup();
+        group.ReplaceSchedule([Slot(DayOfWeek.Thursday, 17, 0, 18, 0)]);
+        group.Archive(new DateOnly(2027, 1, 14));
+
+        SessionCalendar.Between(group, new DateOnly(2027, 1, 14), new DateOnly(2027, 1, 21)).Select(s => s.Date)
+            .ShouldBe([new DateOnly(2027, 1, 14)]);
+        SessionCalendar.Between(group, new DateOnly(2027, 1, 15), new DateOnly(2027, 1, 21)).ShouldBeEmpty();
+    }
+
+    [Fact]
+    [Trait("Story", "US-12")]
+    public void Calendar_does_not_overflow_at_the_end_of_time()
+    {
+        var group = NewGroup();
+        group.ReplaceSchedule([Slot(DateOnly.MaxValue.DayOfWeek, 9, 0, 10, 0)]);
+
+        SessionCalendar.Between(group, DateOnly.MaxValue.AddDays(-6), DateOnly.MaxValue).ShouldHaveSingleItem().Date.ShouldBe(DateOnly.MaxValue);
+    }
 }

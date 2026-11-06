@@ -319,18 +319,25 @@ internal sealed class EndEnrollmentsWhenGroupArchived(IEnrollmentEnder enrollmen
 }
 
 /// <summary>
-/// US-08 / appendix B §6: a deactivated coach's groups stay but have no coach until reassigned. Runs in the
-/// deactivating School Admin's request, so the tenant filter limits it to that school.
+/// US-08 / appendix B §6: a deactivated coach's groups stay but have no coach until reassigned. Groups are
+/// read through the tenant filter, so this must run in a request of the coach's own school; anything else
+/// would silently leave the coach on the groups, so it throws and the deactivation rolls back (DEC-147).
 /// </summary>
-internal sealed class ClearCoachWhenUserDeactivated(IGroupRepository groups) : IDomainEventConsumer<UserDeactivated>
+internal sealed class ClearCoachWhenUserDeactivated(IGroupRepository groups, ICurrentUser currentUser) : IDomainEventConsumer<UserDeactivated>
 {
     public async Task<Result> Handle(UserDeactivated domainEvent, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(domainEvent);
-        if (domainEvent.TenantId is null)
+        if (domainEvent.TenantId is not { } school)
         {
             // The Platform Admin coaches no group.
             return Result.Success();
+        }
+
+        if (currentUser.TenantId != school.Value)
+        {
+            throw new InvalidOperationException(
+                "A school user can only be deactivated in a request of that school; the groups of the user would not be visible otherwise.");
         }
 
         foreach (var group in await groups.ListByCoachAsync(domainEvent.UserId, cancellationToken))

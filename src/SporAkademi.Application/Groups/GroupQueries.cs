@@ -23,6 +23,15 @@ public sealed record GetGroupSessionsQuery(GroupId Id, DateOnly? From, DateOnly?
     public const int MaxDays = 62;
 }
 
+/// <summary>Calendar dates the session endpoints accept (like <c>YearMonth</c>: years 2000–2100).</summary>
+internal static class SessionDates
+{
+    public const int MinYear = 2000;
+    public const int MaxYear = 2100;
+
+    public static bool IsSupported(DateOnly? date) => date is not { } d || d.Year is >= MinYear and <= MaxYear;
+}
+
 /// <summary>The calling coach's active groups (US-12).</summary>
 public sealed record ListMyGroupsQuery : IQuery<IReadOnlyList<GroupDto>>;
 
@@ -44,13 +53,21 @@ internal sealed class GetGroupSessionsValidator : AbstractValidator<GetGroupSess
 {
     public GetGroupSessionsValidator()
     {
-        RuleFor(q => q.From).NotNull().WithErrorCode("Field.Required");
-        RuleFor(q => q.To).NotNull().WithErrorCode("Field.Required");
+        RuleFor(q => q.From).NotNull().WithErrorCode("Field.Required")
+            .Must(SessionDates.IsSupported).WithErrorCode("Field.Invalid");
+        RuleFor(q => q.To).NotNull().WithErrorCode("Field.Required")
+            .Must(SessionDates.IsSupported).WithErrorCode("Field.Invalid");
         RuleFor(q => q.To)
             .Must((q, to) => to!.Value >= q.From!.Value && to.Value.DayNumber - q.From.Value.DayNumber < GetGroupSessionsQuery.MaxDays)
             .WithErrorCode("Field.Invalid")
             .When(q => q.From is not null && q.To is not null);
     }
+}
+
+internal sealed class ListMySessionsValidator : AbstractValidator<ListMySessionsQuery>
+{
+    public ListMySessionsValidator() =>
+        RuleFor(q => q.Date).Must(SessionDates.IsSupported).WithErrorCode("Field.Invalid");
 }
 
 /// <summary>Turns groups into DTOs, fetching names from the Organization and Identity contracts in batches.</summary>

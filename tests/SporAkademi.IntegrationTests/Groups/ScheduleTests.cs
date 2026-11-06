@@ -214,6 +214,9 @@ public sealed class ScheduleTests(DatabaseFixture database) : GroupsTest(databas
     [InlineData("from=2027-01-01&to=2027-03-04", "to")]
     [InlineData("from=2027-01-10&to=2027-01-09", "to")]
     [InlineData("to=2027-01-09", "from")]
+    [InlineData("from=9999-12-01&to=9999-12-31", "from")]
+    [InlineData("from=1999-12-31&to=2000-01-01", "from")]
+    [InlineData("from=2100-12-31&to=2101-01-01", "to")]
     public async Task Session_window_must_be_ordered_and_at_most_62_days(string query, string field)
     {
         var group = await CreateGroupAsync();
@@ -222,6 +225,19 @@ public sealed class ScheduleTests(DatabaseFixture database) : GroupsTest(databas
 
         response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
         (await BodyOf(response)).GetProperty("errors").TryGetProperty(field, out _).ShouldBeTrue();
+    }
+
+    [Fact]
+    [Trait("Story", "US-11")]
+    public async Task Archived_group_keeps_the_session_of_its_archive_day_only()
+    {
+        // The test clock is Thursday 2027-01-14 in Istanbul, so archivedOn is that Thursday.
+        var group = await ScheduleAsync(await CreateGroupAsync(), Slot("Thursday", "17:00", "18:00"));
+        await ArchiveAsync(IdOf(group));
+
+        var sessions = await Admin.GetFromJsonAsync<JsonElement>($"/api/v1/groups/{IdOf(group)}/sessions?from=2027-01-14&to=2027-01-28", Ct);
+
+        sessions.EnumerateArray().Select(s => s.GetProperty("date").GetString()).ShouldBe(["2027-01-14"]);
     }
 
     [Fact]

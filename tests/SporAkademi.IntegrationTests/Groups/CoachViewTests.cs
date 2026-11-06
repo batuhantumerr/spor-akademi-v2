@@ -1,6 +1,12 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
+using SporAkademi.Application.Abstractions.Data;
+using SporAkademi.Domain.Identity;
+using SporAkademi.Domain.SharedKernel;
+using SporAkademi.Infrastructure.Persistence;
 using SporAkademi.IntegrationTests.Infrastructure;
 
 namespace SporAkademi.IntegrationTests.Groups;
@@ -79,6 +85,21 @@ public sealed class CoachViewTests(DatabaseFixture database) : GroupsTest(databa
         sessions[0].GetProperty("facility").GetProperty("name").GetString().ShouldBe("A Sahası");
     }
 
+    [Theory]
+    [InlineData("9999-12-31")]
+    [InlineData("0001-01-01")]
+    [InlineData("1999-12-31")]
+    public async Task Day_outside_the_supported_years_is_a_field_error(string date)
+    {
+        await ScheduleAsync(await CreateGroupAsync("A Grubu", Ayse), Slot("Friday", "09:00", "10:00"));
+        using var coach = CoachClient(Ayse);
+
+        var response = await coach.GetAsync(new Uri($"/api/v1/me/sessions?date={date}", UriKind.Relative), Ct);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        (await BodyOf(response)).GetProperty("errors").GetProperty("date")[0].GetString().ShouldBe("Field.Invalid");
+    }
+
     [Fact]
     public async Task Coach_screens_are_for_coaches_only()
     {
@@ -95,6 +116,30 @@ public sealed class CoachViewTests(DatabaseFixture database) : GroupsTest(databa
         (await ArchiveAsync(IdOf(group), coach)).StatusCode.ShouldBe(HttpStatusCode.Forbidden);
         (await coach.PutAsJsonAsync($"/api/v1/groups/{IdOf(group)}/schedule", new { slots = Array.Empty<object>(), version = VersionOf(group) }, Ct))
             .StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+    }
+
+    [Fact]
+    [Trait("Story", "US-08")]
+    public async Task Deactivation_outside_the_coachs_school_rolls_back()
+    {
+        var group = await CreateGroupAsync("A Grubu", Ayse);
+
+        // A scope without a school (background work): the groups would be invisible, so it must fail.
+        await InScopeAsync(async sp =>
+        {
+            var db = sp.GetRequiredService<AppDbContext>();
+            await Should.ThrowAsync<InvalidOperationException>(() => sp.GetRequiredService<IUnitOfWork>().ExecuteInTransactionAsync(
+                async ct =>
+                {
+                    var coach = await db.Set<User>().Include(u => u.RefreshTokens).SingleAsync(u => u.Id == Ayse.Id, ct);
+                    var deactivated = coach.Deactivate(Api.Clock.GetUtcNow());
+                    return deactivated.IsSuccess ? Result.Success(true) : Result.Failure<bool>(deactivated.Error);
+                },
+                Ct));
+        });
+
+        (await LoadUserAsync(Ayse.Id)).Status.ShouldBe(UserStatus.Active);
+        (await GetGroupAsync(IdOf(group))).GetProperty("coach").GetProperty("id").GetGuid().ShouldBe(Ayse.Id.Value);
     }
 
     [Fact]
