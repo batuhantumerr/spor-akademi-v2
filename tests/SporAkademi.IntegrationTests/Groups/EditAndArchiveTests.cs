@@ -191,5 +191,8 @@ public sealed class EditAndArchiveTests(DatabaseFixture database) : GroupsTest(d
             Calls.Add((groupId, endDate));
             return Task.FromResult(Result.Success());
         }
+
+        public Task<Result> EndActiveEnrollmentsOfStudentAsync(Domain.Students.StudentId studentId, DateOnly endDate, CancellationToken cancellationToken) =>
+            Task.FromResult(Result.Success());
     }
 }

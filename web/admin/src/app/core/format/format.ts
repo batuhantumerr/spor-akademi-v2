@@ -42,6 +42,15 @@ export function formatPercent(ratio: number): string {
   return percentFormatter.format(ratio);
 }
 
+/** Shows an E.164 Turkish number (<c>+905321234567</c>) as <c>0532 123 45 67</c>. */
+export function formatPhone(phone: string | null | undefined): string {
+  if (!phone) {
+    return '—';
+  }
+  const match = /^\+90(\d{3})(\d{3})(\d{2})(\d{2})$/.exec(phone);
+  return match ? `0${match[1]} ${match[2]} ${match[3]} ${match[4]}` : phone;
+}
+
 /** <c>HH:mm</c> already; trims seconds if the server ever sends them. */
 export function formatTime(time: string | null | undefined): string {
   return time ? time.slice(0, 5) : '—';

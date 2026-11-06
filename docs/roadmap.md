@@ -40,10 +40,10 @@ Kapsamın tamamı ve maddelerin açıklamaları: [proje dokümanı, Ek G](proje-
 - [x] P1-21 US-12 Antrenör ana ekranı
 
 ### 1.3 Öğrenciler ve kayıt
-- [ ] P1-22 US-13 Öğrenci kaydı
+- [x] P1-22 US-13 Öğrenci kaydı
 - [ ] P1-23 US-14 Antrenör görünümü
-- [ ] P1-24 US-15 Ayrıldı
-- [ ] P1-25 US-16 Arama ve listeleme
+- [x] P1-24 US-15 Ayrıldı
+- [x] P1-25 US-16 Arama ve listeleme
 - [ ] P1-26 US-17 Kayıt
 - [ ] P1-27 US-18 Kaydı sonlandırma
 
