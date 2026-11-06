@@ -23,9 +23,9 @@ Kapsamın tamamı ve maddelerin açıklamaları: [proje dokümanı, Ek G](proje-
 - [x] P1-06 Hata yönetimi
 - [x] P1-07 Mimari testleri
 - [x] P1-08 Entegrasyon test altyapısı
-- [ ] P1-09 US-03 Giriş
-- [ ] P1-10 US-04 Refresh ve çıkış
-- [ ] P1-11 US-05 İlk giriş ve şifre değiştirme
+- [x] P1-09 US-03 Giriş
+- [x] P1-10 US-04 Refresh ve çıkış
+- [x] P1-11 US-05 İlk giriş ve şifre değiştirme
 - [ ] P1-12 US-01 Okul oluşturma
 - [ ] P1-13 Angular kabuğu, giriş, ADR-0010
 - [ ] P1-14 OpenAPI ve Angular client
