@@ -2,6 +2,7 @@ import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { provideRouter } from '@angular/router';
 
 import { AuthService, CurrentUser } from '../../core/auth/auth.service';
 import { CoachTodayPage } from './coach-today.page';
@@ -37,6 +38,7 @@ describe('CoachTodayPage in the school time zone', () => {
     TestBed.configureTestingModule({
       imports: [CoachTodayPage],
       providers: [
+        provideRouter([]),
         provideHttpClient(),
         provideHttpClientTesting(),
         { provide: AuthService, useValue: { user: signal(coach) } },
