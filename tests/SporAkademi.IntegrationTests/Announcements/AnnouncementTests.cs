@@ -126,6 +126,82 @@ public sealed class AnnouncementTests(DatabaseFixture database) : GroupsTest(dat
     }
 
     [Fact]
+    public async Task Body_is_plain_text_returned_verbatim_with_its_line_breaks()
+    {
+        var group = await CreateGroupAsync("A Grubu", Ayse);
+        const string body = "<script>alert('x')</script>\n\nSatır 2 &amp; <b>kalın değil</b>\r\n  girintili satır";
+
+        var created = await BodyOf(await PublishAsync(IdOf(group), "Duyuru", "  \n" + body + "\n\t "));
+
+        created.GetProperty("body").GetString().ShouldBe(body);
+        using var coach = CoachClient(Ayse);
+        var mine = await coach.GetFromJsonAsync<JsonElement>("/api/v1/me/announcements", Ct);
+        mine.GetProperty("items")[0].GetProperty("body").GetString().ShouldBe(body);
+    }
+
+    [Fact]
+    public async Task Title_spaces_are_collapsed()
+    {
+        var group = await CreateGroupAsync();
+
+        var created = await BodyOf(await PublishAsync(IdOf(group), "  Cumartesi \t  antrenmanı\n ", "Metin"));
+
+        created.GetProperty("title").GetString().ShouldBe("Cumartesi antrenmanı");
+    }
+
+    [Fact]
+    public async Task Lengths_are_checked_after_the_same_whitespace_normalisation_as_the_domain()
+    {
+        var group = await CreateGroupAsync();
+        var paddedTitle = "   " + string.Join("  ", Enumerable.Repeat("abcd", 30)) + "   ";
+        var paddedBody = "\n\n  " + new string('b', 4000) + "  \n";
+
+        var fits = await PublishAsync(IdOf(group), paddedTitle, paddedBody);
+        var blankTitle = await PublishAsync(IdOf(group), " \t\n ", "Metin");
+        var blankBody = await PublishAsync(IdOf(group), "Başlık", " \n\t ");
+        var longBody = await PublishAsync(IdOf(group), "Başlık", "  " + new string('b', 4001) + "  ");
+
+        fits.StatusCode.ShouldBe(HttpStatusCode.Created);
+        (await BodyOf(fits)).GetProperty("title").GetString()!.Length.ShouldBe(149);
+        (await BodyOf(blankTitle)).GetProperty("errors").GetProperty("title")[0].GetString().ShouldBe("Field.Required");
+        (await BodyOf(blankBody)).GetProperty("errors").GetProperty("body")[0].GetString().ShouldBe("Field.Required");
+        (await BodyOf(longBody)).GetProperty("errors").GetProperty("body")[0].GetString().ShouldBe("Field.TooLong");
+    }
+
+    [Theory]
+    [InlineData("page=0", "page")]
+    [InlineData("pageSize=0", "pageSize")]
+    [InlineData("pageSize=101", "pageSize")]
+    public async Task Invalid_paging_is_a_field_error(string query, string field)
+    {
+        var group = await CreateGroupAsync("A Grubu", Ayse);
+        using var coach = CoachClient(Ayse);
+
+        var ofGroup = await Admin.GetAsync(new Uri($"/api/v1/groups/{IdOf(group)}/announcements?{query}", UriKind.Relative), Ct);
+        var mine = await coach.GetAsync(new Uri($"/api/v1/me/announcements?{query}", UriKind.Relative), Ct);
+
+        foreach (var response in new[] { ofGroup, mine })
+        {
+            response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+            (await BodyOf(response)).GetProperty("errors").TryGetProperty(field, out _).ShouldBeTrue();
+        }
+    }
+
+    [Fact]
+    public async Task Coach_cannot_read_another_coachs_active_group()
+    {
+        var others = await CreateGroupAsync("Mehmet'in Grubu", Mehmet);
+        await PublishAsync(IdOf(others), "Sadece Mehmet");
+        using var coach = CoachClient(Ayse);
+
+        var response = await coach.GetAsync(new Uri($"/api/v1/groups/{IdOf(others)}/announcements", UriKind.Relative), Ct);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        (await CodeOf(response)).ShouldBe("Group.NotFound");
+        (await coach.GetFromJsonAsync<JsonElement>("/api/v1/me/announcements", Ct)).GetProperty("totalCount").GetInt32().ShouldBe(0);
+    }
+
+    [Fact]
     public async Task Coaches_cannot_publish_and_admins_have_no_coach_feed()
     {
         var group = await CreateGroupAsync("A Grubu", Ayse);
