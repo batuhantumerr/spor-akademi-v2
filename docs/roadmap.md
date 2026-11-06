@@ -17,7 +17,7 @@ Kapsamın tamamı ve maddelerin açıklamaları: [proje dokümanı, Ek G](proje-
 ### 1.1 Yapı taşları ve kimlik doğrulama
 - [x] P1-01 Domain yapı taşları
 - [x] P1-02 Value object'ler
-- [ ] P1-03 Application pipeline'ı
+- [x] P1-03 Application pipeline'ı
 - [ ] P1-04 Kalıcılık temeli
 - [ ] P1-05 Tenancy
 - [ ] P1-06 Hata yönetimi
