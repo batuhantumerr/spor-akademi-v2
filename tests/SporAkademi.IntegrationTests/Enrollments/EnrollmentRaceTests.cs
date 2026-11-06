@@ -22,13 +22,19 @@ using SporAkademi.IntegrationTests.Infrastructure;
 namespace SporAkademi.IntegrationTests.Enrollments;
 
 /// <summary>
-/// ADR-0005 races made deterministic: every contender is held at a gate right before its locks, so all of
-/// them have read nothing before the first one locks; with the real locks they then run one after another.
-/// The control tests drop the locks and also hold everyone after the last read, so all read the same count.
+/// ADR-0005 races made deterministic: every contender is held right before its locks and again right after
+/// its last read. With the real locks only one can get past the read at a time, so they run one after
+/// another; without them (the controls, or a broken lock) all read the same count and overbook.
 /// </summary>
 [Trait("Story", "US-17")]
 public sealed class EnrollmentRaceTests(DatabaseFixture database) : EnrollmentsTest(database)
 {
+    private static readonly TimeSpan HardPatience = TimeSpan.FromSeconds(10);
+    private static readonly TimeSpan LockedReadHold = TimeSpan.FromSeconds(1);
+
+    private Gate? _lockGate;
+    private Gate? _readGate;
+
     [Fact]
     public async Task Two_admins_racing_for_the_last_seat_only_one_wins()
     {
@@ -39,6 +45,7 @@ public sealed class EnrollmentRaceTests(DatabaseFixture database) : EnrollmentsT
         using var adminB = AdminOf(api);
 
         var responses = await Task.WhenAll(students.Select((s, i) => EnrollAsync(s, IdOf(group), client: i % 2 == 0 ? adminA : adminB)));
+        ShouldHaveRaced();
 
         responses.Count(r => r.StatusCode == HttpStatusCode.Created).ShouldBe(1);
         foreach (var rejected in responses.Where(r => r.StatusCode != HttpStatusCode.Created))
@@ -57,6 +64,7 @@ public sealed class EnrollmentRaceTests(DatabaseFixture database) : EnrollmentsT
         using var admin = AdminOf(api);
 
         var responses = await Task.WhenAll(students.Select(s => EnrollAsync(s, IdOf(group), client: admin)));
+        ShouldHaveRaced();
 
         responses.ShouldAllBe(r => r.StatusCode != HttpStatusCode.InternalServerError);
         responses.Count(r => r.StatusCode == HttpStatusCode.Created).ShouldBeGreaterThan(1);
@@ -73,6 +81,7 @@ public sealed class EnrollmentRaceTests(DatabaseFixture database) : EnrollmentsT
             using var admin = AdminOf(api);
 
             var responses = await Task.WhenAll(Enumerable.Range(0, 4).Select(_ => EnrollAsync(student, IdOf(group), client: admin)));
+            ShouldHaveRaced();
 
             // With locks the policy refuses; without them the partial unique index still does (DEC-050).
             responses.Count(r => r.StatusCode == HttpStatusCode.Created).ShouldBe(1);
@@ -105,6 +114,7 @@ public sealed class EnrollmentRaceTests(DatabaseFixture database) : EnrollmentsT
         }, Ct);
         var enroll = EnrollAsync(newcomer, IdOf(group), client: admin);
         var (lowered, enrolled) = (await lower, await enroll);
+        ShouldHaveRaced();
 
         // Exactly one wins; whichever loses says why.
         (lowered.IsSuccessStatusCode ^ enrolled.IsSuccessStatusCode).ShouldBeTrue();
@@ -220,25 +230,34 @@ public sealed class EnrollmentRaceTests(DatabaseFixture database) : EnrollmentsT
     }
 
     /// <summary>
-    /// An API whose enrollment locks are gated: every contender must reach its lock call before any takes
-    /// a lock. Without real locks a second gate after the last read (the active count) holds everyone until
-    /// all have read, so they all see the same count however slow the machine is.
+    /// An API whose contenders are lined up twice: all must reach the lock call before any locks (hard
+    /// gate), and each is held right after its last read, the active count, until all have read (read gate).
+    /// With real locks only the lock holder can get past its read, so the read gate gives up quietly after
+    /// <see cref="LockedReadHold"/>; if the locks were missing, everyone would read the same count and the
+    /// locked tests would fail. Without locks (the controls) the read gate is hard as well.
     /// </summary>
     private WebApplicationFactory<Program> Gated(int contenders, bool realLocks)
     {
-        var lockGate = new Gate(contenders, "lock call");
-        var readGate = realLocks ? null : new Gate(contenders, "active count read");
+        _lockGate = new Gate(contenders, "lock call", HardPatience, mustFill: true);
+        _readGate = realLocks
+            ? new Gate(contenders, "active count read", LockedReadHold, mustFill: false)
+            : new Gate(contenders, "active count read", HardPatience, mustFill: true);
+        var (lockGate, readGate) = (_lockGate, _readGate);
         return Api.WithWebHostBuilder(builder => builder.ConfigureTestServices(services =>
         {
             services.Replace(ServiceDescriptor.Scoped<IEnrollmentLocks>(sp => new GatedEnrollmentLocks(
                 realLocks ? ActivatorUtilities.CreateInstance<EnrollmentLocks>(sp) : new NoLocks(),
                 lockGate)));
-            if (readGate is not null)
-            {
-                services.Replace(ServiceDescriptor.Scoped<IEnrollmentRepository>(sp => new ReadGatedEnrollments(
-                    ActivatorUtilities.CreateInstance<EnrollmentRepository>(sp), readGate)));
-            }
+            services.Replace(ServiceDescriptor.Scoped<IEnrollmentRepository>(sp => new ReadGatedEnrollments(
+                ActivatorUtilities.CreateInstance<EnrollmentRepository>(sp), readGate)));
         }));
+    }
+
+    /// <summary>Fails with a readable message if a hard gate gave up waiting (the race did not happen as designed).</summary>
+    private void ShouldHaveRaced()
+    {
+        _lockGate!.TimeoutMessage.ShouldBeNull();
+        _readGate!.TimeoutMessage.ShouldBeNull();
     }
 
     private HttpClient AdminOf(WebApplicationFactory<Program> api)
@@ -249,15 +268,16 @@ public sealed class EnrollmentRaceTests(DatabaseFixture database) : EnrollmentsT
     }
 
     /// <summary>
-    /// Releases everyone once all contenders have arrived. There is no short timeout that would silently
-    /// let them through one by one on a slow machine: if they do not all arrive within
-    /// <see cref="Patience"/> the request fails, and so does the test.
+    /// Releases everyone once all contenders have arrived. A hard gate (<c>mustFill</c>) never lets anyone
+    /// through early: after its patience the request fails and <see cref="TimeoutMessage"/> says why. A soft
+    /// gate lets each waiter go after its patience, for contenders that are legitimately blocked elsewhere.
     /// </summary>
-    private sealed class Gate(int contenders, string point)
+    private sealed class Gate(int contenders, string point, TimeSpan patience, bool mustFill)
     {
-        private static readonly TimeSpan Patience = TimeSpan.FromSeconds(10);
         private readonly TaskCompletionSource _open = new(TaskCreationOptions.RunContinuationsAsynchronously);
         private int _arrived;
+
+        public string? TimeoutMessage { get; private set; }
 
         public async Task ArriveAndWaitAsync()
         {
@@ -266,14 +286,13 @@ public sealed class EnrollmentRaceTests(DatabaseFixture database) : EnrollmentsT
                 _open.TrySetResult();
             }
 
-            try
+            if (await Task.WhenAny(_open.Task, Task.Delay(patience)) == _open.Task || !mustFill)
             {
-                await _open.Task.WaitAsync(Patience);
+                return;
             }
-            catch (TimeoutException exception)
-            {
-                throw new TimeoutException($"Only {Volatile.Read(ref _arrived)} of {contenders} contenders reached the {point} within {Patience}.", exception);
-            }
+
+            TimeoutMessage = $"Only {Volatile.Read(ref _arrived)} of {contenders} contenders reached the {point} within {patience}; the race did not run as designed.";
+            throw new TimeoutException(TimeoutMessage);
         }
     }
 
