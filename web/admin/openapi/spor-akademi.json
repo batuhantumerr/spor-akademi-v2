@@ -382,12 +382,19 @@
         }
       }
     },
-    "/api/v1/coaches": {
+    "/api/v1/sports": {
       "get": {
         "tags": [
-          "Coaches"
+          "Sports"
         ],
         "parameters": [
+          {
+            "name": "includeArchived",
+            "in": "query",
+            "schema": {
+              "type": "boolean"
+            }
+          },
           {
             "name": "page",
             "in": "query",
@@ -419,7 +426,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/PageResponseOfCoachDto"
+                  "$ref": "#/components/schemas/PageResponseOfSportDto"
                 }
               }
             }
@@ -458,13 +465,13 @@
       },
       "post": {
         "tags": [
-          "Coaches"
+          "Sports"
         ],
         "requestBody": {
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/CreateCoachRequest"
+                "$ref": "#/components/schemas/SportRequest"
               }
             }
           },
@@ -476,7 +483,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/CoachCreatedResponse"
+                  "$ref": "#/components/schemas/SportDto"
                 }
               }
             }
@@ -524,10 +531,10 @@
         }
       }
     },
-    "/api/v1/coaches/{id}": {
+    "/api/v1/sports/{id}": {
       "get": {
         "tags": [
-          "Coaches"
+          "Sports"
         ],
         "parameters": [
           {
@@ -546,7 +553,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/CoachDto"
+                  "$ref": "#/components/schemas/SportDto"
                 }
               }
             }
@@ -585,7 +592,7 @@
       },
       "put": {
         "tags": [
-          "Coaches"
+          "Sports"
         ],
         "parameters": [
           {
@@ -602,7 +609,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/UpdateCoachRequest"
+                "$ref": "#/components/schemas/RenameSportRequest"
               }
             }
           },
@@ -614,7 +621,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/CoachDto"
+                  "$ref": "#/components/schemas/SportDto"
                 }
               }
             }
@@ -670,12 +677,10 @@
             }
           }
         }
-      }
-    },
-    "/api/v1/coaches/{id}/deactivate": {
-      "post": {
+      },
+      "delete": {
         "tags": [
-          "Coaches"
+          "Sports"
         ],
         "parameters": [
           {
@@ -689,15 +694,8 @@
           }
         ],
         "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/CoachDto"
-                }
-              }
-            }
+          "204": {
+            "description": "No Content"
           },
           "404": {
             "description": "Not Found",
@@ -709,8 +707,8 @@
               }
             }
           },
-          "422": {
-            "description": "Unprocessable Entity",
+          "409": {
+            "description": "Conflict",
             "content": {
               "application/problem\u002Bjson": {
                 "schema": {
@@ -742,12 +740,79 @@
         }
       }
     },
-    "/api/v1/platform/schools": {
-      "get": {
+    "/api/v1/sports/{id}/archive": {
+      "post": {
         "tags": [
-          "Schools"
+          "Sports"
         ],
         "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SportDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/facilities": {
+      "get": {
+        "tags": [
+          "Facilities"
+        ],
+        "parameters": [
+          {
+            "name": "includeArchived",
+            "in": "query",
+            "schema": {
+              "type": "boolean"
+            }
+          },
           {
             "name": "page",
             "in": "query",
@@ -779,7 +844,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/PageResponseOfSchoolListItem"
+                  "$ref": "#/components/schemas/PageResponseOfFacilityDto"
                 }
               }
             }
@@ -818,13 +883,13 @@
       },
       "post": {
         "tags": [
-          "Schools"
+          "Facilities"
         ],
         "requestBody": {
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/CreateSchoolRequest"
+                "$ref": "#/components/schemas/FacilityRequest"
               }
             }
           },
@@ -836,7 +901,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/SchoolCreatedResponse"
+                  "$ref": "#/components/schemas/FacilityDto"
                 }
               }
             }
@@ -884,10 +949,10 @@
         }
       }
     },
-    "/api/v1/platform/schools/{id}": {
+    "/api/v1/facilities/{id}": {
       "get": {
         "tags": [
-          "Schools"
+          "Facilities"
         ],
         "parameters": [
           {
@@ -906,7 +971,216 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/SchoolDto"
+                  "$ref": "#/components/schemas/FacilityDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "Facilities"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateFacilityRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FacilityDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Facilities"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/facilities/{id}/archive": {
+      "post": {
+        "tags": [
+          "Facilities"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FacilityDto"
                 }
               }
             }
@@ -947,6 +1221,25 @@
   },
   "components": {
     "schemas": {
+      "AddressDto": {
+        "required": [
+          "line",
+          "district",
+          "city"
+        ],
+        "type": "object",
+        "properties": {
+          "line": {
+            "type": "string"
+          },
+          "district": {
+            "type": "string"
+          },
+          "city": {
+            "type": "string"
+          }
+        }
+      },
       "ChangePasswordRequest": {
         "required": [
           "currentPassword",
@@ -962,29 +1255,14 @@
           }
         }
       },
-      "CoachCreatedResponse": {
-        "required": [
-          "coach",
-          "temporaryPassword"
-        ],
-        "type": "object",
-        "properties": {
-          "coach": {
-            "$ref": "#/components/schemas/CoachDto"
-          },
-          "temporaryPassword": {
-            "type": "string"
-          }
-        }
-      },
-      "CoachDto": {
+      "FacilityDto": {
         "required": [
           "id",
-          "firstName",
-          "lastName",
-          "email",
-          "phone",
-          "status",
+          "name",
+          "type",
+          "address",
+          "capacity",
+          "isArchived",
           "version"
         ],
         "type": "object",
@@ -993,23 +1271,26 @@
             "type": "string",
             "format": "uuid"
           },
-          "firstName": {
+          "name": {
             "type": "string"
           },
-          "lastName": {
-            "type": "string"
+          "type": {
+            "$ref": "#/components/schemas/FacilityType"
           },
-          "email": {
-            "type": "string"
+          "address": {
+            "$ref": "#/components/schemas/AddressDto"
           },
-          "phone": {
+          "capacity": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
             "type": [
               "null",
+              "integer",
               "string"
-            ]
+            ],
+            "format": "int32"
           },
-          "status": {
-            "$ref": "#/components/schemas/UserStatus"
+          "isArchived": {
+            "type": "boolean"
           },
           "version": {
             "pattern": "^-?(?:0|[1-9]\\d*)$",
@@ -1021,54 +1302,42 @@
           }
         }
       },
-      "CreateCoachRequest": {
-        "required": [
-          "firstName",
-          "lastName",
-          "email",
-          "phone"
-        ],
-        "type": "object",
-        "properties": {
-          "firstName": {
-            "type": "string"
-          },
-          "lastName": {
-            "type": "string"
-          },
-          "email": {
-            "type": "string"
-          },
-          "phone": {
-            "type": [
-              "null",
-              "string"
-            ]
-          }
-        }
-      },
-      "CreateSchoolRequest": {
+      "FacilityRequest": {
         "required": [
           "name",
-          "slug",
-          "timeZone",
-          "admin"
+          "type",
+          "address",
+          "capacity"
         ],
         "type": "object",
         "properties": {
           "name": {
             "type": "string"
           },
-          "slug": {
-            "type": "string"
+          "type": {
+            "$ref": "#/components/schemas/FacilityType"
           },
-          "timeZone": {
-            "type": "string"
+          "address": {
+            "$ref": "#/components/schemas/AddressDto"
           },
-          "admin": {
-            "$ref": "#/components/schemas/NewSchoolAdmin"
+          "capacity": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int32"
           }
         }
+      },
+      "FacilityType": {
+        "enum": [
+          "Field",
+          "Pool",
+          "Court",
+          "Other"
+        ]
       },
       "LoginRequest": {
         "required": [
@@ -1085,26 +1354,7 @@
           }
         }
       },
-      "NewSchoolAdmin": {
-        "required": [
-          "firstName",
-          "lastName",
-          "email"
-        ],
-        "type": "object",
-        "properties": {
-          "firstName": {
-            "type": "string"
-          },
-          "lastName": {
-            "type": "string"
-          },
-          "email": {
-            "type": "string"
-          }
-        }
-      },
-      "PageResponseOfCoachDto": {
+      "PageResponseOfFacilityDto": {
         "required": [
           "items",
           "page",
@@ -1117,7 +1367,7 @@
           "items": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/CoachDto"
+              "$ref": "#/components/schemas/FacilityDto"
             }
           },
           "page": {
@@ -1154,7 +1404,7 @@
           }
         }
       },
-      "PageResponseOfSchoolListItem": {
+      "PageResponseOfSportDto": {
         "required": [
           "items",
           "page",
@@ -1167,7 +1417,7 @@
           "items": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/SchoolListItem"
+              "$ref": "#/components/schemas/SportDto"
             }
           },
           "page": {
@@ -1242,126 +1492,25 @@
           }
         }
       },
-      "SchoolAdminSummary": {
+      "RenameSportRequest": {
         "required": [
-          "id",
-          "firstName",
-          "lastName",
-          "email",
-          "status"
-        ],
-        "type": "object",
-        "properties": {
-          "id": {
-            "type": "string",
-            "format": "uuid"
-          },
-          "firstName": {
-            "type": "string"
-          },
-          "lastName": {
-            "type": "string"
-          },
-          "email": {
-            "type": "string"
-          },
-          "status": {
-            "$ref": "#/components/schemas/UserStatus"
-          }
-        }
-      },
-      "SchoolCreatedResponse": {
-        "required": [
-          "school",
-          "adminId",
-          "temporaryPassword"
-        ],
-        "type": "object",
-        "properties": {
-          "school": {
-            "$ref": "#/components/schemas/SchoolDto"
-          },
-          "adminId": {
-            "type": "string",
-            "format": "uuid"
-          },
-          "temporaryPassword": {
-            "type": "string"
-          }
-        }
-      },
-      "SchoolDto": {
-        "required": [
-          "id",
           "name",
-          "slug",
-          "timeZone",
-          "status"
+          "version"
         ],
         "type": "object",
         "properties": {
-          "id": {
-            "type": "string",
-            "format": "uuid"
-          },
           "name": {
             "type": "string"
           },
-          "slug": {
-            "type": "string"
-          },
-          "timeZone": {
-            "type": "string"
-          },
-          "status": {
-            "$ref": "#/components/schemas/SchoolStatus"
+          "version": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "uint32"
           }
         }
-      },
-      "SchoolListItem": {
-        "required": [
-          "id",
-          "name",
-          "slug",
-          "timeZone",
-          "status",
-          "admin"
-        ],
-        "type": "object",
-        "properties": {
-          "id": {
-            "type": "string",
-            "format": "uuid"
-          },
-          "name": {
-            "type": "string"
-          },
-          "slug": {
-            "type": "string"
-          },
-          "timeZone": {
-            "type": "string"
-          },
-          "status": {
-            "$ref": "#/components/schemas/SchoolStatus"
-          },
-          "admin": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/SchoolAdminSummary"
-              }
-            ]
-          }
-        }
-      },
-      "SchoolStatus": {
-        "enum": [
-          "Active",
-          "Deactivated"
-        ]
       },
       "SessionResponse": {
         "required": [
@@ -1387,6 +1536,46 @@
           }
         }
       },
+      "SportDto": {
+        "required": [
+          "id",
+          "name",
+          "isArchived",
+          "version"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string"
+          },
+          "isArchived": {
+            "type": "boolean"
+          },
+          "version": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "uint32"
+          }
+        }
+      },
+      "SportRequest": {
+        "required": [
+          "name"
+        ],
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          }
+        }
+      },
       "TemporaryPasswordIssued": {
         "required": [
           "temporaryPassword"
@@ -1398,26 +1587,33 @@
           }
         }
       },
-      "UpdateCoachRequest": {
+      "UpdateFacilityRequest": {
         "required": [
-          "firstName",
-          "lastName",
-          "phone",
+          "name",
+          "type",
+          "address",
+          "capacity",
           "version"
         ],
         "type": "object",
         "properties": {
-          "firstName": {
+          "name": {
             "type": "string"
           },
-          "lastName": {
-            "type": "string"
+          "type": {
+            "$ref": "#/components/schemas/FacilityType"
           },
-          "phone": {
+          "address": {
+            "$ref": "#/components/schemas/AddressDto"
+          },
+          "capacity": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
             "type": [
               "null",
+              "integer",
               "string"
-            ]
+            ],
+            "format": "int32"
           },
           "version": {
             "pattern": "^-?(?:0|[1-9]\\d*)$",
@@ -1434,12 +1630,6 @@
           "PlatformAdmin",
           "SchoolAdmin",
           "Coach"
-        ]
-      },
-      "UserStatus": {
-        "enum": [
-          "Active",
-          "Deactivated"
         ]
       },
       "UserSummary": {
@@ -1497,10 +1687,10 @@
       "name": "IdentityEndpoints"
     },
     {
-      "name": "Coaches"
+      "name": "Sports"
     },
     {
-      "name": "Schools"
+      "name": "Facilities"
     }
   ]
 }
