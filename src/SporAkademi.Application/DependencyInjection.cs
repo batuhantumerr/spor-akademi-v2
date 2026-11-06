@@ -3,6 +3,8 @@ using FluentValidation;
 using Microsoft.Extensions.DependencyInjection;
 using SporAkademi.Application.Abstractions.Behaviors;
 using SporAkademi.Application.Abstractions.Messaging;
+using SporAkademi.Application.Enrollments;
+using SporAkademi.Application.Enrollments.Contracts;
 using SporAkademi.Application.Identity;
 using SporAkademi.Application.Identity.Contracts;
 
@@ -14,6 +16,10 @@ public static class DependencyInjection
     {
         services.AddScoped<AccountOpening>();
         services.AddScoped<IIdentityModule, IdentityModule>();
+        services.AddScoped<EnrollmentModule>();
+        services.AddScoped<IEnrollmentCounts>(sp => sp.GetRequiredService<EnrollmentModule>());
+        services.AddScoped<IEnrollmentEnder>(sp => sp.GetRequiredService<EnrollmentModule>());
+        services.AddScoped<IStudentGroupFilter>(sp => sp.GetRequiredService<EnrollmentModule>());
         return services.AddHandlersFrom(typeof(DependencyInjection).Assembly);
     }
 

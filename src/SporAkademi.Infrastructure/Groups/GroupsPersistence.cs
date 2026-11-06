@@ -17,7 +17,7 @@ internal sealed class GroupConfiguration : IEntityTypeConfiguration<Group>
     {
         builder.ToTable("groups", Schemas.Groups);
         builder.HasKey(g => g.Id);
-        builder.HasAlternateKey(g => new { g.TenantId, g.Id });
+        builder.HasAlternateKey(g => new { g.TenantId, g.Id }).HasName("ak_groups_tenant_id_id");
         builder.HasOne<School>().WithMany().HasForeignKey(g => g.TenantId).OnDelete(DeleteBehavior.Restrict);
 
         // ADR-0003 layer 3: a group can only reference a sport or facility of its own school. These

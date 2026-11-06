@@ -176,6 +176,7 @@ internal sealed class UpdateGroupHandler(
     IOrganizationDirectory organization,
     ICoachDirectory coaches,
     IEnrollmentCounts enrollments,
+    IEnrollmentLocks enrollmentLocks,
     IGroupLocks locks) : ICommandHandler<UpdateGroupCommand, Unit>
 {
     public async Task<Result<Unit>> Handle(UpdateGroupCommand command, CancellationToken cancellationToken)
@@ -206,6 +207,8 @@ internal sealed class UpdateGroupHandler(
 
         if (command.Capacity < group.Capacity)
         {
+            // ADR-0005: the group lock stops a concurrent enrollment from slipping in after the count.
+            await enrollmentLocks.LockGroupAsync(group.Id, cancellationToken);
             var active = await enrollments.CountActiveAsync(group.Id, cancellationToken);
             if (command.Capacity < active)
             {

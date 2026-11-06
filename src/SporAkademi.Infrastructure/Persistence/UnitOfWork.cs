@@ -16,6 +16,9 @@ internal sealed class UnitOfWork(AppDbContext dbContext, DomainEventDispatcher d
     private const int MaxEventRounds = 10;
     private const string LockNotAvailable = "55P03";
 
+    /// <summary>PostgreSQL aborted one side of a deadlock; the caller may retry, like after a lock timeout (DEC-166).</summary>
+    private const string DeadlockDetected = "40P01";
+
     public Task<Result<T>> ExecuteInTransactionAsync<T>(
         Func<CancellationToken, Task<Result<T>>> operation,
         CancellationToken cancellationToken) =>
@@ -131,7 +134,7 @@ internal sealed class UnitOfWork(AppDbContext dbContext, DomainEventDispatcher d
     {
         for (Exception? current = exception; current is not null; current = current.InnerException)
         {
-            if (current is PostgresException { SqlState: LockNotAvailable })
+            if (current is PostgresException { SqlState: LockNotAvailable or DeadlockDetected })
             {
                 return true;
             }
