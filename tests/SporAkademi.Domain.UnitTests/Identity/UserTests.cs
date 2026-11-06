@@ -37,6 +37,35 @@ public sealed class UserTests
     }
 
     [Fact]
+    [Trait("Story", "US-08")]
+    public void Profile_update_trims_names_and_sets_the_phone()
+    {
+        var user = NewCoach();
+        var phone = PhoneNumber.Create("0532 123 45 67").Value;
+
+        user.UpdateProfile("  Elif ", " Demir ", phone).IsSuccess.ShouldBeTrue();
+
+        user.FirstName.ShouldBe("Elif");
+        user.LastName.ShouldBe("Demir");
+        user.Phone.ShouldBe(phone);
+        user.UpdateProfile("Elif", "Demir", null).IsSuccess.ShouldBeTrue();
+        user.Phone.ShouldBeNull();
+        user.UpdateProfile("", "Demir", null).Error.ShouldBe(CommonErrors.FieldRequired);
+        user.FirstName.ShouldBe("Elif");
+    }
+
+    [Fact]
+    [Trait("Story", "US-08")]
+    public void Deactivated_accounts_cannot_be_edited()
+    {
+        var user = NewCoach();
+        user.Deactivate(Now);
+
+        user.UpdateProfile("Elif", "Demir", null).Error.ShouldBe(UserErrors.AlreadyInactive);
+        user.FirstName.ShouldBe("Ayşe");
+    }
+
+    [Fact]
     public void Names_are_required_and_bounded()
     {
         var email = Email.Create("a@example.com").Value;
