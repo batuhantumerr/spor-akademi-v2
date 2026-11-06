@@ -38,7 +38,5 @@ export default async function globalSetup(): Promise<void> {
   process.env['E2E_RUN_ID'] = id;
   process.env['E2E_ADMIN_EMAIL'] = adminEmail;
   process.env['E2E_ADMIN_PASSWORD'] = adminPassword;
-  // Valid for 15 minutes, far longer than a run; lets specs arrange data without another login.
-  process.env['E2E_ADMIN_TOKEN'] = admin.accessToken;
   await admin.dispose();
 }

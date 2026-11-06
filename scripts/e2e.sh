@@ -20,6 +20,20 @@ require_env SPOR_AKADEMI_MIGRATOR_PASSWORD SPOR_AKADEMI_APP_PASSWORD JWT_SIGNING
 export SPOR_AKADEMI_DB_NAME=spor_akademi_e2e
 cd "$REPO_ROOT"
 
+# Scratch space for build logs and the TLS certificate, removed when the run ends.
+work_dir="$(mktemp -d)"
+trap 'rm -rf "$work_dir"' EXIT
+
+# Runs a step with its output kept aside; prints the output only when the step fails.
+quietly() {
+  local log="$work_dir/step.log"
+  if ! "$@" >"$log" 2>&1; then
+    cat "$log" >&2
+    echo "error: step failed: $*" >&2
+    exit 1
+  fi
+}
+
 if ! docker compose exec -T postgres pg_isready -U postgres -d postgres >/dev/null 2>&1; then
   echo "error: PostgreSQL is not running. Start it with: docker compose up -d --wait" >&2
   exit 1
@@ -40,10 +54,10 @@ ALTER DEFAULT PRIVILEGES FOR ROLE spor_akademi_migrator GRANT USAGE, SELECT ON S
 SQL
 
 echo "e2e: building the API (Release, so a running dev API does not lock the build output)"
-dotnet build src/SporAkademi.Api -c Release --nologo -v quiet
+quietly dotnet build src/SporAkademi.Api -c Release --nologo
 
 echo "e2e: applying migrations as the migrator role"
-bash scripts/ef.sh database update >/dev/null
+quietly bash scripts/ef.sh database update
 
 # Handed to playwright.config.ts through the environment only; never printed or written to disk.
 E2E_API_CONNECTION="$(connection_string spor_akademi_app SPOR_AKADEMI_APP_PASSWORD)"
@@ -52,22 +66,17 @@ E2E_PLATFORM_ADMIN_EMAIL="platform-$(openssl rand -hex 4)@e2e.test"
 E2E_PLATFORM_ADMIN_PASSWORD="$(openssl rand -hex 24)"
 export E2E_API_CONNECTION E2E_JWT_SIGNING_KEY E2E_PLATFORM_ADMIN_EMAIL E2E_PLATFORM_ADMIN_PASSWORD
 
-# A throwaway self-signed certificate for https://localhost (the refresh cookie is Secure), removed
-# when the run ends. On Git Bash, paths are passed in Windows form and MSYS_NO_PATHCONV keeps
-# "/CN=localhost" from being rewritten into a path.
-tls_dir="$(mktemp -d)"
-trap 'rm -rf "$tls_dir"' EXIT
-native_tls_dir="$tls_dir"
-if command -v cygpath >/dev/null 2>&1; then native_tls_dir="$(cygpath -m "$tls_dir")"; fi
-export E2E_TLS_KEY="$native_tls_dir/key.pem" E2E_TLS_CERT="$native_tls_dir/cert.pem"
-if ! MSYS_NO_PATHCONV=1 openssl req -x509 -newkey rsa:2048 -nodes -days 1 -subj "/CN=localhost" \
+# A throwaway self-signed certificate for https://localhost (the refresh cookie is Secure). On Git
+# Bash, paths are passed in Windows form and MSYS_NO_PATHCONV keeps "/CN=localhost" from being
+# rewritten into a path.
+native_dir="$work_dir"
+if command -v cygpath >/dev/null 2>&1; then native_dir="$(cygpath -m "$work_dir")"; fi
+export E2E_TLS_KEY="$native_dir/key.pem" E2E_TLS_CERT="$native_dir/cert.pem"
+quietly env MSYS_NO_PATHCONV=1 openssl req -x509 -newkey rsa:2048 -nodes -days 1 -subj "/CN=localhost" \
   -addext "subjectAltName=DNS:localhost,IP:127.0.0.1,IP:::1" \
-  -keyout "$E2E_TLS_KEY" -out "$E2E_TLS_CERT" >/dev/null 2>&1; then
-  echo "error: openssl could not create the e2e TLS certificate." >&2
-  exit 1
-fi
+  -keyout "$E2E_TLS_KEY" -out "$E2E_TLS_CERT"
 
 cd web/admin
 echo "e2e: building the admin app (production)"
-npm run --silent build >/dev/null
+quietly npm run build
 npx playwright test "$@"

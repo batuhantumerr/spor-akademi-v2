@@ -11,12 +11,8 @@ export function runId(): string {
   return required('E2E_RUN_ID');
 }
 
-export function schoolAdmin(): { email: string; password: string; token: string } {
-  return {
-    email: required('E2E_ADMIN_EMAIL'),
-    password: required('E2E_ADMIN_PASSWORD'),
-    token: required('E2E_ADMIN_TOKEN'),
-  };
+export function schoolAdmin(): { email: string; password: string } {
+  return { email: required('E2E_ADMIN_EMAIL'), password: required('E2E_ADMIN_PASSWORD') };
 }
 
 /** A password for this run only: long, random, never written anywhere. */
@@ -56,6 +52,20 @@ export function todayInSchool(now = new Date()): { date: string; day: string } {
   }).formatToParts(now);
   const part = (type: Intl.DateTimeFormatPartTypes) => parts.find((p) => p.type === type)!.value;
   return { date: `${part('year')}-${part('month')}-${part('day')}`, day: part('weekday') };
+}
+
+/** Minutes left until midnight in the school's time zone (1440 right at midnight). */
+export function minutesToSchoolMidnight(now = new Date()): number {
+  const [hour, minute] = new Intl.DateTimeFormat('en-GB', {
+    timeZone: schoolTimeZone,
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
+  })
+    .format(now)
+    .split(':')
+    .map(Number);
+  return 24 * 60 - (hour * 60 + minute);
 }
 
 function required(name: string): string {

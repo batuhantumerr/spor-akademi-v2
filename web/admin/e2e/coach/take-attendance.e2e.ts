@@ -5,6 +5,7 @@ import { ApiClient } from '../support/api';
 import {
   newPassword,
   phone,
+  minutesToSchoolMidnight,
   schoolAdmin,
   todayInSchool,
   unique,
@@ -53,10 +54,19 @@ interface Arranged {
 }
 
 let arranged: Arranged;
+/** One fresh School Admin login per project, kept for the read-back (logins are rate limited). */
+let admin: ApiClient | undefined;
 
 test.beforeAll(async () => {
   const testInfo = test.info();
-  const admin = await ApiClient.withToken(schoolAdmin().token);
+  // "Today" must not change between arranging the session and saving its attendance.
+  const toMidnight = minutesToSchoolMidnight();
+  test.skip(
+    toMidnight < 5 || toMidnight > 24 * 60 - 5,
+    'Skipped within 5 minutes of midnight in Europe/Istanbul: the session date would change mid-test.',
+  );
+  const credentials = schoolAdmin();
+  admin = await ApiClient.login(credentials.email, credentials.password);
   const today = todayInSchool();
   const sport = await admin.post<{ id: string }>('/api/v1/sports', {
     name: unique('Basketbol', testInfo),
@@ -120,7 +130,6 @@ test.beforeAll(async () => {
     });
     students.push({ id: student.id, firstName: firstNames[i], lastName });
   }
-  await admin.dispose();
 
   arranged = {
     groupId: group.id,
@@ -183,14 +192,16 @@ test('coach signs in on a phone and records attendance for 20 students', async (
   await expectNoSeriousA11yViolations(page, testInfo, 'take-attendance');
 
   // What the server stored, read back as the School Admin.
-  const admin = await ApiClient.withToken(schoolAdmin().token);
-  const saved = await admin.get<{ students: { studentId: string; status: string | null }[] }>(
+  const saved = await admin!.get<{ students: { studentId: string; status: string | null }[] }>(
     `/api/v1/groups/${arranged.groupId}/sessions/${arranged.sessionKey}/attendance`,
   );
-  await admin.dispose();
   const counts = saved.students.reduce<Record<string, number>>((acc, s) => {
     acc[s.status ?? 'none'] = (acc[s.status ?? 'none'] ?? 0) + 1;
     return acc;
   }, {});
   expect(counts).toEqual({ Present: 17, Absent: 2, Late: 1 });
+});
+
+test.afterAll(async () => {
+  await admin?.dispose();
 });

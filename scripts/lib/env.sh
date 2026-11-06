@@ -40,5 +40,11 @@ connection_string() {
   # $1 = role name, $2 = password variable name. SPOR_AKADEMI_DB_NAME selects another database on the
   # same server (scripts/e2e.sh uses a throwaway one).
   local port="${POSTGRES_HOST_PORT:-55432}"
-  printf 'Host=127.0.0.1;Port=%s;Database=%s;Username=%s;Password=%s' "$port" "${SPOR_AKADEMI_DB_NAME:-spor_akademi}" "$1" "${!2}"
+  local database="${SPOR_AKADEMI_DB_NAME:-spor_akademi}"
+  # A plain identifier only, so the setting cannot smuggle extra connection-string parameters in.
+  if [[ ! "$database" =~ ^[a-z0-9_]+$ ]]; then
+    echo "error: SPOR_AKADEMI_DB_NAME may only contain lowercase letters, digits and '_'." >&2
+    return 1
+  fi
+  printf 'Host=127.0.0.1;Port=%s;Database=%s;Username=%s;Password=%s' "$port" "$database" "$1" "${!2}"
 }

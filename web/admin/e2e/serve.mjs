@@ -64,7 +64,13 @@ function file(path) {
 }
 
 function handle(req, res) {
-  const path = decodeURIComponent(new URL(req.url ?? '/', 'http://localhost').pathname);
+  let path;
+  try {
+    path = decodeURIComponent(new URL(req.url ?? '/', 'http://localhost').pathname);
+  } catch {
+    res.writeHead(400).end(); // malformed percent-encoding
+    return;
+  }
   if (path === '/api' || path.startsWith('/api/') || path.startsWith('/health/')) {
     proxy(req, res);
     return;
@@ -80,8 +86,9 @@ function handle(req, res) {
 for (const host of ['127.0.0.1', '::1']) {
   createServer(tls, handle)
     .on('error', (error) => {
-      // A machine without IPv6 loopback still serves on 127.0.0.1.
-      if (host !== '::1') throw error;
+      // A machine without IPv6 loopback still serves on 127.0.0.1; any other failure is fatal.
+      const noIpv6 = error.code === 'EADDRNOTAVAIL' || error.code === 'EAFNOSUPPORT';
+      if (host !== '::1' || !noIpv6) throw error;
     })
     .listen(port, host);
 }

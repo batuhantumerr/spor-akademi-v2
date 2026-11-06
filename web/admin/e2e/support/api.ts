@@ -25,14 +25,6 @@ export class ApiClient {
     return new ApiClient(context, session.accessToken);
   }
 
-  static async withToken(token: string): Promise<ApiClient> {
-    return new ApiClient(await request.newContext({ baseURL: apiUrl }), token);
-  }
-
-  get accessToken(): string {
-    return this.token;
-  }
-
   /** Replaces a temporary password; the API answers with a fresh session, which this client keeps. */
   async changePassword(currentPassword: string, newPassword: string): Promise<void> {
     const session = await this.post<SessionResponse>(
