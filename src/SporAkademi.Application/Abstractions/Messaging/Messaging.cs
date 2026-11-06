@@ -8,7 +8,7 @@ public interface ICommand<TResponse>;
 /// <summary>
 /// Marks a command whose expected failures still change state that must be kept, so the transaction
 /// commits on a failed result as well: a wrong password counts towards the lockout, a reused refresh
-/// token revokes the user's sessions (DEC-109).
+/// token revokes the user's sessions (DEC-113).
 /// </summary>
 public interface IKeepChangesOnFailure;
 

@@ -1,33 +1,9 @@
-using System.Reflection;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using SporAkademi.Application.Abstractions.Authentication;
 using SporAkademi.Domain.Tenancy;
 
 namespace SporAkademi.Infrastructure.Persistence;
-
-internal static class TenantFilters
-{
-    private static readonly MethodInfo ApplyMethod =
-        typeof(TenantFilters).GetMethod(nameof(Apply), BindingFlags.NonPublic | BindingFlags.Static)!;
-
-    /// <summary>
-    /// Layer 1 of ADR-0003: every query on a tenant-scoped entity only sees the current school's rows.
-    /// Without a tenant (Platform Admin, anonymous) the filter matches nothing: deny by default.
-    /// </summary>
-    public static void AddTenantQueryFilters(this ModelBuilder modelBuilder, AppDbContext context)
-    {
-        foreach (var entityType in modelBuilder.Model.GetEntityTypes()
-                     .Where(t => t.BaseType is null && typeof(ITenantScoped).IsAssignableFrom(t.ClrType)).ToList())
-        {
-            ApplyMethod.MakeGenericMethod(entityType.ClrType).Invoke(null, [modelBuilder, context]);
-        }
-    }
-
-    private static void Apply<TEntity>(ModelBuilder modelBuilder, AppDbContext context)
-        where TEntity : class, ITenantScoped =>
-        modelBuilder.Entity<TEntity>().HasQueryFilter(entity => entity.TenantId == context.CurrentTenantId);
-}
 
 /// <summary>
 /// Layer 2 of ADR-0003: a request bound to a school can only add, change or delete that school's rows,
@@ -60,6 +36,11 @@ internal sealed class TenantWriteGuardInterceptor(ICurrentUser currentUser) : Sa
         }
 
         var tenant = currentUser.TenantId;
+        if (currentUser.IsAuthenticated && currentUser.Role != Role.PlatformAdmin && tenant is null)
+        {
+            throw new TenantIsolationException("A school user without a tenant cannot write.");
+        }
+
         foreach (var entry in context.ChangeTracker.Entries<ITenantScoped>())
         {
             if (entry.State is not (EntityState.Added or EntityState.Modified or EntityState.Deleted))
@@ -73,7 +54,7 @@ internal sealed class TenantWriteGuardInterceptor(ICurrentUser currentUser) : Sa
                 throw new TenantIsolationException($"The tenant of {entry.Metadata.ClrType.Name} cannot change.");
             }
 
-            // Platform-level work (no tenant in the token) is deliberate and audited by its own module.
+            // Platform-level work (Platform Admin or system, no tenant) is deliberate and owned by its module.
             if (tenant is { } current && entry.Entity.TenantId.Value != current)
             {
                 throw new TenantIsolationException($"Cannot write {entry.Metadata.ClrType.Name} of another school.");

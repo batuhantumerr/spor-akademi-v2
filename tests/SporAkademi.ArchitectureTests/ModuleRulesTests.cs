@@ -71,7 +71,11 @@ public sealed class ModuleRulesTests
             .Where(file =>
             {
                 var text = File.ReadAllText(file);
+                var isCompositionRoot = file.EndsWith("Program.cs", StringComparison.Ordinal)
+                    || file.EndsWith("DependencyInjection.cs", StringComparison.Ordinal);
                 return text.Contains("DateTime.Now", StringComparison.Ordinal)
+                    || text.Contains("DateTime.Today", StringComparison.Ordinal)
+                    || (!isCompositionRoot && text.Contains("TimeProvider.System", StringComparison.Ordinal))
                     || text.Contains("DateTime.UtcNow", StringComparison.Ordinal)
                     || text.Contains("DateTimeOffset.Now", StringComparison.Ordinal)
                     || text.Contains("DateTimeOffset.UtcNow", StringComparison.Ordinal);

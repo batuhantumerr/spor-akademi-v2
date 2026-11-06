@@ -14,23 +14,68 @@ namespace SporAkademi.IntegrationTests.Platform;
 public sealed class ErrorHandlingTests(DatabaseFixture database) : IntegrationTest(database)
 {
     [Fact]
-    public async Task Anonymous_calls_are_denied_by_default()
+    public async Task Anonymous_calls_are_denied_by_default_with_a_coded_problem()
     {
         var response = await Client.GetAsync(new Uri("/api/v1/anything", UriKind.Relative), TestContext.Current.CancellationToken);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
+        var problem = await response.Content.ReadFromJsonAsync<JsonElement>(TestContext.Current.CancellationToken);
+        problem.GetProperty("code").GetString().ShouldBe("Auth.Unauthenticated");
+        problem.GetProperty("traceId").GetString().ShouldNotBeNullOrWhiteSpace();
+    }
+
+    public static TheoryData<string> InvalidTokenCases() =>
+        ["other-key", "expired", "wrong-issuer", "alg-none", "school-role-without-tenant", "platform-admin-with-tenant"];
+
+    [Theory]
+    [MemberData(nameof(InvalidTokenCases))]
+    public async Task Invalid_tokens_are_rejected(string @case)
+    {
+        var now = Api.Clock.GetUtcNow();
+        var user = Guid.CreateVersion7();
+        var school = Guid.CreateVersion7();
+        var token = @case switch
+        {
+            "other-key" => TestTokens.Create(user, "SchoolAdmin", school, now, signingKeyHex: new string('b', 64)),
+            "expired" => TestTokens.Create(user, "SchoolAdmin", school, now.AddMinutes(-16)),
+            "wrong-issuer" => TestTokens.Create(user, "SchoolAdmin", school, now, issuer: "someone-else"),
+            "alg-none" => UnsignedToken(user, school, now),
+            "school-role-without-tenant" => TestTokens.Create(user, "SchoolAdmin", null, now),
+            _ => TestTokens.Create(user, "PlatformAdmin", school, now),
+        };
+        using var client = ClientWithTestEndpoints();
+        client.Authorize(token);
+
+        var response = await client.GetAsync(new Uri("/test/business-rule", UriKind.Relative), TestContext.Current.CancellationToken);
 
         response.StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
     }
 
     [Fact]
-    public async Task Tokens_signed_with_another_key_are_rejected()
+    public async Task Valid_token_is_accepted_until_it_expires()
     {
-        using var client = Api.CreateClient();
-        var token = TestTokens.Create(Guid.CreateVersion7(), "SchoolAdmin", Guid.CreateVersion7(), Api.Clock.GetUtcNow());
-        client.Authorize(token[..^4] + "AAAA");
+        using var client = ClientWithTestEndpoints();
+        client.Authorize(TestTokens.Create(Guid.CreateVersion7(), "Coach", Guid.CreateVersion7(), Api.Clock.GetUtcNow()));
 
-        var response = await client.GetAsync(new Uri("/api/v1/anything", UriKind.Relative), TestContext.Current.CancellationToken);
+        (await client.GetAsync(new Uri("/test/business-rule", UriKind.Relative), TestContext.Current.CancellationToken))
+            .StatusCode.ShouldBe(HttpStatusCode.UnprocessableEntity);
 
-        response.StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
+        Api.Clock.Advance(TimeSpan.FromMinutes(16));
+        (await client.GetAsync(new Uri("/test/business-rule", UriKind.Relative), TestContext.Current.CancellationToken))
+            .StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
+    }
+
+    [Fact]
+    public async Task Bodies_over_one_megabyte_are_rejected()
+    {
+        using var content = new ByteArrayContent(new byte[1_048_577]);
+        content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/json");
+
+        var response = await Client.PostAsync(new Uri("/api/v1/anything", UriKind.Relative), content, TestContext.Current.CancellationToken);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        (await response.Content.ReadFromJsonAsync<JsonElement>(TestContext.Current.CancellationToken))
+            .GetProperty("code").GetString().ShouldBe("Request.TooLarge");
     }
 
     [Fact]
@@ -94,6 +139,16 @@ public sealed class ErrorHandlingTests(DatabaseFixture database) : IntegrationTe
         ProblemResults.StatusFor(type).ShouldBe(status);
     }
 
+    private static string UnsignedToken(Guid user, Guid school, DateTimeOffset now)
+    {
+        static string Encode(string json) => Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(json)).TrimEnd('=').Replace('+', '-').Replace('/', '_');
+        var header = Encode("{\"alg\":\"none\",\"typ\":\"JWT\"}");
+        var payload = Encode($"{{\"sub\":\"{user}\",\"role\":\"SchoolAdmin\",\"tenant_id\":\"{school}\",\"iss\":\"spor-akademi\",\"aud\":\"spor-akademi-api\",\"exp\":{now.AddMinutes(15).ToUnixTimeSeconds()}}}");
+        return $"{header}.{payload}.";
+    }
+
+    // The test endpoints sit behind the real pipeline (authentication + fallback policy), so they
+    // also act as probes for token validation.
     private HttpClient ClientWithTestEndpoints() =>
         Api.WithWebHostBuilder(builder => builder.ConfigureServices(services =>
             services.AddSingleton<IStartupFilter, TestEndpointsStartupFilter>())).CreateClient();

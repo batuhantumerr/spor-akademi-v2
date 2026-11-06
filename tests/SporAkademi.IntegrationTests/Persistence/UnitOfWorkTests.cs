@@ -200,6 +200,32 @@ public sealed class UnitOfWorkTests(DatabaseFixture database) : IntegrationTest(
     }
 
     [Fact]
+    public async Task Nested_unit_of_work_does_not_commit_on_its_own()
+    {
+        // The inner call succeeds, the outer one fails afterwards: nothing may be stored.
+        var result = await InScopeAsync(sp =>
+        {
+            var unitOfWork = sp.GetRequiredService<IUnitOfWork>();
+            return unitOfWork.ExecuteInTransactionAsync(
+                async ct =>
+                {
+                    await unitOfWork.ExecuteInTransactionAsync(
+                        _ =>
+                        {
+                            sp.GetRequiredService<AppDbContext>().Add(NewSchool());
+                            return Task.FromResult(Result.Success(1));
+                        },
+                        ct);
+                    return Result.Failure<int>(SchoolErrors.SlugTaken);
+                },
+                TestContext.Current.CancellationToken);
+        });
+
+        result.IsFailure.ShouldBeTrue();
+        (await CountSchoolsAsync()).ShouldBe(0);
+    }
+
+    [Fact]
     public async Task Waiting_on_a_locked_row_times_out_as_a_lock_timeout_error()
     {
         var school = NewSchool();
