@@ -63,6 +63,14 @@ export const routes: Routes = [
             loadComponent: () =>
               import('./features/coach/coach-groups.page').then((m) => m.CoachGroupsPage),
           },
+          {
+            path: 'announcements',
+            title: ui.announcements.title,
+            loadComponent: () =>
+              import('./features/announcements/coach-announcements.page').then(
+                (m) => m.CoachAnnouncementsPage,
+              ),
+          },
         ],
       },
       {

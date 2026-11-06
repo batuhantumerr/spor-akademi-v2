@@ -1,0 +1,57 @@
+import { ChangeDetectionStrategy, Component, inject } from '@angular/core';
+import { RouterLink } from '@angular/router';
+import { LucideMegaphone } from '@lucide/angular';
+
+import { Api } from '../../api/api';
+import { apiV1MeAnnouncementsGet } from '../../api/functions';
+import { AnnouncementDto } from '../../api/models';
+import { ui } from '../../core/i18n/tr';
+import { PagedList } from '../../shared/data/paged-list';
+import { AnnouncementItemComponent } from './announcement-item.component';
+
+/** Compact "Duyurular" on the coach's home: the newest few, with a link to the full list. */
+@Component({
+  selector: 'app-coach-announcements',
+  changeDetection: ChangeDetectionStrategy.OnPush,
+  imports: [RouterLink, AnnouncementItemComponent, LucideMegaphone],
+  template: `
+    <section class="card p-4" aria-labelledby="coach-announcements-title">
+      <div class="mb-2 flex items-center justify-between gap-2">
+        <h2 id="coach-announcements-title" class="flex items-center gap-2 text-lg font-semibold">
+          <svg lucideMegaphone class="size-5 text-primary" aria-hidden="true"></svg>
+          {{ text.title }}
+        </h2>
+        <a routerLink="/coach/announcements" class="btn btn-ghost btn-sm h-11">{{ text.all }}</a>
+      </div>
+      @if (list.error(); as message) {
+        <p role="alert" class="text-sm text-destructive">{{ message }}</p>
+      } @else if (list.loading()) {
+        <p role="status" class="text-sm text-muted-foreground">{{ common.loading }}</p>
+      } @else if (list.isEmpty()) {
+        <p class="text-sm text-muted-foreground">{{ text.emptyCoach }}</p>
+      } @else {
+        <ul class="divide-y divide-border/60">
+          @for (a of list.items(); track a.id) {
+            <li class="py-2">
+              <app-announcement-item [announcement]="a" [showGroup]="true" [compact]="true" />
+            </li>
+          }
+        </ul>
+      }
+    </section>
+  `,
+})
+export class CoachAnnouncementsComponent {
+  private readonly api = inject(Api);
+
+  protected readonly text = ui.announcements;
+  protected readonly common = ui.common;
+  /** The API returns the newest first. */
+  protected readonly list = new PagedList<AnnouncementDto>((page) =>
+    this.api.invoke(apiV1MeAnnouncementsGet, { page, pageSize: 3 }),
+  );
+
+  constructor() {
+    void this.list.load();
+  }
+}
