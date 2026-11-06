@@ -27,7 +27,7 @@ Kapsamın tamamı ve maddelerin açıklamaları: [proje dokümanı, Ek G](proje-
 - [x] P1-10 US-04 Refresh ve çıkış
 - [x] P1-11 US-05 İlk giriş ve şifre değiştirme
 - [x] P1-12 US-01 Okul oluşturma
-- [ ] P1-13 Angular kabuğu, giriş, ADR-0010
+- [x] P1-13 Angular kabuğu, giriş, ADR-0010 (ADR-0010 Proposed, sahip onayı bekliyor)
 - [x] P1-14 OpenAPI ve Angular client
 
 ### 1.2 Okul kurulumu ve gruplar
@@ -63,5 +63,5 @@ Kapsamın tamamı ve maddelerin açıklamaları: [proje dokümanı, Ek G](proje-
 - [x] P1-36 Uçtan uca testler (Playwright)
 - [x] P1-37 MVP güvenlik kontrol listesi
 - [x] P1-38 Demo verisi seed betiği
-- [ ] P1-39 CHANGELOG (etiket sahipte)
+- [x] P1-39 CHANGELOG (etiket sahipte)
 - [ ] P1-40 Faz 1 geçişi (sahip)

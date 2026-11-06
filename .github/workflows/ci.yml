@@ -240,7 +240,7 @@ jobs:
           echo "$GH_TOKEN" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
           owner=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
           for img in api migrator admin; do
-            target="ghcr.io/$owner/spor-akademi-$img:${{ github.sha }}"
+            target="ghcr.io/$owner/spor-akademi-v2-$img:${{ github.sha }}"
             docker tag "spor-akademi-$img:ci" "$target"
             docker push "$target"
             digest=$(docker buildx imagetools inspect "$target" --format '{{json .Manifest.Digest}}')

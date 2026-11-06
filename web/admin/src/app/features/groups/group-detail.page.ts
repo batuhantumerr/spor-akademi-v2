@@ -29,6 +29,7 @@ import { PageHeaderComponent } from '../../shared/ui/page-header.component';
 import { ToastService } from '../../shared/ui/toast.service';
 import { GroupAttendanceComponent } from '../attendance/group-attendance.component';
 import { GroupAnnouncementsComponent } from '../announcements/group-announcements.component';
+import { GroupFeesComponent } from '../billing/group-fees.component';
 import { GroupStudentsComponent } from '../enrollments/group-students.component';
 import { ScheduleEditorComponent } from './schedule-editor.component';
 
@@ -46,6 +47,7 @@ const UPCOMING_DAYS = 14;
     GroupAnnouncementsComponent,
     GroupStudentsComponent,
     GroupAttendanceComponent,
+    GroupFeesComponent,
     LucideArrowLeft,
     LucideCalendarClock,
   ],
@@ -191,6 +193,10 @@ const UPCOMING_DAYS = 14;
             </ul>
           }
         </section>
+      </div>
+
+      <div class="mt-4">
+        <app-group-fees [group]="g" />
       </div>
 
       <div class="mt-4">
