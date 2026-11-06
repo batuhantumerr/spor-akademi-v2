@@ -109,4 +109,15 @@ public sealed class EnrollmentTests
         enrollment.EndDate.ShouldBe(Today);
         enrollment.End(Today).Error.ShouldBe(EnrollmentErrors.AlreadyEnded);
     }
+
+    [Fact]
+    [Trait("Story", "US-17")]
+    public void Archived_groups_in_the_students_list_are_ignored()
+    {
+        var group = Group(slots: Slot(DayOfWeek.Monday, 17, 19));
+        var archivedSameTime = Group("Eski", archived: true, slots: Slot(DayOfWeek.Monday, 17, 19));
+        var archivedCopy = group with { IsArchived = true };
+
+        Enroll(group, others: [archivedSameTime, archivedCopy]).IsSuccess.ShouldBeTrue();
+    }
 }

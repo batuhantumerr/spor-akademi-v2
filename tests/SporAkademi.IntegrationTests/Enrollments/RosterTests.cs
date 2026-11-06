@@ -92,6 +92,20 @@ public sealed class RosterTests(DatabaseFixture database) : EnrollmentsTest(data
     }
 
     [Fact]
+    [Trait("Story", "US-11")]
+    public async Task School_admin_gets_an_empty_roster_for_an_archived_group()
+    {
+        var group = await GroupAsync("Eski Grup", 20, Ayse);
+        await EnrollOkAsync(await RegisterStudentAsync(), IdOf(group));
+        await ArchiveAsync(IdOf(group));
+
+        var response = await Admin.GetAsync(new Uri($"/api/v1/groups/{IdOf(group)}/roster", UriKind.Relative), Ct);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await BodyOf(response)).GetArrayLength().ShouldBe(0);
+    }
+
+    [Fact]
     public async Task Coaches_cannot_read_enrollment_lists_or_student_histories()
     {
         var group = await GroupAsync("U10 Futbol", 20, Ayse);

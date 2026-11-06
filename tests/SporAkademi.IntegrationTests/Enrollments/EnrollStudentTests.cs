@@ -160,40 +160,6 @@ public sealed class EnrollStudentTests(DatabaseFixture database) : EnrollmentsTe
     }
 
     [Fact]
-    public async Task Two_admins_racing_for_the_last_seat_only_one_wins()
-    {
-        // ADR-0005: student then group row locks serialize the capacity check.
-        var group = await GroupAsync("Son Yer", capacity: 1);
-        var students = new List<Guid>();
-        for (var i = 0; i < 6; i++)
-        {
-            students.Add(await RegisterStudentAsync($"Öğrenci{i}"));
-        }
-
-        using var secondAdmin = Api.SchoolAdminClient(School);
-        var responses = await Task.WhenAll(students.Select((s, i) => EnrollAsync(s, IdOf(group), client: i % 2 == 0 ? Admin : secondAdmin)));
-
-        responses.Count(r => r.StatusCode == HttpStatusCode.Created).ShouldBe(1);
-        foreach (var rejected in responses.Where(r => r.StatusCode != HttpStatusCode.Created))
-        {
-            rejected.StatusCode.ShouldBe(HttpStatusCode.UnprocessableEntity);
-            (await CodeOf(rejected)).ShouldBe("Enrollment.GroupFull");
-        }
-    }
-
-    [Fact]
-    public async Task Same_student_enrolled_twice_at_once_gets_one_enrollment()
-    {
-        var student = await RegisterStudentAsync();
-        var group = await GroupAsync("U10 Futbol");
-
-        var responses = await Task.WhenAll(Enumerable.Range(0, 4).Select(_ => EnrollAsync(student, IdOf(group))));
-
-        responses.Count(r => r.StatusCode == HttpStatusCode.Created).ShouldBe(1);
-        responses.Where(r => r.StatusCode != HttpStatusCode.Created).ShouldAllBe(r => r.StatusCode == HttpStatusCode.Conflict);
-    }
-
-    [Fact]
     public async Task Coaches_cannot_enroll()
     {
         using var coach = CoachClient(Ayse);

@@ -37,6 +37,10 @@ public static class EnrollmentPolicy
         ArgumentNullException.ThrowIfNull(group);
         ArgumentNullException.ThrowIfNull(studentsActiveGroups);
 
+        // Defensive: an archived group's enrollments are ended with it, so it can neither already hold
+        // the student nor block a time slot.
+        var activeGroups = studentsActiveGroups.Where(g => !g.IsArchived).ToList();
+
         if (student.Status != StudentStatus.Active)
         {
             return Result.Failure<Enrollment>(EnrollmentErrors.StudentNotActive);
@@ -47,7 +51,7 @@ public static class EnrollmentPolicy
             return Result.Failure<Enrollment>(EnrollmentErrors.GroupArchived);
         }
 
-        if (studentsActiveGroups.Any(g => g.Id == group.Id))
+        if (activeGroups.Any(g => g.Id == group.Id))
         {
             return Result.Failure<Enrollment>(EnrollmentErrors.AlreadyEnrolled);
         }
@@ -62,7 +66,7 @@ public static class EnrollmentPolicy
             return Result.Failure<Enrollment>(EnrollmentErrors.GroupFull);
         }
 
-        var conflict = studentsActiveGroups
+        var conflict = activeGroups
             .OrderBy(g => g.Name, StringComparer.Ordinal)
             .FirstOrDefault(other => other.Slots.Any(o => group.Slots.Any(o.Overlaps)));
         if (conflict is not null)
