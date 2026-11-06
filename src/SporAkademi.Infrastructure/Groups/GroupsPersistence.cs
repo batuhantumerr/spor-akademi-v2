@@ -54,12 +54,34 @@ internal sealed class GroupConfiguration : IEntityTypeConfiguration<Group>
             slots.ComplexProperty(s => s.Time);
         });
 
+        // Fees are a child table, not jsonb like the schedule (DEC-180): money is a numeric(12,2) column with a
+        // check, one fee per period is a unique index (the backstop for concurrent definitions), and Billing
+        // reads fee histories of many groups with one indexed query.
+        builder.Ignore(g => g.Fees);
+        builder.HasMany<GroupFee>(Group.FeesField).WithOne().HasForeignKey(f => f.GroupId).OnDelete(DeleteBehavior.Cascade);
+        builder.Navigation(Group.FeesField).UsePropertyAccessMode(PropertyAccessMode.Field);
+
         builder.ToTable(t =>
         {
             t.HasCheckConstraint("ck_groups_capacity", $"capacity BETWEEN 1 AND {Group.MaxCapacity}");
             t.HasCheckConstraint("ck_groups_birth_years", "birth_year_from <= birth_year_to");
         });
         builder.Ignore(g => g.DomainEvents);
+    }
+}
+
+internal sealed class GroupFeeConfiguration : IEntityTypeConfiguration<GroupFee>
+{
+    public const string UniquePeriodIndex = "ix_group_fees_group_id_effective_from";
+
+    public void Configure(EntityTypeBuilder<GroupFee> builder)
+    {
+        builder.ToTable("group_fees", Schemas.Groups, t => t.HasCheckConstraint("ck_group_fees_amount", "amount >= 0"));
+        builder.HasKey(f => f.Id);
+        // Client-generated ids: a fee added to the collection is new, never an update.
+        builder.Property(f => f.Id).ValueGeneratedNever();
+        builder.HasIndex(f => new { f.GroupId, f.EffectiveFrom }).IsUnique().HasDatabaseName(UniquePeriodIndex);
+        builder.ComplexProperty(f => f.Amount, MoneyMapping.Configure);
     }
 }
 
@@ -132,6 +154,12 @@ internal sealed class GroupRepository(AppDbContext db) : IGroupRepository
                 .OrderBy(g => g.NameKey))
             .ToListAsync(cancellationToken);
 
+    public Task<Group?> GetWithFeesAsync(GroupId id, CancellationToken cancellationToken) =>
+        db.Set<Group>().Include(Group.FeesField).SingleOrDefaultAsync(g => g.Id == id, cancellationToken);
+
+    public async Task<IReadOnlyList<GroupFee>?> FindFeesAsync(GroupId id, CancellationToken cancellationToken) =>
+        (await db.Set<Group>().AsNoTracking().Include(Group.FeesField).SingleOrDefaultAsync(g => g.Id == id, cancellationToken))?.Fees;
+
     private static IQueryable<GroupSnapshot> Snapshots(IQueryable<Group> query) =>
         query.AsNoTracking().Select(g => new GroupSnapshot(g, EF.Property<uint>(g, ConcurrencyToken.PropertyName)));
 }
@@ -144,4 +172,27 @@ internal sealed class GroupUsage(AppDbContext db) : IGroupUsage
 
     public Task<bool> AnyActiveGroupUsesFacilityAsync(FacilityId facilityId, CancellationToken cancellationToken) =>
         db.Set<Group>().AnyAsync(g => g.FacilityId == facilityId && g.Status == GroupStatus.Active, cancellationToken);
+}
+
+/// <summary>Fee histories for Billing. Read through the groups, so the tenant filter applies (group fees have none of their own).</summary>
+internal sealed class GroupFeeSchedule(AppDbContext db) : IGroupFeeSchedule
+{
+    public async Task<IReadOnlyDictionary<GroupId, IReadOnlyList<GroupFeeInfo>>> GetFeesAsync(
+        IReadOnlyCollection<GroupId> groupIds,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(groupIds);
+        if (groupIds.Count == 0)
+        {
+            return new Dictionary<GroupId, IReadOnlyList<GroupFeeInfo>>();
+        }
+
+        var ids = groupIds.Distinct().ToList();
+        var groups = await db.Set<Group>().AsNoTracking().Include(Group.FeesField).Where(g => ids.Contains(g.Id)).ToListAsync(cancellationToken);
+        return groups
+            .Where(g => g.Fees.Count > 0)
+            .ToDictionary(
+                g => g.Id,
+                g => (IReadOnlyList<GroupFeeInfo>)[.. g.Fees.Select(f => new GroupFeeInfo(f.EffectiveFrom, f.Amount))]);
+    }
 }

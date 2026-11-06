@@ -62,7 +62,16 @@ public interface IGroupRepository
     Task<PagedResult<GroupSnapshot>> ListAsync(GroupFilter filter, PageRequest page, CancellationToken cancellationToken);
 
     Task<IReadOnlyList<GroupSnapshot>> ListActiveOfCoachAsync(UserId coachId, CancellationToken cancellationToken);
+
+    /// <summary>Tracked with its fee history, for defining a fee.</summary>
+    Task<Group?> GetWithFeesAsync(GroupId id, CancellationToken cancellationToken);
+
+    /// <summary>The group's fee history (oldest first), or null when the group is not found.</summary>
+    Task<IReadOnlyList<GroupFee>?> FindFeesAsync(GroupId id, CancellationToken cancellationToken);
 }
+
+/// <summary>One entry of a group's fee history (US-22); the period is <c>YYYY-MM</c>.</summary>
+public sealed record GroupFeeDto(string EffectiveFrom, MoneyDto Amount);
 
 /// <summary>
 /// Serializes schedule changes per coach (DEC-148, like ADR-0005 for enrollments): two concurrent changes

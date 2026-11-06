@@ -125,3 +125,21 @@ internal sealed class EnrollmentLocks(AppDbContext db, ICurrentUser currentUser)
         return currentUser.TenantId ?? throw new InvalidOperationException("Enrollment locks need a school.");
     }
 }
+
+/// <summary>Enrollments of the current school for other modules (tenant filter applies).</summary>
+internal sealed class EnrollmentDirectory(AppDbContext db) : IEnrollmentDirectory
+{
+    public async Task<EnrollmentInfo?> FindAsync(EnrollmentId enrollmentId, CancellationToken cancellationToken) =>
+        await db.Set<Enrollment>().AsNoTracking()
+            .Where(e => e.Id == enrollmentId)
+            .Select(e => new EnrollmentInfo(e.Id, e.StudentId, e.GroupId, e.StartDate, e.EndDate))
+            .SingleOrDefaultAsync(cancellationToken);
+
+    public async Task<IReadOnlyList<EnrollmentInfo>> ListActiveBetweenAsync(GroupId? groupId, DateOnly? firstDay, DateOnly lastDay, CancellationToken cancellationToken) =>
+        await db.Set<Enrollment>().AsNoTracking()
+            .Where(e => (groupId == null || e.GroupId == groupId)
+                && e.StartDate <= lastDay
+                && (firstDay == null || e.EndDate == null || e.EndDate >= firstDay))
+            .Select(e => new EnrollmentInfo(e.Id, e.StudentId, e.GroupId, e.StartDate, e.EndDate))
+            .ToListAsync(cancellationToken);
+}
