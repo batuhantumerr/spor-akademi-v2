@@ -1,13 +1,17 @@
 using FluentValidation;
 using SporAkademi.Application.Abstractions.Authentication;
+using SporAkademi.Application.Abstractions.Behaviors;
 using SporAkademi.Application.Abstractions.Messaging;
 using SporAkademi.Domain.Identity;
 using SporAkademi.Domain.SharedKernel;
 
 namespace SporAkademi.Application.Identity.Passwords;
 
-/// <summary>US-05: the signed-in user sets a new password; other sessions end, this one continues with new tokens.</summary>
-public sealed record ChangePasswordCommand(Guid UserId, string CurrentPassword, string NewPassword) : ICommand<AuthSession>;
+/// <summary>
+/// US-05: the signed-in user sets a new password; other sessions end, this one continues with new tokens.
+/// A wrong current password counts towards the lockout like a failed login, so failures commit.
+/// </summary>
+public sealed record ChangePasswordCommand(Guid UserId, string CurrentPassword, string NewPassword) : ICommand<AuthSession>, IKeepChangesOnFailure;
 
 internal sealed class ChangePasswordValidator : AbstractValidator<ChangePasswordCommand>
 {
@@ -36,12 +40,25 @@ internal sealed class ChangePasswordHandler(
             return Result.Failure<AuthSession>(UserErrors.NotFound);
         }
 
-        if (passwordHasher.Verify(user.PasswordHash, command.CurrentPassword) == PasswordVerification.Failed)
+        var now = timeProvider.GetUtcNow();
+        var notLocked = user.CheckNotLockedOut(now);
+        if (notLocked.IsFailure)
         {
-            return Result.Failure<AuthSession>(AuthErrors.CurrentPasswordIncorrect);
+            return Result.Failure<AuthSession>(notLocked.Error);
         }
 
-        var now = timeProvider.GetUtcNow();
+        if (passwordHasher.Verify(user.PasswordHash, command.CurrentPassword) == PasswordVerification.Failed)
+        {
+            var failure = user.RecordFailedLogin(now);
+            return Result.Failure<AuthSession>(failure == AuthErrors.AccountLocked ? failure : AuthErrors.CurrentPasswordIncorrect);
+        }
+
+        // Compared only after the current password is verified, so this answer reveals nothing.
+        if (string.Equals(command.NewPassword, command.CurrentPassword, StringComparison.Ordinal))
+        {
+            return Result.Failure<AuthSession>(ValidationErrors.ForField("newPassword", AuthErrors.PasswordUnchanged));
+        }
+
         var refreshToken = refreshTokens.Create();
         var session = user.ChangePassword(passwordHasher.Hash(command.NewPassword), refreshToken.Hash, now);
         return session.IsSuccess

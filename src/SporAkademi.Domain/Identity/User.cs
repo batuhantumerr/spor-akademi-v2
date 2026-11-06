@@ -217,6 +217,7 @@ public sealed class User : AggregateRoot<UserId>
 
         PasswordHash = newPasswordHash;
         MustChangePassword = false;
+        ClearFailedLogins();
         RevokeAllRefreshTokens(now);
         Raise(new PasswordChanged(Id));
         return Result.Success(StartSession(refreshTokenHash, now));

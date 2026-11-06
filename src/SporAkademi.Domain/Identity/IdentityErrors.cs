@@ -13,6 +13,7 @@ public static class AuthErrors
     public static readonly Error PasswordChangeRequired = Error.Forbidden("Auth.PasswordChangeRequired", "The password must be changed first.");
     public static readonly Error CurrentPasswordIncorrect = Error.BusinessRule("Auth.CurrentPasswordIncorrect", "The current password is wrong.");
     public static readonly Error PasswordTooWeak = Error.Validation("Auth.PasswordTooWeak", "The password does not meet the policy.");
+    public static readonly Error PasswordUnchanged = Error.Validation("Auth.PasswordUnchanged", "The new password must differ from the current one.");
 }
 
 public static class UserErrors

@@ -94,7 +94,7 @@ public sealed class IdentityHandlerTests
 
     [Fact]
     [Trait("Story", "US-05")]
-    public async Task Wrong_current_password_does_not_change_anything()
+    public async Task Wrong_current_password_changes_nothing_but_counts_towards_the_lockout()
     {
         var user = Coach();
         var handler = new ChangePasswordHandler(_users, _hasher, _refreshTokens, _accessTokens, _clock);
@@ -102,6 +102,21 @@ public sealed class IdentityHandlerTests
         var result = await handler.Handle(new ChangePasswordCommand(user.Id.Value, "wrong-password", "Yeni-Sifre-2027"), CancellationToken.None);
 
         result.Error.ShouldBe(AuthErrors.CurrentPasswordIncorrect);
+        user.MustChangePassword.ShouldBeTrue();
+        user.FailedLoginCount.ShouldBe(1);
+    }
+
+    [Fact]
+    [Trait("Story", "US-05")]
+    public async Task New_password_equal_to_the_current_one_is_rejected()
+    {
+        var user = Coach();
+        var handler = new ChangePasswordHandler(_users, _hasher, _refreshTokens, _accessTokens, _clock);
+
+        var result = await handler.Handle(new ChangePasswordCommand(user.Id.Value, "Gecici-Sifre-1", "Gecici-Sifre-1"), CancellationToken.None);
+
+        result.Error.Code.ShouldBe("Validation.Failed");
+        ((IReadOnlyDictionary<string, string[]>)result.Error.Arguments["errors"]!)["newPassword"].ShouldBe(["Auth.PasswordUnchanged"]);
         user.MustChangePassword.ShouldBeTrue();
     }
 

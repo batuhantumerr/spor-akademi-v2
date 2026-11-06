@@ -13,12 +13,14 @@ public sealed class PasswordChangeTests
         var user = UserTests.NewCoach();
         var first = user.CompleteLogin("h1", Now).Value;
         var second = user.CompleteLogin("h2", Now).Value;
+        user.RecordFailedLogin(Now);
 
         var session = user.ChangePassword("new-hash", "h3", Now.AddMinutes(1)).Value;
 
         session.IsActive(Now.AddMinutes(1)).ShouldBeTrue();
         user.PasswordHash.ShouldBe("new-hash");
         user.MustChangePassword.ShouldBeFalse();
+        user.FailedLoginCount.ShouldBe(0);
         first.RevokedAt.ShouldBe(Now.AddMinutes(1));
         second.RevokedAt.ShouldBe(Now.AddMinutes(1));
         user.DomainEvents.OfType<PasswordChanged>().Single().UserId.ShouldBe(user.Id);
