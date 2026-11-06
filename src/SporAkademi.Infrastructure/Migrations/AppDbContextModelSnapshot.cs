@@ -23,6 +23,137 @@ namespace SporAkademi.Infrastructure.Migrations
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
+            modelBuilder.Entity("SporAkademi.Domain.Groups.Group", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateOnly?>("ArchivedOn")
+                        .HasColumnType("date")
+                        .HasColumnName("archived_on");
+
+                    b.Property<int>("Capacity")
+                        .HasColumnType("integer")
+                        .HasColumnName("capacity");
+
+                    b.Property<Guid?>("CoachId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("coach_id");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid?>("CreatedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("created_by");
+
+                    b.Property<Guid>("FacilityId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("facility_id");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("name");
+
+                    b.Property<string>("NameKey")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("name_key");
+
+                    b.Property<Guid>("SportId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("sport_id");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .HasColumnName("status");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("tenant_id");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<Guid?>("UpdatedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("updated_by");
+
+                    b.Property<uint>("Version")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
+
+                    b.ComplexProperty(typeof(Dictionary<string, object>), "BirthYearRange", "SporAkademi.Domain.Groups.Group.BirthYearRange#BirthYearRange", b1 =>
+                        {
+                            b1.IsRequired();
+
+                            b1.Property<int>("From")
+                                .HasColumnType("integer")
+                                .HasColumnName("birth_year_from");
+
+                            b1.Property<int>("To")
+                                .HasColumnType("integer")
+                                .HasColumnName("birth_year_to");
+                        });
+
+                    b.ComplexCollection(typeof(List<Dictionary<string, object>>), "_scheduleSlots", "SporAkademi.Domain.Groups.Group._scheduleSlots#ScheduleSlot", b1 =>
+                        {
+                            b1.IsRequired();
+
+                            b1.Property<string>("Day")
+                                .IsRequired();
+
+                            b1.ComplexProperty(typeof(Dictionary<string, object>), "Time", "SporAkademi.Domain.Groups.Group._scheduleSlots#ScheduleSlot.Time#TimeRange", b2 =>
+                                {
+                                    b2.IsRequired();
+
+                                    b2.Property<TimeOnly>("End");
+
+                                    b2.Property<TimeOnly>("Start");
+                                });
+
+                            b1
+                                .ToJson("schedule_slots")
+                                .HasColumnType("jsonb");
+                        });
+
+                    b.HasKey("Id")
+                        .HasName("pk_groups");
+
+                    b.HasAlternateKey("TenantId", "Id")
+                        .HasName("ak_groups_tenant_id_id");
+
+                    b.HasIndex("TenantId", "CoachId")
+                        .HasDatabaseName("ix_groups_tenant_id_coach_id");
+
+                    b.HasIndex("TenantId", "FacilityId")
+                        .HasDatabaseName("ix_groups_tenant_id_facility_id");
+
+                    b.HasIndex("TenantId", "NameKey")
+                        .IsUnique()
+                        .HasDatabaseName("ix_groups_tenant_id_name_key");
+
+                    b.HasIndex("TenantId", "SportId")
+                        .HasDatabaseName("ix_groups_tenant_id_sport_id");
+
+                    b.ToTable("groups", "groups", t =>
+                        {
+                            t.HasCheckConstraint("ck_groups_birth_years", "birth_year_from <= birth_year_to");
+
+                            t.HasCheckConstraint("ck_groups_capacity", "capacity BETWEEN 1 AND 1000");
+                        });
+                });
+
             modelBuilder.Entity("SporAkademi.Domain.Identity.RefreshToken", b =>
                 {
                     b.Property<Guid>("Id")
@@ -691,6 +822,32 @@ namespace SporAkademi.Infrastructure.Migrations
                         .HasDatabaseName("ix_schools_slug");
 
                     b.ToTable("schools", "tenancy");
+                });
+
+            modelBuilder.Entity("SporAkademi.Domain.Groups.Group", b =>
+                {
+                    b.HasOne("SporAkademi.Domain.Tenancy.School", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_groups_school_tenant_id");
+
+                    b.HasOne("SporAkademi.Domain.Organization.Facility", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId", "FacilityId")
+                        .HasPrincipalKey("TenantId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_groups_facility_tenant_id_facility_id");
+
+                    b.HasOne("SporAkademi.Domain.Organization.Sport", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId", "SportId")
+                        .HasPrincipalKey("TenantId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_groups_sport_tenant_id_sport_id");
                 });
 
             modelBuilder.Entity("SporAkademi.Domain.Identity.RefreshToken", b =>

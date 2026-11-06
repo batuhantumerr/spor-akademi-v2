@@ -1624,7 +1624,7 @@ API'nin döndüğü tüm hata ve uyarı kodlarının kataloğu. Kurallar:
 | `Sport.InUse` | Conflict | Bu branşa bağlı gruplar olduğu için silinemez. Arşivleyebilirsiniz. | US-06 |
 | `Sport.Archived` | BusinessRule | Arşivlenmiş bir branş için yeni grup oluşturulamaz. | US-06 |
 | `Sport.NotFound` | NotFound | Branş bulunamadı. | US-06 |
-| `Facility.InUse` | Conflict | Bu tesisi aktif gruplar kullandığı için silinemez. Arşivleyebilirsiniz. | US-07 |
+| `Facility.InUse` | Conflict | Bu tesisi kullanan gruplar olduğu için silinemez. Arşivleyebilirsiniz. | US-07 |
 | `Facility.Archived` | BusinessRule | Arşivlenmiş bir tesis gruplara atanamaz. | US-07 |
 | `Facility.NotFound` | NotFound | Tesis bulunamadı. | US-07 |
 
@@ -1634,6 +1634,7 @@ API'nin döndüğü tüm hata ve uyarı kodlarının kataloğu. Kurallar:
 | --- | --- | --- | --- |
 | `Group.NotFound` | NotFound | Grup bulunamadı. | US-09, US-12 |
 | `Group.InvalidCapacity` | Validation | Kontenjan en az 1 olmalı. | US-09 |
+| `Group.NameTaken` | Conflict | Bu adda bir grup zaten var. | US-09 |
 | `Group.CapacityBelowActiveEnrollments` | BusinessRule | Kontenjan, gruptaki aktif öğrenci sayısının ({count}) altına düşürülemez. | US-11 |
 | `Group.Archived` | BusinessRule | Bu grup arşivlenmiş. | US-11 |
 | `Group.CoachNotFound` | BusinessRule | Seçilen antrenör bulunamadı veya aktif değil. | US-09 |

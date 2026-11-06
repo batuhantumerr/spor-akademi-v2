@@ -5,6 +5,7 @@ using SporAkademi.Application.Abstractions.Behaviors;
 using SporAkademi.Application.Abstractions.Messaging;
 using SporAkademi.Application.Enrollments.Contracts;
 using SporAkademi.Application.Tenancy.Contracts;
+using SporAkademi.Domain.Groups;
 using SporAkademi.Domain.Organization;
 using SporAkademi.Domain.SharedKernel;
 using SporAkademi.Domain.Students;
@@ -122,7 +123,7 @@ internal sealed class RegisterStudentHandler(
             return Result.Failure<StudentId>(links.Error);
         }
 
-        var today = await tenancy.GetTodayAsync(tenant, cancellationToken);
+        var today = await tenancy.TodayAsync(tenant, cancellationToken);
         var registered = Student.Register(tenant, details.Value, links.Value, today);
         if (registered.IsFailure)
         {
@@ -151,7 +152,7 @@ internal sealed class UpdateStudentHandler(IStudentRepository students, ITenancy
             return Result.Failure<Unit>(details.Error);
         }
 
-        var today = await tenancy.GetTodayAsync(currentUser.RequireTenant(), cancellationToken);
+        var today = await tenancy.TodayAsync(currentUser.RequireTenant(), cancellationToken);
         students.ExpectVersion(student, command.Version);
         var updated = student.Update(details.Value, today);
         return updated.IsSuccess ? Result.Success(Unit.Value) : Result.Failure<Unit>(updated.Error.ToStudentFieldError());
@@ -179,7 +180,7 @@ internal sealed class ReplaceStudentGuardiansHandler(
             return Result.Failure<Unit>(links.Error);
         }
 
-        var today = await tenancy.GetTodayAsync(tenant, cancellationToken);
+        var today = await tenancy.TodayAsync(tenant, cancellationToken);
         students.ExpectVersion(student, command.Version);
         var replaced = student.ReplaceGuardians(links.Value, today);
         return replaced.IsSuccess ? Result.Success(Unit.Value) : Result.Failure<Unit>(replaced.Error.ToGuardiansFieldError());
@@ -199,7 +200,7 @@ internal sealed class LeaveStudentHandler(IStudentRepository students, ITenancyM
 
         // A future date would mark the student Left while enrollments stay active until then.
         var date = command.Date!.Value;
-        var today = await tenancy.GetTodayAsync(currentUser.RequireTenant(), cancellationToken);
+        var today = await tenancy.TodayAsync(currentUser.RequireTenant(), cancellationToken);
         if (date > today || date < student.BirthDate)
         {
             return Result.Failure<Unit>(ValidationErrors.ForField("date", CommonErrors.FieldInvalid));
@@ -243,7 +244,9 @@ internal sealed class SearchStudentsHandler(IStudentRepository students, IStuden
         var sort = string.IsNullOrEmpty(query.Sort) ? StudentSort.LastName : SearchStudentsQuery.SortFields[query.Sort];
         var only = query.GroupId is null && query.SportId is null
             ? null
-            : await groupFilter.StudentsEnrolledInAsync(query.GroupId, query.SportId is { } sport ? SportId.From(sport) : null, cancellationToken);
+            : await groupFilter.StudentsEnrolledInAsync(
+                query.GroupId is { } group ? GroupId.From(group) : null,
+                query.SportId is { } sport ? SportId.From(sport) : null, cancellationToken);
 
         return Result.Success(await students.SearchAsync(new StudentSearch(key, status, only, sort), query.Page, cancellationToken));
     }
@@ -252,10 +255,9 @@ internal sealed class SearchStudentsHandler(IStudentRepository students, IStuden
 /// <summary>US-15: a student who leaves has every active enrollment ended on the leave date (appendix B §6).</summary>
 internal sealed class EndEnrollmentsWhenStudentLeaves(IEnrollmentEnder enrollments) : IDomainEventConsumer<StudentLeft>
 {
-    public async Task<Result> Handle(StudentLeft domainEvent, CancellationToken cancellationToken)
+    public Task<Result> Handle(StudentLeft domainEvent, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(domainEvent);
-        await enrollments.EndActiveEnrollmentsOfStudentAsync(domainEvent.StudentId, domainEvent.LeftAt, cancellationToken);
-        return Result.Success();
+        return enrollments.EndActiveEnrollmentsOfStudentAsync(domainEvent.StudentId, domainEvent.LeftAt, cancellationToken);
     }
 }

@@ -103,8 +103,6 @@ public sealed class User : AggregateRoot<UserId>
     {
         ArgumentNullException.ThrowIfNull(email);
         ArgumentException.ThrowIfNullOrWhiteSpace(passwordHash);
-        ArgumentNullException.ThrowIfNull(firstName);
-        ArgumentNullException.ThrowIfNull(lastName);
 
         // Invariant (appendix B 4.2): the Platform Admin has no school, every other role has one.
         if ((role == UserRole.PlatformAdmin) != (tenantId is null))
@@ -112,19 +110,31 @@ public sealed class User : AggregateRoot<UserId>
             throw new ArgumentException("Only the Platform Admin has no school.", nameof(tenantId));
         }
 
-        var first = firstName.Trim();
-        var last = lastName.Trim();
-        if (first.Length == 0 || last.Length == 0)
+        var names = CheckNames(firstName, lastName);
+        return names.IsSuccess
+            ? Result.Success(new User(EntityId.New<UserId>(), tenantId, email, passwordHash, role, names.Value.First, names.Value.Last, phone))
+            : Result.Failure<User>(names.Error);
+    }
+
+    /// <summary>Changes the editable profile (US-08: name and phone) of an active account. The e-mail is the login and does not change here.</summary>
+    public Result UpdateProfile(string firstName, string lastName, PhoneNumber? phone)
+    {
+        // DEC-126: a deactivated account is read-only.
+        if (Status == UserStatus.Deactivated)
         {
-            return Result.Failure<User>(CommonErrors.FieldRequired);
+            return Result.Failure(UserErrors.AlreadyInactive);
         }
 
-        if (first.Length > NameMaxLength || last.Length > NameMaxLength)
+        var names = CheckNames(firstName, lastName);
+        if (names.IsFailure)
         {
-            return Result.Failure<User>(CommonErrors.FieldTooLong);
+            return Result.Failure(names.Error);
         }
 
-        return Result.Success(new User(EntityId.New<UserId>(), tenantId, email, passwordHash, role, first, last, phone));
+        FirstName = names.Value.First;
+        LastName = names.Value.Last;
+        Phone = phone;
+        return Result.Success();
     }
 
     public Result CheckNotLockedOut(DateTimeOffset now) =>
@@ -274,6 +284,23 @@ public sealed class User : AggregateRoot<UserId>
 
     private RefreshToken? FindToken(string tokenHash) =>
         _refreshTokens.Find(t => string.Equals(t.TokenHash, tokenHash, StringComparison.Ordinal));
+
+    private static Result<(string First, string Last)> CheckNames(string firstName, string lastName)
+    {
+        ArgumentNullException.ThrowIfNull(firstName);
+        ArgumentNullException.ThrowIfNull(lastName);
+
+        var first = firstName.Trim();
+        var last = lastName.Trim();
+        if (first.Length == 0 || last.Length == 0)
+        {
+            return Result.Failure<(string, string)>(CommonErrors.FieldRequired);
+        }
+
+        return first.Length > NameMaxLength || last.Length > NameMaxLength
+            ? Result.Failure<(string, string)>(CommonErrors.FieldTooLong)
+            : Result.Success((first, last));
+    }
 
     private void ClearFailedLogins()
     {

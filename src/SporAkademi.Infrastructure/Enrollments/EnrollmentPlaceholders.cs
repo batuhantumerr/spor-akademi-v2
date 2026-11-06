@@ -1,19 +1,26 @@
 using SporAkademi.Application.Enrollments.Contracts;
+using SporAkademi.Domain.Groups;
 using SporAkademi.Domain.Organization;
+using SporAkademi.Domain.SharedKernel;
 using SporAkademi.Domain.Students;
 
 namespace SporAkademi.Infrastructure.Enrollments;
 
-/// <summary>Placeholder until the Enrollments module exists (P1-26): a student has no enrollments to end.</summary>
-internal sealed class NoEnrollmentEnder : IEnrollmentEnder
+/// <summary>
+/// Stand-in until the Enrollments module exists: enrollments arrive with US-17 (P1-26) and are ended
+/// with US-18 (P1-27). Until then no group has an enrollment, so nothing is counted or ended.
+/// The student search filters by group and sport do not restrict yet.
+/// </summary>
+internal sealed class NoEnrollments : IEnrollmentCounts, IEnrollmentEnder, IStudentGroupFilter
 {
-    public Task EndActiveEnrollmentsOfStudentAsync(StudentId studentId, DateOnly endDate, CancellationToken cancellationToken) =>
-        Task.CompletedTask;
-}
+    public Task<int> CountActiveAsync(GroupId groupId, CancellationToken cancellationToken) => Task.FromResult(0);
 
-/// <summary>Placeholder until the Enrollments module exists (P1-26): the group and sport filters do not restrict.</summary>
-internal sealed class NoStudentGroupFilter : IStudentGroupFilter
-{
-    public Task<IReadOnlyCollection<StudentId>?> StudentsEnrolledInAsync(Guid? groupId, SportId? sportId, CancellationToken cancellationToken) =>
+    public Task<Result> EndActiveEnrollmentsAsync(GroupId groupId, DateOnly endDate, CancellationToken cancellationToken) =>
+        Task.FromResult(Result.Success());
+
+    public Task<Result> EndActiveEnrollmentsOfStudentAsync(StudentId studentId, DateOnly endDate, CancellationToken cancellationToken) =>
+        Task.FromResult(Result.Success());
+
+    public Task<IReadOnlyCollection<StudentId>?> StudentsEnrolledInAsync(GroupId? groupId, SportId? sportId, CancellationToken cancellationToken) =>
         Task.FromResult<IReadOnlyCollection<StudentId>?>(null);
 }

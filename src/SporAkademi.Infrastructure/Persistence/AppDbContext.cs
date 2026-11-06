@@ -1,6 +1,7 @@
 using System.Reflection;
 using Microsoft.EntityFrameworkCore;
 using SporAkademi.Application.Abstractions.Authentication;
+using SporAkademi.Domain.Groups;
 using SporAkademi.Domain.SharedKernel;
 using SporAkademi.Domain.Students;
 using SporAkademi.Domain.Tenancy;
@@ -30,6 +31,9 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options, ICurren
         configurationBuilder.ComplexProperties<RetentionPolicy>();
         configurationBuilder.ComplexProperties<Address>();
         configurationBuilder.ComplexProperties<EmergencyContact>();
+        configurationBuilder.ComplexProperties<BirthYearRange>();
+        configurationBuilder.ComplexProperties<TimeRange>();
+        configurationBuilder.ComplexProperties<ScheduleSlot>();
 
         // Every strongly typed id is stored as its Guid; every domain enum as its name.
         foreach (var type in typeof(IEntityId<>).Assembly.GetTypes())

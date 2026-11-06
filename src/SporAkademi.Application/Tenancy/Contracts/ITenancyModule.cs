@@ -8,6 +8,6 @@ public interface ITenancyModule
     /// <summary>False for a deactivated or unknown school.</summary>
     Task<bool> IsSchoolActiveAsync(SchoolId schoolId, CancellationToken cancellationToken);
 
-    /// <summary>Today's date in the school's time zone, from <see cref="TimeProvider"/> (e.g. for the age rules of US-13).</summary>
-    Task<DateOnly> GetTodayAsync(SchoolId schoolId, CancellationToken cancellationToken);
+    /// <summary>Today's date in the school's time zone ("today" of US-11 and US-12).</summary>
+    Task<DateOnly> TodayAsync(SchoolId schoolId, CancellationToken cancellationToken);
 }

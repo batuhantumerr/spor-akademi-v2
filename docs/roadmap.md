@@ -26,18 +26,18 @@ Kapsamın tamamı ve maddelerin açıklamaları: [proje dokümanı, Ek G](proje-
 - [x] P1-09 US-03 Giriş
 - [x] P1-10 US-04 Refresh ve çıkış
 - [x] P1-11 US-05 İlk giriş ve şifre değiştirme
-- [ ] P1-12 US-01 Okul oluşturma
+- [x] P1-12 US-01 Okul oluşturma
 - [ ] P1-13 Angular kabuğu, giriş, ADR-0010
 - [x] P1-14 OpenAPI ve Angular client
 
 ### 1.2 Okul kurulumu ve gruplar
 - [x] P1-15 US-06 Branşlar
 - [x] P1-16 US-07 Tesisler
-- [ ] P1-17 US-08 Antrenörler
-- [ ] P1-18 US-09 Grup oluşturma
-- [ ] P1-19 US-10 Haftalık program
-- [ ] P1-20 US-11 Grup düzenleme ve arşiv
-- [ ] P1-21 US-12 Antrenör ana ekranı
+- [x] P1-17 US-08 Antrenörler
+- [x] P1-18 US-09 Grup oluşturma
+- [x] P1-19 US-10 Haftalık program
+- [x] P1-20 US-11 Grup düzenleme ve arşiv
+- [x] P1-21 US-12 Antrenör ana ekranı
 
 ### 1.3 Öğrenciler ve kayıt
 - [x] P1-22 US-13 Öğrenci kaydı

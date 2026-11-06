@@ -7,6 +7,8 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using SporAkademi.Application.Enrollments.Contracts;
 using SporAkademi.Application.Students;
+using SporAkademi.Domain.Groups;
+using SporAkademi.Domain.SharedKernel;
 using SporAkademi.Domain.Students;
 using SporAkademi.IntegrationTests.Infrastructure;
 
@@ -123,10 +125,13 @@ public sealed class LeaveStudentTests(DatabaseFixture database) : StudentsTest(d
 
         public IReadOnlyList<(StudentId, DateOnly)> Calls => [.. _calls];
 
-        public Task EndActiveEnrollmentsOfStudentAsync(StudentId studentId, DateOnly endDate, CancellationToken cancellationToken)
+        public Task<Result> EndActiveEnrollmentsAsync(GroupId groupId, DateOnly endDate, CancellationToken cancellationToken) =>
+            Task.FromResult(Result.Success());
+
+        public Task<Result> EndActiveEnrollmentsOfStudentAsync(StudentId studentId, DateOnly endDate, CancellationToken cancellationToken)
         {
             _calls.Enqueue((studentId, endDate));
-            return Task.CompletedTask;
+            return Task.FromResult(Result.Success());
         }
     }
 }

@@ -1,3 +1,4 @@
+using SporAkademi.Domain.Groups;
 using SporAkademi.Domain.Organization;
 using SporAkademi.Domain.Students;
 
@@ -11,7 +12,7 @@ public interface IStudentGroupFilter
 {
     /// <summary>
     /// Students actively enrolled in <paramref name="groupId"/> and/or in a group of <paramref name="sportId"/>;
-    /// <c>null</c> means no restriction.
+    /// <c>null</c> means no restriction (neither filter given).
     /// </summary>
-    Task<IReadOnlyCollection<StudentId>?> StudentsEnrolledInAsync(Guid? groupId, SportId? sportId, CancellationToken cancellationToken);
+    Task<IReadOnlyCollection<StudentId>?> StudentsEnrolledInAsync(GroupId? groupId, SportId? sportId, CancellationToken cancellationToken);
 }

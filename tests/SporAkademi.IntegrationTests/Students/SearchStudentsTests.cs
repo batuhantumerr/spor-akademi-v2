@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using SporAkademi.Application.Enrollments.Contracts;
+using SporAkademi.Domain.Groups;
 using SporAkademi.Domain.Organization;
 using SporAkademi.Domain.Students;
 using SporAkademi.IntegrationTests.Infrastructure;
@@ -158,7 +159,7 @@ public sealed class SearchStudentsTests(DatabaseFixture database) : StudentsTest
 
     private sealed class FixedGroupFilter(Guid groupId, Guid sportId, StudentId enrolled) : IStudentGroupFilter
     {
-        public Task<IReadOnlyCollection<StudentId>?> StudentsEnrolledInAsync(Guid? group, SportId? sport, CancellationToken cancellationToken) =>
-            Task.FromResult<IReadOnlyCollection<StudentId>?>(group == groupId || sport == SportId.From(sportId) ? [enrolled] : []);
+        public Task<IReadOnlyCollection<StudentId>?> StudentsEnrolledInAsync(GroupId? group, SportId? sport, CancellationToken cancellationToken) =>
+            Task.FromResult<IReadOnlyCollection<StudentId>?>(group == GroupId.From(groupId) || sport == SportId.From(sportId) ? [enrolled] : []);
     }
 }
