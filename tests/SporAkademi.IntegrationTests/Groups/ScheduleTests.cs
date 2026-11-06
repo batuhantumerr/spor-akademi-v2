@@ -133,6 +133,48 @@ public sealed class ScheduleTests(DatabaseFixture database) : GroupsTest(databas
     }
 
     [Fact]
+    public async Task Concurrent_schedule_changes_cannot_double_book_a_coach()
+    {
+        // DEC-148: the coach lock serializes the availability check, so only one of these can win.
+        var groups = new List<JsonElement>();
+        for (var i = 0; i < 5; i++)
+        {
+            groups.Add(await CreateGroupAsync($"Grup {i}", Ayse));
+        }
+
+        var responses = await Task.WhenAll(groups.Select(g => PutScheduleAsync(g, null, Slot("Monday", "17:00", "18:00"))));
+
+        responses.Count(r => r.StatusCode == HttpStatusCode.OK).ShouldBe(1);
+        foreach (var rejected in responses.Where(r => r.StatusCode != HttpStatusCode.OK))
+        {
+            rejected.StatusCode.ShouldBe(HttpStatusCode.UnprocessableEntity);
+            (await CodeOf(rejected)).ShouldBe("Schedule.CoachUnavailable");
+        }
+    }
+
+    [Fact]
+    public async Task Concurrent_coach_assignment_and_schedule_change_cannot_double_book()
+    {
+        var mehmetsGroup = await CreateGroupAsync("Mehmet'in Grubu", Mehmet);
+        var scheduled = await ScheduleAsync(await CreateGroupAsync("Ayşe'nin Grubu", Ayse), Slot("Tuesday", "10:00", "11:00"));
+
+        var assign = Admin.PutAsJsonAsync($"/api/v1/groups/{IdOf(scheduled)}", new
+        {
+            name = "Ayşe'nin Grubu",
+            birthYearRange = new { from = 2015, to = 2016 },
+            capacity = 20,
+            facilityId = FieldA,
+            coachId = Mehmet.Id.Value,
+            version = VersionOf(scheduled),
+        }, Ct);
+        var schedule = PutScheduleAsync(mehmetsGroup, null, Slot("Tuesday", "10:30", "11:30"));
+        var responses = await Task.WhenAll(assign, schedule);
+
+        responses.Count(r => r.StatusCode == HttpStatusCode.OK).ShouldBe(1);
+        (await CodeOf(responses.Single(r => r.StatusCode != HttpStatusCode.OK))).ShouldBe("Schedule.CoachUnavailable");
+    }
+
+    [Fact]
     public async Task Stale_version_is_a_conflict()
     {
         var group = await CreateGroupAsync();

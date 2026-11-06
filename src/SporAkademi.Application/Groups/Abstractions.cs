@@ -64,6 +64,15 @@ public interface IGroupRepository
     Task<IReadOnlyList<GroupSnapshot>> ListActiveOfCoachAsync(UserId coachId, CancellationToken cancellationToken);
 }
 
+/// <summary>
+/// Serializes schedule changes per coach (DEC-148, like ADR-0005 for enrollments): two concurrent changes
+/// cannot both pass the coach availability check. Held until the transaction ends.
+/// </summary>
+public interface IGroupLocks
+{
+    Task LockCoachScheduleAsync(UserId coachId, CancellationToken cancellationToken);
+}
+
 internal static class TimeFormat
 {
     public const string Pattern = "HH:mm";

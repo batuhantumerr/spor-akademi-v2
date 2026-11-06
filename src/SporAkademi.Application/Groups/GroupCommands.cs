@@ -175,7 +175,8 @@ internal sealed class UpdateGroupHandler(
     IGroupRepository groups,
     IOrganizationDirectory organization,
     ICoachDirectory coaches,
-    IEnrollmentCounts enrollments) : ICommandHandler<UpdateGroupCommand, Unit>
+    IEnrollmentCounts enrollments,
+    IGroupLocks locks) : ICommandHandler<UpdateGroupCommand, Unit>
 {
     public async Task<Result<Unit>> Handle(UpdateGroupCommand command, CancellationToken cancellationToken)
     {
@@ -231,9 +232,11 @@ internal sealed class UpdateGroupHandler(
         }
 
         // A new coach must be free at the group's times (US-10); facility overlaps are only reported by
-        // the schedule endpoint, so warnings are not returned here.
-        if (coachChanged || facilityChanged)
+        // the schedule endpoint, so warnings are not returned here. The coach's lock makes the check and
+        // the save atomic against concurrent schedule changes of that coach (DEC-148).
+        if (coachChanged && coachId is { } newCoach)
         {
+            await locks.LockCoachScheduleAsync(newCoach, cancellationToken);
             var others = await groups.ListActiveWeeksAsync(group.Id, group.CoachId, group.FacilityId, cancellationToken);
             var conflicts = ScheduleConflictChecker.Check(GroupWeek.Of(group), others);
             if (conflicts.IsFailure)
@@ -246,7 +249,7 @@ internal sealed class UpdateGroupHandler(
     }
 }
 
-internal sealed class ReplaceScheduleHandler(IGroupRepository groups) : ICommandHandler<ReplaceScheduleCommand, IReadOnlyList<Warning>>
+internal sealed class ReplaceScheduleHandler(IGroupRepository groups, IGroupLocks locks) : ICommandHandler<ReplaceScheduleCommand, IReadOnlyList<Warning>>
 {
     public async Task<Result<IReadOnlyList<Warning>>> Handle(ReplaceScheduleCommand command, CancellationToken cancellationToken)
     {
@@ -275,6 +278,12 @@ internal sealed class ReplaceScheduleHandler(IGroupRepository groups) : ICommand
         if (replaced.IsFailure)
         {
             return Result.Failure<IReadOnlyList<Warning>>(replaced.Error);
+        }
+
+        // Serialize with other schedule changes of the same coach before reading their groups (DEC-148).
+        if (group.CoachId is { } coachId)
+        {
+            await locks.LockCoachScheduleAsync(coachId, cancellationToken);
         }
 
         var others = await groups.ListActiveWeeksAsync(group.Id, group.CoachId, group.FacilityId, cancellationToken);

@@ -65,6 +65,7 @@ public static class DependencyInjection
         services.AddScoped<IFacilityRepository, FacilityRepository>();
         services.AddScoped<IOrganizationDirectory, OrganizationDirectory>();
         services.AddScoped<IGroupRepository, GroupRepository>();
+        services.AddScoped<IGroupLocks, GroupLocks>();
         services.AddScoped<IGroupUsage, GroupUsage>();
         services.AddScoped<NoEnrollments>();
         services.AddScoped<IEnrollmentCounts>(sp => sp.GetRequiredService<NoEnrollments>());

@@ -1,15 +1,8 @@
 using System.Net;
 using System.Net.Http.Json;
-using System.Security.Claims;
 using System.Text.Json;
-using Microsoft.AspNetCore.Http;
-using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.DependencyInjection;
-using SporAkademi.Application.Abstractions.Data;
 using SporAkademi.Domain.Identity;
-using SporAkademi.Domain.SharedKernel;
 using SporAkademi.Domain.Tenancy;
-using SporAkademi.Infrastructure.Persistence;
 using SporAkademi.IntegrationTests.Identity;
 using SporAkademi.IntegrationTests.Infrastructure;
 
@@ -135,41 +128,4 @@ public abstract class GroupsTest(DatabaseFixture database) : IdentityTest(databa
 
     protected static async Task<string?> CodeOf(HttpResponseMessage response) =>
         (await BodyOf(response)).GetProperty("code").GetString();
-
-    /// <summary>
-    /// Deactivates a user through the domain and the unit of work, as the coach endpoint (P1-17) will:
-    /// inside a School Admin's request of that school, so the in-transaction event consumers run.
-    /// </summary>
-    protected Task DeactivateWithEventsAsync(User user) =>
-        InScopeAsync(async sp =>
-        {
-            var accessor = sp.GetRequiredService<IHttpContextAccessor>();
-            accessor.HttpContext = new DefaultHttpContext
-            {
-                User = new ClaimsPrincipal(new ClaimsIdentity(
-                    [
-                        new Claim("sub", Guid.CreateVersion7().ToString()),
-                        new Claim("role", "SchoolAdmin"),
-                        new Claim("tenant_id", user.TenantId!.Value.Value.ToString()),
-                    ],
-                    "Test")),
-            };
-            try
-            {
-                var db = sp.GetRequiredService<AppDbContext>();
-                var result = await sp.GetRequiredService<IUnitOfWork>().ExecuteInTransactionAsync(
-                    async ct =>
-                    {
-                        var tracked = await db.Set<User>().Include(u => u.RefreshTokens).SingleAsync(u => u.Id == user.Id, ct);
-                        var deactivated = tracked.Deactivate(Api.Clock.GetUtcNow());
-                        return deactivated.IsSuccess ? Result.Success(true) : Result.Failure<bool>(deactivated.Error);
-                    },
-                    Ct);
-                result.IsSuccess.ShouldBeTrue();
-            }
-            finally
-            {
-                accessor.HttpContext = null;
-            }
-        });
 }

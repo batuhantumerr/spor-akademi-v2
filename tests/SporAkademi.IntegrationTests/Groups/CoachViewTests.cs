@@ -104,8 +104,9 @@ public sealed class CoachViewTests(DatabaseFixture database) : GroupsTest(databa
         var group = await CreateGroupAsync("A Grubu", Ayse);
         var other = await CreateGroupAsync("Mehmet'in Grubu", Mehmet);
 
-        await DeactivateWithEventsAsync(Ayse);
+        var response = await Admin.PostAsync(new Uri($"/api/v1/coaches/{Ayse.Id.Value}/deactivate", UriKind.Relative), null, Ct);
 
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
         var after = await GetGroupAsync(IdOf(group));
         after.GetProperty("coach").ValueKind.ShouldBe(JsonValueKind.Null);
         after.GetProperty("status").GetString().ShouldBe("Active");
