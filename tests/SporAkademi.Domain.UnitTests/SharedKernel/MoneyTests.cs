@@ -69,9 +69,29 @@ public sealed class MoneyTests
     }
 
     [Fact]
-    public void Subtracting_floors_at_nothing_and_rejects_negative_results()
+    public void Subtract_rejects_negative_results()
     {
         Money.Try(100m).Subtract(Money.Try(40m)).ShouldBe(Money.Try(60m));
         Should.Throw<InvalidOperationException>(() => Money.Try(10m).Subtract(Money.Try(11m)));
+    }
+
+    [Fact]
+    public void Add_past_the_maximum_is_a_programmer_error()
+    {
+        Should.Throw<InvalidOperationException>(() => Money.Try(Money.MaxAmount).Add(Money.Try(0.01m)));
+    }
+
+    [Theory]
+    [InlineData("try")]
+    [InlineData("")]
+    public void Currency_must_be_exactly_try(string currency)
+    {
+        Money.Create(1m, currency).Error.Code.ShouldBe("Money.Invalid");
+    }
+
+    [Fact]
+    public void Null_currency_is_a_programmer_error()
+    {
+        Should.Throw<ArgumentNullException>(() => Money.Create(1m, null!));
     }
 }

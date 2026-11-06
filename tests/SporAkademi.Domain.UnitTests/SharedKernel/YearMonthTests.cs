@@ -62,4 +62,11 @@ public sealed class YearMonthTests
         feb.LastDay.ShouldBe(new DateOnly(2028, 2, 29));
         YearMonth.From(new DateOnly(2028, 2, 14)).ShouldBe(feb);
     }
+
+    [Fact]
+    public void Range_edges_are_programmer_errors()
+    {
+        Should.Throw<InvalidOperationException>(() => YearMonth.Create(2100, 12).Value.Next());
+        Should.Throw<ArgumentOutOfRangeException>(() => YearMonth.From(new DateOnly(1999, 12, 31)));
+    }
 }
