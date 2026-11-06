@@ -81,7 +81,7 @@ internal static class StudentEndpoints
     {
         var command = new RegisterStudentCommand(
             request.FirstName, request.LastName, request.BirthDate, request.Gender, request.Phone, request.Email, request.EmergencyContact, request.Guardians);
-        var created = await handler.Handle(command, cancellationToken);
+        var created = await GuardianLinkConflicts.RetryOnceAsync(() => handler.Handle(command, cancellationToken));
         if (created.IsFailure)
         {
             return ProblemResults.Problem(created.Error);
@@ -111,7 +111,8 @@ internal static class StudentEndpoints
         CancellationToken cancellationToken)
     {
         var command = new ReplaceStudentGuardiansCommand(StudentId.From(id), request.Guardians, request.Version);
-        return await ThenRead(await handler.Handle(command, cancellationToken), id, reader, cancellationToken);
+        var replaced = await GuardianLinkConflicts.RetryOnceAsync(() => handler.Handle(command, cancellationToken));
+        return await ThenRead(replaced, id, reader, cancellationToken);
     }
 
     private static async Task<IResult> LeaveStudent(

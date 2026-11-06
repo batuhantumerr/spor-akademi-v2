@@ -48,6 +48,30 @@ public sealed class LeaveStudentTests(DatabaseFixture database) : StudentsTest(d
     }
 
     [Fact]
+    public async Task Concurrent_leaves_end_the_enrollments_only_once()
+    {
+        var recorder = new RecordingEnrollmentEnder();
+        await using var api = Api.WithWebHostBuilder(builder => builder.ConfigureTestServices(services =>
+            services.Replace(ServiceDescriptor.Scoped<IEnrollmentEnder>(_ => recorder))));
+        var student = await RegisterAsync(Minor());
+        var clients = Enumerable.Range(0, 4).Select(_ =>
+        {
+            var client = api.CreateClient();
+            client.Authorize(TestTokens.Create(Guid.CreateVersion7(), "SchoolAdmin", School.Value, Api.Clock.GetUtcNow()));
+            return client;
+        }).ToList();
+
+        var responses = await Task.WhenAll(clients.Select(c => c.PostAsJsonAsync($"/api/v1/students/{student.Id}/leave", new { date = "2027-01-10" }, Ct)));
+
+        // The loser either sees the committed Left state (422) or loses the version-checked update (409).
+        responses.Count(r => r.StatusCode == HttpStatusCode.OK).ShouldBe(1);
+        responses.Where(r => r.StatusCode != HttpStatusCode.OK).Select(r => r.StatusCode)
+            .ShouldAllBe(code => code == HttpStatusCode.UnprocessableEntity || code == HttpStatusCode.Conflict);
+        recorder.Calls.Count.ShouldBe(1);
+        clients.ForEach(c => c.Dispose());
+    }
+
+    [Fact]
     public async Task Leaving_twice_is_rejected()
     {
         var student = await RegisterAsync(Minor());

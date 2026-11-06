@@ -149,6 +149,55 @@ public sealed class RegisterStudentTests(DatabaseFixture database) : StudentsTes
     }
 
     [Fact]
+    public async Task A_29_february_birthday_turns_18_on_1_march_in_a_non_leap_year()
+    {
+        Api.Clock.SetUtcNow(new DateTimeOffset(2030, 2, 28, 12, 0, 0, TimeSpan.Zero));
+        using var onFebruary28 = Api.SchoolAdminClient(School);
+        var minor = await onFebruary28.PostAsJsonAsync("/api/v1/students", Adult(birthDate: "2012-02-29"), Ct);
+
+        Api.Clock.SetUtcNow(new DateTimeOffset(2030, 3, 1, 12, 0, 0, TimeSpan.Zero));
+        using var onMarch1 = Api.SchoolAdminClient(School);
+        var adult = await onMarch1.PostAsJsonAsync("/api/v1/students", Adult(birthDate: "2012-02-29"), Ct);
+
+        minor.StatusCode.ShouldBe(HttpStatusCode.UnprocessableEntity);
+        (await CodeOf(minor)).ShouldBe("Student.GuardianRequired");
+        adult.StatusCode.ShouldBe(HttpStatusCode.Created);
+    }
+
+    [Fact]
+    public async Task Concurrent_registrations_with_the_same_new_guardian_share_it()
+    {
+        var clients = Enumerable.Range(0, 4).Select(_ => Api.SchoolAdminClient(School)).ToList();
+
+        var responses = await Task.WhenAll(clients.Select((c, i) => c.PostAsJsonAsync("/api/v1/students", Minor($"Kardeş{i}"), Ct)));
+
+        responses.Select(r => r.StatusCode).ShouldAllBe(code => code == HttpStatusCode.Created);
+        var students = await Task.WhenAll(responses.Select(r => r.Content.ReadFromJsonAsync<StudentDto>(Json, Ct)));
+        students.Select(s => s!.Guardians.Single().GuardianId).Distinct().ShouldHaveSingleItem();
+        clients.ForEach(c => c.Dispose());
+    }
+
+    [Fact]
+    public async Task Another_school_cannot_update_a_guardian()
+    {
+        var student = await RegisterAsync(Minor());
+        var other = await TestSchools.CreateAsync(Api, "okul-b");
+        using var otherAdmin = Api.SchoolAdminClient(other);
+
+        var response = await otherAdmin.PutAsJsonAsync($"/api/v1/guardians/{student.Guardians[0].GuardianId}", new
+        {
+            firstName = "Hack",
+            lastName = "Deneme",
+            phone = "0532 111 22 33",
+            version = 1,
+        }, Ct);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        (await CodeOf(response)).ShouldBe("Guardian.NotFound");
+        (await GetAsync(student.Id))!.Guardians[0].FirstName.ShouldBe("Ayşe");
+    }
+
+    [Fact]
     public async Task A_guardian_of_another_school_cannot_be_linked()
     {
         var other = await TestSchools.CreateAsync(Api, "okul-b");

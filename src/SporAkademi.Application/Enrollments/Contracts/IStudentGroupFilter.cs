@@ -6,7 +6,7 @@ namespace SporAkademi.Application.Enrollments.Contracts;
 
 /// <summary>
 /// Read contract of the Enrollments module for the student search filters by group and sport (US-16).
-/// Enrollments arrive in P1-26; until then the filters do not restrict the result.
+/// Enrollments arrive in P1-26; until then no student is enrolled anywhere, so the filters match nobody.
 /// </summary>
 public interface IStudentGroupFilter
 {

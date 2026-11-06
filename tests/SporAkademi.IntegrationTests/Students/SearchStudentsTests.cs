@@ -73,11 +73,13 @@ public sealed class SearchStudentsTests(DatabaseFixture database) : StudentsTest
     }
 
     [Fact]
-    public async Task Group_and_sport_filters_are_accepted_before_enrollments_exist()
+    public async Task Before_enrollments_exist_no_student_is_in_a_group_or_sport()
     {
         await RegisterAsync(Minor("Ali"));
 
-        (await NamesAsync($"/api/v1/students?groupId={Guid.CreateVersion7()}&sportId={Guid.CreateVersion7()}")).Count.ShouldBe(1);
+        (await NamesAsync($"/api/v1/students?groupId={Guid.CreateVersion7()}")).ShouldBeEmpty();
+        (await NamesAsync($"/api/v1/students?sportId={Guid.CreateVersion7()}")).ShouldBeEmpty();
+        (await NamesAsync("/api/v1/students")).Count.ShouldBe(1);
     }
 
     [Fact]

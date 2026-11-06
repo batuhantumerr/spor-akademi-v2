@@ -8,8 +8,8 @@ namespace SporAkademi.Infrastructure.Enrollments;
 
 /// <summary>
 /// Stand-in until the Enrollments module exists: enrollments arrive with US-17 (P1-26) and are ended
-/// with US-18 (P1-27). Until then no group has an enrollment, so nothing is counted or ended.
-/// The student search filters by group and sport do not restrict yet.
+/// with US-18 (P1-27). Until then no group has an enrollment, so nothing is counted or ended, and no
+/// student is in any group or sport.
 /// </summary>
 internal sealed class NoEnrollments : IEnrollmentCounts, IEnrollmentEnder, IStudentGroupFilter
 {
@@ -22,5 +22,5 @@ internal sealed class NoEnrollments : IEnrollmentCounts, IEnrollmentEnder, IStud
         Task.FromResult(Result.Success());
 
     public Task<IReadOnlyCollection<StudentId>?> StudentsEnrolledInAsync(GroupId? groupId, SportId? sportId, CancellationToken cancellationToken) =>
-        Task.FromResult<IReadOnlyCollection<StudentId>?>(null);
+        Task.FromResult<IReadOnlyCollection<StudentId>?>(Array.Empty<StudentId>());
 }

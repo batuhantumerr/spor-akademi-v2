@@ -127,7 +127,7 @@ internal sealed class RegisterStudentHandler(
         var registered = Student.Register(tenant, details.Value, links.Value, today);
         if (registered.IsFailure)
         {
-            return Result.Failure<StudentId>(registered.Error.ToStudentFieldError());
+            return Result.Failure<StudentId>(registered.Error.ToStudentFieldError(command));
         }
 
         students.Add(registered.Value);
@@ -155,7 +155,7 @@ internal sealed class UpdateStudentHandler(IStudentRepository students, ITenancy
         var today = await tenancy.TodayAsync(currentUser.RequireTenant(), cancellationToken);
         students.ExpectVersion(student, command.Version);
         var updated = student.Update(details.Value, today);
-        return updated.IsSuccess ? Result.Success(Unit.Value) : Result.Failure<Unit>(updated.Error.ToStudentFieldError());
+        return updated.IsSuccess ? Result.Success(Unit.Value) : Result.Failure<Unit>(updated.Error.ToStudentFieldError(command));
     }
 }
 

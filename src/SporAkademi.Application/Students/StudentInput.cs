@@ -165,15 +165,18 @@ internal static class StudentInputMapping
             input.FirstName, input.LastName, input.BirthDate, input.Gender, phone.Value, email.Value, emergencyContact.Value));
     }
 
-    /// <summary>Field-level domain failures become <c>Validation.Failed</c> on the field; rule failures pass through.</summary>
-    public static Error ToStudentFieldError(this Error error)
+    /// <summary>Field-level domain failures become <c>Validation.Failed</c> on the field they concern; rule failures pass through.</summary>
+    public static Error ToStudentFieldError(this Error error, IStudentFields input)
     {
-        if (error == CommonErrors.FieldInvalid)
+        var field = error switch
         {
-            return ValidationErrors.ForField("birthDate", error);
-        }
-
-        return error == StudentErrors.EmergencyContactRequired ? ValidationErrors.ForField("emergencyContact", error) : error;
+            _ when error == CommonErrors.FieldRequired || error == CommonErrors.FieldTooLong =>
+                PersonNames.Validate(input.FirstName, "-").IsFailure ? "firstName" : "lastName",
+            _ when error == CommonErrors.FieldInvalid => Enum.IsDefined(input.Gender) ? "birthDate" : "gender",
+            _ when error == StudentErrors.EmergencyContactRequired => "emergencyContact",
+            _ => null,
+        };
+        return field is null ? error : ValidationErrors.ForField(field, error);
     }
 
     public static Result<PhoneNumber?> OptionalPhone(string? value, string field)
@@ -303,4 +306,19 @@ internal static class GuardianLinkResolver
     /// <summary>A duplicate or too many links is a field error on <c>guardians</c>; rule failures pass through.</summary>
     public static Error ToGuardiansFieldError(this Error error) =>
         error == CommonErrors.FieldInvalid ? ValidationErrors.ForField("guardians", error) : error;
+}
+
+/// <summary>
+/// DEC-157: two requests can both decide that a new guardian's phone is unknown and both insert it; the
+/// unique index rejects the second with Guardian.PhoneTaken. Running the command once more, in a fresh
+/// transaction, finds the committed guardian and links it (US-13) instead of failing.
+/// </summary>
+public static class GuardianLinkConflicts
+{
+    public static async Task<Result<T>> RetryOnceAsync<T>(Func<Task<Result<T>>> operation)
+    {
+        ArgumentNullException.ThrowIfNull(operation);
+        var result = await operation();
+        return result.IsFailure && result.Error == GuardianErrors.PhoneTaken ? await operation() : result;
+    }
 }
