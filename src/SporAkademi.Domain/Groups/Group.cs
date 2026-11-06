@@ -33,10 +33,13 @@ public sealed class Group : AggregateRoot<GroupId>, ITenantScoped
     /// <summary>Name of the field holding the schedule, for the persistence mapping.</summary>
     public const string ScheduleSlotsField = nameof(_scheduleSlots);
 
+    /// <summary>Name of the field holding the fees, for the persistence mapping.</summary>
+    public const string FeesField = nameof(_fees);
+
+    private readonly List<GroupFee> _fees = [];
+
     private List<ScheduleSlot> _scheduleSlots = [];
 
-    // Fees (appendix B 4.5, P1-31) will be a second owned collection next to the schedule, changed only
-    // through methods of this aggregate.
     private Group(GroupId id, SchoolId tenantId, SportId sportId)
         : base(id)
     {
@@ -80,6 +83,9 @@ public sealed class Group : AggregateRoot<GroupId>, ITenantScoped
     public IReadOnlyList<ScheduleSlot> ScheduleSlots => _scheduleSlots.AsReadOnly();
 
     public bool IsArchived => Status == GroupStatus.Archived;
+
+    /// <summary>The fee history, oldest first (US-22).</summary>
+    public IReadOnlyList<GroupFee> Fees => [.. _fees.OrderBy(f => f.EffectiveFrom)];
 
     public static Result<Group> Create(
         SchoolId tenantId,
@@ -142,6 +148,40 @@ public sealed class Group : AggregateRoot<GroupId>, ITenantScoped
         Raise(new GroupArchived(Id, TenantId, today));
         return Result.Success();
     }
+
+    /// <summary>
+    /// Sets the monthly fee from <paramref name="effectiveFrom"/> onward (US-22). Earlier periods keep their fee:
+    /// a period before <paramref name="currentPeriod"/> (the school's current month) cannot get a fee, and each
+    /// period has at most one fee.
+    /// </summary>
+    public Result DefineFee(YearMonth effectiveFrom, Money amount, YearMonth currentPeriod)
+    {
+        ArgumentNullException.ThrowIfNull(effectiveFrom);
+        ArgumentNullException.ThrowIfNull(amount);
+        ArgumentNullException.ThrowIfNull(currentPeriod);
+
+        if (IsArchived)
+        {
+            return Result.Failure(GroupErrors.Archived);
+        }
+
+        if (effectiveFrom < currentPeriod)
+        {
+            return Result.Failure(FeeErrors.PeriodInPast);
+        }
+
+        if (_fees.Exists(f => f.EffectiveFrom == effectiveFrom))
+        {
+            return Result.Failure(FeeErrors.AlreadyDefined);
+        }
+
+        _fees.Add(GroupFee.Define(Id, effectiveFrom, amount));
+        return Result.Success();
+    }
+
+    /// <summary>The fee that applies to <paramref name="period"/>: the latest one not after it, or null.</summary>
+    public Money? FeeFor(YearMonth period) =>
+        _fees.Where(f => f.EffectiveFrom <= period).MaxBy(f => f.EffectiveFrom)?.Amount;
 
     /// <summary>The coach left (deactivated): the group stays, shown as "no active coach" until reassigned (US-08).</summary>
     public void ClearCoach() => CoachId = null;
