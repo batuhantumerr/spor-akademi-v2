@@ -25,4 +25,12 @@ public sealed class HealthTests(DatabaseFixture database) : IntegrationTest(data
         ready.StatusCode.ShouldBe(HttpStatusCode.ServiceUnavailable);
         live.StatusCode.ShouldBe(HttpStatusCode.OK);
     }
+
+    [Fact]
+    public void Startup_fails_fast_without_a_connection_string()
+    {
+        using var factory = new ApiFactory(string.Empty);
+
+        Should.Throw<Microsoft.Extensions.Options.OptionsValidationException>(() => factory.CreateClient());
+    }
 }

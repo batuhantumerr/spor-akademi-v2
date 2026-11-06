@@ -1,4 +1,5 @@
 using System.Text.RegularExpressions;
+using DotNet.Testcontainers.Configurations;
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
 using Respawn;
@@ -9,7 +10,8 @@ namespace SporAkademi.IntegrationTests.Infrastructure;
 
 /// <summary>
 /// One PostgreSQL container per test run, built exactly like local development: the image comes from
-/// compose.yaml, roles from the same init script, and migrations run as the migrator role (P1-08).
+/// compose.yaml, roles from the same init script (executable, so it runs as a subprocess like the
+/// local bind mount), and migrations run as the migrator role (P1-08).
 /// </summary>
 public sealed partial class DatabaseFixture : IAsyncLifetime
 {
@@ -24,7 +26,7 @@ public sealed partial class DatabaseFixture : IAsyncLifetime
         .WithEnvironment("SPOR_AKADEMI_DB", Database)
         .WithEnvironment("SPOR_AKADEMI_MIGRATOR_PASSWORD", MigratorPassword)
         .WithEnvironment("SPOR_AKADEMI_APP_PASSWORD", AppPassword)
-        .WithResourceMapping(new FileInfo(Path.Combine(AppContext.BaseDirectory, "Infrastructure", "10-create-roles.sh")), "/docker-entrypoint-initdb.d/")
+        .WithResourceMapping(File.ReadAllBytes(Path.Combine(AppContext.BaseDirectory, "Infrastructure", "10-create-roles.sh")), "/docker-entrypoint-initdb.d/10-create-roles.sh", fileMode: Unix.FileMode755)
         .Build();
 
     private Respawner? _respawner;

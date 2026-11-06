@@ -14,6 +14,13 @@ public static class DependencyInjection
     {
         ArgumentNullException.ThrowIfNull(configuration);
 
+        // Read lazily below, but still fail at startup when it is missing.
+        services.AddOptions<DatabaseConfigurationCheck>()
+            .Validate<IConfiguration>(
+                (_, config) => !string.IsNullOrWhiteSpace(config.GetConnectionString("App")),
+                "Connection string 'App' is not configured.")
+            .ValidateOnStart();
+
         services.TryAddScoped<ICurrentUser, AnonymousCurrentUser>();
         services.TryAddSingleton(TimeProvider.System);
         services.AddScoped<AuditingInterceptor>();
@@ -35,3 +42,5 @@ public static class DependencyInjection
         return services;
     }
 }
+
+internal sealed class DatabaseConfigurationCheck;
