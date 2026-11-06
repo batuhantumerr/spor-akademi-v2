@@ -16,6 +16,8 @@ internal static class Logging
         {
             configuration
                 .ReadFrom.Configuration(builder.Configuration)
+                // Sinks registered as ILogEventSink (e.g. the log-privacy test's collector) receive every event too.
+                .ReadFrom.Services(services)
                 .MinimumLevel.Override("Microsoft.AspNetCore", LogEventLevel.Warning)
                 .MinimumLevel.Override("Microsoft.EntityFrameworkCore", LogEventLevel.Warning)
                 .Enrich.FromLogContext()
