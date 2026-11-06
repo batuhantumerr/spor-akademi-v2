@@ -16,3 +16,6 @@
 | DEC-106 | Domain event işleyici arayüzünün adı `IDomainEventConsumer<T>`: CA1711 `EventHandler` sonekini yasaklıyor ve analyzer kapatılmıyor. | Proposed |
 | DEC-107 | JWT süre doğrulaması `TimeProvider` üzerinden yapılır (`LifetimeValidator`); böylece 15 dk / 7 gün / 30 gün kuralları testte saat ilerletilerek doğrulanır. | Proposed |
 | DEC-108 | Tenant yazma koruması: token'da okul varsa sadece o okulun satırları eklenir/değişir/silinir, bir satırın tenant'ı asla değişmez; ihlal `TenantIsolationException` (500, programcı hatası/saldırı). Token'da okul yoksa (Platform Admin) yazma kendi modülünün kontrolündedir. | Proposed |
+| DEC-109 | Çerçevenin ürettiği çıplak yanıtlar da kodlu ProblemDetails döner. Ek E'ye eklenen kodlar: `Auth.Unauthenticated` (401, token yok/geçersiz), `Auth.Forbidden` (403), `Resource.NotFound` (404, eşleşmeyen rota), `Request.MethodNotAllowed` (405), `Request.TooManyRequests` (429). | Proposed |
+| DEC-110 | Token tutarlılık kuralı: `PlatformAdmin` token'ında `tenant_id` olmaz, diğer rollerde geçerli bir `tenant_id` zorunludur; aksi halde kimlik doğrulama başarısız (401). Tenant'sız bir okul rolü yazamaz. | Proposed |
+| DEC-111 | 1 MB gövde sınırı Kestrel ayarına ek olarak `Content-Length` kontrol eden bir middleware ile de uygulanır (sunucudan bağımsız ve test edilebilir). | Proposed |

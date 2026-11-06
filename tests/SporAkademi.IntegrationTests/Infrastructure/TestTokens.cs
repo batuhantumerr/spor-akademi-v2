@@ -8,7 +8,14 @@ namespace SporAkademi.IntegrationTests.Infrastructure;
 /// <summary>Mints access tokens signed with the test key, for endpoints whose login flow is not under test.</summary>
 public static class TestTokens
 {
-    public static string Create(Guid userId, string role, Guid? tenantId, DateTimeOffset now, bool passwordChangeRequired = false)
+    public static string Create(
+        Guid userId,
+        string role,
+        Guid? tenantId,
+        DateTimeOffset now,
+        bool passwordChangeRequired = false,
+        string? signingKeyHex = null,
+        string issuer = "spor-akademi")
     {
         var claims = new List<Claim>
         {
@@ -22,9 +29,9 @@ public static class TestTokens
             claims.Add(new Claim("tenant_id", tenant.ToString()));
         }
 
-        var key = new SymmetricSecurityKey(Convert.FromHexString(ApiFactory.JwtSigningKey));
+        var key = new SymmetricSecurityKey(Convert.FromHexString(signingKeyHex ?? ApiFactory.JwtSigningKey));
         var token = new JwtSecurityToken(
-            issuer: "spor-akademi",
+            issuer: issuer,
             audience: "spor-akademi-api",
             claims: claims,
             notBefore: now.UtcDateTime,

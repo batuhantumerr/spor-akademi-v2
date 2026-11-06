@@ -36,6 +36,7 @@ internal static class JwtSetup
             .Configure<IOptions<JwtOptions>, TimeProvider>((bearer, jwt, timeProvider) =>
             {
                 bearer.MapInboundClaims = false;
+                bearer.Events = new JwtBearerEvents { OnTokenValidated = RejectTokensWithoutValidRoleAndTenant };
                 bearer.TokenValidationParameters = new TokenValidationParameters
                 {
                     ValidIssuer = JwtOptions.Issuer,
@@ -62,4 +63,20 @@ internal static class JwtSetup
         return services;
     }
 
+
+    /// <summary>A school role without a well-formed tenant id is never a valid token (ADR-0003).</summary>
+    private static Task RejectTokensWithoutValidRoleAndTenant(TokenValidatedContext context)
+    {
+        var principal = context.Principal;
+        var validRole = Enum.TryParse<SporAkademi.Application.Abstractions.Authentication.Role>(principal?.FindFirst("role")?.Value, out var role);
+        var hasTenant = Guid.TryParse(principal?.FindFirst(HttpCurrentUser.TenantIdClaim)?.Value, out _);
+        var valid = validRole && (role == SporAkademi.Application.Abstractions.Authentication.Role.PlatformAdmin ? !hasTenant : hasTenant)
+            && Guid.TryParse(principal?.FindFirst("sub")?.Value, out _);
+        if (!valid)
+        {
+            context.Fail("Token claims are inconsistent.");
+        }
+
+        return Task.CompletedTask;
+    }
 }
