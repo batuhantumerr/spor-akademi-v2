@@ -33,5 +33,6 @@ public sealed class SlugTests
     public void Blank_is_required()
     {
         Slug.Create("").Error.Code.ShouldBe("Field.Required");
+        Slug.Create("   ").Error.Code.ShouldBe("Field.Required");
     }
 }

@@ -35,6 +35,10 @@ public sealed class PhoneNumberTests
     [InlineData("+15321234567")] // not Turkey
     [InlineData("0532abc4567")]
     [InlineData("+90 532 123 45 67 8")]
+    [InlineData("+05321234567")] // plus with a trunk prefix
+    [InlineData("0532+1234567")]
+    [InlineData("07321234567")]
+    [InlineData("09321234567")]
     public void Invalid_numbers_are_rejected(string input)
     {
         PhoneNumber.Create(input).Error.Code.ShouldBe("PhoneNumber.Invalid");

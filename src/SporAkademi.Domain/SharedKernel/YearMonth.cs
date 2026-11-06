@@ -52,7 +52,12 @@ public sealed record YearMonth : IComparable<YearMonth>
         return Create(year, month);
     }
 
-    public YearMonth Next() => Month == 12 ? new YearMonth(Year + 1, 1) : new YearMonth(Year, Month + 1);
+    /// <summary>The following month. Going past <see cref="MaxYear"/> is a programmer error.</summary>
+    public YearMonth Next()
+    {
+        var next = Month == 12 ? Create(Year + 1, 1) : Create(Year, Month + 1);
+        return next.IsSuccess ? next.Value : throw new InvalidOperationException("No period after the supported range.");
+    }
 
     public int CompareTo(YearMonth? other) =>
         other is null ? 1 : ((Year * 12) + Month).CompareTo((other.Year * 12) + other.Month);

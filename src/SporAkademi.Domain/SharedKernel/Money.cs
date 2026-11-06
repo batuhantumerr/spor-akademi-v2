@@ -47,10 +47,14 @@ public sealed record Money : IComparable<Money>
             : throw new ArgumentOutOfRangeException(nameof(amount), amount, "Not a valid TRY amount.");
     }
 
+    /// <summary>Adds; exceeding <see cref="MaxAmount"/> is a programmer error.</summary>
     public Money Add(Money other)
     {
         EnsureSameCurrency(other);
-        return Try(Amount + other.Amount);
+        var sum = Amount + other.Amount;
+        return sum <= MaxAmount
+            ? Try(sum)
+            : throw new InvalidOperationException("Money exceeds the supported maximum.");
     }
 
     /// <summary>Subtracts; a negative result is a programmer error (callers compare first).</summary>
