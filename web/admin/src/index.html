@@ -2,12 +2,73 @@
 <html lang="tr">
   <head>
     <meta charset="utf-8" />
+    <!-- Static fallback; the router sets page titles from ui.appName in core/i18n/tr.ts. -->
     <title>Spor Akademi</title>
     <base href="/" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="light dark" />
     <link rel="icon" type="image/x-icon" href="favicon.ico" />
+    <script>
+      // Apply the stored or system theme before first paint to avoid a flash.
+      (function () {
+        var pref = 'system';
+        try {
+          pref = localStorage.getItem('sa-theme') || 'system';
+        } catch (e) {}
+        var dark =
+          pref === 'dark' ||
+          (pref === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+        document.documentElement.classList.add(dark ? 'dark' : 'light');
+      })();
+    </script>
+    <style>
+      html.light,
+      html.light body {
+        background: #f8fafc;
+        color: #0f172a;
+        color-scheme: light;
+      }
+      html.dark,
+      html.dark body {
+        background: #121620;
+        color: #edf2f7;
+        color-scheme: dark;
+      }
+      .boot-loading {
+        display: flex;
+        min-height: 100dvh;
+        align-items: center;
+        justify-content: center;
+        gap: 0.75rem;
+        font:
+          500 1rem system-ui,
+          sans-serif;
+      }
+      .boot-loading::before {
+        content: '';
+        width: 1.25rem;
+        height: 1.25rem;
+        border: 2px solid currentColor;
+        border-right-color: transparent;
+        border-radius: 50%;
+        animation: boot-spin 0.8s linear infinite;
+      }
+      @keyframes boot-spin {
+        to {
+          transform: rotate(360deg);
+        }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .boot-loading::before {
+          animation: none;
+        }
+      }
+    </style>
   </head>
   <body>
-    <app-root></app-root>
+    <app-root>
+      <!-- Replaced when Angular renders; shown while the session is being restored. -->
+      <div class="boot-loading" role="status" aria-live="polite">Yükleniyor…</div>
+    </app-root>
   </body>
 </html>
