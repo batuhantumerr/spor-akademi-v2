@@ -17,7 +17,7 @@ builder.Host.UseDefaultServiceProvider(options =>
 builder.AddStructuredLogging();
 builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddHttpContextAccessor();
-builder.Services.AddScoped<ICurrentUser, HttpCurrentUser>();
+builder.Services.AddScoped<ICurrentUser, HttpCurrentUser>(); // before AddInfrastructure, which only adds a fallback
 builder.Services.AddApplication();
 builder.Services.AddInfrastructure(builder.Configuration);
 

@@ -38,7 +38,7 @@ internal static class ModelConventions
     public static void AddConcurrencyTokens(this ModelBuilder modelBuilder)
     {
         foreach (var entityType in modelBuilder.Model.GetEntityTypes()
-                     .Where(t => typeof(IAggregateRoot).IsAssignableFrom(t.ClrType)).ToList())
+                     .Where(t => t.BaseType is null && typeof(IAggregateRoot).IsAssignableFrom(t.ClrType)).ToList())
         {
             modelBuilder.Entity(entityType.ClrType)
                 .Property<uint>(ConcurrencyToken.PropertyName)
