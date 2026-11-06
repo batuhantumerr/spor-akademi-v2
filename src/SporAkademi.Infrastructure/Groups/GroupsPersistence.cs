@@ -17,7 +17,7 @@ internal sealed class GroupConfiguration : IEntityTypeConfiguration<Group>
     {
         builder.ToTable("groups", Schemas.Groups);
         builder.HasKey(g => g.Id);
-        builder.HasAlternateKey(g => new { g.TenantId, g.Id });
+        builder.HasAlternateKey(g => new { g.TenantId, g.Id }).HasName("ak_groups_tenant_id_id");
         builder.HasOne<School>().WithMany().HasForeignKey(g => g.TenantId).OnDelete(DeleteBehavior.Restrict);
 
         // ADR-0003 layer 3: a group can only reference a sport or facility of its own school. These
@@ -144,4 +144,14 @@ internal sealed class GroupUsage(AppDbContext db) : IGroupUsage
 
     public Task<bool> AnyActiveGroupUsesFacilityAsync(FacilityId facilityId, CancellationToken cancellationToken) =>
         db.Set<Group>().AnyAsync(g => g.FacilityId == facilityId && g.Status == GroupStatus.Active, cancellationToken);
+}
+
+/// <summary>Active groups of a coach for other modules (tenant filter applies).</summary>
+internal sealed class CoachGroups(AppDbContext db) : ICoachGroups
+{
+    public async Task<IReadOnlyList<GroupId>> ListActiveGroupIdsAsync(UserId coachId, CancellationToken cancellationToken) =>
+        await db.Set<Group>()
+            .Where(g => g.CoachId == coachId && g.Status == GroupStatus.Active)
+            .Select(g => g.Id)
+            .ToListAsync(cancellationToken);
 }
