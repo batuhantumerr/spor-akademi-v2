@@ -1,6 +1,7 @@
 using System.Text.Json.Serialization;
 using SporAkademi.Api;
 using SporAkademi.Api.Authentication;
+using SporAkademi.Api.Endpoints.Groups;
 using SporAkademi.Api.Endpoints.Identity;
 using SporAkademi.Api.Endpoints.Organization;
 using SporAkademi.Api.Errors;
@@ -53,6 +54,7 @@ app.UseMiddleware<PasswordChangeRequiredMiddleware>();
 app.MapHealthEndpoints();
 app.MapIdentityEndpoints();
 app.MapOrganizationEndpoints();
+app.MapGroupsEndpoints();
 app.MapApiDocument();
 
 await app.RunAsync();

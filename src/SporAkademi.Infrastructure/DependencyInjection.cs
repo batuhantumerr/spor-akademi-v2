@@ -4,10 +4,16 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using SporAkademi.Application.Abstractions.Authentication;
 using SporAkademi.Application.Abstractions.Data;
+using SporAkademi.Application.Enrollments.Contracts;
+using SporAkademi.Application.Groups;
 using SporAkademi.Application.Groups.Contracts;
 using SporAkademi.Application.Identity;
+using SporAkademi.Application.Identity.Contracts;
 using SporAkademi.Application.Organization;
+using SporAkademi.Application.Organization.Contracts;
 using SporAkademi.Application.Tenancy.Contracts;
+using SporAkademi.Infrastructure.Enrollments;
+using SporAkademi.Infrastructure.Groups;
 using SporAkademi.Infrastructure.Identity;
 using SporAkademi.Infrastructure.Organization;
 using SporAkademi.Infrastructure.Persistence;
@@ -52,7 +58,13 @@ public static class DependencyInjection
         services.AddSingleton<IRefreshTokenFactory, RefreshTokenFactory>();
         services.AddScoped<ISportRepository, SportRepository>();
         services.AddScoped<IFacilityRepository, FacilityRepository>();
-        services.AddScoped<IGroupUsage, NoGroupUsage>();
+        services.AddScoped<IOrganizationDirectory, OrganizationDirectory>();
+        services.AddScoped<ICoachDirectory, CoachDirectory>();
+        services.AddScoped<IGroupRepository, GroupRepository>();
+        services.AddScoped<IGroupUsage, GroupUsage>();
+        services.AddScoped<NoEnrollments>();
+        services.AddScoped<IEnrollmentCounts>(sp => sp.GetRequiredService<NoEnrollments>());
+        services.AddScoped<IEnrollmentEnder>(sp => sp.GetRequiredService<NoEnrollments>());
 
         services.AddHealthChecks()
             .AddDbContextCheck<AppDbContext>("database", tags: ["ready"]);
