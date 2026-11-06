@@ -51,8 +51,18 @@ export const routes: Routes = [
         path: 'coach',
         canActivate: [roleGuard('Coach')],
         children: [
-          { path: 'today', title: ui.nav.today, ...placeholder(ui.nav.today) },
-          { path: 'groups', title: ui.nav.myGroups, ...placeholder(ui.nav.myGroups) },
+          {
+            path: 'today',
+            title: ui.nav.today,
+            loadComponent: () =>
+              import('./features/coach/coach-today.page').then((m) => m.CoachTodayPage),
+          },
+          {
+            path: 'groups',
+            title: ui.nav.myGroups,
+            loadComponent: () =>
+              import('./features/coach/coach-groups.page').then((m) => m.CoachGroupsPage),
+          },
         ],
       },
       {
@@ -78,7 +88,17 @@ export const routes: Routes = [
             loadComponent: () =>
               import('./features/coaches/coaches.page').then((m) => m.CoachesPage),
           },
-          { path: 'groups', title: ui.nav.groups, ...placeholder(ui.nav.groups) },
+          {
+            path: 'groups',
+            title: ui.nav.groups,
+            loadComponent: () => import('./features/groups/groups.page').then((m) => m.GroupsPage),
+          },
+          {
+            path: 'groups/:id',
+            title: ui.nav.groups,
+            loadComponent: () =>
+              import('./features/groups/group-detail.page').then((m) => m.GroupDetailPage),
+          },
           { path: 'students', title: ui.nav.students, ...placeholder(ui.nav.students) },
           { path: 'attendance', title: ui.nav.attendance, ...placeholder(ui.nav.attendance) },
           { path: 'payments', title: ui.nav.payments, ...placeholder(ui.nav.payments) },

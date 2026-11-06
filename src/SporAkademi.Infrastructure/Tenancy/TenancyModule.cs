@@ -16,4 +16,10 @@ internal sealed class TenancyModule(AppDbContext dbContext, TimeProvider timePro
             ?? throw new InvalidOperationException("The school of a signed-in user must exist.");
         return school.Today(timeProvider);
     }
+
+    public Task<string?> TimeZoneAsync(SchoolId schoolId, CancellationToken cancellationToken) =>
+        dbContext.Set<School>().AsNoTracking()
+            .Where(s => s.Id == schoolId)
+            .Select(s => (string?)s.TimeZone)
+            .SingleOrDefaultAsync(cancellationToken);
 }

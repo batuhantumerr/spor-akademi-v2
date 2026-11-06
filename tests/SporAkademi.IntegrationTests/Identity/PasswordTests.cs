@@ -185,4 +185,24 @@ public sealed class PasswordTests(DatabaseFixture database) : IdentityTest(datab
 
         me.ShouldBe(new UserBody(coach.Id.Value, "coach@example.com", "Deniz", "Kaya", "Coach", school.Value, false));
     }
+
+    [Fact]
+    public async Task Me_returns_the_school_time_zone_for_school_users_only()
+    {
+        var school = await SeedSchoolAsync();
+        await SeedUserAsync("coach@example.com", UserRole.Coach, school);
+        await SeedUserAsync("platform@example.com", UserRole.PlatformAdmin, null);
+
+        var coach = await LoginOkAsync("coach@example.com");
+        var platform = await LoginOkAsync("platform@example.com");
+        var coachMe = await (await SendAsync(HttpMethod.Get, "/api/v1/me", coach.AccessToken))
+            .Content.ReadFromJsonAsync<MeTimeZoneBody>(TestContext.Current.CancellationToken);
+        var platformMe = await (await SendAsync(HttpMethod.Get, "/api/v1/me", platform.AccessToken))
+            .Content.ReadFromJsonAsync<MeTimeZoneBody>(TestContext.Current.CancellationToken);
+
+        coachMe!.SchoolTimeZone.ShouldBe("Europe/Istanbul");
+        platformMe!.SchoolTimeZone.ShouldBeNull();
+    }
+
+    private sealed record MeTimeZoneBody(string? SchoolTimeZone);
 }
