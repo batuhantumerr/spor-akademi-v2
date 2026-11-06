@@ -58,7 +58,10 @@ internal sealed class TransactionCommandDecorator<TCommand, TResponse>(
     where TCommand : ICommand<TResponse>
 {
     public Task<Result<TResponse>> Handle(TCommand command, CancellationToken cancellationToken) =>
-        unitOfWork.ExecuteInTransactionAsync(ct => inner.Handle(command, ct), cancellationToken);
+        unitOfWork.ExecuteInTransactionAsync(
+            ct => inner.Handle(command, ct),
+            commitOnFailure: command is IKeepChangesOnFailure,
+            cancellationToken);
 }
 
 internal static partial class RequestLogging

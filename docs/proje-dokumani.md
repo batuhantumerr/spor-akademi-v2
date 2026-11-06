@@ -1603,6 +1603,7 @@ API'nin döndüğü tüm hata ve uyarı kodlarının kataloğu. Kurallar:
 | `Auth.PasswordChangeRequired` | Forbidden | Devam etmek için şifrenizi değiştirmeniz gerekiyor. | US-05 |
 | `Auth.CurrentPasswordIncorrect` | BusinessRule | Mevcut şifreniz hatalı. | US-05 |
 | `Auth.PasswordTooWeak` | Validation | Şifre en az 10 karakter olmalı ve çok yaygın bir şifre olmamalı. | US-05 |
+| `Auth.PasswordUnchanged` | Validation | Yeni şifre mevcut şifrenizle aynı olamaz. | US-05 |
 | `User.EmailTaken` | Conflict | Bu e-posta adresi zaten kullanılıyor. | US-01, US-08 |
 | `User.NotFound` | NotFound | Kullanıcı bulunamadı. | US-08 |
 | `User.AlreadyInactive` | BusinessRule | Bu kullanıcı zaten pasif. | US-08 |

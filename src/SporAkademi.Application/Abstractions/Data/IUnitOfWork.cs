@@ -11,5 +11,15 @@ public interface IUnitOfWork
 {
     Task<Result<T>> ExecuteInTransactionAsync<T>(
         Func<CancellationToken, Task<Result<T>>> operation,
+        CancellationToken cancellationToken) =>
+        ExecuteInTransactionAsync(operation, commitOnFailure: false, cancellationToken);
+
+    /// <summary>
+    /// With <paramref name="commitOnFailure"/> a failed result is saved and committed too, for operations
+    /// whose failure itself changes state (e.g. a wrong password counts towards the lockout).
+    /// </summary>
+    Task<Result<T>> ExecuteInTransactionAsync<T>(
+        Func<CancellationToken, Task<Result<T>>> operation,
+        bool commitOnFailure,
         CancellationToken cancellationToken);
 }

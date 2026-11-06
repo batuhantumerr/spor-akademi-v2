@@ -53,6 +53,22 @@ public sealed class UnitOfWorkTests(DatabaseFixture database) : IntegrationTest(
     }
 
     [Fact]
+    public async Task Failed_result_is_committed_when_asked_to_keep_failure_changes()
+    {
+        var result = await InScopeAsync(sp => sp.GetRequiredService<IUnitOfWork>().ExecuteInTransactionAsync(
+            ct =>
+            {
+                sp.GetRequiredService<AppDbContext>().Add(NewSchool());
+                return Task.FromResult(Result.Failure<SchoolId>(SchoolErrors.SlugTaken));
+            },
+            commitOnFailure: true,
+            TestContext.Current.CancellationToken));
+
+        result.Error.ShouldBe(SchoolErrors.SlugTaken);
+        (await CountSchoolsAsync()).ShouldBe(1);
+    }
+
+    [Fact]
     public async Task Exception_rolls_back_and_propagates()
     {
         await Should.ThrowAsync<InvalidOperationException>(() => InScopeAsync(sp => sp.GetRequiredService<IUnitOfWork>().ExecuteInTransactionAsync<SchoolId>(
