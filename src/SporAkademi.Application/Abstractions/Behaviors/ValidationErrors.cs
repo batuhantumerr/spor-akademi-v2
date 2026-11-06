@@ -9,13 +9,19 @@ public static class ValidationErrors
     public const string Code = "Validation.Failed";
     public const string ErrorsArgument = "errors";
 
+    /// <summary>Used when a rule has no catalogue code, so FluentValidation defaults never leak into the API.</summary>
+    public const string FallbackFieldCode = "Field.Invalid";
+
+    /// <summary>Key for model-level rules that have no property.</summary>
+    public const string ModelKey = "_";
+
     public static Error From(IEnumerable<ValidationFailure> failures)
     {
         var errors = failures
-            .GroupBy(f => ToCamelCasePath(f.PropertyName), StringComparer.Ordinal)
+            .GroupBy(f => string.IsNullOrEmpty(f.PropertyName) ? ModelKey : ToCamelCasePath(f.PropertyName), StringComparer.Ordinal)
             .ToDictionary(
                 g => g.Key,
-                g => g.Select(f => f.ErrorCode).Distinct(StringComparer.Ordinal).ToArray(),
+                g => g.Select(f => ToCatalogueCode(f.ErrorCode)).Distinct(StringComparer.Ordinal).ToArray(),
                 StringComparer.Ordinal);
 
         return Error.Validation(Code, "One or more fields are invalid.").WithArgument(ErrorsArgument, errors);
@@ -28,6 +34,12 @@ public static class ValidationErrors
         var errors = new Dictionary<string, string[]>(StringComparer.Ordinal) { [field] = [error.Code] };
         return Error.Validation(Code, "One or more fields are invalid.").WithArgument(ErrorsArgument, errors);
     }
+
+    /// <summary>Catalogue codes look like <c>Area.Condition</c>; anything else (e.g. <c>NotEmptyValidator</c>) is replaced.</summary>
+    internal static string ToCatalogueCode(string? code) =>
+        code is { Length: > 2 } && code.Contains('.', StringComparison.Ordinal) && char.IsUpper(code[0])
+            ? code
+            : FallbackFieldCode;
 
     internal static string ToCamelCasePath(string propertyPath) =>
         string.Join('.', propertyPath.Split('.').Select(segment =>

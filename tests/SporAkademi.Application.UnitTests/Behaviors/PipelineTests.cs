@@ -78,6 +78,28 @@ public sealed class PipelineTests
         outer.GetType().GetGenericTypeDefinition().ShouldBe(typeof(LoggingCommandDecorator<,>));
     }
 
+    [Fact]
+    public void Default_validator_codes_never_leak()
+    {
+        var error = ValidationErrors.From([
+            new FluentValidation.Results.ValidationFailure("Name", "msg") { ErrorCode = "NotEmptyValidator" },
+            new FluentValidation.Results.ValidationFailure("", "msg") { ErrorCode = "Field.Required" },
+        ]);
+
+        var errors = (IReadOnlyDictionary<string, string[]>)error.Arguments[ValidationErrors.ErrorsArgument]!;
+        errors["name"].ShouldBe(["Field.Invalid"]);
+        errors["_"].ShouldBe(["Field.Required"]);
+    }
+
+    [Fact]
+    public void Single_field_errors_use_the_same_shape()
+    {
+        var error = ValidationErrors.ForField("email", Error.Validation("Email.Invalid", "d"));
+
+        error.Code.ShouldBe("Validation.Failed");
+        ((IReadOnlyDictionary<string, string[]>)error.Arguments[ValidationErrors.ErrorsArgument]!)["email"].ShouldBe(["Email.Invalid"]);
+    }
+
     [Theory]
     [InlineData("Name", "name")]
     [InlineData("Guardians[0].Phone", "guardians[0].phone")]
