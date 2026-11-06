@@ -1510,6 +1510,7 @@ Roller: **PA** = Platform Admin, **SA** = Okul Admini, **CO** = Antrenör, **Her
 | Metot | Yol | Açıklama | Rol | Hikaye |
 | --- | --- | --- | --- | --- |
 | `POST` | `/enrollments` | Öğrenciyi gruba kaydeder (ADR-0005 kilitleriyle) | SA | US-17 |
+| `GET` | `/enrollments/{id}` | Tek kayıt (oluşturma yanıtındaki `Location` hedefi) | SA | US-17 |
 | `POST` | `/enrollments/{id}/end` | Kaydı bir tarihle sonlandırır | SA | US-18 |
 | `GET` | `/groups/{id}/enrollments` | Grubun kayıtları (`?status=`) | SA | US-17, US-18 |
 
