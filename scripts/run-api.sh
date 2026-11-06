@@ -13,6 +13,10 @@ export ConnectionStrings__App Jwt__SigningKey
 # warns about a missing setting or a placeholder password instead of silently skipping the seed.
 if [[ -n "${PLATFORM_ADMIN_EMAIL:-}" ]]; then export PlatformAdmin__Email="$PLATFORM_ADMIN_EMAIL"; fi
 if [[ -n "${PLATFORM_ADMIN_PASSWORD:-}" ]]; then export PlatformAdmin__InitialPassword="$PLATFORM_ADMIN_PASSWORD"; fi
+# Optional (DEC-315): the Valkey L2 cache from docker compose; without VALKEY_PASSWORD the cache is in memory only.
+if [[ -n "${VALKEY_PASSWORD:-}" && "$VALKEY_PASSWORD" != change-me* ]]; then
+  export ConnectionStrings__Cache="127.0.0.1:${VALKEY_HOST_PORT:-56379},password=$VALKEY_PASSWORD"
+fi
 export ASPNETCORE_ENVIRONMENT="${ASPNETCORE_ENVIRONMENT:-Development}"
 export ASPNETCORE_URLS="${ASPNETCORE_URLS:-http://127.0.0.1:5080}"
 export Seq__ServerUrl="http://127.0.0.1:${SEQ_HOST_PORT:-5341}"
