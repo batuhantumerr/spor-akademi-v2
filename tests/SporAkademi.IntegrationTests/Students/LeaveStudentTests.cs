@@ -4,8 +4,11 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Serilog.Core;
+using Serilog.Events;
 using SporAkademi.Application.Enrollments.Contracts;
 using SporAkademi.Application.Students;
 using SporAkademi.Domain.Groups;
@@ -160,8 +163,21 @@ public sealed class LeaveStudentTests(DatabaseFixture database) : StudentsTest(d
         message.Payload.ShouldContain(student.Id.ToString());
         message.Payload.ShouldNotContain("Ali"); // ids only, no personal data
 
-        (await Api.Services.GetRequiredService<OutboxProcessor>().ProcessBatchAsync(Ct)).ShouldBe(1);
-        (await OutboxMessagesAsync()).ShouldHaveSingleItem().ProcessedAt.ShouldNotBeNull();
+        // LogStudentLeft's own log event proves the real handler ran (not just that the row was marked).
+        var sink = new StudentLeftLogSink();
+        await using var api = Api.WithWebHostBuilder(builder =>
+        {
+            builder.ConfigureAppConfiguration((_, config) => config.AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["Serilog:MinimumLevel:Default"] = "Information",
+            }));
+            builder.ConfigureTestServices(services => services.AddSingleton<ILogEventSink>(sink));
+        });
+        (await api.Services.GetRequiredService<OutboxProcessor>().ProcessBatchAsync(Ct)).ShouldBe(1);
+
+        var processed = (await OutboxMessagesAsync()).ShouldHaveSingleItem();
+        processed.ProcessedAt.ShouldNotBeNull();
+        sink.Delivered.ShouldBe([(student.Id, School.Value, processed.Id)]);
     }
 
     [Fact]
@@ -183,6 +199,27 @@ public sealed class LeaveStudentTests(DatabaseFixture database) : StudentsTest(d
     {
         await using var scope = Api.Services.CreateAsyncScope();
         return await scope.ServiceProvider.GetRequiredService<AppDbContext>().Set<OutboxMessage>().AsNoTracking().ToListAsync(Ct);
+    }
+
+    /// <summary>Collects LogStudentLeft's events (DEC-201 sink registration) as (student, school, message) ids.</summary>
+    private sealed class StudentLeftLogSink : ILogEventSink
+    {
+        private readonly ConcurrentQueue<(Guid, Guid, Guid)> _delivered = new();
+
+        public IReadOnlyList<(Guid StudentId, Guid TenantId, Guid MessageId)> Delivered => [.. _delivered];
+
+        public void Emit(LogEvent logEvent)
+        {
+            ArgumentNullException.ThrowIfNull(logEvent);
+            if (logEvent.Properties.TryGetValue("SourceContext", out var source)
+                && source.ToString().Contains(nameof(LogStudentLeft), StringComparison.Ordinal))
+            {
+                _delivered.Enqueue((Id(logEvent, "StudentId"), Id(logEvent, "TenantId"), Id(logEvent, "MessageId")));
+            }
+        }
+
+        private static Guid Id(LogEvent logEvent, string property) =>
+            (Guid)((ScalarValue)logEvent.Properties[property]).Value!;
     }
 
     private sealed class FailingEnrollmentEnder : IEnrollmentEnder

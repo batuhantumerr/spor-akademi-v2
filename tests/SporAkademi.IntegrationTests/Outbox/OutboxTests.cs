@@ -277,6 +277,114 @@ public sealed class OutboxTests(DatabaseFixture database) : OutboxTest(database)
         (await OutboxHealthAsync()).ShouldBe(HealthStatus.Degraded);
     }
 
+    [Fact]
+    public async Task A_message_waiting_for_its_next_retry_is_not_overdue()
+    {
+        Probe.FailNext(1);
+        await EnqueueAsync();
+        await ProcessAsync(); // rescheduled within the base delay
+
+        Api.Clock.Advance(BaseRetryDelay / 2 - TimeSpan.FromSeconds(1));
+        (await OutboxHealthAsync()).ShouldBe(HealthStatus.Healthy);
+    }
+
+    [Fact]
+    public async Task A_message_type_without_handlers_is_retried_and_then_dead_lettered()
+    {
+        var result = await InUnitOfWorkAsync((outbox, _, _) =>
+        {
+            outbox.Enqueue(new OrphanMessage(Guid.CreateVersion7()), null);
+            return Task.FromResult(Result.Success(1));
+        });
+        result.IsSuccess.ShouldBeTrue();
+
+        (await ProcessAsync()).ShouldBe(1);
+        var failed = await SingleMessageAsync();
+        failed.ProcessedAt.ShouldBeNull();
+        failed.Attempts.ShouldBe(1);
+        failed.LastError.ShouldBe(OutboxProcessor.NoHandlerError);
+
+        for (var attempt = 2; attempt <= MaxAttempts; attempt++)
+        {
+            Api.Clock.Advance(MaxRetryDelay);
+            await ProcessAsync();
+        }
+
+        (await SingleMessageAsync()).DeadLetteredAt.ShouldNotBeNull();
+    }
+
+    [Theory]
+    [InlineData(ProbeHang.Cooperative)]
+    [InlineData(ProbeHang.IgnoresToken)]
+    public async Task A_handler_running_past_the_timeout_is_a_failed_attempt(ProbeHang hang)
+    {
+        Probe.Hang = hang;
+        await EnqueueAsync();
+
+        var run = ProcessAsync();
+        await Probe.Started.Task.WaitAsync(TimeSpan.FromSeconds(30), Ct);
+        await AdvanceUntilAsync(run, HandlerTimeout);
+        await run;
+
+        var message = await SingleMessageAsync();
+        message.LastError.ShouldBe(OutboxProcessor.TimeoutError);
+        message.Attempts.ShouldBe(1);
+        message.ProcessedAt.ShouldBeNull();
+        Probe.Release.TrySetResult(); // let the abandoned non-cooperative handler finish
+    }
+
+    [Fact]
+    public async Task Shutdown_during_a_handler_does_not_count_as_an_attempt()
+    {
+        Probe.Hang = ProbeHang.Cooperative;
+        await EnqueueAsync();
+        using var shutdown = CancellationTokenSource.CreateLinkedTokenSource(Ct);
+
+        var run = Processor.ProcessBatchAsync(shutdown.Token);
+        await Probe.Started.Task.WaitAsync(TimeSpan.FromSeconds(30), Ct);
+        await shutdown.CancelAsync();
+        (await run).ShouldBe(1);
+
+        var message = await SingleMessageAsync();
+        message.Attempts.ShouldBe(0);
+        message.LastError.ShouldBeNull();
+        message.ProcessedAt.ShouldBeNull();
+
+        Probe.Hang = ProbeHang.None;
+        (await ProcessAsync()).ShouldBe(1);
+        (await SingleMessageAsync()).ProcessedAt.ShouldNotBeNull();
+    }
+
+    [Fact]
+    public async Task A_claim_that_never_commits_is_delivered_again()
+    {
+        // The handler succeeds, then the processor's connection dies before it can commit (like a crash).
+        Probe.KillClaimOnce();
+        await EnqueueAsync();
+
+        await Should.ThrowAsync<Exception>(ProcessAsync);
+        (await SingleMessageAsync()).ProcessedAt.ShouldBeNull();
+
+        (await ProcessAsync()).ShouldBe(1);
+
+        var message = await SingleMessageAsync();
+        message.ProcessedAt.ShouldNotBeNull();
+        message.Attempts.ShouldBe(0);
+        Probe.Deliveries.Select(d => (d.MessageId, d.Attempt)).ShouldBe([(message.Id, 1), (message.Id, 1)]);
+    }
+
+    /// <summary>Timers are created while the batch runs; keep moving the fake clock until it finishes.</summary>
+    private async Task AdvanceUntilAsync(Task run, TimeSpan step)
+    {
+        for (var tick = 0; tick < 200 && !run.IsCompleted; tick++)
+        {
+            Api.Clock.Advance(step);
+            await Task.Delay(TimeSpan.FromMilliseconds(25), Ct);
+        }
+
+        run.IsCompleted.ShouldBeTrue();
+    }
+
     private async Task<HealthStatus> OutboxHealthAsync()
     {
         var report = await Host.Services.GetRequiredService<HealthCheckService>().CheckHealthAsync(r => r.Name == "outbox", Ct);

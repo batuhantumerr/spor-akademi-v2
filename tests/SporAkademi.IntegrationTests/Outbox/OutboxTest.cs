@@ -18,6 +18,7 @@ public abstract class OutboxTest(DatabaseFixture database) : IntegrationTest(dat
 {
     protected static readonly TimeSpan BaseRetryDelay = TimeSpan.FromSeconds(10);
     protected static readonly TimeSpan MaxRetryDelay = TimeSpan.FromMinutes(1);
+    protected static readonly TimeSpan HandlerTimeout = TimeSpan.FromSeconds(30);
     protected const int MaxAttempts = 3;
     protected const int BatchSize = 5;
 
@@ -46,6 +47,7 @@ public abstract class OutboxTest(DatabaseFixture database) : IntegrationTest(dat
             builder.ConfigureTestServices(services =>
             {
                 services.AddOutboxMessageType(typeof(ProbeMessage));
+                services.AddOutboxMessageType(typeof(OrphanMessage));
                 services.AddSingleton(Probe);
                 services.AddScoped<IOutboxMessageHandler<ProbeMessage>, ProbeHandler>();
             });
