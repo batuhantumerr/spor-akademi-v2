@@ -28,7 +28,7 @@ Kapsamın tamamı ve maddelerin açıklamaları: [proje dokümanı, Ek G](proje-
 - [ ] P1-11 US-05 İlk giriş ve şifre değiştirme
 - [ ] P1-12 US-01 Okul oluşturma
 - [ ] P1-13 Angular kabuğu, giriş, ADR-0010
-- [ ] P1-14 OpenAPI ve Angular client
+- [x] P1-14 OpenAPI ve Angular client
 
 ### 1.2 Okul kurulumu ve gruplar
 - [ ] P1-15 US-06 Branşlar

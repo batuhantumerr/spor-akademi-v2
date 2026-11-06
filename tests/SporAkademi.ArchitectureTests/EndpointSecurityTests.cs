@@ -15,6 +15,7 @@ public sealed class EndpointSecurityTests : IDisposable
     [
         "/health/live",
         "/health/ready",
+        "/openapi/{documentName}.json", // Development and Testing only
         "/api/v1/auth/login",
         "/api/v1/auth/refresh",
         "/api/v1/auth/logout",
