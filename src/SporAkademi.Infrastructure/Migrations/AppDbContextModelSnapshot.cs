@@ -490,6 +490,265 @@ namespace SporAkademi.Infrastructure.Migrations
                     b.ToTable("sports", "organization");
                 });
 
+            modelBuilder.Entity("SporAkademi.Domain.Students.Guardian", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid?>("CreatedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("created_by");
+
+                    b.Property<string>("Email")
+                        .HasMaxLength(254)
+                        .HasColumnType("character varying(254)")
+                        .HasColumnName("email");
+
+                    b.Property<string>("FirstName")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("first_name");
+
+                    b.Property<string>("LastName")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("last_name");
+
+                    b.Property<string>("Phone")
+                        .IsRequired()
+                        .HasMaxLength(13)
+                        .HasColumnType("character varying(13)")
+                        .HasColumnName("phone");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("tenant_id");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<Guid?>("UpdatedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("updated_by");
+
+                    b.Property<uint>("Version")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
+
+                    b.ComplexProperty(typeof(Dictionary<string, object>), "Address", "SporAkademi.Domain.Students.Guardian.Address#Address", b1 =>
+                        {
+                            b1.Property<string>("City")
+                                .IsRequired()
+                                .HasMaxLength(60)
+                                .HasColumnType("character varying(60)")
+                                .HasColumnName("address_city");
+
+                            b1.Property<string>("District")
+                                .IsRequired()
+                                .HasMaxLength(60)
+                                .HasColumnType("character varying(60)")
+                                .HasColumnName("address_district");
+
+                            b1.Property<string>("Line")
+                                .IsRequired()
+                                .HasMaxLength(200)
+                                .HasColumnType("character varying(200)")
+                                .HasColumnName("address_line");
+                        });
+
+                    b.HasKey("Id")
+                        .HasName("pk_guardians");
+
+                    b.HasAlternateKey("TenantId", "Id")
+                        .HasName("ak_guardians_tenant_id_id");
+
+                    b.HasIndex("TenantId", "Phone")
+                        .IsUnique()
+                        .HasDatabaseName("ix_guardians_tenant_id_phone");
+
+                    b.ToTable("guardians", "students");
+                });
+
+            modelBuilder.Entity("SporAkademi.Domain.Students.Student", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTimeOffset?>("AnonymizedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("anonymized_at");
+
+                    b.Property<DateOnly>("BirthDate")
+                        .HasColumnType("date")
+                        .HasColumnName("birth_date");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid?>("CreatedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("created_by");
+
+                    b.Property<string>("Email")
+                        .HasMaxLength(254)
+                        .HasColumnType("character varying(254)")
+                        .HasColumnName("email");
+
+                    b.Property<string>("FirstName")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("first_name");
+
+                    b.Property<string>("Gender")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .HasColumnName("gender");
+
+                    b.Property<string>("LastName")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("last_name");
+
+                    b.Property<DateOnly?>("LeftAt")
+                        .HasColumnType("date")
+                        .HasColumnName("left_at");
+
+                    b.Property<string>("Phone")
+                        .HasMaxLength(13)
+                        .HasColumnType("character varying(13)")
+                        .HasColumnName("phone");
+
+                    b.Property<string>("SearchKey")
+                        .IsRequired()
+                        .HasMaxLength(201)
+                        .HasColumnType("character varying(201)")
+                        .HasColumnName("search_key");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .HasColumnName("status");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("tenant_id");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<Guid?>("UpdatedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("updated_by");
+
+                    b.Property<uint>("Version")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
+
+                    b.ComplexProperty(typeof(Dictionary<string, object>), "EmergencyContact", "SporAkademi.Domain.Students.Student.EmergencyContact#EmergencyContact", b1 =>
+                        {
+                            b1.IsRequired();
+
+                            b1.Property<string>("Name")
+                                .IsRequired()
+                                .HasMaxLength(100)
+                                .HasColumnType("character varying(100)")
+                                .HasColumnName("emergency_contact_name");
+
+                            b1.Property<string>("Phone")
+                                .IsRequired()
+                                .HasMaxLength(13)
+                                .HasColumnType("character varying(13)")
+                                .HasColumnName("emergency_contact_phone");
+
+                            b1.Property<string>("Relationship")
+                                .IsRequired()
+                                .HasMaxLength(50)
+                                .HasColumnType("character varying(50)")
+                                .HasColumnName("emergency_contact_relationship");
+                        });
+
+                    b.HasKey("Id")
+                        .HasName("pk_students");
+
+                    b.HasAlternateKey("TenantId", "Id")
+                        .HasName("ak_students_tenant_id_id");
+
+                    b.HasIndex("TenantId", "SearchKey")
+                        .HasDatabaseName("ix_students_tenant_id_search_key");
+
+                    b.ToTable("students", "students", t =>
+                        {
+                            t.HasCheckConstraint("ck_students_left_at", "(status = 'Left') = (left_at IS NOT NULL)");
+                        });
+                });
+
+            modelBuilder.Entity("SporAkademi.Domain.Students.StudentGuardian", b =>
+                {
+                    b.Property<Guid>("StudentId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("student_id");
+
+                    b.Property<Guid>("GuardianId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("guardian_id");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid?>("CreatedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("created_by");
+
+                    b.Property<string>("Relationship")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .HasColumnName("relationship");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("tenant_id");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<Guid?>("UpdatedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("updated_by");
+
+                    b.HasKey("StudentId", "GuardianId")
+                        .HasName("pk_student_guardians");
+
+                    b.HasIndex("TenantId", "GuardianId")
+                        .HasDatabaseName("ix_student_guardians_tenant_id_guardian_id");
+
+                    b.HasIndex("TenantId", "StudentId")
+                        .HasDatabaseName("ix_student_guardians_tenant_id_student_id");
+
+                    b.ToTable("student_guardians", "students");
+                });
+
             modelBuilder.Entity("SporAkademi.Domain.Tenancy.School", b =>
                 {
                     b.Property<Guid>("Id")
@@ -630,9 +889,53 @@ namespace SporAkademi.Infrastructure.Migrations
                         .HasConstraintName("fk_sports_school_tenant_id");
                 });
 
+            modelBuilder.Entity("SporAkademi.Domain.Students.Guardian", b =>
+                {
+                    b.HasOne("SporAkademi.Domain.Tenancy.School", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_guardians_school_tenant_id");
+                });
+
+            modelBuilder.Entity("SporAkademi.Domain.Students.Student", b =>
+                {
+                    b.HasOne("SporAkademi.Domain.Tenancy.School", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_students_school_tenant_id");
+                });
+
+            modelBuilder.Entity("SporAkademi.Domain.Students.StudentGuardian", b =>
+                {
+                    b.HasOne("SporAkademi.Domain.Students.Guardian", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId", "GuardianId")
+                        .HasPrincipalKey("TenantId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_student_guardians_guardians_tenant_id_guardian_id");
+
+                    b.HasOne("SporAkademi.Domain.Students.Student", null)
+                        .WithMany("Guardians")
+                        .HasForeignKey("TenantId", "StudentId")
+                        .HasPrincipalKey("TenantId", "Id")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_student_guardians_students_tenant_id_student_id");
+                });
+
             modelBuilder.Entity("SporAkademi.Domain.Identity.User", b =>
                 {
                     b.Navigation("RefreshTokens");
+                });
+
+            modelBuilder.Entity("SporAkademi.Domain.Students.Student", b =>
+                {
+                    b.Navigation("Guardians");
                 });
 #pragma warning restore 612, 618
         }

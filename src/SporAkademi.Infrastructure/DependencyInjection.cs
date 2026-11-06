@@ -11,6 +11,7 @@ using SporAkademi.Application.Identity;
 using SporAkademi.Application.Identity.Contracts;
 using SporAkademi.Application.Organization;
 using SporAkademi.Application.Organization.Contracts;
+using SporAkademi.Application.Students;
 using SporAkademi.Application.Tenancy;
 using SporAkademi.Application.Tenancy.Contracts;
 using SporAkademi.Infrastructure.Enrollments;
@@ -18,6 +19,7 @@ using SporAkademi.Infrastructure.Groups;
 using SporAkademi.Infrastructure.Identity;
 using SporAkademi.Infrastructure.Organization;
 using SporAkademi.Infrastructure.Persistence;
+using SporAkademi.Infrastructure.Students;
 using SporAkademi.Infrastructure.Tenancy;
 
 namespace SporAkademi.Infrastructure;
@@ -70,6 +72,9 @@ public static class DependencyInjection
         services.AddScoped<NoEnrollments>();
         services.AddScoped<IEnrollmentCounts>(sp => sp.GetRequiredService<NoEnrollments>());
         services.AddScoped<IEnrollmentEnder>(sp => sp.GetRequiredService<NoEnrollments>());
+        services.AddScoped<IStudentGroupFilter>(sp => sp.GetRequiredService<NoEnrollments>());
+        services.AddScoped<IStudentRepository, StudentRepository>();
+        services.AddScoped<IGuardianRepository, GuardianRepository>();
 
         services.AddHealthChecks()
             .AddDbContextCheck<AppDbContext>("database", tags: ["ready"]);

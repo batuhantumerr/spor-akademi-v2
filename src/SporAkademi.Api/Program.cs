@@ -4,6 +4,7 @@ using SporAkademi.Api.Authentication;
 using SporAkademi.Api.Endpoints.Groups;
 using SporAkademi.Api.Endpoints.Identity;
 using SporAkademi.Api.Endpoints.Organization;
+using SporAkademi.Api.Endpoints.Students;
 using SporAkademi.Api.Endpoints.Tenancy;
 using SporAkademi.Api.Errors;
 using SporAkademi.Api.Observability;
@@ -57,6 +58,7 @@ app.MapIdentityEndpoints();
 app.MapCoachEndpoints();
 app.MapSchoolEndpoints();
 app.MapOrganizationEndpoints();
+app.MapStudentEndpoints();
 app.MapGroupsEndpoints();
 app.MapApiDocument();
 
