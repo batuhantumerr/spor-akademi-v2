@@ -10,7 +10,7 @@ RUN npm run build
 FROM nginxinc/nginx-unprivileged:1.30.6-alpine-slim@sha256:5d8bb9437d74a600ec5dbf90c035451c724dc33eac8d3a71078f6f8612c345f6
 # DEC-104: temporary until the stable base ships zlib >= 1.3.2-r1 (CVE-2026-85091). Remove then.
 USER root
-RUN apk upgrade --no-cache zlib
+RUN apk add --no-cache 'zlib>=1.3.2-r1'
 USER 101
 COPY docker/admin/nginx.conf /etc/nginx/conf.d/default.conf
 COPY --from=build /app/dist/admin/browser/ /usr/share/nginx/html/
