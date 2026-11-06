@@ -13,4 +13,7 @@ public interface ITenancyModule
 
     /// <summary>The wall-clock time now in the school's time zone (e.g. whether a session has started, US-19).</summary>
     Task<DateTime> LocalNowAsync(SchoolId schoolId, CancellationToken cancellationToken);
+
+    /// <summary>The school's IANA time zone (e.g. <c>Europe/Istanbul</c>), or null for an unknown school.</summary>
+    Task<string?> TimeZoneAsync(SchoolId schoolId, CancellationToken cancellationToken);
 }

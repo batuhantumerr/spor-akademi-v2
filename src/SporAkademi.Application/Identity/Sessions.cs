@@ -2,7 +2,11 @@ using SporAkademi.Domain.Identity;
 
 namespace SporAkademi.Application.Identity;
 
-/// <summary>The signed-in user as the client sees it (login response and <c>GET /me</c>).</summary>
+/// <summary>
+/// The signed-in user as the client sees it (login response and <c>GET /me</c>).
+/// <see cref="SchoolTimeZone"/> is filled by <c>GET /me</c> for school users so the client can tell
+/// the school's "today"; it is null for the Platform Admin and in the login response.
+/// </summary>
 public sealed record UserSummary(
     Guid Id,
     string Email,
@@ -10,7 +14,8 @@ public sealed record UserSummary(
     string LastName,
     UserRole Role,
     Guid? TenantId,
-    bool MustChangePassword)
+    bool MustChangePassword,
+    string? SchoolTimeZone = null)
 {
     public static UserSummary From(User user)
     {

@@ -6542,6 +6542,12 @@
           },
           "mustChangePassword": {
             "type": "boolean"
+          },
+          "schoolTimeZone": {
+            "type": [
+              "null",
+              "string"
+            ]
           }
         }
       },
