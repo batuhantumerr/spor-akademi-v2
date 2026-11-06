@@ -3,13 +3,19 @@ using FluentValidation;
 using Microsoft.Extensions.DependencyInjection;
 using SporAkademi.Application.Abstractions.Behaviors;
 using SporAkademi.Application.Abstractions.Messaging;
+using SporAkademi.Application.Identity;
+using SporAkademi.Application.Identity.Contracts;
 
 namespace SporAkademi.Application;
 
 public static class DependencyInjection
 {
-    public static IServiceCollection AddApplication(this IServiceCollection services) =>
-        services.AddHandlersFrom(typeof(DependencyInjection).Assembly);
+    public static IServiceCollection AddApplication(this IServiceCollection services)
+    {
+        services.AddScoped<AccountOpening>();
+        services.AddScoped<IIdentityModule, IdentityModule>();
+        return services.AddHandlersFrom(typeof(DependencyInjection).Assembly);
+    }
 
     /// <summary>
     /// Registers handlers and validators from <paramref name="assembly"/> and wraps them in decorators.
