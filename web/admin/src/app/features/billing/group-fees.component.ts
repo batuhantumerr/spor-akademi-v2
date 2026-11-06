@@ -1,6 +1,9 @@
 import {
   ChangeDetectionStrategy,
   Component,
+  ElementRef,
+  Injector,
+  afterNextRender,
   computed,
   effect,
   inject,
@@ -13,8 +16,8 @@ import { Api } from '../../api/api';
 import { apiV1GroupsIdFeesGet, apiV1GroupsIdFeesPost } from '../../api/functions';
 import { GroupDto, GroupFeeDto } from '../../api/models';
 import { fieldErrors, problemMessage, toProblem } from '../../core/api/problem';
-import { errorMessages, ui } from '../../core/i18n/tr';
-import { displayMoney, isPositive, money, parseMoneyInput } from '../../core/money/money';
+import { errorMessages, interpolate, ui } from '../../core/i18n/tr';
+import { displayMoney, money, parseMoneyInput } from '../../core/money/money';
 import { SchoolClock } from '../../core/time/school-clock';
 import { ToastService } from '../../shared/ui/toast.service';
 import { periodLabel } from './billing-format';
@@ -73,6 +76,9 @@ type Field = 'effectiveFrom' | 'amount';
             <p id="fee-amount-hint" class="mt-1.5 text-xs text-muted-foreground">
               {{ text.amountHint }}
             </p>
+            <p class="mt-0.5 font-mono text-xs text-muted-foreground" aria-live="polite">
+              {{ amountPreview() }}
+            </p>
             @if (errors()['amount']; as m) {
               <p id="fee-amount-error" class="field-error">{{ m }}</p>
             }
@@ -102,12 +108,14 @@ type Field = 'effectiveFrom' | 'amount';
         <p class="text-sm text-muted-foreground">{{ text.noFees }}</p>
       } @else {
         <ul class="divide-y divide-border/60">
-          @for (fee of sortedFees(); track fee.effectiveFrom; let first = $first) {
+          @for (fee of sortedFees(); track fee.effectiveFrom) {
             <li class="flex items-center justify-between gap-3 py-2 text-sm">
               <span>
                 {{ period(fee.effectiveFrom) }}
-                @if (first) {
+                @if (fee.effectiveFrom === currentFrom()) {
                   <span class="badge badge-success ml-1">{{ text.currentFee }}</span>
+                } @else if (fee.effectiveFrom > thisMonth()) {
+                  <span class="badge badge-info ml-1">{{ text.upcomingFee }}</span>
                 }
               </span>
               <span class="font-mono font-semibold">{{ show(fee.amount.amount) }}</span>
@@ -122,6 +130,8 @@ export class GroupFeesComponent {
   private readonly api = inject(Api);
   private readonly toasts = inject(ToastService);
   private readonly clock = inject(SchoolClock);
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
+  private readonly injector = inject(Injector);
 
   readonly group = input.required<GroupDto>();
 
@@ -135,6 +145,14 @@ export class GroupFeesComponent {
   protected readonly saving = signal(false);
   protected readonly error = signal<string | null>(null);
   protected readonly errors = signal<Partial<Record<Field, string>>>({});
+  /** The fee in force this month: the latest one that started on or before it. */
+  protected readonly currentFrom = computed(
+    () => this.sortedFees().find((f) => f.effectiveFrom <= this.thisMonth())?.effectiveFrom ?? null,
+  );
+  protected readonly amountPreview = computed(() => {
+    const parsed = parseMoneyInput(this.amountText());
+    return parsed ? interpolate(this.text.amountPreview, { amount: displayMoney(parsed) }) : '';
+  });
   /** Newest period first. */
   protected readonly sortedFees = computed(() =>
     [...(this.fees() ?? [])].sort((a, b) => b.effectiveFrom.localeCompare(a.effectiveFrom)),
@@ -161,6 +179,22 @@ export class GroupFeesComponent {
     if (this.errors()[field]) {
       this.errors.update((all) => ({ ...all, [field]: undefined }));
     }
+  }
+
+  private focusFirstInvalid(): void {
+    afterNextRender(
+      () => {
+        const id = this.errors()['effectiveFrom']
+          ? 'fee-from'
+          : this.errors()['amount']
+            ? 'fee-amount'
+            : null;
+        if (id) {
+          this.host.nativeElement.querySelector<HTMLElement>(`#${id}`)?.focus();
+        }
+      },
+      { injector: this.injector },
+    );
   }
 
   async load(): Promise<void> {
@@ -190,13 +224,15 @@ export class GroupFeesComponent {
     } else if (from < this.thisMonth()) {
       problems.effectiveFrom = errorMessages['Fee.PeriodInPast'];
     }
-    if (!amount || !isPositive(amount)) {
+    // Zero is a valid fee (the API accepts it, e.g. a free group).
+    if (!amount) {
       problems.amount = this.amountText().trim()
         ? errorMessages['Money.Invalid']
         : errorMessages['Field.Required'];
     }
     if (Object.keys(problems).length > 0) {
       this.errors.set(problems);
+      this.focusFirstInvalid();
       return;
     }
     this.saving.set(true);
@@ -215,11 +251,13 @@ export class GroupFeesComponent {
       const fields = fieldErrors(problem);
       if (problem.code === 'Fee.PeriodInPast' || problem.code === 'Fee.AlreadyDefined') {
         this.errors.set({ effectiveFrom: problemMessage(problem) });
+        this.focusFirstInvalid();
       } else if (fields['effectiveFrom'] || fields['amount'] || fields['amount.amount']) {
         this.errors.set({
           effectiveFrom: fields['effectiveFrom'],
           amount: fields['amount'] ?? fields['amount.amount'],
         });
+        this.focusFirstInvalid();
       } else {
         this.error.set(problemMessage(problem));
       }

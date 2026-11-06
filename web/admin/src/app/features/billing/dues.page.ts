@@ -18,7 +18,8 @@ import { RECORD_PAYMENT_TITLE_ID, RecordPaymentData, RecordPaymentDialog } from 
 import { periodLabel } from './billing-format';
 
 interface Totals {
-  count: number;
+  /** Null when the list changed while the pages were being walked (count not reliable). */
+  count: number | null;
   fee: string;
   paid: string;
   remaining: string;
@@ -26,6 +27,8 @@ interface Totals {
 
 /** Totals walk every page of the current filter, 100 rows at a time (the API maximum). */
 const TOTALS_PAGE_SIZE = 100;
+/** Extra walks when rows were added or removed while paging (the totalCount did not match). */
+const TOTALS_RETRIES = 2;
 
 /** US-18: outstanding dues by group and period, with exact totals and "take payment". */
 @Component({
@@ -64,9 +67,11 @@ const TOTALS_PAGE_SIZE = 100;
     <section class="card mb-4 p-4" aria-labelledby="dues-totals-title" aria-live="polite">
       <h2 id="dues-totals-title" class="sr-only">{{ text.dues }}</h2>
       @if (totals(); as t) {
-        <dl class="grid grid-cols-2 gap-3 text-sm sm:grid-cols-4">
+        <dl class="grid grid-cols-2 gap-3 text-sm sm:grid-cols-3">
           <div>
-            <dt class="text-xs text-muted-foreground">{{ totalsLabel(t.count) }}</dt>
+            <dt class="text-xs text-muted-foreground">
+              {{ t.count === null ? text.totalsNoCount : totalsLabel(t.count) }}
+            </dt>
             <dd
               class="font-mono text-base font-bold text-destructive"
               data-testid="total-remaining"
@@ -252,7 +257,10 @@ export class DuesPage {
       const data: RecordPaymentData = {
         prefill: {
           enrollmentId: due.enrollmentId,
-          label: `${due.studentFirstName} ${due.studentLastName} · ${due.groupName}`,
+          label: interpolate(this.text.dueLabel, {
+            student: `${due.studentFirstName} ${due.studentLastName}`,
+            group: due.groupName,
+          }),
           period: due.period,
           amount: due.remaining.amount,
         },
@@ -277,25 +285,19 @@ export class DuesPage {
     this.totals.set(null);
     this.totalsError.set(null);
     try {
-      const all: OutstandingDueDto[] = [];
-      let page = 1;
-      let totalPages = 1;
-      do {
-        const result = await this.api.invoke(apiV1DuesOutstandingGet, {
-          groupId: this.groupId() || undefined,
-          period: this.period() || undefined,
-          page,
-          pageSize: TOTALS_PAGE_SIZE,
-        });
-        if (request !== this.totalsSequence) {
-          return;
+      // A payment recorded while paging shifts rows between pages; walk again if the count is off.
+      let all: OutstandingDueDto[] = [];
+      let consistent = false;
+      for (let attempt = 0; attempt <= TOTALS_RETRIES && !consistent; attempt++) {
+        const walk = await this.walkAllPages(request);
+        if (!walk) {
+          return; // A newer request took over.
         }
-        all.push(...result.items);
-        totalPages = Number(result.totalPages);
-        page++;
-      } while (page <= totalPages);
+        all = walk.rows;
+        consistent = walk.rows.length === walk.expected;
+      }
       this.totals.set({
-        count: all.length,
+        count: consistent ? all.length : null,
         fee: sumAmounts(all.map((d) => d.fee.amount)),
         paid: sumAmounts(all.map((d) => d.paid.amount)),
         remaining: sumAmounts(all.map((d) => d.remaining.amount)),
@@ -305,6 +307,34 @@ export class DuesPage {
         this.totalsError.set(problemMessage(toProblem(err)));
       }
     }
+  }
+
+  /** All rows of the filter plus the first response's totalCount; null if superseded. */
+  private async walkAllPages(
+    request: number,
+  ): Promise<{ rows: OutstandingDueDto[]; expected: number } | null> {
+    const rows: OutstandingDueDto[] = [];
+    let expected = 0;
+    let page = 1;
+    let totalPages = 1;
+    do {
+      const result = await this.api.invoke(apiV1DuesOutstandingGet, {
+        groupId: this.groupId() || undefined,
+        period: this.period() || undefined,
+        page,
+        pageSize: TOTALS_PAGE_SIZE,
+      });
+      if (request !== this.totalsSequence) {
+        return null;
+      }
+      if (page === 1) {
+        expected = Number(result.totalCount);
+        totalPages = Number(result.totalPages);
+      }
+      rows.push(...result.items);
+      page++;
+    } while (page <= totalPages);
+    return { rows, expected };
   }
 
   private async refresh(reset = false): Promise<void> {

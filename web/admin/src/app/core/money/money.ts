@@ -6,13 +6,20 @@ import { MoneyDto } from '../../api/models';
  */
 export const CURRENCY = 'TRY';
 
+/** "1.250", "12.500.000": a leading group of 1–3 digits that does not start with 0. */
+const THOUSANDS = /^[1-9]\d{0,2}(\.\d{3})+$/;
+
+/** An API amount: digits, optional two decimals, optional leading minus for differences. */
+const API_AMOUNT = /^-?\d+(\.\d{1,2})?$/;
+
 /** Same bound as the API (Money.MaxAmount = 9 999 999 999.99). */
 const MAX_INTEGER_DIGITS = 10;
 
 /**
- * Reads what a Turkish user types: "1250", "1.250", "1.250,5", "1250,50" or "1250.50" (a dot
- * followed by exactly three digits is a thousands separator). Returns the API form "1250.50", or
- * null when the text is not an amount (more than two decimals, letters, a sign…).
+ * Reads what a Turkish user types: "1250", "1.250", "1.250,5", "1250,50" or "1250.50". Dots are
+ * thousands separators only in a well-formed grouping that starts with 1–9 ("1.250", "12.500.000"),
+ * so "0.500" or "00.500" are not read as 500. Returns the API form "1250.50", or null when the
+ * text is not an amount (more than two decimals, letters, a sign…).
  */
 export function parseMoneyInput(text: string): string | null {
   const value = text.trim().replace(/\s|₺/g, '');
@@ -24,12 +31,12 @@ export function parseMoneyInput(text: string): string | null {
   if (value.includes(',')) {
     // Turkish: comma is the decimal separator, dots group thousands.
     const [int, frac, ...rest] = value.split(',');
-    if (rest.length > 0 || !/^\d{1,3}(\.\d{3})*$|^\d+$/.test(int)) {
+    if (rest.length > 0 || !(THOUSANDS.test(int) || /^\d+$/.test(int))) {
       return null;
     }
     integer = int.replace(/\./g, '');
     fraction = frac;
-  } else if (/^\d{1,3}(\.\d{3})+$/.test(value)) {
+  } else if (THOUSANDS.test(value)) {
     integer = value.replace(/\./g, '');
   } else {
     const [int, frac, ...rest] = value.split('.');
@@ -49,10 +56,15 @@ export function parseMoneyInput(text: string): string | null {
   return `${integer}.${fraction.padEnd(2, '0')}`;
 }
 
-/** "1250.5" or "1250.50" → 125050n kuruş. */
+/** "1250.5" or "1250.50" → 125050n kuruş; "-1.25" → -125n. Throws on anything else. */
 export function toKurus(amount: string): bigint {
-  const [integer, fraction = ''] = amount.split('.');
-  return BigInt(integer || '0') * 100n + BigInt((fraction + '00').slice(0, 2));
+  if (!API_AMOUNT.test(amount)) {
+    throw new Error(`Not an amount: ${amount}`);
+  }
+  const negative = amount.startsWith('-');
+  const [integer, fraction = ''] = amount.replace(/^-/, '').split('.');
+  const kurus = BigInt(integer) * 100n + BigInt((fraction + '00').slice(0, 2));
+  return negative ? -kurus : kurus;
 }
 
 /** 125050n → "1250.50". */
@@ -75,13 +87,14 @@ export function isPositive(amount: string): boolean {
 /** "1250.50" → "₺1.250,50" (grouping and comma decimals as in tr-TR, from the text itself). */
 export function displayMoney(amount: string | MoneyDto | null | undefined): string {
   const text = typeof amount === 'string' ? amount : amount?.amount;
-  if (text === null || text === undefined || text === '') {
+  if (text === null || text === undefined || !API_AMOUNT.test(text)) {
     return '—';
   }
-  const normalized = fromKurus(toKurus(text.replace(/^-/, '')));
+  const kurus = toKurus(text);
+  const normalized = fromKurus(kurus < 0n ? -kurus : kurus);
   const [integer, fraction] = normalized.split('.');
   const grouped = integer.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
-  return `${text.startsWith('-') ? '-' : ''}₺${grouped},${fraction}`;
+  return `${kurus < 0n ? '-' : ''}₺${grouped},${fraction}`;
 }
 
 export function money(amount: string): MoneyDto {

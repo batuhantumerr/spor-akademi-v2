@@ -274,8 +274,11 @@ export class RecordPaymentDialog {
   }
 
   protected enrollmentLabel(e: EnrollmentDto): string {
-    const dates = `${formatDate(e.startDate)} – ${e.endDate ? formatDate(e.endDate) : '…'}`;
-    return `${e.groupName} (${dates})`;
+    return interpolate(this.text.enrollmentOption, {
+      group: e.groupName,
+      from: formatDate(e.startDate),
+      to: e.endDate ? formatDate(e.endDate) : this.text.openEnded,
+    });
   }
 
   protected clear(field: Field): void {
@@ -336,8 +339,16 @@ export class RecordPaymentDialog {
     } else if (!isPositive(amount)) {
       problems.amount = errorMessages['Payment.InvalidAmount'];
     }
-    if (!this.paidOn() || this.paidOn() > this.today()) {
-      problems.paidOn = this.text.paidOnHint;
+    // Same bounds as the API: a real date, 2000–2100, not after the school's today.
+    const paidOn = this.paidOn();
+    const year = Number(paidOn.slice(0, 4));
+    if (
+      !/^\d{4}-\d{2}-\d{2}$/.test(paidOn) ||
+      year < 2000 ||
+      year > 2100 ||
+      paidOn > this.today()
+    ) {
+      problems.paidOn = this.text.paidOnInvalid;
     }
     if (Object.keys(problems).length > 0) {
       this.errors.set(problems);
@@ -375,14 +386,34 @@ export class RecordPaymentDialog {
       ) {
         mapped.period = problemMessage(problem);
       }
-      const any = Object.values(mapped).some((m) => !!m);
-      this.errors.set(mapped);
-      if (!any) {
+      // A field error for something this dialog does not show (e.g. the enrollment of a
+      // prefilled due) goes to the banner, so no problem is ever invisible.
+      const shown = Object.fromEntries(
+        Object.entries(mapped).filter(
+          ([field, message]) => message && this.isRendered(field as Field),
+        ),
+      ) as Partial<Record<Field, string>>;
+      const hidden = Object.entries(mapped).some(
+        ([field, message]) => message && !this.isRendered(field as Field),
+      );
+      this.errors.set(shown);
+      if (hidden || Object.keys(shown).length === 0) {
         this.error.set(problemMessage(problem));
       }
       this.saving.set(false);
       this.focusFirst();
     }
+  }
+
+  /** Whether the control for a field is on screen in this mode. */
+  private isRendered(field: Field): boolean {
+    if (field === 'student') {
+      return !this.prefill;
+    }
+    if (field === 'enrollment') {
+      return !this.prefill && !!this.studentId();
+    }
+    return true;
   }
 
   private focusFirst(): void {
@@ -419,6 +450,10 @@ export class RecordPaymentDialog {
   }
 }
 
+/** What the cancel dialog closes with when the payment was already cancelled. */
+export const ALREADY_CANCELLED = 'alreadyCancelled' as const;
+export type CancelPaymentResult = PaymentDto | typeof ALREADY_CANCELLED;
+
 export interface CancelPaymentData {
   payment: PaymentDto;
 }
@@ -433,7 +468,9 @@ export interface CancelPaymentData {
       <p class="mt-2 text-sm text-muted-foreground">{{ description }}</p>
       @if (error()) {
         <p
+          id="cancel-error"
           role="alert"
+          tabindex="-1"
           class="mt-3 rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive"
         >
           {{ error() }}
@@ -468,7 +505,9 @@ export interface CancelPaymentData {
 })
 export class CancelPaymentDialog {
   private readonly api = inject(Api);
-  protected readonly ref = inject<DialogRef<PaymentDto>>(DialogRef);
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
+  private readonly injector = inject(Injector);
+  protected readonly ref = inject<DialogRef<CancelPaymentResult>>(DialogRef);
   private readonly payment = inject<CancelPaymentData>(DIALOG_DATA).payment;
 
   protected readonly dialogClass = dialogClass;
@@ -492,6 +531,7 @@ export class CancelPaymentDialog {
     const reason = this.reason().trim();
     if (!reason) {
       this.reasonError.set(errorMessages['Payment.CancelReasonRequired']);
+      this.focus('cancel-reason');
       return;
     }
     this.saving.set(true);
@@ -504,12 +544,25 @@ export class CancelPaymentDialog {
       this.ref.close(cancelled);
     } catch (err) {
       const problem = toProblem(err);
+      if (problem.code === 'Payment.AlreadyCancelled') {
+        // Someone else cancelled it first: nothing left to do here; the list reloads.
+        this.ref.close(ALREADY_CANCELLED);
+        return;
+      }
       if (problem.code === 'Payment.CancelReasonRequired' || fieldErrors(problem)['reason']) {
         this.reasonError.set(problemMessage(problem));
+        this.focus('cancel-reason');
       } else {
         this.error.set(problemMessage(problem));
+        this.focus('cancel-error');
       }
       this.saving.set(false);
     }
+  }
+
+  private focus(id: string): void {
+    afterNextRender(() => this.host.nativeElement.querySelector<HTMLElement>(`#${id}`)?.focus(), {
+      injector: this.injector,
+    });
   }
 }

@@ -8,16 +8,18 @@ import { Api } from '../../api/api';
 import { apiV1GroupsGet, apiV1PaymentsGet } from '../../api/functions';
 import { NamedReferenceDto, PaymentDto, PaymentStatus } from '../../api/models';
 import { formatDate } from '../../core/format/format';
-import { interpolate, ui } from '../../core/i18n/tr';
+import { errorMessages, interpolate, ui } from '../../core/i18n/tr';
 import { displayMoney } from '../../core/money/money';
 import { PagedList } from '../../shared/data/paged-list';
 import { PageHeaderComponent } from '../../shared/ui/page-header.component';
 import { PaginationComponent } from '../../shared/ui/pagination.component';
 import { ToastService } from '../../shared/ui/toast.service';
 import {
+  ALREADY_CANCELLED,
   CANCEL_PAYMENT_TITLE_ID,
   CancelPaymentData,
   CancelPaymentDialog,
+  CancelPaymentResult,
   RECORD_PAYMENT_TITLE_ID,
   RecordPaymentData,
   RecordPaymentDialog,
@@ -255,12 +257,15 @@ export class PaymentsPage {
   protected async cancel(payment: PaymentDto): Promise<void> {
     await this.exclusive(async () => {
       const data: CancelPaymentData = { payment };
-      const ref = this.dialog.open<PaymentDto>(CancelPaymentDialog, {
+      const ref = this.dialog.open<CancelPaymentResult>(CancelPaymentDialog, {
         data,
         ariaLabelledBy: CANCEL_PAYMENT_TITLE_ID,
         backdropClass: ['bg-slate-900/60'],
       });
-      if (await firstValueFrom(ref.closed)) {
+      const result = await firstValueFrom(ref.closed);
+      if (result === ALREADY_CANCELLED) {
+        this.toasts.error(errorMessages['Payment.AlreadyCancelled']);
+      } else if (result) {
         this.toasts.success(this.text.cancelled);
       }
       // Reload either way: someone may have cancelled it first.

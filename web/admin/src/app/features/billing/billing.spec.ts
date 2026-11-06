@@ -9,7 +9,7 @@ import { of } from 'rxjs';
 import { GroupDto, OutstandingDueDto, PaymentDto } from '../../api/models';
 import { AuthService } from '../../core/auth/auth.service';
 import { errorMessages, ui } from '../../core/i18n/tr';
-import { displayMoney, parseMoneyInput, sumAmounts } from '../../core/money/money';
+import { displayMoney, parseMoneyInput, sumAmounts, toKurus } from '../../core/money/money';
 import { SchoolClock } from '../../core/time/school-clock';
 import { ToastService } from '../../shared/ui/toast.service';
 import {
@@ -38,13 +38,35 @@ describe('money as text', () => {
     ['1250.5', '1250.50'],
     ['₺ 1.250,00', '1250.00'],
     ['0,99', '0.99'],
+    ['0.5', '0.50'],
+    ['12.500.000', '12500000.00'],
     ['9999999999,99', '9999999999.99'],
   ])('reads %s as %s', (input, expected) => {
     expect(parseMoneyInput(input)).toBe(expected);
   });
 
-  it.each(['', 'abc', '12,345', '1.25.0', '-5', '1,2,3', '12345678901'])('rejects %s', (input) => {
+  it.each([
+    '',
+    'abc',
+    '12,345',
+    '1.25.0',
+    '-5',
+    '1,2,3',
+    '12345678901',
+    '0.500',
+    '0.250',
+    '00.500',
+    '0.500,5',
+  ])('rejects %s', (input) => {
     expect(parseMoneyInput(input)).toBeNull();
+  });
+
+  it('handles signs and refuses malformed API text', () => {
+    expect(toKurus('-1.25')).toBe(-125n);
+    expect(sumAmounts(['10.00', '-2.50'])).toBe('7.50');
+    expect(() => toKurus('1,25')).toThrow();
+    expect(displayMoney('abc')).toBe('—');
+    expect(displayMoney('-12.5')).toBe('-₺12,50');
   });
 
   it('shows ₺1.250,00 from the text without floating point', () => {
@@ -114,6 +136,49 @@ describe('GroupFeesComponent', () => {
     el.dispatchEvent(new Event('input'));
     await settle(fixture);
   }
+
+  it('marks the fee in force this month as current and later ones as upcoming', async () => {
+    const thisMonth = TestBed.inject(SchoolClock).today().slice(0, 7);
+    const [y, m] = thisMonth.split('-').map(Number);
+    const next = `${m === 12 ? y + 1 : y}-${String(m === 12 ? 1 : m + 1).padStart(2, '0')}`;
+    fees().flush([
+      { effectiveFrom: '2020-01', amount: tl('900.00') },
+      { effectiveFrom: next, amount: tl('1500.00') },
+    ]);
+    await settle(fixture);
+    const items = root.querySelectorAll('li');
+    expect(items[0].textContent).toContain('₺1.500,00');
+    expect(items[0].textContent).toContain(ui.billing.upcomingFee);
+    expect(items[0].textContent).not.toContain(ui.billing.currentFee);
+    expect(items[1].textContent).toContain(ui.billing.currentFee);
+  });
+
+  it('previews the amount politely and accepts a zero fee', async () => {
+    fees().flush([]);
+    await settle(fixture);
+    await type('fee-amount', '0');
+    const preview = root.querySelector('#fee-amount-hint + [aria-live="polite"]');
+    expect(preview?.textContent).toContain('₺0,00');
+    (root.querySelector('form') as HTMLFormElement).requestSubmit();
+    await settle(fixture);
+    const post = backend.expectOne((r) => r.method === 'POST');
+    expect((post.request.body as { amount: unknown }).amount).toEqual(tl('0.00'));
+    post.flush({});
+    await settle(fixture);
+    fees().flush([]);
+    await settle(fixture);
+  });
+
+  it('focuses the first invalid field on submit', async () => {
+    document.body.appendChild(root);
+    fees().flush([]);
+    await settle(fixture);
+    await type('fee-amount', 'abc');
+    (root.querySelector('form') as HTMLFormElement).requestSubmit();
+    await settle(fixture);
+    expect(document.activeElement).toBe(root.querySelector('#fee-amount'));
+    root.remove();
+  });
 
   it('lists the fee history newest first with the current one marked', async () => {
     fees().flush([
@@ -318,6 +383,67 @@ describe('billing dialogs', () => {
     );
   });
 
+  it('shows a field error for a hidden field (prefilled enrollment) in the banner', async () => {
+    await open(RecordPaymentDialog, {
+      prefill: { enrollmentId: 'e1', label: 'x', period: '2026-11', amount: '100.00' },
+    });
+    await submit();
+    backend
+      .expectOne('/api/v1/payments')
+      .flush(
+        { code: 'Validation.Failed', errors: { enrollmentId: ['Field.Invalid'] } },
+        { status: 400, statusText: 'Bad Request' },
+      );
+    await settle(fixture);
+    await settle(fixture);
+    expect(root.querySelector('#pay-error')?.textContent).toContain(
+      errorMessages['Validation.Failed'],
+    );
+    expect(document.activeElement).toBe(root.querySelector('#pay-error'));
+  });
+
+  it('gives paid-on its own message and bounds the year', async () => {
+    await open(RecordPaymentDialog, {
+      prefill: { enrollmentId: 'e1', label: 'x', period: '2026-11', amount: '100.00' },
+    });
+    await type('pay-paid-on', '1999-12-31');
+    await submit();
+    backend.expectNone('/api/v1/payments');
+    expect(root.querySelector('#pay-paid-on-error')?.textContent).toContain(
+      ui.billing.paidOnInvalid,
+    );
+  });
+
+  it('focuses the reason when empty and the alert on a server error; closes when already cancelled', async () => {
+    const payment = {
+      id: 'p1',
+      studentFirstName: 'Ayşe',
+      studentLastName: 'Yılmaz',
+      period: '2026-11',
+      amount: tl('1250.00'),
+    } as PaymentDto;
+    await open(CancelPaymentDialog, { payment });
+    await submit();
+    await settle(fixture);
+    expect(document.activeElement).toBe(root.querySelector('#cancel-reason'));
+
+    await type('cancel-reason', 'Yanlış');
+    await submit();
+    backend.expectOne('/api/v1/payments/p1/cancel').flush(null, { status: 0, statusText: '' });
+    await settle(fixture);
+    await settle(fixture);
+    const alert = root.querySelector('#cancel-error') as HTMLElement;
+    expect(alert.getAttribute('tabindex')).toBe('-1');
+    expect(document.activeElement).toBe(alert);
+
+    await submit();
+    backend
+      .expectOne('/api/v1/payments/p1/cancel')
+      .flush({ code: 'Payment.AlreadyCancelled' }, { status: 409, statusText: 'Conflict' });
+    await settle(fixture);
+    expect(close).toHaveBeenCalledWith('alreadyCancelled');
+  });
+
   it('requires a cancel reason and sends it', async () => {
     const payment = {
       id: 'p1',
@@ -492,6 +618,50 @@ describe('DuesPage', () => {
     }
     await settle(fixture);
     expect(toast.success).toHaveBeenCalledWith(ui.billing.paymentRecorded);
+    backend.verify();
+  });
+
+  it('walks again when the count changes during paging, then shows totals without a count', async () => {
+    TestBed.configureTestingModule({
+      imports: [DuesPage],
+      providers: providers([
+        { provide: Dialog, useValue: { open: vi.fn() } },
+        { provide: ToastService, useValue: { success: vi.fn(), error: vi.fn() } },
+      ]),
+    });
+    const fixture = TestBed.createComponent(DuesPage);
+    const backend = TestBed.inject(HttpTestingController);
+    await settle(fixture);
+    backend
+      .expectOne((r) => r.url === '/api/v1/groups')
+      .flush({ items: [], page: 1, pageSize: 100, totalCount: 0, totalPages: 0 });
+    backend
+      .expectOne((r) => r.url === '/api/v1/dues/outstanding' && r.params.get('pageSize') === '25')
+      .flush({ items: [], page: 1, pageSize: 25, totalCount: 0, totalPages: 0 });
+
+    // Three walks (first + 2 retries), each claiming 3 rows but returning 2.
+    for (let walk = 0; walk < 3; walk++) {
+      await settle(fixture);
+      backend
+        .expectOne(
+          (r) => r.url === '/api/v1/dues/outstanding' && r.params.get('pageSize') === '100',
+        )
+        .flush({
+          items: [due('a', '100.00', '0.00', '100.00'), due('b', '50.00', '0.00', '50.00')],
+          page: 1,
+          pageSize: 100,
+          totalCount: 3,
+          totalPages: 1,
+        });
+    }
+    await settle(fixture);
+
+    const root = fixture.nativeElement as HTMLElement;
+    expect(root.querySelector('[data-testid="total-remaining"]')?.textContent?.trim()).toBe(
+      '₺150,00',
+    );
+    expect(root.textContent).toContain(ui.billing.totalsNoCount);
+    expect(root.textContent).not.toContain('kayıt)');
     backend.verify();
   });
 });
