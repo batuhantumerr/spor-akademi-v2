@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
+using SporAkademi.Application.Identity;
 
 namespace SporAkademi.Api.Authentication;
 
@@ -30,6 +31,7 @@ internal static class JwtSetup
             .BindConfiguration(JwtOptions.Section)
             .Validate(o => JwtOptions.IsValidKey(o.SigningKey), "Jwt:SigningKey must be at least 32 bytes of hex.")
             .ValidateOnStart();
+        services.AddSingleton<IAccessTokenIssuer, JwtAccessTokenIssuer>();
 
         services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme).AddJwtBearer();
         services.AddOptions<JwtBearerOptions>(JwtBearerDefaults.AuthenticationScheme)
