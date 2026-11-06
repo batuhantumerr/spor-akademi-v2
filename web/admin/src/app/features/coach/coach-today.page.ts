@@ -15,6 +15,8 @@ import {
   LucideMapPin,
 } from '@lucide/angular';
 
+import { RouterLink } from '@angular/router';
+
 import { Api } from '../../api/api';
 import { apiV1MeSessionsGet } from '../../api/functions';
 import { SessionDto } from '../../api/models';
@@ -22,6 +24,7 @@ import { problemMessage, toProblem } from '../../core/api/problem';
 import { formatDate, formatTime } from '../../core/format/format';
 import { interpolate, ui } from '../../core/i18n/tr';
 import { addDays, weekdayName } from '../../core/schedule/schedule';
+import { sessionKey } from '../../core/attendance/attendance';
 import { SchoolClock } from '../../core/time/school-clock';
 import { CoachAnnouncementsComponent } from '../announcements/coach-announcements.component';
 
@@ -33,6 +36,7 @@ import { CoachAnnouncementsComponent } from '../announcements/coach-announcement
   selector: 'app-coach-today-page',
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
+    RouterLink,
     CoachAnnouncementsComponent,
     LucideCalendarCheck,
     LucideChevronLeft,
@@ -103,19 +107,15 @@ import { CoachAnnouncementsComponent } from '../announcements/coach-announcement
                 <svg lucideMapPin class="size-4 shrink-0" aria-hidden="true"></svg>
                 {{ session.facility.name }}
               </p>
-              <!-- Placeholder until attendance (US-13) lands: focusable, explained, inert. -->
-              <button
-                type="button"
-                class="btn btn-primary mt-4 h-12 w-full cursor-not-allowed opacity-50"
-                aria-disabled="true"
-                [attr.aria-describedby]="'soon-' + $index"
-                [attr.title]="text.comingSoon"
+              <a
+                class="btn btn-primary mt-4 h-12 w-full"
+                [routerLink]="['/coach/sessions', session.groupId, key(session)]"
+                [attr.aria-label]="
+                  text.takeAttendance + ': ' + session.groupName + ' ' + time(session.start)
+                "
               >
                 <svg lucideClipboardCheck></svg>{{ text.takeAttendance }}
-              </button>
-              <p [id]="'soon-' + $index" class="mt-1 text-center text-xs text-muted-foreground">
-                {{ text.comingSoon }}
-              </p>
+              </a>
             </li>
           }
         </ul>
@@ -168,6 +168,10 @@ export class CoachTodayPage {
         previous = today;
       });
     });
+  }
+
+  protected key(session: SessionDto): string {
+    return sessionKey(session.date, session.start);
   }
 
   protected time(value: string): string {

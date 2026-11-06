@@ -2,6 +2,7 @@
   <Folder Name="/src/">
     <Project Path="src/SporAkademi.Api/SporAkademi.Api.csproj" />
     <Project Path="src/SporAkademi.Application/SporAkademi.Application.csproj" />
+    <Project Path="src/SporAkademi.DemoSeed/SporAkademi.DemoSeed.csproj" />
     <Project Path="src/SporAkademi.Domain/SporAkademi.Domain.csproj" />
     <Project Path="src/SporAkademi.Infrastructure/SporAkademi.Infrastructure.csproj" />
   </Folder>

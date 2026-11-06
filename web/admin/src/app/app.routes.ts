@@ -64,6 +64,14 @@ export const routes: Routes = [
               import('./features/coach/coach-groups.page').then((m) => m.CoachGroupsPage),
           },
           {
+            path: 'sessions/:groupId/:sessionKey',
+            title: ui.attendance.title,
+            loadComponent: () =>
+              import('./features/attendance/take-attendance.page').then(
+                (m) => m.TakeAttendancePage,
+              ),
+          },
+          {
             path: 'announcements',
             title: ui.announcements.title,
             loadComponent: () =>
@@ -113,6 +121,14 @@ export const routes: Routes = [
             loadComponent: () => import('./features/groups/groups.page').then((m) => m.GroupsPage),
           },
           {
+            path: 'groups/:groupId/sessions/:sessionKey',
+            title: ui.attendance.title,
+            loadComponent: () =>
+              import('./features/attendance/take-attendance.page').then(
+                (m) => m.TakeAttendancePage,
+              ),
+          },
+          {
             path: 'groups/:id',
             title: ui.nav.groups,
             loadComponent: () =>
@@ -139,8 +155,17 @@ export const routes: Routes = [
               import('./features/students/student-detail.page').then((m) => m.StudentDetailPage),
           },
           { path: 'attendance', title: ui.nav.attendance, ...placeholder(ui.nav.attendance) },
-          { path: 'payments', title: ui.nav.payments, ...placeholder(ui.nav.payments) },
-          { path: 'dues', title: ui.nav.dues, ...placeholder(ui.nav.dues) },
+          {
+            path: 'payments',
+            title: ui.nav.payments,
+            loadComponent: () =>
+              import('./features/billing/payments.page').then((m) => m.PaymentsPage),
+          },
+          {
+            path: 'dues',
+            title: ui.nav.dues,
+            loadComponent: () => import('./features/billing/dues.page').then((m) => m.DuesPage),
+          },
         ],
       },
     ],

@@ -216,7 +216,7 @@ describe('DashboardPage', () => {
     expect(kpi('outstandingTotal')).toContain('₺1.234.567,89');
     expect(kpi('attendance')).toContain('%85,7');
     expect(kpi('today')).toContain('1 / 4');
-    expect(root.querySelector('[data-kpi="today"] a')?.getAttribute('href')).toBe('/attendance');
+    expect(root.querySelector('[data-kpi="today"] a')?.getAttribute('href')).toBe('/groups');
   });
 
   it('shows null ratios as a dash', async () => {

@@ -104,6 +104,8 @@ describe('AnnouncementItemComponent', () => {
     const time = (fixture.nativeElement as HTMLElement).querySelector('time')!;
     expect(time.textContent).toContain('dün');
     expect(time.getAttribute('title')).toBe('14.01.2027 23:00');
+    // Reachable without hovering: the exact time is in the accessible text.
+    expect(time.querySelector('.sr-only')?.textContent).toContain('Yayımlanma: 14.01.2027 23:00');
     vi.unstubAllEnvs();
   });
 
@@ -242,6 +244,79 @@ describe('GroupAnnouncementsComponent', () => {
     expect(document.activeElement).toBe(field('announcement-body'));
   });
 
+  it('shows a non-field publish failure in a focused banner and keeps the text', async () => {
+    list().flush(page([]));
+    await settle(fixture);
+    await type('announcement-title', 'Tatil');
+    await type('announcement-body', 'Metin');
+    await submit();
+    backend.expectOne((r) => r.method === 'POST').flush(null, { status: 0, statusText: '' });
+    await settle(fixture);
+    await settle(fixture);
+
+    const banner = field('announcement-error');
+    expect(banner.textContent).toContain('Sunucuya ulaşılamıyor');
+    expect(document.activeElement).toBe(banner);
+    expect(field<HTMLInputElement>('announcement-title').value).toBe('Tatil');
+  });
+
+  it('keeps the publish button focusable while publishing and ignores a second submit', async () => {
+    list().flush(page([]));
+    await settle(fixture);
+    await type('announcement-title', 'Tatil');
+    await type('announcement-body', 'Metin');
+    const button = root.querySelector('button[type="submit"]') as HTMLButtonElement;
+    button.focus();
+    await submit();
+
+    expect(button.disabled).toBe(false);
+    expect(button.getAttribute('aria-disabled')).toBe('true');
+    expect(button.getAttribute('aria-busy')).toBe('true');
+    expect(document.activeElement).toBe(button);
+    await submit();
+    const post = backend.expectOne((r) => r.method === 'POST');
+    post.flush(announcement('a9'));
+    await settle(fixture);
+    list().flush(page([announcement('a9')]));
+    await settle(fixture);
+
+    const live = root.querySelector('[data-testid="announcements-live"]')!.textContent!;
+    expect(live).not.toContain(ui.announcements.published);
+    expect(root.querySelector('[data-testid="announcements-live"]')?.textContent).toContain(
+      '1 duyuru',
+    );
+  });
+
+  it('stays silent in the live region when the reload after publishing fails', async () => {
+    list().flush(page([]));
+    await settle(fixture);
+    await type('announcement-title', 'Tatil');
+    await type('announcement-body', 'Metin');
+    await submit();
+    backend.expectOne((r) => r.method === 'POST').flush(announcement('a9'));
+    await settle(fixture);
+    list().flush(null, { status: 0, statusText: '' });
+    await settle(fixture);
+    await settle(fixture);
+
+    const live = root.querySelector('[data-testid="announcements-live"]')!.textContent!;
+    expect(live).not.toContain('güncellendi');
+    expect(live.trim()).toBe('');
+    expect(root.querySelector('[role="alert"]')?.textContent).toContain('Sunucuya ulaşılamıyor');
+  });
+
+  it('offers a retry when the list fails to load', async () => {
+    list().flush(null, { status: 0, statusText: '' });
+    await settle(fixture);
+    const alert = root.querySelector('[role="alert"]') as HTMLElement;
+    expect(alert.textContent).toContain('Sunucuya ulaşılamıyor');
+    alert.querySelector('button')!.click();
+    await settle(fixture);
+    list().flush(page([announcement('a1')]));
+    await settle(fixture);
+    expect(root.textContent).toContain('Başlık a1');
+  });
+
   it('hides the form for an archived group', async () => {
     fixture.componentRef.setInput('group', { ...group, id: 'g9', status: 'Archived' });
     await settle(fixture);
@@ -334,6 +409,35 @@ describe('coach announcements', () => {
       .flush(page([announcement('a1')]));
     await settle(fixture);
     expect(root.textContent).toContain('Başlık a1');
+  });
+
+  it('hides "Tüm duyurular" when the list is empty or failed', async () => {
+    const fixture = TestBed.createComponent(CoachAnnouncementsComponent);
+    await settle(fixture);
+    const root = fixture.nativeElement as HTMLElement;
+    backend
+      .expectOne((r) => r.url === '/api/v1/me/announcements')
+      .flush(null, { status: 0, statusText: '' });
+    await settle(fixture);
+    expect(root.querySelector('a[href="/coach/announcements"]')).toBeNull();
+
+    [...root.querySelectorAll('button')]
+      .find((b) => b.textContent?.trim() === ui.common.retry)!
+      .click();
+    await settle(fixture);
+    backend.expectOne((r) => r.url === '/api/v1/me/announcements').flush(page([]));
+    await settle(fixture);
+    expect(root.querySelector('a[href="/coach/announcements"]')).toBeNull();
+  });
+
+  it('has a /coach/announcements route behind the coach guard', async () => {
+    const { routes } = await import('../../app.routes');
+    const coach = routes[2].children!.find((r) => r.path === 'coach')!;
+    const route = coach.children!.find((r) => r.path === 'announcements')!;
+    expect(route.title).toBe(ui.announcements.title);
+    expect(coach.canActivate?.length).toBe(1);
+    const component = await (route.loadComponent as () => Promise<unknown>)();
+    expect(component).toBe(CoachAnnouncementsPage);
   });
 
   it('says when there is nothing yet', async () => {

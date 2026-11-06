@@ -149,7 +149,7 @@ interface Kpi {
                 </div>
               }
               <a
-                routerLink="/attendance"
+                routerLink="/groups"
                 class="mt-auto pt-3 text-sm font-semibold text-primary hover:underline"
               >
                 {{ text.today.link }}

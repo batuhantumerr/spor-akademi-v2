@@ -21,7 +21,9 @@ import { AnnouncementItemComponent } from './announcement-item.component';
           <svg lucideMegaphone class="size-5 text-primary" aria-hidden="true"></svg>
           {{ text.title }}
         </h2>
-        <a routerLink="/coach/announcements" class="btn btn-ghost btn-sm h-11">{{ text.all }}</a>
+        @if (!list.error() && !list.loading() && !list.isEmpty()) {
+          <a routerLink="/coach/announcements" class="btn btn-ghost btn-sm h-11">{{ text.all }}</a>
+        }
       </div>
       <div [attr.aria-busy]="list.loading() || list.refreshing()">
         @if (list.error(); as message) {
