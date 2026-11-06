@@ -1,0 +1,98 @@
+using SporAkademi.Domain.SharedKernel;
+
+namespace SporAkademi.Domain.Tenancy;
+
+public readonly record struct SchoolId(Guid Value) : IEntityId<SchoolId>
+{
+    public static SchoolId From(Guid value) => new(value);
+}
+
+public enum SchoolStatus
+{
+    Active,
+    Deactivated,
+}
+
+/// <summary>A sports school; its id is the <c>TenantId</c> everywhere else. Not tenant-scoped itself.</summary>
+public sealed class School : AggregateRoot<SchoolId>
+{
+    public const int NameMaxLength = 150;
+    public const int TimeZoneMaxLength = 64;
+
+    private School(SchoolId id, string name, Slug slug, string timeZone, RetentionPolicy retentionPolicy)
+        : base(id)
+    {
+        Name = name;
+        Slug = slug;
+        TimeZone = timeZone;
+        RetentionPolicy = retentionPolicy;
+        Status = SchoolStatus.Active;
+    }
+
+    // For EF Core materialization only.
+    private School()
+        : base(default)
+    {
+        Name = null!;
+        Slug = null!;
+        TimeZone = null!;
+        RetentionPolicy = null!;
+    }
+
+    public string Name { get; private set; }
+
+    public Slug Slug { get; private set; }
+
+    /// <summary>IANA time zone id, e.g. <c>Europe/Istanbul</c>. Local dates and times are interpreted in it.</summary>
+    public string TimeZone { get; private set; }
+
+    public SchoolStatus Status { get; private set; }
+
+    public RetentionPolicy RetentionPolicy { get; private set; }
+
+    public static Result<School> Create(string name, Slug slug, string timeZone, RetentionPolicy retentionPolicy)
+    {
+        ArgumentNullException.ThrowIfNull(name);
+        ArgumentNullException.ThrowIfNull(slug);
+        ArgumentNullException.ThrowIfNull(timeZone);
+        ArgumentNullException.ThrowIfNull(retentionPolicy);
+
+        var trimmedName = name.Trim();
+        if (trimmedName.Length == 0)
+        {
+            return Result.Failure<School>(CommonErrors.FieldRequired);
+        }
+
+        if (trimmedName.Length > NameMaxLength)
+        {
+            return Result.Failure<School>(CommonErrors.FieldTooLong);
+        }
+
+        if (!IsKnownTimeZone(timeZone))
+        {
+            return Result.Failure<School>(SchoolErrors.InvalidTimeZone);
+        }
+
+        return Result.Success(new School(EntityId.New<SchoolId>(), trimmedName, slug, timeZone, retentionPolicy));
+    }
+
+    /// <summary>Today's date in the school's time zone.</summary>
+    public DateOnly Today(TimeProvider timeProvider)
+    {
+        ArgumentNullException.ThrowIfNull(timeProvider);
+        var local = TimeZoneInfo.ConvertTime(timeProvider.GetUtcNow(), TimeZoneInfo.FindSystemTimeZoneById(TimeZone));
+        return DateOnly.FromDateTime(local.DateTime);
+    }
+
+    public static bool IsKnownTimeZone(string timeZone) =>
+        timeZone.Length is > 0 and <= TimeZoneMaxLength
+        && TimeZoneInfo.TryFindSystemTimeZoneById(timeZone, out var zone)
+        && zone.HasIanaId;
+}
+
+public static class SchoolErrors
+{
+    public static readonly Error SlugTaken = Error.Conflict("School.SlugTaken", "The slug is already used by another school.");
+    public static readonly Error InvalidTimeZone = Error.Validation("School.InvalidTimeZone", "Unknown time zone.");
+    public static readonly Error NotFound = Error.NotFound("School.NotFound", "School not found.");
+}
