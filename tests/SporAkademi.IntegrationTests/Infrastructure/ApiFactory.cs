@@ -7,8 +7,11 @@ using Microsoft.Extensions.Time.Testing;
 
 namespace SporAkademi.IntegrationTests.Infrastructure;
 
-/// <summary>The real API wired to the test database, with a controllable clock.</summary>
-public sealed class ApiFactory(string appConnectionString) : WebApplicationFactory<Program>
+/// <summary>
+/// The real API wired to the test database, with a controllable clock. Without <paramref name="cacheConnectionString"/>
+/// the cache is in memory only (DEC-315).
+/// </summary>
+public sealed class ApiFactory(string appConnectionString, string? cacheConnectionString = null) : WebApplicationFactory<Program>
 {
     public const string JwtSigningKey = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
 
@@ -21,6 +24,7 @@ public sealed class ApiFactory(string appConnectionString) : WebApplicationFacto
         builder.ConfigureAppConfiguration(config => config.AddInMemoryCollection(new Dictionary<string, string?>
         {
             ["ConnectionStrings:App"] = appConnectionString,
+            ["ConnectionStrings:Cache"] = cacheConnectionString,
             ["Jwt:SigningKey"] = JwtSigningKey,
             ["Seq:ServerUrl"] = null,
             ["Serilog:MinimumLevel:Default"] = "Fatal",
