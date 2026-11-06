@@ -22,7 +22,7 @@ Kapsamın tamamı ve maddelerin açıklamaları: [proje dokümanı, Ek G](proje-
 - [ ] P1-05 Tenancy
 - [ ] P1-06 Hata yönetimi
 - [ ] P1-07 Mimari testleri
-- [ ] P1-08 Entegrasyon test altyapısı
+- [x] P1-08 Entegrasyon test altyapısı
 - [ ] P1-09 US-03 Giriş
 - [ ] P1-10 US-04 Refresh ve çıkış
 - [ ] P1-11 US-05 İlk giriş ve şifre değiştirme

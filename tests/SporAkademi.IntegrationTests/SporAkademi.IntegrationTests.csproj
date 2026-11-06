@@ -1,13 +1,19 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\SporAkademi.Api\SporAkademi.Api.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" />
+    <PackageReference Include="Testcontainers.PostgreSql" />
+    <PackageReference Include="Respawn" />
+    <PackageReference Include="Microsoft.Extensions.TimeProvider.Testing" />
+  </ItemGroup>
 
-  <PropertyGroup>
-    <!-- DEC-076: no tests yet; remove when the first test lands. -->
-    <TestingPlatformCommandLineArguments>$(TestingPlatformCommandLineArguments) --ignore-exit-code 8</TestingPlatformCommandLineArguments>
-  </PropertyGroup>
+  <ItemGroup>
+    <None Include="..\..\compose.yaml" Link="Infrastructure\compose.yaml" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\..\docker\postgres\initdb\10-create-roles.sh" Link="Infrastructure\10-create-roles.sh" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
 
 </Project>
