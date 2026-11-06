@@ -173,7 +173,7 @@ export class GroupAnnouncementsComponent {
   protected readonly publishing = signal(false);
   protected readonly submitted = signal(false);
   protected readonly error = signal<string | null>(null);
-  /** Text for the polite live region (publish result, list refresh). */
+  /** Polite live region text: only the list reload that follows a successful publish. */
   protected readonly announcement = signal('');
   private readonly serverErrors = signal<Partial<Record<Field, string>>>({});
   protected readonly titleCount = computed(() =>
@@ -238,10 +238,15 @@ export class GroupAnnouncementsComponent {
       this.body.set('');
       this.submitted.set(false);
       this.toasts.success(this.text.published);
+      // Clear first so a repeat of the same text is announced again.
+      this.announcement.set('');
       await this.list.reset();
-      this.announcement.set(
-        `${this.text.published} ${interpolate(this.text.listUpdated, { count: this.list.totalCount() })}`,
-      );
+      // The toast already says "published"; a failed reload shows its own alert, so stay silent then.
+      if (!this.list.error()) {
+        this.announcement.set(
+          interpolate(this.text.listUpdated, { count: this.list.totalCount() }),
+        );
+      }
     } catch (err) {
       const problem = toProblem(err);
       const fields = fieldErrors(problem);

@@ -280,12 +280,29 @@ describe('GroupAnnouncementsComponent', () => {
     list().flush(page([announcement('a9')]));
     await settle(fixture);
 
-    expect(root.querySelector('[data-testid="announcements-live"]')?.textContent).toContain(
-      ui.announcements.published,
-    );
+    const live = root.querySelector('[data-testid="announcements-live"]')!.textContent!;
+    expect(live).not.toContain(ui.announcements.published);
     expect(root.querySelector('[data-testid="announcements-live"]')?.textContent).toContain(
       '1 duyuru',
     );
+  });
+
+  it('stays silent in the live region when the reload after publishing fails', async () => {
+    list().flush(page([]));
+    await settle(fixture);
+    await type('announcement-title', 'Tatil');
+    await type('announcement-body', 'Metin');
+    await submit();
+    backend.expectOne((r) => r.method === 'POST').flush(announcement('a9'));
+    await settle(fixture);
+    list().flush(null, { status: 0, statusText: '' });
+    await settle(fixture);
+    await settle(fixture);
+
+    const live = root.querySelector('[data-testid="announcements-live"]')!.textContent!;
+    expect(live).not.toContain('güncellendi');
+    expect(live.trim()).toBe('');
+    expect(root.querySelector('[role="alert"]')?.textContent).toContain('Sunucuya ulaşılamıyor');
   });
 
   it('offers a retry when the list fails to load', async () => {
