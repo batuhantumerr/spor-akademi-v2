@@ -1,0 +1,18 @@
+# Secret scan configuration (DEC-200). The default gitleaks rules apply; only synthetic test values are
+# allowed. Never add a real secret's value here: rotate it and remove it from history instead.
+title = "spor-akademi-v2"
+
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Synthetic test credentials: test projects, frontend specs and the fixed 64-hex test JWT key"
+paths = [
+  '''^tests/''',
+  '''^web/admin/src/.*\.spec\.ts$''',
+]
+regexes = [
+  # Test JWT signing keys (ApiFactory, the CI smoke test, EndpointSecurityTests).
+  '''0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef''',
+  '''a{64}''',
+]

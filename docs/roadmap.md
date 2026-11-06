@@ -61,7 +61,7 @@ Kapsamın tamamı ve maddelerin açıklamaları: [proje dokümanı, Ek G](proje-
 ### Sürüm hazırlığı
 - [x] P1-35 Tenant izolasyon test paketi
 - [ ] P1-36 Uçtan uca testler (Playwright)
-- [ ] P1-37 MVP güvenlik kontrol listesi
+- [x] P1-37 MVP güvenlik kontrol listesi
 - [ ] P1-38 Demo verisi seed betiği
 - [ ] P1-39 CHANGELOG (etiket sahipte)
 - [ ] P1-40 Faz 1 geçişi (sahip)

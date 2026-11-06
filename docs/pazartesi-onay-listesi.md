@@ -10,6 +10,11 @@ Sahip yokken (2026-11-06 – 2026-11-09) agent'ın aldığı ve sahibin onayın�
 | --- | --- | --- | --- |
 | (dokümandaki listeden: EF Core, Npgsql, EFCore.NamingConventions, xUnit v3, Shouldly, NSubstitute, Testcontainers, Respawn, FakeTimeProvider, NetArchTest, Coverlet) | Doküman kararları (DEC-023, DEC-061, DEC-079) | MIT / Apache-2.0 / BSD | — |
 
+## Araçlar (CI)
+| Araç | Neden | Lisans | Sabitleme |
+| --- | --- | --- | --- |
+| gitleaks `v8.30.1` | NFR-SEC-09: repo geçmişinde gizli bilgi taraması, `repo-checks` işinde (DEC-200) | MIT | Resmi sürüm ikilisi + SHA-256 (`ci.yml`) |
+
 ## Sahibe kalan işler
 - `v0.0.1` ve `v0.1.0` etiketleri, faz geçişleri (P0-35, P1-40).
 - Deploy bloğu.

@@ -19,6 +19,8 @@ env:
   DOTNET_CLI_UI_LANGUAGE: en
   TRIVY_VERSION: 0.76.1
   TRIVY_SHA256: c7cbe3137fb8a48a17574bede3dd6beb16742d1e9772929940fc90082c39d9c0
+  GITLEAKS_VERSION: 8.30.1
+  GITLEAKS_SHA256: 551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb
 
 jobs:
   backend:
@@ -72,6 +74,9 @@ jobs:
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # The secret scan reads the whole history: a secret removed later is still leaked.
+          fetch-depth: 0
       - name: Line endings are LF (DEC-077)
         run: |
           bad=$(git ls-files --eol | awk '$2 ~ /crlf|mixed/ {print $4}' | grep -v 'packages.lock.json' || true)
@@ -84,6 +89,12 @@ jobs:
           if git grep -n -i -E '"(mediatr|automapper|fluentassertions)[".]|Include="(MediatR|AutoMapper|FluentAssertions)' -- '*.csproj' '*.props' '**/packages.lock.json'; then
             echo "Forbidden package referenced."; exit 1
           fi
+      - name: Secret scan (gitleaks, pinned binary + checksum, DEC-200)
+        run: |
+          curl -fsSLo gitleaks.tgz "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
+          echo "${GITLEAKS_SHA256}  gitleaks.tgz" | sha256sum -c -
+          tar -xzf gitleaks.tgz gitleaks
+          ./gitleaks git --config .gitleaks.toml --redact --no-banner --exit-code 1 .
       - name: dotnet-ef matches EF Core version
         run: |
           tool=$(jq -r '.tools["dotnet-ef"].version' .config/dotnet-tools.json)

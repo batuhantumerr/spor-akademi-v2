@@ -1,6 +1,7 @@
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { provideRouter } from '@angular/router';
 
 import { SessionDto } from '../../api/models';
 import { ui } from '../../core/i18n/tr';
@@ -30,14 +31,18 @@ describe('CoachTodayPage', () => {
   beforeEach(() => {
     TestBed.configureTestingModule({
       imports: [CoachTodayPage],
-      providers: [provideHttpClient(), provideHttpClientTesting()],
+      providers: [provideRouter([]), provideHttpClient(), provideHttpClientTesting()],
     });
     fixture = TestBed.createComponent(CoachTodayPage);
     backend = TestBed.inject(HttpTestingController);
     root = fixture.nativeElement as HTMLElement;
   });
 
-  afterEach(() => backend.verify());
+  afterEach(() => {
+    // The announcements section loads on its own; it has its own tests.
+    backend.match((r) => r.url.includes('/announcements'));
+    backend.verify();
+  });
 
   const sessionsFor = (date: string) =>
     backend.expectOne((r) => r.url === '/api/v1/me/sessions' && r.params.get('date') === date);

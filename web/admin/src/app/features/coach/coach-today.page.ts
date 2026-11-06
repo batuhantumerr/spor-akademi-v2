@@ -23,6 +23,7 @@ import { formatDate, formatTime } from '../../core/format/format';
 import { interpolate, ui } from '../../core/i18n/tr';
 import { addDays, weekdayName } from '../../core/schedule/schedule';
 import { SchoolClock } from '../../core/time/school-clock';
+import { CoachAnnouncementsComponent } from '../announcements/coach-announcements.component';
 
 /**
  * US-12: the coach's sessions for one day, phone first (NFR-USA-01): large cards, 44px+ targets,
@@ -32,6 +33,7 @@ import { SchoolClock } from '../../core/time/school-clock';
   selector: 'app-coach-today-page',
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
+    CoachAnnouncementsComponent,
     LucideCalendarCheck,
     LucideChevronLeft,
     LucideChevronRight,
@@ -118,6 +120,9 @@ import { SchoolClock } from '../../core/time/school-clock';
           }
         </ul>
       }
+      <div class="mt-6">
+        <app-coach-announcements />
+      </div>
     </div>
   `,
 })
