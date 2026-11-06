@@ -25,7 +25,8 @@ import { GuardianDto, StudentDto, StudentGuardianDto } from '../../api/models';
 import { problemMessage, toProblem } from '../../core/api/problem';
 import { formatDate, formatPhone } from '../../core/format/format';
 import { interpolate, ui } from '../../core/i18n/tr';
-import { ageOn, todayIso } from '../../core/students/age';
+import { ageOn } from '../../core/students/age';
+import { SchoolClock } from '../../core/time/school-clock';
 import { ConfirmService } from '../../shared/ui/confirm-dialog.component';
 import { PageHeaderComponent } from '../../shared/ui/page-header.component';
 import { ToastService } from '../../shared/ui/toast.service';
@@ -180,6 +181,7 @@ export class StudentDetailPage {
   private readonly dialog = inject(Dialog);
   private readonly toasts = inject(ToastService);
   private readonly confirmer = inject(ConfirmService);
+  private readonly clock = inject(SchoolClock);
 
   /** Route parameter (component input binding). */
   readonly id = input.required<string>();
@@ -193,7 +195,7 @@ export class StudentDetailPage {
   protected readonly busy = signal(false);
   protected readonly age = computed(() => {
     const s = this.student();
-    const age = s ? ageOn(s.birthDate, todayIso()) : null;
+    const age = s ? ageOn(s.birthDate, this.clock.today()) : null;
     return age === null ? '' : `(${interpolate(this.list.age, { age })})`;
   });
 

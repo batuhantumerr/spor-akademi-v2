@@ -9,7 +9,7 @@ import {
 import { EmergencyContactInput, Gender, StudentDto } from '../../api/models';
 import { formatPhone } from '../../core/format/format';
 import { interpolate, ui } from '../../core/i18n/tr';
-import { ageOn, isMinor, todayIso } from '../../core/students/age';
+import { ageOn, isMinor } from '../../core/students/age';
 import { optionalTurkishPhone } from '../../shared/forms/validators';
 
 function trimmedRequired(control: AbstractControl): ValidationErrors | null {
@@ -75,9 +75,12 @@ export const studentApiPaths: Record<StudentField, string> = {
   emergencyRelationship: 'emergencyContact.relationship',
 };
 
-/** Age from the browser date; the API decides with the school's time zone. */
-export function ageInfo(birthDate: string): { age: number; minor: boolean; hint: string } | null {
-  const age = ageOn(birthDate, todayIso());
+/** Age on the school's today (SchoolClock); the API stays authoritative. */
+export function ageInfo(
+  birthDate: string,
+  today: string,
+): { age: number; minor: boolean; hint: string } | null {
+  const age = ageOn(birthDate, today);
   if (age === null) {
     return null;
   }

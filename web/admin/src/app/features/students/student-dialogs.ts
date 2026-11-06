@@ -21,7 +21,8 @@ import { GuardianDto, StudentDto } from '../../api/models';
 import { problemMessage, toProblem } from '../../core/api/problem';
 import { formatPhone } from '../../core/format/format';
 import { ui } from '../../core/i18n/tr';
-import { todayIso } from '../../core/students/age';
+import { SchoolClock } from '../../core/time/school-clock';
+import { ConflictNoticeComponent } from '../../shared/ui/conflict-notice.component';
 import { optionalTurkishPhone } from '../../shared/forms/validators';
 import { PathErrors, clientMessage } from './path-errors';
 import {
@@ -47,11 +48,14 @@ function focusFirstInvalid(host: HTMLElement): void {
   host.querySelector<HTMLElement>('[aria-invalid="true"]')?.focus();
 }
 
-/** Edit a student's own data and emergency contact; sends the version, reloads on a conflict. */
+/**
+ * Edit a student's own data and emergency contact; sends the version. On a conflict the typed
+ * values stay and the user chooses between applying them to the fresh version or taking it.
+ */
 @Component({
   selector: 'app-student-edit-dialog',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [StudentProfileFieldsComponent, EmergencyFieldsComponent],
+  imports: [StudentProfileFieldsComponent, EmergencyFieldsComponent, ConflictNoticeComponent],
   template: `
     <form [class]="dialogClass" (submit)="$event.preventDefault(); save()" novalidate>
       <h2 [id]="titleId" class="mb-3 text-lg font-semibold">{{ text.editTitle }}</h2>
@@ -62,6 +66,18 @@ function focusFirstInvalid(host: HTMLElement): void {
         >
           {{ error() }}
         </p>
+      }
+      @if (conflict()) {
+        <div class="mb-3">
+          <app-conflict-notice
+            [ready]="fresh() !== null"
+            [loadError]="freshError()"
+            [busy]="saving()"
+            (applyMine)="applyMine()"
+            (loadServer)="loadServer()"
+            (retry)="loadFresh()"
+          />
+        </div>
       }
       <div class="space-y-4">
         <app-student-profile-fields
@@ -102,6 +118,9 @@ export class StudentEditDialog {
   protected readonly saving = signal(false);
   protected readonly submitted = signal(false);
   protected readonly error = signal<string | null>(null);
+  protected readonly conflict = signal(false);
+  protected readonly fresh = signal<StudentDto | null>(null);
+  protected readonly freshError = signal<string | null>(null);
   private readonly errors = new PathErrors(studentCodePaths);
   protected readonly serverError = (path: string) => this.errors.get(path);
 
@@ -137,26 +156,55 @@ export class StudentEditDialog {
     } catch (err) {
       const problem = toProblem(err);
       if (problem.code === 'Concurrency.Conflict') {
-        await this.reload();
-      } else {
-        this.errors.apply(problem);
-        this.error.set(problemMessage(problem));
-        setTimeout(() => focusFirstInvalid(this.host.nativeElement));
+        // Keep the typed values; load the server's version aside and let the user choose.
+        this.conflict.set(true);
+        this.fresh.set(null);
+        this.saving.set(false);
+        await this.loadFresh();
+        return;
       }
+      this.errors.apply(problem);
+      this.error.set(problemMessage(problem));
+      setTimeout(() => focusFirstInvalid(this.host.nativeElement));
       this.saving.set(false);
     }
   }
 
-  /** Someone else saved first: show their data so the next save carries the fresh version. */
-  private async reload(): Promise<void> {
-    try {
-      const fresh = await this.api.invoke(apiV1StudentsIdGet, { id: this.student.id });
-      this.student = fresh;
-      this.form.reset(studentFieldsForm(fresh).getRawValue());
-      this.error.set(ui.common.conflictReloaded);
-    } catch (err) {
-      this.error.set(problemMessage(toProblem(err)));
+  /** Re-send the typed values on top of the fresh version. */
+  protected async applyMine(): Promise<void> {
+    const fresh = this.fresh();
+    if (!fresh || this.saving()) {
+      return;
     }
+    this.student = fresh;
+    this.clearConflict();
+    await this.save();
+  }
+
+  /** Discard the typed values and show the server's version. */
+  protected loadServer(): void {
+    const fresh = this.fresh();
+    if (!fresh) {
+      return;
+    }
+    this.student = fresh;
+    this.form.reset(studentFieldsForm(fresh).getRawValue());
+    this.clearConflict();
+  }
+
+  async loadFresh(): Promise<void> {
+    this.freshError.set(null);
+    try {
+      this.fresh.set(await this.api.invoke(apiV1StudentsIdGet, { id: this.student.id }));
+    } catch (err) {
+      this.freshError.set(problemMessage(toProblem(err)));
+    }
+  }
+
+  private clearConflict(): void {
+    this.conflict.set(false);
+    this.fresh.set(null);
+    this.freshError.set(null);
   }
 }
 
@@ -172,7 +220,7 @@ export interface GuardianEditData {
 @Component({
   selector: 'app-guardian-edit-dialog',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [ReactiveFormsModule],
+  imports: [ReactiveFormsModule, ConflictNoticeComponent],
   template: `
     <form
       [class]="dialogClass"
@@ -189,6 +237,18 @@ export interface GuardianEditData {
         >
           {{ error() }}
         </p>
+      }
+      @if (conflict()) {
+        <div class="mt-3">
+          <app-conflict-notice
+            [ready]="fresh() !== null"
+            [loadError]="freshError()"
+            [busy]="saving()"
+            (applyMine)="applyMine()"
+            (loadServer)="loadServer()"
+            (retry)="loadFresh()"
+          />
+        </div>
       }
       @if (!guardian() && !error()) {
         <p role="status" class="mt-3 text-sm text-muted-foreground">{{ common.loading }}</p>
@@ -245,6 +305,9 @@ export class GuardianEditDialog {
   protected readonly saving = signal(false);
   protected readonly submitted = signal(false);
   protected readonly error = signal<string | null>(null);
+  protected readonly conflict = signal(false);
+  protected readonly fresh = signal<GuardianDto | null>(null);
+  protected readonly freshError = signal<string | null>(null);
   private readonly errors = new PathErrors({ 'Guardian.PhoneTaken': 'phone' });
 
   protected readonly fields = [
@@ -353,17 +416,67 @@ export class GuardianEditDialog {
     } catch (err) {
       const problem = toProblem(err);
       if (problem.code === 'Concurrency.Conflict') {
-        await this.load(guardian.phone);
-        if (this.guardian()) {
-          this.error.set(ui.common.conflictReloaded);
-        }
-      } else {
-        this.errors.apply(problem);
-        this.error.set(problemMessage(problem));
-        setTimeout(() => focusFirstInvalid(this.host.nativeElement));
+        // Keep the typed values; load the server's version aside and let the user choose.
+        this.conflict.set(true);
+        this.fresh.set(null);
+        this.saving.set(false);
+        await this.loadFresh();
+        return;
       }
+      this.errors.apply(problem);
+      this.error.set(problemMessage(problem));
+      setTimeout(() => focusFirstInvalid(this.host.nativeElement));
       this.saving.set(false);
     }
+  }
+
+  /** Re-send the typed values on top of the fresh version. */
+  protected async applyMine(): Promise<void> {
+    const fresh = this.fresh();
+    if (!fresh || this.saving()) {
+      return;
+    }
+    this.guardian.set(fresh);
+    this.clearConflict();
+    await this.save();
+  }
+
+  /** Discard the typed values and show the server's version. */
+  protected loadServer(): void {
+    const fresh = this.fresh();
+    if (!fresh) {
+      return;
+    }
+    this.guardian.set(fresh);
+    this.fill(fresh);
+    this.clearConflict();
+  }
+
+  /** The fresh copy, found by the phone it was loaded with. */
+  async loadFresh(): Promise<void> {
+    const current = this.guardian();
+    if (!current) {
+      return;
+    }
+    this.freshError.set(null);
+    try {
+      const result = await this.api.invoke(apiV1GuardiansGet, { phone: current.phone });
+      const fresh = result.items.find((g) => g.id === current.id) ?? null;
+      if (fresh) {
+        this.fresh.set(fresh);
+      } else {
+        // The phone was changed by someone else; it cannot be found that way any more.
+        this.freshError.set(this.text.guardianGone);
+      }
+    } catch (err) {
+      this.freshError.set(problemMessage(toProblem(err)));
+    }
+  }
+
+  private clearConflict(): void {
+    this.conflict.set(false);
+    this.fresh.set(null);
+    this.freshError.set(null);
   }
 
   private async load(phone: string): Promise<void> {
@@ -376,18 +489,22 @@ export class GuardianEditDialog {
         return;
       }
       this.guardian.set(guardian);
-      this.form.reset({
-        firstName: guardian.firstName,
-        lastName: guardian.lastName,
-        phone: formatPhone(guardian.phone),
-        email: guardian.email ?? '',
-        line: guardian.address?.line ?? '',
-        district: guardian.address?.district ?? '',
-        city: guardian.address?.city ?? '',
-      });
+      this.fill(guardian);
     } catch (err) {
       this.error.set(problemMessage(toProblem(err)));
     }
+  }
+
+  private fill(guardian: GuardianDto): void {
+    this.form.reset({
+      firstName: guardian.firstName,
+      lastName: guardian.lastName,
+      phone: formatPhone(guardian.phone),
+      email: guardian.email ?? '',
+      line: guardian.address?.line ?? '',
+      district: guardian.address?.district ?? '',
+      city: guardian.address?.city ?? '',
+    });
   }
 }
 
@@ -419,7 +536,7 @@ export class GuardianEditDialog {
           type="date"
           class="input"
           [formControl]="date"
-          [max]="today"
+          [max]="today()"
           [attr.aria-invalid]="!!dateError()"
           [attr.aria-describedby]="
             dateError() ? 'leave-date-hint leave-date-error' : 'leave-date-hint'
@@ -451,8 +568,9 @@ export class StudentLeaveDialog {
   protected readonly titleId = LEAVE_TITLE_ID;
   protected readonly text = ui.studentDetail;
   protected readonly actions = ui.actions;
-  protected readonly today = todayIso();
-  protected readonly date = new FormControl(this.today, {
+  /** The school's today (not the browser's): the latest allowed leave date. */
+  protected readonly today = inject(SchoolClock).today;
+  protected readonly date = new FormControl(this.today(), {
     nonNullable: true,
     validators: [Validators.required],
   });
@@ -477,7 +595,7 @@ export class StudentLeaveDialog {
     if (!value) {
       return clientMessage(this.date);
     }
-    return value > this.today || value < this.student.birthDate ? this.text.leaveDateHint : null;
+    return value > this.today() || value < this.student.birthDate ? this.text.leaveDateHint : null;
   }
 
   protected async save(): Promise<void> {

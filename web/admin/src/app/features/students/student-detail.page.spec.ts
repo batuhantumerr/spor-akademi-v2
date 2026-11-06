@@ -6,7 +6,7 @@ import { provideRouter } from '@angular/router';
 
 import { StudentDto } from '../../api/models';
 import { ui } from '../../core/i18n/tr';
-import { todayIso } from '../../core/students/age';
+import { SchoolClock } from '../../core/time/school-clock';
 import { ConfirmService } from '../../shared/ui/confirm-dialog.component';
 import { ToastService } from '../../shared/ui/toast.service';
 import { StudentDetailPage } from './student-detail.page';
@@ -97,7 +97,7 @@ describe('StudentDetailPage', () => {
     const dialog = dialogRoot();
     expect(dialog.getAttribute('aria-labelledby')).toBe('student-leave-title');
     const date = dialog.querySelector('#leave-date') as HTMLInputElement;
-    expect(date.value).toBe(todayIso());
+    expect(date.value).toBe(TestBed.inject(SchoolClock).today());
     date.value = '2026-09-01';
     date.dispatchEvent(new Event('input'));
     await settle(fixture);

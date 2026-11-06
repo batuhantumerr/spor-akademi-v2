@@ -1,12 +1,6 @@
 /** Same threshold as the API (Student.AdultAge). */
 export const ADULT_AGE = 18;
 
-/** Today's local calendar date as <c>YYYY-MM-DD</c>. The server's school-time-zone date wins. */
-export function todayIso(now: Date = new Date()): string {
-  const pad = (n: number) => String(n).padStart(2, '0');
-  return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
-}
-
 /**
  * Whole years between two ISO dates, compared by (month, day) like the API, so a 29 February
  * birthday turns a year older on 1 March in a non-leap year. Null for an unusable date.

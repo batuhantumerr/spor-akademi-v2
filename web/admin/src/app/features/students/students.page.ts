@@ -14,7 +14,8 @@ import { apiV1GroupsGet, apiV1SportsGet, apiV1StudentsGet } from '../../api/func
 import { NamedReferenceDto, StudentListItemDto, StudentStatus } from '../../api/models';
 import { formatDate } from '../../core/format/format';
 import { interpolate, ui } from '../../core/i18n/tr';
-import { ageOn, todayIso } from '../../core/students/age';
+import { ageOn } from '../../core/students/age';
+import { SchoolClock } from '../../core/time/school-clock';
 import { PagedList } from '../../shared/data/paged-list';
 import { PageHeaderComponent } from '../../shared/ui/page-header.component';
 import { PaginationComponent } from '../../shared/ui/pagination.component';
@@ -256,7 +257,7 @@ export class StudentsPage {
     }),
   );
 
-  private readonly today = todayIso();
+  private readonly clock = inject(SchoolClock);
   private debounce: ReturnType<typeof setTimeout> | null = null;
 
   constructor() {
@@ -270,7 +271,7 @@ export class StudentsPage {
   }
 
   protected age(birthIso: string): string {
-    const age = ageOn(birthIso, this.today);
+    const age = ageOn(birthIso, this.clock.today());
     return age === null ? '' : `(${interpolate(this.text.age, { age })})`;
   }
 

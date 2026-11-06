@@ -3,6 +3,7 @@ import {
   Component,
   computed,
   effect,
+  inject,
   input,
   output,
   signal,
@@ -11,7 +12,7 @@ import { ReactiveFormsModule } from '@angular/forms';
 import { LucideCopy } from '@lucide/angular';
 
 import { interpolate, ui } from '../../core/i18n/tr';
-import { todayIso } from '../../core/students/age';
+import { SchoolClock } from '../../core/time/school-clock';
 import { clientMessage } from './path-errors';
 import { StudentField, StudentFieldsForm, ageInfo, studentApiPaths } from './student-fields';
 
@@ -70,7 +71,7 @@ function fieldMessage(
             type="date"
             class="input"
             formControlName="birthDate"
-            [max]="today"
+            [max]="today()"
             aria-required="true"
             [attr.aria-invalid]="!!message('birthDate')"
             [attr.aria-describedby]="
@@ -171,10 +172,12 @@ export class StudentProfileFieldsComponent {
   protected readonly text = ui.studentForm;
   protected readonly genders = ui.students.genders;
   protected readonly nameFields = ['firstName', 'lastName'] as const;
-  protected readonly today = todayIso();
+  private readonly clock = inject(SchoolClock);
+  /** The school's today: the latest allowed birth date and the reference for the age hint. */
+  protected readonly today = this.clock.today;
   /** Mirrors the birth date control for the live hint (the form is not signal-based). */
   private readonly birthDate = signal('');
-  protected readonly age = computed(() => ageInfo(this.birthDate()));
+  protected readonly age = computed(() => ageInfo(this.birthDate(), this.today()));
   protected readonly adult = computed(() => this.age()?.minor === false);
 
   constructor() {

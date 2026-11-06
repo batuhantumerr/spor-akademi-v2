@@ -16,6 +16,7 @@ import { Api } from '../../api/api';
 import { apiV1StudentsPost } from '../../api/functions';
 import { formatPhone } from '../../core/format/format';
 import { errorMessages, ui } from '../../core/i18n/tr';
+import { SchoolClock } from '../../core/time/school-clock';
 import { ToastService } from '../../shared/ui/toast.service';
 import { toProblem, problemMessage } from '../../core/api/problem';
 import { PageHeaderComponent } from '../../shared/ui/page-header.component';
@@ -140,6 +141,7 @@ export class RegisterStudentPage {
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
   private readonly injector = inject(Injector);
   private readonly destroyRef = inject(DestroyRef);
+  private readonly clock = inject(SchoolClock);
 
   protected readonly text = ui.studentForm;
   protected readonly maxGuardians = MAX_GUARDIANS;
@@ -257,7 +259,7 @@ export class RegisterStudentPage {
       'phone',
       'email',
     ];
-    const age = ageInfo(this.form.controls.birthDate.value);
+    const age = ageInfo(this.form.controls.birthDate.value, this.clock.today());
     const firstInvalid = order.find((f) => this.form.controls[f].invalid);
     if (firstInvalid) {
       return `s-${firstInvalid}`;

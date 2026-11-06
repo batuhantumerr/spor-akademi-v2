@@ -1,4 +1,4 @@
-import { ageOn, isMinor, todayIso } from './age';
+import { ageOn, isMinor } from './age';
 
 describe('ageOn (same rule as the API)', () => {
   it('counts the birthday itself as a year older', () => {
@@ -19,9 +19,5 @@ describe('ageOn (same rule as the API)', () => {
   it('treats under 18 as minor', () => {
     expect(isMinor(17)).toBe(true);
     expect(isMinor(18)).toBe(false);
-  });
-
-  it('formats the local date', () => {
-    expect(todayIso(new Date(2026, 0, 5))).toBe('2026-01-05');
   });
 });
