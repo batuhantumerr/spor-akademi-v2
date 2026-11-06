@@ -42,3 +42,6 @@ __screenshots__/
 # System files
 .DS_Store
 Thumbs.db
+
+# Generated from openapi/spor-akademi.json (npm run generate:api)
+/src/app/api/

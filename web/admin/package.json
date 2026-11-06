@@ -3,10 +3,15 @@
   "version": "0.0.0",
   "scripts": {
     "ng": "ng",
+    "generate:api": "ng-openapi-gen --config ng-openapi-gen.json",
+    "prestart": "npm run generate:api",
     "start": "ng serve --proxy-config proxy.conf.json",
+    "prebuild": "npm run generate:api",
     "build": "ng build",
     "watch": "ng build --watch --configuration development",
+    "pretest": "npm run generate:api",
     "test": "ng test --watch=false",
+    "prelint": "npm run generate:api",
     "lint": "ng lint",
     "format:check": "prettier --check .",
     "format": "prettier --write ."
@@ -38,6 +43,7 @@
     "angular-eslint": "22.6.0",
     "eslint": "^10.12.0",
     "jsdom": "^30.0.0",
+    "ng-openapi-gen": "1.1.0",
     "postcss": "8.5.32",
     "prettier": "^3.8.1",
     "tailwindcss": "4.3.3",

@@ -16,8 +16,14 @@ internal sealed class UnitOfWork(AppDbContext dbContext, DomainEventDispatcher d
     private const int MaxEventRounds = 10;
     private const string LockNotAvailable = "55P03";
 
+    public Task<Result<T>> ExecuteInTransactionAsync<T>(
+        Func<CancellationToken, Task<Result<T>>> operation,
+        CancellationToken cancellationToken) =>
+        ExecuteInTransactionAsync(operation, commitOnFailure: false, cancellationToken);
+
     public async Task<Result<T>> ExecuteInTransactionAsync<T>(
         Func<CancellationToken, Task<Result<T>>> operation,
+        bool commitOnFailure,
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(operation);
@@ -37,11 +43,12 @@ internal sealed class UnitOfWork(AppDbContext dbContext, DomainEventDispatcher d
             await dbContext.Database.ExecuteSqlRawAsync("SET LOCAL lock_timeout = '5s'", cancellationToken);
 
             var result = await operation(cancellationToken);
-            if (result.IsFailure)
+            if (result.IsFailure && !commitOnFailure)
             {
                 return result;
             }
 
+            // With commitOnFailure a failed result's changes are committed and the failure is returned.
             var saved = await SaveAndDispatchEventsAsync(cancellationToken);
             if (saved.IsFailure)
             {

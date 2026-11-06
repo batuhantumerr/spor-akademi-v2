@@ -41,6 +41,19 @@ public sealed class PipelineTests
     }
 
     [Fact]
+    public async Task Commands_that_keep_changes_on_failure_ask_the_transaction_to_commit_failures()
+    {
+        using var provider = BuildProvider();
+        using var scope = provider.CreateScope();
+        var handler = scope.ServiceProvider.GetRequiredService<ICommandHandler<AttemptThing, Guid>>();
+
+        var result = await handler.Handle(new AttemptThing(), CancellationToken.None);
+
+        result.Error.Code.ShouldBe("Thing.Failed");
+        _calls.Entries.ShouldBe(["transaction:begin(commit-on-failure)", "attempt", "transaction:end"]);
+    }
+
+    [Fact]
     public async Task Invalid_command_never_reaches_the_transaction_or_handler()
     {
         using var provider = BuildProvider();
@@ -131,6 +144,17 @@ public sealed class CreateThingHandler(CallLog calls) : ICommandHandler<CreateTh
     }
 }
 
+public sealed record AttemptThing : ICommand<Guid>, IKeepChangesOnFailure;
+
+public sealed class AttemptThingHandler(CallLog calls) : ICommandHandler<AttemptThing, Guid>
+{
+    public Task<Result<Guid>> Handle(AttemptThing command, CancellationToken cancellationToken)
+    {
+        calls.Entries.Add("attempt");
+        return Task.FromResult(Result.Failure<Guid>(Error.BusinessRule("Thing.Failed", "d")));
+    }
+}
+
 public sealed record GetThing(int Id) : IQuery<string>;
 
 public sealed class GetThingValidator : AbstractValidator<GetThing>
@@ -149,10 +173,10 @@ public sealed class GetThingHandler(CallLog calls) : IQueryHandler<GetThing, str
 
 public sealed class RecordingUnitOfWork : IUnitOfWork
 {
-    public async Task<Result<T>> ExecuteInTransactionAsync<T>(Func<CancellationToken, Task<Result<T>>> operation, CancellationToken cancellationToken)
+    public async Task<Result<T>> ExecuteInTransactionAsync<T>(Func<CancellationToken, Task<Result<T>>> operation, bool commitOnFailure, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(operation);
-        Log?.Entries.Add("transaction:begin");
+        Log?.Entries.Add(commitOnFailure ? "transaction:begin(commit-on-failure)" : "transaction:begin");
         var result = await operation(cancellationToken);
         Log?.Entries.Add("transaction:end");
         return result;

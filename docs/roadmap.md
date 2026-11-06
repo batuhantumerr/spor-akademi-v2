@@ -19,16 +19,16 @@ Kapsamın tamamı ve maddelerin açıklamaları: [proje dokümanı, Ek G](proje-
 - [x] P1-02 Value object'ler
 - [x] P1-03 Application pipeline'ı
 - [x] P1-04 Kalıcılık temeli
-- [ ] P1-05 Tenancy
-- [ ] P1-06 Hata yönetimi
-- [ ] P1-07 Mimari testleri
-- [ ] P1-08 Entegrasyon test altyapısı
-- [ ] P1-09 US-03 Giriş
-- [ ] P1-10 US-04 Refresh ve çıkış
-- [ ] P1-11 US-05 İlk giriş ve şifre değiştirme
+- [x] P1-05 Tenancy
+- [x] P1-06 Hata yönetimi
+- [x] P1-07 Mimari testleri
+- [x] P1-08 Entegrasyon test altyapısı
+- [x] P1-09 US-03 Giriş
+- [x] P1-10 US-04 Refresh ve çıkış
+- [x] P1-11 US-05 İlk giriş ve şifre değiştirme
 - [ ] P1-12 US-01 Okul oluşturma
 - [ ] P1-13 Angular kabuğu, giriş, ADR-0010
-- [ ] P1-14 OpenAPI ve Angular client
+- [x] P1-14 OpenAPI ve Angular client
 
 ### 1.2 Okul kurulumu ve gruplar
 - [ ] P1-15 US-06 Branşlar
