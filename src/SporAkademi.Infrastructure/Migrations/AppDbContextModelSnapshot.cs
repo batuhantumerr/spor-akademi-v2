@@ -88,6 +88,192 @@ namespace SporAkademi.Infrastructure.Migrations
                     b.ToTable("announcements", "announcements");
                 });
 
+            modelBuilder.Entity("SporAkademi.Domain.Attendance.AttendanceChange", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTimeOffset>("ChangedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("changed_at");
+
+                    b.Property<Guid>("ChangedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("changed_by");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid?>("CreatedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("created_by");
+
+                    b.Property<string>("NewStatus")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .HasColumnName("new_status");
+
+                    b.Property<string>("PreviousStatus")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .HasColumnName("previous_status");
+
+                    b.Property<Guid>("SessionId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("session_id");
+
+                    b.Property<Guid>("StudentId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("student_id");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("tenant_id");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<Guid?>("UpdatedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("updated_by");
+
+                    b.HasKey("Id")
+                        .HasName("pk_attendance_changes");
+
+                    b.HasIndex("TenantId", "SessionId")
+                        .HasDatabaseName("ix_attendance_changes_tenant_id_session_id");
+
+                    b.HasIndex("TenantId", "StudentId")
+                        .HasDatabaseName("ix_attendance_changes_tenant_id_student_id");
+
+                    b.ToTable("attendance_changes", "attendance");
+                });
+
+            modelBuilder.Entity("SporAkademi.Domain.Attendance.AttendanceRecord", b =>
+                {
+                    b.Property<Guid>("SessionId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("session_id");
+
+                    b.Property<Guid>("StudentId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("student_id");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid?>("CreatedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("created_by");
+
+                    b.Property<DateTimeOffset>("RecordedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("recorded_at");
+
+                    b.Property<Guid>("RecordedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("recorded_by");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .HasColumnName("status");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("tenant_id");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<Guid?>("UpdatedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("updated_by");
+
+                    b.HasKey("SessionId", "StudentId")
+                        .HasName("pk_attendance_records");
+
+                    b.HasIndex("TenantId", "SessionId")
+                        .HasDatabaseName("ix_attendance_records_tenant_id_session_id");
+
+                    b.HasIndex("TenantId", "StudentId")
+                        .HasDatabaseName("ix_attendance_records_tenant_id_student_id");
+
+                    b.ToTable("attendance_records", "attendance");
+                });
+
+            modelBuilder.Entity("SporAkademi.Domain.Attendance.Session", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid?>("CreatedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("created_by");
+
+                    b.Property<DateOnly>("Date")
+                        .HasColumnType("date")
+                        .HasColumnName("date");
+
+                    b.Property<TimeOnly>("EndTime")
+                        .HasColumnType("time without time zone")
+                        .HasColumnName("end_time");
+
+                    b.Property<Guid>("GroupId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("group_id");
+
+                    b.Property<TimeOnly>("StartTime")
+                        .HasColumnType("time without time zone")
+                        .HasColumnName("start_time");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("tenant_id");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<Guid?>("UpdatedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("updated_by");
+
+                    b.Property<uint>("Version")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
+
+                    b.HasKey("Id")
+                        .HasName("pk_sessions");
+
+                    b.HasAlternateKey("TenantId", "Id")
+                        .HasName("ak_sessions_tenant_id_id");
+
+                    b.HasIndex("TenantId", "GroupId", "Date", "StartTime")
+                        .IsUnique()
+                        .HasDatabaseName("ix_sessions_group_date_start");
+
+                    b.ToTable("sessions", "attendance", t =>
+                        {
+                            t.HasCheckConstraint("ck_sessions_time", "end_time > start_time");
+                        });
+                });
+
             modelBuilder.Entity("SporAkademi.Domain.Billing.Payment", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1166,6 +1352,54 @@ namespace SporAkademi.Infrastructure.Migrations
                         .HasConstraintName("fk_announcements_group_tenant_id_group_id");
                 });
 
+            modelBuilder.Entity("SporAkademi.Domain.Attendance.AttendanceChange", b =>
+                {
+                    b.HasOne("SporAkademi.Domain.Attendance.Session", null)
+                        .WithMany("Changes")
+                        .HasForeignKey("TenantId", "SessionId")
+                        .HasPrincipalKey("TenantId", "Id")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_attendance_changes_sessions_tenant_id_session_id");
+                });
+
+            modelBuilder.Entity("SporAkademi.Domain.Attendance.AttendanceRecord", b =>
+                {
+                    b.HasOne("SporAkademi.Domain.Attendance.Session", null)
+                        .WithMany("Records")
+                        .HasForeignKey("TenantId", "SessionId")
+                        .HasPrincipalKey("TenantId", "Id")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_attendance_records_sessions_tenant_id_session_id");
+
+                    b.HasOne("SporAkademi.Domain.Students.Student", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId", "StudentId")
+                        .HasPrincipalKey("TenantId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_attendance_records_student_tenant_id_student_id");
+                });
+
+            modelBuilder.Entity("SporAkademi.Domain.Attendance.Session", b =>
+                {
+                    b.HasOne("SporAkademi.Domain.Tenancy.School", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_sessions_school_tenant_id");
+
+                    b.HasOne("SporAkademi.Domain.Groups.Group", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId", "GroupId")
+                        .HasPrincipalKey("TenantId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_sessions_group_tenant_id_group_id");
+                });
+
             modelBuilder.Entity("SporAkademi.Domain.Billing.Payment", b =>
                 {
                     b.HasOne("SporAkademi.Domain.Tenancy.School", null)
@@ -1338,6 +1572,13 @@ namespace SporAkademi.Infrastructure.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired()
                         .HasConstraintName("fk_student_guardians_students_tenant_id_student_id");
+                });
+
+            modelBuilder.Entity("SporAkademi.Domain.Attendance.Session", b =>
+                {
+                    b.Navigation("Changes");
+
+                    b.Navigation("Records");
                 });
 
             modelBuilder.Entity("SporAkademi.Domain.Groups.Group", b =>

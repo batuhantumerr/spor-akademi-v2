@@ -77,11 +77,13 @@ public sealed class School : AggregateRoot<SchoolId>
     }
 
     /// <summary>Today's date in the school's time zone.</summary>
-    public DateOnly Today(TimeProvider timeProvider)
+    public DateOnly Today(TimeProvider timeProvider) => DateOnly.FromDateTime(LocalNow(timeProvider));
+
+    /// <summary>The wall-clock time now in the school's time zone, comparable with local dates and schedule times.</summary>
+    public DateTime LocalNow(TimeProvider timeProvider)
     {
         ArgumentNullException.ThrowIfNull(timeProvider);
-        var local = TimeZoneInfo.ConvertTime(timeProvider.GetUtcNow(), TimeZoneInfo.FindSystemTimeZoneById(TimeZone));
-        return DateOnly.FromDateTime(local.DateTime);
+        return TimeZoneInfo.ConvertTime(timeProvider.GetUtcNow(), TimeZoneInfo.FindSystemTimeZoneById(TimeZone)).DateTime;
     }
 
     public static bool IsKnownTimeZone(string timeZone) =>

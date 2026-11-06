@@ -11,6 +11,32 @@ public interface IEnrollmentCounts
 }
 
 /// <summary>
+/// A student's membership period in a group, for attendance (DEC-170). The student counts as enrolled
+/// from <see cref="StartDate"/> through <see cref="LastDay"/>: the end date itself, unless the student
+/// starts another enrollment on that date (<paramref name="HandsOverOnEndDate"/>); a same-day transfer
+/// belongs to the new enrollment only, so the student is never listed in two groups on one day.
+/// </summary>
+public sealed record EnrollmentPeriod(StudentId StudentId, GroupId GroupId, DateOnly StartDate, DateOnly? EndDate, bool HandsOverOnEndDate = false)
+{
+    /// <summary>The last day enrolled, or null while the enrollment is open. Before the start for a same-day hand-over.</summary>
+    public DateOnly? LastDay => EndDate is { } end && HandsOverOnEndDate ? end.AddDays(-1) : EndDate;
+
+    public bool Covers(DateOnly date) => StartDate <= date && (LastDay is not { } last || date <= last);
+
+    public bool Overlaps(DateOnly firstDay, DateOnly lastDay) => StartDate <= lastDay && (LastDay is not { } last || last >= firstDay);
+}
+
+/// <summary>Read contract of the Enrollments module: who was enrolled when (attendance, US-19, US-21).</summary>
+public interface IEnrollmentHistory
+{
+    /// <summary>Enrollments of the group that overlap the dates, both inclusive.</summary>
+    Task<IReadOnlyList<EnrollmentPeriod>> ListOfGroupAsync(GroupId groupId, DateOnly firstDay, DateOnly lastDay, CancellationToken cancellationToken);
+
+    /// <summary>Every enrollment of the student, in any group.</summary>
+    Task<IReadOnlyList<EnrollmentPeriod>> ListOfStudentAsync(StudentId studentId, CancellationToken cancellationToken);
+}
+
+/// <summary>
 /// Write contract of the Enrollments module, called inside the transaction of the triggering change (ADR-0009):
 /// ends active enrollments on the given date.
 /// </summary>

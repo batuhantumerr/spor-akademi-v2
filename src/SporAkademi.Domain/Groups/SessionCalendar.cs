@@ -15,18 +15,30 @@ public static class SessionCalendar
     public static IReadOnlyList<PlannedSession> Between(Group group, DateOnly from, DateOnly to)
     {
         ArgumentNullException.ThrowIfNull(group);
+        return Between(group.Id, group.ScheduleSlots, group.ArchivedOn, from, to);
+    }
+
+    /// <summary>The same for a group known only by its schedule and archive date (e.g. through a module contract).</summary>
+    public static IReadOnlyList<PlannedSession> Between(
+        GroupId groupId,
+        IReadOnlyCollection<ScheduleSlot> slots,
+        DateOnly? archivedOn,
+        DateOnly from,
+        DateOnly to)
+    {
+        ArgumentNullException.ThrowIfNull(slots);
 
         // An archived group trains up to and including the day it was archived.
-        var last = group.ArchivedOn is { } archivedOn && archivedOn < to ? archivedOn : to;
+        var last = archivedOn is { } archived && archived < to ? archived : to;
         var sessions = new List<PlannedSession>();
         // Day numbers instead of AddDays: the loop never steps past DateOnly.MaxValue.
         for (var day = from.DayNumber; day <= last.DayNumber; day++)
         {
             var date = DateOnly.FromDayNumber(day);
-            sessions.AddRange(group.ScheduleSlots
+            sessions.AddRange(slots
                 .Where(slot => slot.Day == date.DayOfWeek)
                 .OrderBy(slot => slot.Time.Start)
-                .Select(slot => new PlannedSession(group.Id, date, slot.Time)));
+                .Select(slot => new PlannedSession(groupId, date, slot.Time)));
         }
 
         return sessions;
