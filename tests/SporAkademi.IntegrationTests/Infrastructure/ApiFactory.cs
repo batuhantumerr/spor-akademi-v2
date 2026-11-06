@@ -24,6 +24,8 @@ public sealed class ApiFactory(string appConnectionString) : WebApplicationFacto
             ["Jwt:SigningKey"] = JwtSigningKey,
             ["Seq:ServerUrl"] = null,
             ["Serilog:MinimumLevel:Default"] = "Fatal",
+            // Tests drive OutboxProcessor themselves so delivery happens exactly when they decide (OutboxWorkerTests turn it on).
+            ["Outbox:Enabled"] = "false",
         }));
         builder.ConfigureServices(services => services.Replace(ServiceDescriptor.Singleton<TimeProvider>(Clock)));
     }
