@@ -5,7 +5,31 @@
     <title>Spor Akademi</title>
     <base href="/" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="light dark" />
     <link rel="icon" type="image/x-icon" href="favicon.ico" />
+    <script>
+      // Apply the stored or system theme before first paint to avoid a flash.
+      (function () {
+        var pref = 'system';
+        try {
+          pref = localStorage.getItem('sa-theme') || 'system';
+        } catch (e) {}
+        var dark =
+          pref === 'dark' ||
+          (pref === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+        document.documentElement.classList.add(dark ? 'dark' : 'light');
+      })();
+    </script>
+    <style>
+      html.light,
+      html.light body {
+        background: #f8fafc;
+      }
+      html.dark,
+      html.dark body {
+        background: #121620;
+      }
+    </style>
   </head>
   <body>
     <app-root></app-root>

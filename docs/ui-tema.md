@@ -8,7 +8,7 @@ Sahibin isteği (2026-11-06): arayüz modern, anlaşılır, grafiklerle destekle
 - Karanlık mod: `<html>` üzerinde `dark` / `light` sınıfı; tercih `localStorage` (`sa-theme`: `light|dark|system`), yoksa `prefers-color-scheme`. İlk boyamadan önce küçük bir inline script uygular.
 - Font: Inter (gövde), JetBrains Mono (sayılar, tablo başlıkları). Kök font boyutu 14px.
 - İkonlar: lucide (`@lucide/angular` veya eşdeğeri).
-- Grafikler: ApexCharts (`ng-apexcharts`). Renkler CSS değişkenlerinden `getComputedStyle` ile okunur, tema değişince yeniden uygulanır.
+- Grafikler: Apache ECharts (`ngx-echarts`, ADR-0010; ApexCharts ticari lisans nedeniyle reddedildi). Renkler CSS değişkenlerinden `getComputedStyle` ile okunur, tema değişince yeniden uygulanır.
 
 ## Token'lar (hex)
 
@@ -57,6 +57,6 @@ Radius: `--radius: 0.25rem`; `sm = r-2px`, `md = r`, `lg = r+2px`, `xl = r+4px`.
 - **Tabs:** liste `bg-muted rounded-xl p-[3px]`; tetikleyici `rounded-xl px-3 py-2 text-sm font-medium`, aktif `bg-card`.
 - **KPI kartı:** `p-4 rounded-3xl border bg-card shadow-sm hover:shadow-md relative overflow-hidden`, arkada `w-44 h-44 rounded-full blur-3xl opacity-[0.06]` renk parlaması; başlık `text-[11px] font-bold uppercase tracking-wider text-muted-foreground`; değer `text-2xl font-extrabold tracking-tight font-mono`.
 
-## Grafik varsayılanları (ApexCharts)
+## Grafik varsayılanları (ECharts, `app-chart`)
 
-`chart: { toolbar: { show: false }, background: 'transparent', fontFamily: 'Inter' }`, `theme.mode` ve `tooltip.theme` temaya göre, `legend.show: false` (gerekmedikçe), eksen çizgi ve tikleri gizli, `grid.borderColor` = border token'ı, `strokeDashArray: 4`. Kullanılacak grafikler: devam oranı trendi (area), gruplara göre doluluk (bar), aylık tahsilat/borç (bar), yoklama dağılımı (donut), grup aylık yoklama tablosu (heatmap).
+Şeffaf arka plan, Inter font, renkler `--chart-1..5` token'larından, eksen çizgi ve tikleri gizli, yatay ızgara çizgileri `--border` renginde kesikli, tooltip `--popover` renginde. Kullanılacak grafikler: devam oranı trendi (area), gruplara göre doluluk (bar), aylık tahsilat/borç (bar), yoklama dağılımı (donut), grup aylık yoklama tablosu (heatmap).

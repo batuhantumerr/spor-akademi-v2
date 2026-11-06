@@ -1,1 +1,251 @@
-/* You can add global styles to this file, and also import other style files */
+@import 'tailwindcss';
+
+/* Theme tokens: see docs/ui-tema.md. Dark mode is a class on <html>. */
+@custom-variant dark (&:is(.dark *));
+
+:root {
+  --font-size: 14px;
+  --radius: 0.25rem;
+
+  --background: #f8fafc;
+  --foreground: #0f172a;
+  --card: #ffffff;
+  --card-foreground: #0f172a;
+  --popover: #ffffff;
+  --popover-foreground: #0f172a;
+  --primary: #1d4ed8;
+  --primary-foreground: #ffffff;
+  --secondary: #f1f5f9;
+  --secondary-foreground: #475569;
+  --muted: #f1f5f9;
+  --muted-foreground: #64748b;
+  --accent: #1d4ed8;
+  --accent-foreground: #ffffff;
+  --destructive: #e63946;
+  --destructive-foreground: #ffffff;
+  --border: #e2e8f0;
+  --input: #ffffff;
+  --ring: #2563eb;
+  --success: #16a34a;
+  --warning: #d97706;
+  --info: #2563eb;
+  --chart-1: #2563eb;
+  --chart-2: #d97706;
+  --chart-3: #16a34a;
+  --chart-4: #7c3aed;
+  --chart-5: #dc2626;
+  --sidebar: #ffffff;
+  --sidebar-foreground: #475569;
+}
+
+.dark {
+  --background: #121620;
+  --foreground: #edf2f7;
+  --card: #1a202c;
+  --card-foreground: #edf2f7;
+  --popover: #1a202c;
+  --popover-foreground: #edf2f7;
+  --primary: #60a5fa;
+  --primary-foreground: #121620;
+  --secondary: #1e2736;
+  --secondary-foreground: #a0aec0;
+  --muted: #1e2736;
+  --muted-foreground: #a0aec0;
+  --accent: #60a5fa;
+  --accent-foreground: #121620;
+  --destructive: #e63946;
+  --destructive-foreground: #edf2f7;
+  --border: #2d3748;
+  --input: #1a202c;
+  --ring: #60a5fa;
+  --success: #4ade80;
+  --warning: #f39c12;
+  --info: #3b82f6;
+  --chart-1: #60a5fa;
+  --chart-2: #ffb703;
+  --chart-3: #4ade80;
+  --chart-4: #a78bfa;
+  --chart-5: #e63946;
+  --sidebar: #0d1117;
+  --sidebar-foreground: #a0aec0;
+}
+
+@theme inline {
+  --font-sans: 'Inter Variable', 'Inter', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono Variable', 'JetBrains Mono', ui-monospace, monospace;
+
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-info: var(--info);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+
+  --radius-sm: calc(var(--radius) - 2px);
+  --radius-md: var(--radius);
+  --radius-lg: calc(var(--radius) + 2px);
+  --radius-xl: calc(var(--radius) + 4px);
+}
+
+@layer base {
+  html {
+    font-size: var(--font-size);
+  }
+
+  * {
+    @apply border-border outline-ring/50;
+  }
+
+  body {
+    @apply bg-background text-foreground font-sans antialiased;
+  }
+
+  h1 {
+    @apply text-2xl font-semibold tracking-tight;
+  }
+
+  h2 {
+    @apply text-xl font-semibold;
+  }
+
+  h3 {
+    @apply text-lg font-medium;
+  }
+
+  label,
+  button {
+    @apply text-sm font-medium;
+  }
+
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: var(--border);
+    border-radius: 3px;
+  }
+}
+
+@layer components {
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 rounded-md text-sm font-semibold whitespace-nowrap transition-all duration-200 select-none focus-visible:ring-2 focus-visible:ring-primary/50 focus-visible:outline-none active:scale-95 disabled:pointer-events-none disabled:opacity-40 [&_svg]:size-4;
+    @apply h-10 px-5;
+  }
+
+  .btn-primary {
+    @apply bg-primary text-primary-foreground shadow-lg shadow-primary/10 hover:bg-primary/90;
+  }
+
+  .btn-outline {
+    @apply border-2 border-border bg-transparent text-muted-foreground hover:border-primary hover:bg-primary/5 hover:text-primary;
+  }
+
+  .btn-secondary {
+    @apply border border-border bg-card text-foreground hover:bg-muted;
+  }
+
+  .btn-ghost {
+    @apply text-muted-foreground hover:bg-primary/10 hover:text-primary;
+  }
+
+  .btn-destructive {
+    @apply bg-red-600 text-white hover:bg-red-700;
+  }
+
+  .btn-sm {
+    @apply h-9 px-3 text-xs;
+  }
+
+  .btn-icon {
+    @apply size-10 px-0;
+  }
+
+  .card {
+    @apply rounded-xl border border-border bg-card text-card-foreground;
+  }
+
+  .input {
+    @apply h-10 w-full rounded-md border border-border bg-card/50 px-3 text-sm text-foreground transition-colors placeholder:text-muted-foreground/50 focus-visible:border-primary focus-visible:ring-[3px] focus-visible:ring-primary/20 focus-visible:outline-none aria-invalid:border-destructive;
+  }
+
+  .field-label {
+    @apply mb-1.5 block text-sm font-medium text-foreground;
+  }
+
+  .field-error {
+    @apply mt-1.5 text-xs text-destructive;
+  }
+
+  .badge {
+    @apply inline-flex items-center rounded-full border px-2.5 py-0.5 text-[10px] font-bold tracking-wider uppercase;
+  }
+
+  .badge-success {
+    @apply border-success/30 bg-success/10 text-success;
+  }
+
+  .badge-warning {
+    @apply border-warning/30 bg-warning/10 text-warning;
+  }
+
+  .badge-danger {
+    @apply border-destructive/30 bg-destructive/10 text-destructive;
+  }
+
+  .badge-info {
+    @apply border-info/30 bg-info/10 text-info;
+  }
+
+  .badge-muted {
+    @apply border-border bg-card/50 text-muted-foreground;
+  }
+
+  .table-shell {
+    @apply w-full overflow-x-auto rounded-xl border border-border bg-card;
+  }
+
+  .data-table {
+    @apply w-full text-left text-sm;
+  }
+
+  .data-table thead {
+    @apply border-b border-border bg-muted/60;
+  }
+
+  .data-table th {
+    @apply h-10 px-4 font-mono text-[10px] font-semibold tracking-wider whitespace-nowrap text-muted-foreground uppercase md:text-xs;
+  }
+
+  .data-table td {
+    @apply px-4 py-3 font-medium;
+  }
+
+  .data-table tbody tr {
+    @apply border-b border-border/60 transition-colors last:border-0 hover:bg-muted/40;
+  }
+}
