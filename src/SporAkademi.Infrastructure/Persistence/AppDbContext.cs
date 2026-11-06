@@ -27,6 +27,7 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options, ICurren
 
         // Multi-field value objects are always complex types, never entities.
         configurationBuilder.ComplexProperties<RetentionPolicy>();
+        configurationBuilder.ComplexProperties<Address>();
 
         // Every strongly typed id is stored as its Guid; every domain enum as its name.
         foreach (var type in typeof(IEntityId<>).Assembly.GetTypes())

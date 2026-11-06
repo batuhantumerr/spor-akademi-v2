@@ -31,8 +31,8 @@ Kapsamın tamamı ve maddelerin açıklamaları: [proje dokümanı, Ek G](proje-
 - [x] P1-14 OpenAPI ve Angular client
 
 ### 1.2 Okul kurulumu ve gruplar
-- [ ] P1-15 US-06 Branşlar
-- [ ] P1-16 US-07 Tesisler
+- [x] P1-15 US-06 Branşlar
+- [x] P1-16 US-07 Tesisler
 - [ ] P1-17 US-08 Antrenörler
 - [ ] P1-18 US-09 Grup oluşturma
 - [ ] P1-19 US-10 Haftalık program
