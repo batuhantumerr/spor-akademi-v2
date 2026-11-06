@@ -62,21 +62,31 @@ public sealed class Announcement : AggregateRoot<AnnouncementId>, ITenantScoped
         string body,
         DateTimeOffset now)
     {
-        ArgumentNullException.ThrowIfNull(title);
-        ArgumentNullException.ThrowIfNull(body);
-
-        var cleanTitle = TextNormalization.CollapseSpaces(title);
-        var cleanBody = body.Trim();
-        if (cleanTitle.Length == 0 || cleanBody.Length == 0)
+        var cleanTitle = CleanTitle(title);
+        if (cleanTitle.IsFailure)
         {
-            return Result.Failure<Announcement>(CommonErrors.FieldRequired);
+            return Result.Failure<Announcement>(cleanTitle.Error);
         }
 
-        if (cleanTitle.Length > TitleMaxLength || cleanBody.Length > BodyMaxLength)
+        var cleanBody = CleanBody(body);
+        if (cleanBody.IsFailure)
         {
-            return Result.Failure<Announcement>(CommonErrors.FieldTooLong);
+            return Result.Failure<Announcement>(cleanBody.Error);
         }
 
-        return Result.Success(new Announcement(EntityId.New<AnnouncementId>(), tenantId, groupId, authorId, cleanTitle, cleanBody, now));
+        return Result.Success(new Announcement(EntityId.New<AnnouncementId>(), tenantId, groupId, authorId, cleanTitle.Value, cleanBody.Value, now));
     }
+
+    /// <summary>The stored title: whitespace runs collapsed to single spaces; required, at most <see cref="TitleMaxLength"/> after that.</summary>
+    public static Result<string> CleanTitle(string? title) => Bounded(TextNormalization.CollapseSpaces(title ?? string.Empty), TitleMaxLength);
+
+    /// <summary>The stored body: only trimmed, inner line breaks kept; required, at most <see cref="BodyMaxLength"/> after that.</summary>
+    public static Result<string> CleanBody(string? body) => Bounded((body ?? string.Empty).Trim(), BodyMaxLength);
+
+    private static Result<string> Bounded(string value, int maxLength) => value.Length switch
+    {
+        0 => Result.Failure<string>(CommonErrors.FieldRequired),
+        var length when length > maxLength => Result.Failure<string>(CommonErrors.FieldTooLong),
+        _ => Result.Success(value),
+    };
 }
