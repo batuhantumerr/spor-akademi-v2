@@ -5,6 +5,7 @@ import {
   Injector,
   afterNextRender,
   computed,
+  effect,
   inject,
   input,
   linkedSignal,
@@ -24,10 +25,25 @@ import {
   validateSlots,
 } from '../../core/schedule/schedule';
 
+/** A row of the editor; the id keeps per-row state stable when rows are removed. */
+interface Row extends SlotDraft {
+  id: number;
+}
+
+let nextRowId = 1;
+
+function toRows(slots: readonly SlotDraft[]): Row[] {
+  return sortSlots(slots).map(({ day, start, end }) => ({ id: nextRowId++, day, start, end }));
+}
+
+function sameSlot(a: SlotDraft, b: SlotDraft): boolean {
+  return a.day === b.day && a.start === b.start && a.end === b.end;
+}
+
 /**
  * Weekly schedule editor (US-09): one row per slot with day, start and end (24h HH:mm). Checks
  * format, order and same-day overlaps before emitting `save`; shows the API's warnings as a
- * non-blocking notice and its error as an alert.
+ * non-blocking notice and its error as a focused alert naming the slot when the API points at one.
  */
 @Component({
   selector: 'app-schedule-editor',
@@ -39,10 +55,12 @@ import {
 
       @if (error()) {
         <p
+          id="schedule-error"
           role="alert"
+          tabindex="-1"
           class="mt-3 rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive"
         >
-          {{ error() }}
+          {{ alertText() }}
         </p>
       }
       <div role="status">
@@ -63,11 +81,11 @@ import {
         }
       </div>
 
-      @if (drafts().length === 0) {
+      @if (rows().length === 0) {
         <p class="mt-4 text-sm text-muted-foreground">{{ text.noSlots }}</p>
       }
       <ol class="mt-4 space-y-3">
-        @for (slot of drafts(); track $index; let i = $index) {
+        @for (row of rows(); track row.id; let i = $index) {
           <li>
             <fieldset
               class="grid grid-cols-2 items-start gap-2 rounded-lg border border-border p-3 sm:grid-cols-[1fr_1fr_1fr_auto]"
@@ -76,68 +94,49 @@ import {
               <div class="col-span-2 sm:col-span-1">
                 <label class="field-label" [for]="'slot-day-' + i">{{ text.day }}</label>
                 <select
-                  class="input"
+                  class="input pointer-coarse:h-11"
                   [id]="'slot-day-' + i"
-                  [value]="slot.day"
                   [disabled]="readonly()"
                   (change)="update(i, 'day', $any($event.target).value)"
                 >
                   @for (day of week; track day) {
-                    <option [value]="day" [selected]="day === slot.day">{{ dayName(day) }}</option>
+                    <option [value]="day" [selected]="day === row.day">{{ dayName(day) }}</option>
                   }
                 </select>
               </div>
-              <div>
-                <label class="field-label" [for]="'slot-start-' + i">{{ text.start }}</label>
-                <input
-                  class="input font-mono"
-                  [id]="'slot-start-' + i"
-                  inputmode="numeric"
-                  maxlength="5"
-                  placeholder="17:00"
-                  autocomplete="off"
-                  [value]="slot.start"
-                  [disabled]="readonly()"
-                  [attr.aria-invalid]="!!issue(i, 'start')"
-                  [attr.aria-describedby]="
-                    issue(i, 'start') ? 'slot-start-' + i + '-error' : 'schedule-hint'
-                  "
-                  (input)="update(i, 'start', $any($event.target).value)"
-                  (blur)="touch(i, 'start')"
-                />
-                @if (issue(i, 'start'); as m) {
-                  <p [id]="'slot-start-' + i + '-error'" class="field-error">{{ m }}</p>
-                }
-              </div>
-              <div>
-                <label class="field-label" [for]="'slot-end-' + i">{{ text.end }}</label>
-                <input
-                  class="input font-mono"
-                  [id]="'slot-end-' + i"
-                  inputmode="numeric"
-                  maxlength="5"
-                  placeholder="18:30"
-                  autocomplete="off"
-                  [value]="slot.end"
-                  [disabled]="readonly()"
-                  [attr.aria-invalid]="!!issue(i, 'end')"
-                  [attr.aria-describedby]="
-                    issue(i, 'end') ? 'slot-end-' + i + '-error' : 'schedule-hint'
-                  "
-                  (input)="update(i, 'end', $any($event.target).value)"
-                  (blur)="touch(i, 'end')"
-                />
-                @if (issue(i, 'end'); as m) {
-                  <p [id]="'slot-end-' + i + '-error'" class="field-error">{{ m }}</p>
-                }
-              </div>
+              @for (field of timeFields; track field) {
+                <div>
+                  <label class="field-label" [for]="'slot-' + field + '-' + i">{{
+                    text[field]
+                  }}</label>
+                  <input
+                    class="input font-mono pointer-coarse:h-11"
+                    [id]="'slot-' + field + '-' + i"
+                    inputmode="numeric"
+                    maxlength="5"
+                    [placeholder]="field === 'start' ? '17:00' : '18:30'"
+                    autocomplete="off"
+                    [value]="row[field]"
+                    [disabled]="readonly()"
+                    [attr.aria-invalid]="!!issue(i, field)"
+                    [attr.aria-describedby]="
+                      issue(i, field) ? 'slot-' + field + '-' + i + '-error' : 'schedule-hint'
+                    "
+                    (input)="update(i, field, $any($event.target).value)"
+                    (blur)="touch(row.id)"
+                  />
+                  @if (issue(i, field); as m) {
+                    <p [id]="'slot-' + field + '-' + i + '-error'" class="field-error">{{ m }}</p>
+                  }
+                </div>
+              }
               @if (!readonly()) {
                 <button
                   type="button"
                   class="btn btn-ghost btn-icon col-span-2 justify-self-end hover:!bg-destructive/10 hover:!text-destructive sm:col-span-1 sm:mt-6"
                   [attr.aria-label]="text.removeSlot + ': ' + label(i)"
                   [attr.title]="text.removeSlot"
-                  (click)="remove(i)"
+                  (click)="remove(row.id)"
                 >
                   <svg lucideTrash2></svg>
                 </button>
@@ -150,16 +149,16 @@ import {
       @if (!readonly()) {
         <div class="mt-4 flex flex-wrap items-center justify-between gap-2">
           <button
-            #addButton
+            id="slot-add"
             type="button"
             class="btn btn-secondary"
-            [disabled]="drafts().length >= maxSlots"
-            [attr.aria-describedby]="drafts().length >= maxSlots ? 'slot-limit' : null"
+            [disabled]="rows().length >= maxSlots"
+            [attr.aria-describedby]="rows().length >= maxSlots ? 'slot-limit' : null"
             (click)="add()"
           >
             <svg lucidePlus></svg>{{ text.addSlot }}
           </button>
-          @if (drafts().length >= maxSlots) {
+          @if (rows().length >= maxSlots) {
             <p id="slot-limit" class="text-xs text-muted-foreground">{{ text.tooManySlots }}</p>
           }
           <button type="submit" class="btn btn-primary" [disabled]="saving()">
@@ -177,6 +176,8 @@ export class ScheduleEditorComponent {
   readonly slots = input.required<ScheduleSlotDto[]>();
   readonly warnings = input<WarningDto[]>([]);
   readonly error = input<string | null>(null);
+  /** The slot the API's error is about (from `slots[i]` in the problem), if any. */
+  readonly errorSlot = input<SlotDraft | null>(null);
   readonly saving = input(false);
   readonly readonly = input(false);
   readonly save = output<SlotDraft[]>();
@@ -184,20 +185,29 @@ export class ScheduleEditorComponent {
   protected readonly text = ui.groupDetail;
   protected readonly week = WEEK;
   protected readonly maxSlots = MAX_SLOTS;
+  protected readonly timeFields = ['start', 'end'] as const;
 
-  /** Editable copy; reset whenever the parent passes new slots (load, save, conflict reload). */
-  protected readonly drafts = linkedSignal<SlotDraft[]>(() =>
-    sortSlots(this.slots()).map(({ day, start, end }) => ({ day, start, end })),
-  );
-  private readonly touched = linkedSignal<Set<string>>(() => {
+  /** Editable copy; reset only when the parent passes new slots (load, successful save, discard). */
+  protected readonly rows = linkedSignal<Row[]>(() => toRows(this.slots()));
+  private readonly touched = linkedSignal<Set<number>>(() => {
     this.slots();
-    return new Set<string>();
+    return new Set<number>();
   });
   private readonly submitted = linkedSignal(() => {
     this.slots();
     return false;
   });
-  private readonly issues = computed(() => validateSlots(this.drafts()));
+  private readonly issues = computed(() => validateSlots(this.rows()));
+  /** Row index the API error points at. */
+  private readonly errorRow = computed(() => {
+    const slot = this.errorSlot();
+    return slot ? this.rows().findIndex((r) => sameSlot(r, slot)) : -1;
+  });
+
+  protected readonly alertText = computed(() => {
+    const row = this.errorRow();
+    return row >= 0 ? `${this.error()} (${slotLabel(row)})` : this.error();
+  });
 
   protected readonly warningMessages = computed(() =>
     this.warnings().map((w) =>
@@ -208,6 +218,18 @@ export class ScheduleEditorComponent {
     ),
   );
 
+  constructor() {
+    // Move focus to a new API error so screen-reader and keyboard users land on it.
+    effect(() => {
+      if (this.error()) {
+        afterNextRender(
+          () => this.host.nativeElement.querySelector<HTMLElement>('#schedule-error')?.focus(),
+          { injector: this.injector },
+        );
+      }
+    });
+  }
+
   protected label(index: number): string {
     return slotLabel(index);
   }
@@ -216,51 +238,71 @@ export class ScheduleEditorComponent {
     return ui.days[day].long;
   }
 
-  /** A row's problem, shown once that field was left or the form was submitted. */
+  /**
+   * A row's problem, shown after submit, once the row was used, or (for an overlap) once the
+   * row it collides with was used; the API's slot error shows on the row it names.
+   */
   protected issue(index: number, field: 'start' | 'end'): string | undefined {
+    const issue = this.issues()[index];
+    const row = this.rows()[index];
+    const touched = (k: number) => this.touched().has(this.rows()[k]?.id);
     const shown =
       this.submitted() ||
-      this.touched().has(`${index}-${field}`) ||
-      // An overlap or order problem is reported on "end" once either time was touched.
-      (field === 'end' &&
-        this.touched().has(`${index}-start`) &&
-        isTimeFilled(this.drafts()[index]));
-    return shown ? this.issues()[index]?.[field] : undefined;
+      touched(index) ||
+      (field === 'end' && (issue?.overlapsWith ?? []).some(touched));
+    const client = shown ? issue?.[field] : undefined;
+    if (client) {
+      return client;
+    }
+    return field === 'end' && row && index === this.errorRow()
+      ? (this.error() ?? undefined)
+      : undefined;
   }
 
   protected update(index: number, field: keyof SlotDraft, value: string): void {
-    this.drafts.update((list) =>
-      list.map((slot, i) => (i === index ? { ...slot, [field]: value } : slot)),
+    const id = this.rows()[index]?.id;
+    this.rows.update((list) =>
+      list.map((row, i) => (i === index ? { ...row, [field]: value } : row)),
     );
+    // A new day can create or resolve an overlap right away.
+    if (field === 'day' && id !== undefined) {
+      this.touch(id);
+    }
   }
 
-  protected touch(index: number, field: 'start' | 'end'): void {
-    this.touched.update((set) => new Set(set).add(`${index}-${field}`));
+  protected touch(id: number): void {
+    if (!this.touched().has(id)) {
+      this.touched.update((set) => new Set(set).add(id));
+    }
   }
 
   protected add(): void {
-    const list = this.drafts();
+    const list = this.rows();
     if (list.length >= MAX_SLOTS) {
       return;
     }
     const last = list.at(-1);
     const day = last ? WEEK[(WEEK.indexOf(last.day) + 1) % WEEK.length] : 'Monday';
-    this.drafts.set([...list, { day, start: last?.start ?? '', end: last?.end ?? '' }]);
+    this.rows.set([
+      ...list,
+      { id: nextRowId++, day, start: last?.start ?? '', end: last?.end ?? '' },
+    ]);
     const index = list.length;
     afterNextRender(() => this.element(`slot-day-${index}`)?.focus(), { injector: this.injector });
   }
 
-  protected remove(index: number): void {
-    this.drafts.update((list) => list.filter((_, i) => i !== index));
-    // Index-based keys shift; start the "touched" bookkeeping over for the remaining rows.
-    this.touched.set(new Set());
-    const next = Math.min(index, this.drafts().length - 1);
+  protected remove(id: number): void {
+    const index = this.rows().findIndex((r) => r.id === id);
+    this.rows.update((list) => list.filter((r) => r.id !== id));
+    // Other rows keep their touched state (it is keyed by row id, not position).
+    this.touched.update((set) => {
+      const next = new Set(set);
+      next.delete(id);
+      return next;
+    });
+    const next = Math.min(index, this.rows().length - 1);
     afterNextRender(
-      () =>
-        (next >= 0
-          ? this.element(`slot-day-${next}`)
-          : this.host.nativeElement.querySelector<HTMLElement>('button[type="button"]')
-        )?.focus(),
+      () => (next >= 0 ? this.element(`slot-day-${next}`) : this.element('slot-add'))?.focus(),
       { injector: this.injector },
     );
   }
@@ -274,14 +316,10 @@ export class ScheduleEditorComponent {
       this.element(`slot-${field}-${first}`)?.focus();
       return;
     }
-    this.save.emit(sortSlots(this.drafts()));
+    this.save.emit(sortSlots(this.rows()).map(({ day, start, end }) => ({ day, start, end })));
   }
 
   private element(id: string): HTMLElement | null {
     return this.host.nativeElement.querySelector<HTMLElement>(`[id="${id}"]`);
   }
-}
-
-function isTimeFilled(slot: SlotDraft | undefined): boolean {
-  return !!slot && slot.start !== '' && slot.end !== '';
 }

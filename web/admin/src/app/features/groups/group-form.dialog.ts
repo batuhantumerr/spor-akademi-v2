@@ -23,6 +23,7 @@ import { problemMessage, toProblem } from '../../core/api/problem';
 import { errorMessages, interpolate, ui } from '../../core/i18n/tr';
 import { focusFirstInvalid } from '../../shared/forms/focus-first-invalid';
 import { ServerFieldErrors } from '../../shared/forms/server-field-errors';
+import { ConflictNoticeComponent } from '../../shared/ui/conflict-notice.component';
 import { GroupLookups } from './group-lookups';
 
 export const GROUP_FORM_TITLE_ID = 'group-form-title';
@@ -59,7 +60,7 @@ function birthYearOrder(group: AbstractControl): ValidationErrors | null {
 @Component({
   selector: 'app-group-form-dialog',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [ReactiveFormsModule],
+  imports: [ReactiveFormsModule, ConflictNoticeComponent],
   template: `
     <form
       class="max-h-[calc(100dvh-2rem)] w-[min(36rem,calc(100vw-2rem))] overflow-y-auto rounded-lg border border-border bg-background p-6 shadow-lg"
@@ -75,6 +76,18 @@ function birthYearOrder(group: AbstractControl): ValidationErrors | null {
         >
           {{ error() }}
         </p>
+      }
+      @if (conflict()) {
+        <div class="mt-3">
+          <app-conflict-notice
+            [ready]="fresh() !== null"
+            [loadError]="freshError()"
+            [busy]="saving()"
+            (applyMine)="applyMine()"
+            (loadServer)="loadServer()"
+            (retry)="loadFresh()"
+          />
+        </div>
       }
       <div class="mt-4 grid gap-4 sm:grid-cols-2">
         <div class="sm:col-span-2">
@@ -253,6 +266,10 @@ export class GroupFormDialog {
   protected readonly capacityMax = CAPACITY_MAX;
   protected readonly saving = signal(false);
   protected readonly error = signal<string | null>(null);
+  /** After a 409 the form keeps the user's values; the server's version loads aside. */
+  protected readonly conflict = signal(false);
+  protected readonly fresh = signal<GroupDto | null>(null);
+  protected readonly freshError = signal<string | null>(null);
 
   /** Active facilities, plus the group's current one if it has been archived meanwhile. */
   protected readonly facilities = computed(() =>
@@ -383,7 +400,10 @@ export class GroupFormDialog {
     } catch (err) {
       const problem = toProblem(err);
       if (problem.code === 'Concurrency.Conflict' && group) {
-        await this.reload(group.id);
+        // Keep what the user typed; load the server's version next to it and let them choose.
+        this.conflict.set(true);
+        this.fresh.set(null);
+        await this.loadFresh();
       } else {
         this.server.apply(problem);
         this.error.set(problemMessage(problem));
@@ -393,16 +413,45 @@ export class GroupFormDialog {
     }
   }
 
-  /** Someone else saved first: show their version so the next save carries the fresh version. */
-  private async reload(id: string): Promise<void> {
-    try {
-      const fresh = await this.api.invoke(apiV1GroupsIdGet, { id });
-      this.group.set(fresh);
-      this.fill(fresh);
-      this.error.set(ui.common.conflictReloaded);
-    } catch (err) {
-      this.error.set(problemMessage(toProblem(err)));
+  /** Re-send the user's values on top of the fresh version. */
+  protected async applyMine(): Promise<void> {
+    const fresh = this.fresh();
+    if (!fresh || this.saving()) {
+      return;
     }
+    this.group.set(fresh);
+    this.clearConflict();
+    await this.save();
+  }
+
+  /** Discard the user's values and show the server's version. */
+  protected loadServer(): void {
+    const fresh = this.fresh();
+    if (!fresh) {
+      return;
+    }
+    this.group.set(fresh);
+    this.fill(fresh);
+    this.clearConflict();
+  }
+
+  async loadFresh(): Promise<void> {
+    const group = this.group();
+    if (!group) {
+      return;
+    }
+    this.freshError.set(null);
+    try {
+      this.fresh.set(await this.api.invoke(apiV1GroupsIdGet, { id: group.id }));
+    } catch (err) {
+      this.freshError.set(problemMessage(toProblem(err)));
+    }
+  }
+
+  private clearConflict(): void {
+    this.conflict.set(false);
+    this.fresh.set(null);
+    this.freshError.set(null);
   }
 
   private fill(group: GroupDto | null): void {

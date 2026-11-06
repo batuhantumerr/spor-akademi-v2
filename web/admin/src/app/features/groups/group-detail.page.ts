@@ -21,13 +21,9 @@ import { GroupDto, SessionDto, WarningDto } from '../../api/models';
 import { problemMessage, toProblem } from '../../core/api/problem';
 import { formatDate, formatTime } from '../../core/format/format';
 import { ui } from '../../core/i18n/tr';
-import {
-  SlotDraft,
-  addDays,
-  isoDate,
-  summarizeSchedule,
-  weekdayName,
-} from '../../core/schedule/schedule';
+import { SlotDraft, addDays, summarizeSchedule, weekdayName } from '../../core/schedule/schedule';
+import { SchoolClock } from '../../core/time/school-clock';
+import { ConflictNoticeComponent } from '../../shared/ui/conflict-notice.component';
 import { PageHeaderComponent } from '../../shared/ui/page-header.component';
 import { ToastService } from '../../shared/ui/toast.service';
 import { ScheduleEditorComponent } from './schedule-editor.component';
@@ -42,6 +38,7 @@ const UPCOMING_DAYS = 14;
     RouterLink,
     PageHeaderComponent,
     ScheduleEditorComponent,
+    ConflictNoticeComponent,
     LucideArrowLeft,
     LucideCalendarClock,
   ],
@@ -130,10 +127,23 @@ const UPCOMING_DAYS = 14;
           @if (g.status !== 'Active') {
             <p class="mb-3 text-sm text-muted-foreground">{{ text.archivedNotice }}</p>
           }
+          @if (conflict()) {
+            <div class="mb-3">
+              <app-conflict-notice
+                [ready]="freshGroup() !== null"
+                [loadError]="freshError()"
+                [busy]="saving()"
+                (applyMine)="applyMine()"
+                (loadServer)="loadServer()"
+                (retry)="loadFresh()"
+              />
+            </div>
+          }
           <app-schedule-editor
             [slots]="g.slots"
             [warnings]="warnings()"
             [error]="scheduleError()"
+            [errorSlot]="errorSlot()"
             [saving]="saving()"
             [readonly]="g.status !== 'Active'"
             (save)="saveSchedule($event)"
@@ -191,13 +201,36 @@ export class GroupDetailPage {
   protected readonly sessionsError = signal<string | null>(null);
   protected readonly warnings = signal<WarningDto[]>([]);
   protected readonly scheduleError = signal<string | null>(null);
+  protected readonly errorSlot = signal<SlotDraft | null>(null);
   protected readonly saving = signal(false);
+  /** After a 409: the user's unsaved slots stay in the editor; the fresh version loads aside. */
+  protected readonly conflict = signal(false);
+  protected readonly freshGroup = signal<GroupDto | null>(null);
+  protected readonly freshError = signal<string | null>(null);
   protected readonly summary = computed(() => summarizeSchedule(this.group()?.slots ?? []));
+
+  private readonly clock = inject(SchoolClock);
+  /** The slots of the last save attempt, re-sent by "apply my changes". */
+  private pendingSlots: SlotDraft[] | null = null;
+  private loadSequence = 0;
+  private sessionsSequence = 0;
 
   constructor() {
     effect(() => {
-      this.id();
-      untracked(() => void this.load());
+      const id = this.id();
+      untracked(() => {
+        this.reset();
+        void this.load(id);
+      });
+    });
+    // The upcoming window starts at the school's today; follow it when the day turns over.
+    effect(() => {
+      this.clock.today();
+      untracked(() => {
+        if (this.group()) {
+          void this.loadSessions();
+        }
+      });
     });
   }
 
@@ -213,12 +246,20 @@ export class GroupDetailPage {
     return weekdayName(iso);
   }
 
-  async load(): Promise<void> {
+  /** Loads the group of the current route; a response for an older id is ignored. */
+  async load(id = this.id()): Promise<void> {
+    const request = ++this.loadSequence;
     this.loadError.set(null);
     try {
-      this.group.set(await this.api.invoke(apiV1GroupsIdGet, { id: this.id() }));
+      const group = await this.api.invoke(apiV1GroupsIdGet, { id });
+      if (request !== this.loadSequence) {
+        return;
+      }
+      this.group.set(group);
     } catch (err) {
-      this.loadError.set(problemMessage(toProblem(err)));
+      if (request === this.loadSequence) {
+        this.loadError.set(problemMessage(toProblem(err)));
+      }
       return;
     }
     await this.loadSessions();
@@ -229,31 +270,74 @@ export class GroupDetailPage {
     if (!group || this.saving()) {
       return;
     }
+    await this.put(group.id, slots, Number(group.version));
+  }
+
+  /** Re-send the user's slots on top of the fresh version. */
+  protected async applyMine(): Promise<void> {
+    const fresh = this.freshGroup();
+    const slots = this.pendingSlots;
+    if (!fresh || !slots || this.saving()) {
+      return;
+    }
+    await this.put(fresh.id, slots, Number(fresh.version));
+  }
+
+  /** Discard the user's slots and show the server's version. */
+  protected loadServer(): void {
+    const fresh = this.freshGroup();
+    if (!fresh) {
+      return;
+    }
+    this.clearConflict();
+    this.scheduleError.set(null);
+    this.errorSlot.set(null);
+    this.group.set(fresh);
+  }
+
+  async loadFresh(): Promise<void> {
+    const group = this.group();
+    if (!group) {
+      return;
+    }
+    this.freshError.set(null);
+    try {
+      this.freshGroup.set(await this.api.invoke(apiV1GroupsIdGet, { id: group.id }));
+    } catch (err) {
+      this.freshError.set(problemMessage(toProblem(err)));
+    }
+  }
+
+  private async put(id: string, slots: SlotDraft[], version: number): Promise<void> {
     this.saving.set(true);
     this.scheduleError.set(null);
-    this.warnings.set([]);
+    this.errorSlot.set(null);
+    this.pendingSlots = slots;
     try {
       const result = await this.api.invoke(apiV1GroupsIdSchedulePut, {
-        id: group.id,
-        body: { slots, version: Number(group.version) },
+        id,
+        body: { slots, version },
       });
-      this.group.set({ ...group, slots: result.slots, version: result.version });
+      const base = this.freshGroup() ?? this.group();
+      this.clearConflict();
+      if (base) {
+        this.group.set({ ...base, slots: result.slots, version: result.version });
+      }
+      // Warnings are replaced only by a successful save; a failed one keeps the last notice.
       this.warnings.set(result.warnings);
       this.toasts.success(this.text.scheduleSaved);
       void this.loadSessions();
     } catch (err) {
       const problem = toProblem(err);
       if (problem.code === 'Concurrency.Conflict') {
-        // Reload so the next save carries the fresh version (the editor shows the current slots).
-        try {
-          this.group.set(await this.api.invoke(apiV1GroupsIdGet, { id: group.id }));
-          this.scheduleError.set(ui.common.conflictReloaded);
-        } catch (reloadErr) {
-          this.scheduleError.set(problemMessage(toProblem(reloadErr)));
-        }
+        // Keep the user's slots in the editor; load the server's version next to them.
+        this.conflict.set(true);
+        this.freshGroup.set(null);
+        await this.loadFresh();
       } else {
-        // e.g. Schedule.CoachUnavailable carries the other group's name.
+        // e.g. Schedule.CoachUnavailable carries the other group's name; slots[i] names the row.
         this.scheduleError.set(problemMessage(problem));
+        this.errorSlot.set(offendingSlot(problem.errors, slots));
       }
     } finally {
       this.saving.set(false);
@@ -261,18 +345,56 @@ export class GroupDetailPage {
   }
 
   private async loadSessions(): Promise<void> {
+    const request = ++this.sessionsSequence;
     this.sessionsError.set(null);
-    const from = isoDate(new Date());
+    const from = this.clock.today();
     try {
-      this.sessions.set(
-        await this.api.invoke(apiV1GroupsIdSessionsGet, {
-          id: this.id(),
-          from,
-          to: addDays(from, UPCOMING_DAYS - 1),
-        }),
-      );
+      const sessions = await this.api.invoke(apiV1GroupsIdSessionsGet, {
+        id: this.id(),
+        from,
+        to: addDays(from, UPCOMING_DAYS - 1),
+      });
+      if (request === this.sessionsSequence) {
+        this.sessions.set(sessions);
+      }
     } catch (err) {
-      this.sessionsError.set(problemMessage(toProblem(err)));
+      if (request === this.sessionsSequence) {
+        this.sessionsError.set(problemMessage(toProblem(err)));
+      }
     }
   }
+
+  private clearConflict(): void {
+    this.conflict.set(false);
+    this.freshGroup.set(null);
+    this.freshError.set(null);
+    this.pendingSlots = null;
+  }
+
+  /** A new route id starts from a clean view, never showing the previous group. */
+  private reset(): void {
+    this.group.set(null);
+    this.loadError.set(null);
+    this.sessions.set(null);
+    this.sessionsError.set(null);
+    this.warnings.set([]);
+    this.scheduleError.set(null);
+    this.errorSlot.set(null);
+    this.clearConflict();
+    this.sessionsSequence++;
+  }
+}
+
+/** The slot an API error names via a `slots[i]` field path, if any. */
+function offendingSlot(
+  errors: Record<string, string[]> | undefined,
+  sent: SlotDraft[],
+): SlotDraft | null {
+  for (const key of Object.keys(errors ?? {})) {
+    const match = /^slots\[(\d+)\]/.exec(key);
+    if (match) {
+      return sent[Number(match[1])] ?? null;
+    }
+  }
+  return null;
 }

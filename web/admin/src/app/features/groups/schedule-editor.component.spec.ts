@@ -123,6 +123,79 @@ describe('ScheduleEditorComponent', () => {
     ]);
   });
 
+  const removeButton = (n: number) =>
+    root.querySelector(
+      `button[aria-label="${ui.groupDetail.removeSlot}: ${n}. saat"]`,
+    ) as HTMLButtonElement;
+  async function chooseDay(index: number, day: string): Promise<void> {
+    const select = field(`slot-day-${index}`) as unknown as HTMLSelectElement;
+    select.value = day;
+    select.dispatchEvent(new Event('change'));
+    await settle(fixture);
+  }
+
+  it('checks a row as soon as its day changes and shows an overlap on both rows', async () => {
+    await render([
+      { day: 'Monday', start: '17:00', end: '18:30' },
+      { day: 'Wednesday', start: '18:00', end: '19:00' },
+    ]);
+    await chooseDay(1, 'Monday');
+
+    // No submit and no blur: the day change alone marks the row as used.
+    expect(root.querySelector('#slot-end-1-error')?.textContent).toContain(
+      errorMessages['Schedule.SlotOverlap'],
+    );
+    expect(root.querySelector('#slot-end-0-error')?.textContent).toContain(
+      errorMessages['Schedule.SlotOverlap'],
+    );
+  });
+
+  it('keeps other rows checked when a row is removed, and moves focus to the next row', async () => {
+    await render([
+      { day: 'Monday', start: '09:00', end: '10:00' },
+      { day: 'Tuesday', start: '17:00', end: '18:00' },
+      { day: 'Wednesday', start: '17:00', end: '18:00' },
+    ]);
+    await type('slot-end-2', '16:00');
+    field('slot-end-2').dispatchEvent(new Event('blur'));
+    await settle(fixture);
+    expect(root.querySelector('#slot-end-2-error')).not.toBeNull();
+
+    removeButton(2).focus();
+    removeButton(2).click();
+    await settle(fixture);
+
+    // The former third row is now the second and still shows its problem.
+    expect(root.querySelector('#slot-end-1-error')?.textContent).toContain(
+      errorMessages['TimeRange.Invalid'],
+    );
+    expect(document.activeElement).toBe(field('slot-day-1'));
+    expect((field('slot-day-1') as unknown as HTMLSelectElement).value).toBe('Wednesday');
+  });
+
+  it('moves focus to "add" when the last row is removed', async () => {
+    await render([{ day: 'Monday', start: '09:00', end: '10:00' }]);
+    removeButton(1).click();
+    await settle(fixture);
+    expect(document.activeElement).toBe(button(ui.groupDetail.addSlot));
+  });
+
+  it('focuses the API error and names the slot it is about', async () => {
+    await render([
+      { day: 'Monday', start: '09:00', end: '10:00' },
+      { day: 'Tuesday', start: '17:00', end: '18:00' },
+    ]);
+    fixture.componentRef.setInput('error', 'Bitiş saati başlangıç saatinden sonra olmalı.');
+    fixture.componentRef.setInput('errorSlot', { day: 'Tuesday', start: '17:00', end: '18:00' });
+    await settle(fixture);
+
+    const alert = root.querySelector('#schedule-error') as HTMLElement;
+    expect(alert.textContent).toContain('2. saat');
+    expect(document.activeElement).toBe(alert);
+    expect(field('slot-end-1').getAttribute('aria-invalid')).toBe('true');
+    expect(field('slot-end-0').getAttribute('aria-invalid')).toBe('false');
+  });
+
   it('removes a slot', async () => {
     await render([
       { day: 'Monday', start: '17:00', end: '18:00' },

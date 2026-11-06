@@ -166,9 +166,10 @@ describe('GroupFormDialog', () => {
     expect(document.activeElement).toBe(el('g-coach'));
   });
 
-  it('reloads the group after a version conflict and retries with the fresh version', async () => {
+  async function conflict(): Promise<void> {
     await open(group);
     await type('g-name', 'U12 Lacivert');
+    await type('g-capacity', '24');
     await submit();
     backend
       .expectOne('/api/v1/groups/g1')
@@ -176,15 +177,65 @@ describe('GroupFormDialog', () => {
     await settle(fixture);
     backend.expectOne('/api/v1/groups/g1').flush({ ...group, name: 'U12 Beyaz', version: 9 });
     await settle(fixture);
+  }
 
-    expect(root.querySelector('[role="alert"]')?.textContent).toContain(ui.common.conflictReloaded);
-    expect(el('g-name').value).toBe('U12 Beyaz');
+  const buttonWith = (text: string) =>
+    [...root.querySelectorAll('button')].find((b) => b.textContent?.includes(text)) as
+      HTMLButtonElement | undefined;
 
-    await submit();
+  it('keeps the edits after a version conflict and can apply them on the fresh version', async () => {
+    await conflict();
+
+    expect(root.querySelector('[role="alert"]')?.textContent).toContain(ui.conflict.title);
+    // Nothing the user typed was dropped.
+    expect(el('g-name').value).toBe('U12 Lacivert');
+    expect(el('g-capacity').value).toBe('24');
+
+    buttonWith(ui.conflict.applyMine)!.click();
+    await settle(fixture);
     const retry = backend.expectOne('/api/v1/groups/g1');
-    expect(retry.request.body).toEqual(expect.objectContaining({ version: 9 }));
+    expect(retry.request.body).toEqual(
+      expect.objectContaining({ name: 'U12 Lacivert', capacity: 24, version: 9 }),
+    );
     retry.flush(group);
     await settle(fixture);
     expect(close).toHaveBeenCalledWith(true);
+  });
+
+  it('can take the server version instead after a conflict', async () => {
+    await conflict();
+
+    buttonWith(ui.conflict.loadServer)!.click();
+    await settle(fixture);
+
+    expect(el('g-name').value).toBe('U12 Beyaz');
+    expect(el('g-capacity').value).toBe('20');
+    expect(buttonWith(ui.conflict.applyMine)).toBeUndefined();
+
+    await submit();
+    const next = backend.expectOne('/api/v1/groups/g1');
+    expect(next.request.body).toEqual(expect.objectContaining({ name: 'U12 Beyaz', version: 9 }));
+    next.flush(group);
+    await settle(fixture);
+  });
+
+  it('offers a retry when the fresh version cannot be loaded, still keeping the edits', async () => {
+    await open(group);
+    await type('g-name', 'U12 Lacivert');
+    await submit();
+    backend
+      .expectOne('/api/v1/groups/g1')
+      .flush({ code: 'Concurrency.Conflict' }, { status: 409, statusText: 'Conflict' });
+    await settle(fixture);
+    backend.expectOne('/api/v1/groups/g1').flush(null, { status: 0, statusText: '' });
+    await settle(fixture);
+
+    expect(el('g-name').value).toBe('U12 Lacivert');
+    expect(buttonWith(ui.conflict.applyMine)).toBeUndefined();
+    buttonWith(ui.common.retry)!.click();
+    await settle(fixture);
+    backend.expectOne('/api/v1/groups/g1').flush({ ...group, version: 9 });
+    await settle(fixture);
+    expect(buttonWith(ui.conflict.applyMine)).toBeDefined();
   });
 });
