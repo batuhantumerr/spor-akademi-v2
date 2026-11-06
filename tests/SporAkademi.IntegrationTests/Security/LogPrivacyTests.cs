@@ -241,7 +241,7 @@ public sealed class LogPrivacyTests(DatabaseFixture database) : IdentityTest(dat
     }
 
     /// <summary>
-    /// A throwaway endpoint behind the real pipeline (authentication, error handling): it reads a body with personal
+    /// A throwaway, anonymous endpoint appended after the real pipeline, so the global error handler and request logging see it (the bearer token and cookie are sent only to check they never reach the logs): it reads a body with personal
     /// data and inserts a user whose e-mail already exists, so <c>SaveChanges</c> fails with a unique-key violation.
     /// </summary>
     private sealed class DuplicateUserEndpoint(SchoolId school) : IStartupFilter
