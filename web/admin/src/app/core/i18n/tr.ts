@@ -125,6 +125,7 @@ export const ui = {
     toggle: 'Temayı değiştir',
   },
   shell: {
+    mainMenu: 'Ana menü',
     openMenu: 'Menüyü aç',
     closeMenu: 'Menüyü kapat',
     collapse: 'Menüyü daralt',
@@ -165,6 +166,10 @@ export const ui = {
     save: 'Kaydet',
     cancel: 'İptal',
     retry: 'Tekrar dene',
+    close: 'Kapat',
+    pagination: 'Sayfalama',
+    previousPage: 'Önceki sayfa',
+    nextPage: 'Sonraki sayfa',
     empty: 'Henüz kayıt yok.',
     comingSoon: 'Bu bölüm hazırlanıyor.',
     notFoundTitle: 'Sayfa bulunamadı',
