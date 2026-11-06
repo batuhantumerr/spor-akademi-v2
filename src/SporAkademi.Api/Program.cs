@@ -29,7 +29,7 @@ builder.Services.AddScoped<ICurrentUser, HttpCurrentUser>(); // before AddInfras
 builder.Services.AddApplication();
 builder.Services.AddInfrastructure(builder.Configuration);
 builder.Services.AddJwtAuthentication();
-builder.Services.AddLoginRateLimiting();
+builder.Services.AddAuthRateLimiting();
 
 builder.Services.ConfigureHttpJsonOptions(json => json.SerializerOptions.Converters.Add(new JsonStringEnumConverter()));
 builder.Services.AddProblemDetails(options => options.CustomizeProblemDetails = ProblemShape.Complete);
@@ -39,6 +39,7 @@ builder.Services.AddApiDocument();
 var app = builder.Build();
 
 app.UseMiddleware<CorrelationIdMiddleware>();
+app.UseMiddleware<NoStoreMiddleware>();
 app.UseMiddleware<RequestSizeLimitMiddleware>();
 app.UseExceptionHandler();
 app.UseStatusCodePages();

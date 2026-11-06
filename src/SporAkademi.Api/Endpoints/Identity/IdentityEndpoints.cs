@@ -20,23 +20,60 @@ internal sealed record ChangePasswordRequest(string CurrentPassword, string NewP
 internal sealed record SessionResponse(string AccessToken, int ExpiresIn, UserSummary User);
 
 /// <summary>Identity endpoints (appendix D 2.1, 2.2, 2.3).</summary>
-internal static class IdentityEndpoints
+internal static partial class IdentityEndpoints
 {
     public static IEndpointRouteBuilder MapIdentityEndpoints(this IEndpointRouteBuilder app)
     {
         var auth = app.MapGroup("/api/v1/auth");
-        auth.MapPost("/login", Login).AllowAnonymous().RequireRateLimiting(LoginRateLimiting.Policy);
+        auth.MapPost("/login", Login)
+            .AllowAnonymous()
+            .RequireRateLimiting(AuthRateLimiting.Policy)
+            .Produces<SessionResponse>()
+            .ProducesProblem(StatusCodes.Status400BadRequest)
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .ProducesProblem(StatusCodes.Status429TooManyRequests);
         // DEC-055: no access token, but the refresh cookie plus a header a cross-site form cannot send.
-        auth.MapPost("/refresh", Refresh).AllowAnonymous().AddEndpointFilter<RequireXRequestedWithFilter>();
-        auth.MapPost("/logout", Logout).AllowAnonymous().AddEndpointFilter<RequireXRequestedWithFilter>();
-        auth.MapPost("/change-password", ChangePassword).AllowDuringPasswordChange();
+        auth.MapPost("/refresh", Refresh)
+            .AllowAnonymous()
+            .RequireRateLimiting(AuthRateLimiting.Policy)
+            .AddEndpointFilter<RequireXRequestedWithFilter>()
+            .Produces<SessionResponse>()
+            .ProducesProblem(StatusCodes.Status400BadRequest)
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .ProducesProblem(StatusCodes.Status409Conflict)
+            .ProducesProblem(StatusCodes.Status429TooManyRequests);
+        auth.MapPost("/logout", Logout)
+            .AllowAnonymous()
+            .AddEndpointFilter<RequireXRequestedWithFilter>()
+            .Produces(StatusCodes.Status204NoContent)
+            .ProducesProblem(StatusCodes.Status400BadRequest);
+        auth.MapPost("/change-password", ChangePassword)
+            .AllowDuringPasswordChange()
+            .RequireRateLimiting(AuthRateLimiting.Policy)
+            .Produces<SessionResponse>()
+            .ProducesProblem(StatusCodes.Status400BadRequest)
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .ProducesProblem(StatusCodes.Status422UnprocessableEntity)
+            .ProducesProblem(StatusCodes.Status429TooManyRequests);
 
-        app.MapGet("/api/v1/me", Me).AllowDuringPasswordChange();
+        app.MapGet("/api/v1/me", Me)
+            .AllowDuringPasswordChange()
+            .Produces<UserSummary>()
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .ProducesProblem(StatusCodes.Status404NotFound);
 
         app.MapPost("/api/v1/coaches/{id:guid}/reset-password", ResetCoachPassword)
-            .RequireAuthorization(policy => policy.RequireRole(nameof(Role.SchoolAdmin)));
+            .RequireAuthorization(policy => policy.RequireRole(nameof(Role.SchoolAdmin)))
+            .Produces<TemporaryPasswordIssued>()
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status404NotFound);
         app.MapPost("/api/v1/platform/schools/{schoolId:guid}/admins/{userId:guid}/reset-password", ResetSchoolAdminPassword)
-            .RequireAuthorization(policy => policy.RequireRole(nameof(Role.PlatformAdmin)));
+            .RequireAuthorization(policy => policy.RequireRole(nameof(Role.PlatformAdmin)))
+            .Produces<TemporaryPasswordIssued>()
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status404NotFound);
 
         return app;
     }
@@ -74,20 +111,28 @@ internal static class IdentityEndpoints
         return ProblemResults.Problem(result.Error);
     }
 
+    /// <summary>
+    /// Always ends the session on the client: the cookie is cleared and 204 returned even when revoking
+    /// fails (e.g. a lock timeout); the token then simply expires. The failure is logged by code only.
+    /// </summary>
     private static async Task<IResult> Logout(
         ICommandHandler<LogoutCommand, Unit> handler,
+        ILoggerFactory loggerFactory,
         HttpContext httpContext,
         CancellationToken cancellationToken)
     {
         var result = await handler.Handle(new LogoutCommand(RefreshCookie.Read(httpContext.Request)), cancellationToken);
         if (result.IsFailure)
         {
-            return ProblemResults.Problem(result.Error);
+            LogRevokeFailed(loggerFactory.CreateLogger(typeof(IdentityEndpoints)), result.Error.Code);
         }
 
         RefreshCookie.Delete(httpContext.Response);
         return TypedResults.NoContent();
     }
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Logout could not revoke the refresh token: {ErrorCode}")]
+    private static partial void LogRevokeFailed(ILogger logger, string errorCode);
 
     private static async Task<IResult> ChangePassword(
         ChangePasswordRequest request,
