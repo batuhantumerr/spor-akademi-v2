@@ -99,7 +99,26 @@ export const routes: Routes = [
             loadComponent: () =>
               import('./features/groups/group-detail.page').then((m) => m.GroupDetailPage),
           },
-          { path: 'students', title: ui.nav.students, ...placeholder(ui.nav.students) },
+          {
+            path: 'students',
+            title: ui.nav.students,
+            loadComponent: () =>
+              import('./features/students/students.page').then((m) => m.StudentsPage),
+          },
+          {
+            path: 'students/new',
+            title: ui.studentForm.title,
+            loadComponent: () =>
+              import('./features/students/register-student.page').then(
+                (m) => m.RegisterStudentPage,
+              ),
+          },
+          {
+            path: 'students/:id',
+            title: ui.nav.students,
+            loadComponent: () =>
+              import('./features/students/student-detail.page').then((m) => m.StudentDetailPage),
+          },
           { path: 'attendance', title: ui.nav.attendance, ...placeholder(ui.nav.attendance) },
           { path: 'payments', title: ui.nav.payments, ...placeholder(ui.nav.payments) },
           { path: 'dues', title: ui.nav.dues, ...placeholder(ui.nav.dues) },
