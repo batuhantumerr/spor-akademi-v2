@@ -133,6 +133,35 @@ public sealed class DemoSeedTests(DatabaseFixture database) : IntegrationTest(da
     }
 
     [Fact]
+    public async Task Never_runs_against_a_remote_database()
+    {
+        var remote = new NpgsqlConnectionStringBuilder(Database.AppConnectionString) { Host = "db.example.com" }.ConnectionString;
+        using var host = DemoSeedHost.Create([], new Dictionary<string, string?> { ["ConnectionStrings:App"] = remote }, "Development");
+
+        var exitCode = await DemoSeedProgram.RunAsync(host, new DemoSeedOptions(Now, Password: Password));
+
+        exitCode.ShouldBe(DemoSeedProgram.NotLocalDatabase);
+        (await CountAsync("SELECT count(*) FROM tenancy.schools")).ShouldBe(0);
+    }
+
+    [Theory]
+    [InlineData("Host=localhost;Port=55432;Database=x", true)]
+    [InlineData("Host=127.0.0.1;Database=x", true)]
+    [InlineData("Host=::1;Database=x", true)]
+    [InlineData("Host=[::1]:55432;Database=x", true)]
+    [InlineData("Host=LOCALHOST:5432;Database=x", true)]
+    [InlineData("Host=db.example.com;Database=x", false)]
+    [InlineData("Host=localhost,db.example.com;Database=x", false)]
+    [InlineData("Host=10.0.0.5;Database=x", false)]
+    [InlineData("Host=localhost.evil.example;Database=x", false)]
+    [InlineData("", false)]
+    [InlineData(null, false)]
+    public void Only_local_databases_are_accepted(string? connectionString, bool local)
+    {
+        DemoSeedProgram.IsLocalDatabase(connectionString).ShouldBe(local);
+    }
+
+    [Fact]
     public async Task A_weak_demo_password_is_refused_before_anything_is_written()
     {
         using var host = SeedHost();

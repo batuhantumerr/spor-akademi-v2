@@ -1,5 +1,8 @@
+using System.Data.Common;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Npgsql;
 
 namespace SporAkademi.DemoSeed;
 
@@ -9,8 +12,45 @@ namespace SporAkademi.DemoSeed;
 /// </summary>
 internal static class DemoSeedProgram
 {
-    public const int Refused = 3;
     public const int WrongEnvironment = 2;
+    public const int Refused = 3;
+    public const int NotLocalDatabase = 4;
+    public const int Failed = 5;
+
+    public const string ResetHint =
+        "Partial demo data may remain. To start over with an empty local database: "
+        + "docker compose down -v && docker compose up -d --wait && bash scripts/ef.sh database update "
+        + "(this deletes ALL local data), then run scripts/seed-demo.sh again.";
+
+    private static readonly string[] LocalHosts = ["localhost", "127.0.0.1", "::1", "[::1]"];
+
+    /// <summary>True when the connection string names a database server on this machine only.</summary>
+    public static bool IsLocalDatabase(string? connectionString)
+    {
+        if (string.IsNullOrWhiteSpace(connectionString))
+        {
+            return false;
+        }
+
+        try
+        {
+            var hosts = new NpgsqlConnectionStringBuilder(connectionString).Host?
+                .Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)
+                .Select(HostWithoutPort)
+                .ToList();
+            return hosts is { Count: > 0 } && hosts.All(h => LocalHosts.Contains(h, StringComparer.OrdinalIgnoreCase));
+        }
+        catch (ArgumentException)
+        {
+            return false;
+        }
+    }
+
+    /// <summary><c>host:port</c> → host; <c>[::1]:5432</c> → <c>[::1]</c>; a bare IPv6 literal stays as it is.</summary>
+    private static string HostWithoutPort(string host) =>
+        host.StartsWith('[') ? host[..(host.IndexOf(']', StringComparison.Ordinal) + 1)]
+        : host.Count(c => c == ':') == 1 ? host[..host.IndexOf(':', StringComparison.Ordinal)]
+        : host;
 
     public static async Task<int> Main(string[] args)
     {
@@ -30,9 +70,29 @@ internal static class DemoSeedProgram
             return WrongEnvironment;
         }
 
+        // Second guard: only a database on this machine, whatever the environment says.
+        var connection = host.Services.GetRequiredService<IConfiguration>().GetConnectionString("App");
+        if (!IsLocalDatabase(connection))
+        {
+            await Console.Error.WriteLineAsync("Refusing to seed demo data: the 'App' connection string must point to localhost, 127.0.0.1 or ::1.");
+            return NotLocalDatabase;
+        }
+
         var configuredPassword = options.Password;
         await using var scope = host.Services.CreateAsyncScope();
-        var result = await scope.ServiceProvider.GetRequiredService<DemoSeeder>().RunAsync(options, CancellationToken.None);
+        DemoSeedResult result;
+        try
+        {
+            result = await scope.ServiceProvider.GetRequiredService<DemoSeeder>().RunAsync(options, CancellationToken.None);
+        }
+        catch (Exception exception) when (exception is DemoSeedException or DbException or InvalidOperationException)
+        {
+            // Each command commits on its own, so a failure leaves partial demo data behind.
+            await Console.Error.WriteLineAsync($"Demo seeding failed: {exception.Message}");
+            await Console.Error.WriteLineAsync(ResetHint);
+            return Failed;
+        }
+
         if (!result.Created)
         {
             await Console.Error.WriteLineAsync("Demo schools already exist; nothing was changed.");

@@ -19,7 +19,7 @@ internal static class DemoData
     public static readonly string[] MaleNames =
     [
         "Yusuf", "Eymen", "Ömer", "Mustafa", "Alparslan", "Mehmet", "Ali", "Kerem", "Emir", "Aras", "Çınar",
-        "Burak", "Efe", "Arda", "Deniz", "Kaan", "Barış", "Mert", "Onur", "Tuna", "Batuhan", "Doruk", "Umut", "Can",
+        "Burak", "Efe", "Arda", "Deniz", "Kaan", "Barış", "Mert", "Onur", "Tuna", "Doruk", "Umut", "Can", "Oğuz",
     ];
 
     public static readonly string[] LastNames =
