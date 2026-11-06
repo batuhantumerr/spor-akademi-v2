@@ -83,7 +83,7 @@ describe('GroupDetailPage', () => {
     // The announcements section loads on its own; it has its own tests.
     backend.match((r) => r.url.includes('/announcements'));
     // The students section loads on its own; it has its own tests.
-    backend.match((r) => r.url.includes('/enrollments'));
+    backend.match((r) => /\/(enrollments|attendance)/.test(r.url));
     backend.verify();
   });
 

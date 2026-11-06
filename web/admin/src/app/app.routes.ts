@@ -64,6 +64,14 @@ export const routes: Routes = [
               import('./features/coach/coach-groups.page').then((m) => m.CoachGroupsPage),
           },
           {
+            path: 'sessions/:groupId/:sessionKey',
+            title: ui.attendance.title,
+            loadComponent: () =>
+              import('./features/attendance/take-attendance.page').then(
+                (m) => m.TakeAttendancePage,
+              ),
+          },
+          {
             path: 'announcements',
             title: ui.announcements.title,
             loadComponent: () =>
@@ -106,6 +114,14 @@ export const routes: Routes = [
             path: 'groups',
             title: ui.nav.groups,
             loadComponent: () => import('./features/groups/groups.page').then((m) => m.GroupsPage),
+          },
+          {
+            path: 'groups/:groupId/sessions/:sessionKey',
+            title: ui.attendance.title,
+            loadComponent: () =>
+              import('./features/attendance/take-attendance.page').then(
+                (m) => m.TakeAttendancePage,
+              ),
           },
           {
             path: 'groups/:id',

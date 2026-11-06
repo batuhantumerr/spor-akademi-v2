@@ -27,6 +27,7 @@ import { ConflictState } from '../../shared/data/conflict-state';
 import { ConflictNoticeComponent } from '../../shared/ui/conflict-notice.component';
 import { PageHeaderComponent } from '../../shared/ui/page-header.component';
 import { ToastService } from '../../shared/ui/toast.service';
+import { GroupAttendanceComponent } from '../attendance/group-attendance.component';
 import { GroupAnnouncementsComponent } from '../announcements/group-announcements.component';
 import { GroupStudentsComponent } from '../enrollments/group-students.component';
 import { ScheduleEditorComponent } from './schedule-editor.component';
@@ -44,6 +45,7 @@ const UPCOMING_DAYS = 14;
     ConflictNoticeComponent,
     GroupAnnouncementsComponent,
     GroupStudentsComponent,
+    GroupAttendanceComponent,
     LucideArrowLeft,
     LucideCalendarClock,
   ],
@@ -193,6 +195,10 @@ const UPCOMING_DAYS = 14;
 
       <div class="mt-4">
         <app-group-students [group]="g" />
+      </div>
+
+      <div class="mt-4">
+        <app-group-attendance [groupId]="g.id" />
       </div>
     }
   `,

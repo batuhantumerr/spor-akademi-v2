@@ -4,6 +4,7 @@ using SporAkademi.Api.Authentication;
 using SporAkademi.Api.Endpoints.Announcements;
 using SporAkademi.Api.Endpoints.Attendance;
 using SporAkademi.Api.Endpoints.Billing;
+using SporAkademi.Api.Endpoints.Dashboard;
 using SporAkademi.Api.Endpoints.Enrollments;
 using SporAkademi.Api.Endpoints.Groups;
 using SporAkademi.Api.Endpoints.Identity;
@@ -68,6 +69,7 @@ app.MapAnnouncementEndpoints();
 app.MapEnrollmentEndpoints();
 app.MapAttendanceEndpoints();
 app.MapBillingEndpoints();
+app.MapDashboardEndpoints();
 app.MapApiDocument();
 
 await app.RunAsync();

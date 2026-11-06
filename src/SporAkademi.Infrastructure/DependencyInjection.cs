@@ -86,6 +86,8 @@ public static class DependencyInjection
         services.AddScoped<IEnrollmentRepository, EnrollmentRepository>();
         services.AddScoped<IEnrollmentLocks, EnrollmentLocks>();
         services.AddScoped<ISessionRepository, SessionRepository>();
+        services.AddScoped<Application.Attendance.Contracts.IAttendanceSummary, Attendance.AttendanceSummary>();
+        services.AddScoped<Application.Dashboard.IDashboardReadModel, Dashboard.DashboardReadModel>();
         services.AddScoped<ISessionLocks, SessionLocks>();
         services.AddScoped<IStudentDirectory, StudentDirectory>();
         services.AddScoped<IStudentRepository, StudentRepository>();

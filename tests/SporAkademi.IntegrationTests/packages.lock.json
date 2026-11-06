@@ -779,6 +779,13 @@
           "SporAkademi.Domain": "[1.0.0, )"
         }
       },
+      "sporakademi.demoseed": {
+        "type": "Project",
+        "dependencies": {
+          "SporAkademi.Application": "[1.0.0, )",
+          "SporAkademi.Infrastructure": "[1.0.0, )"
+        }
+      },
       "sporakademi.domain": {
         "type": "Project"
       },
