@@ -91,10 +91,15 @@ export interface EnrollGroupData {
       }
 
       @if (fixedGroup) {
-        <p class="mt-2 text-sm text-muted-foreground" aria-live="polite">
+        <div class="mt-2 text-sm text-muted-foreground" aria-live="polite">
           <span class="font-medium text-foreground">{{ fixedGroup.name }}</span> ·
-          {{ facts() ?? text.groupFactsLoading }}
-        </p>
+          {{ factsText() }}
+        </div>
+        @if (factsFailed()) {
+          <button type="button" class="btn btn-ghost btn-sm mt-1" (click)="retryFacts()">
+            {{ common.retry }}
+          </button>
+        }
         <div class="mt-4">
           <label class="field-label" for="enroll-search">{{ text.searchStudent }}</label>
           <input
@@ -111,17 +116,15 @@ export interface EnrollGroupData {
             {{ text.searchStudentHint }}
           </p>
         </div>
-        <fieldset
-          class="mt-3 min-w-0"
-          id="enroll-student"
-          tabindex="-1"
-          [attr.aria-invalid]="!!targetError('student')"
-          [attr.aria-describedby]="targetError('student') ? 'enroll-student-error' : null"
-        >
+        <fieldset class="mt-3 min-w-0" id="enroll-student" tabindex="-1">
           <legend class="field-label">{{ text.searchResults }}</legend>
           <div aria-live="polite">
-            @if (results() !== null && results()!.length === 0) {
-              <p class="text-sm text-muted-foreground">{{ text.noStudentFound }}</p>
+            @if (searchError(); as message) {
+              <p class="text-sm text-destructive">{{ message }}</p>
+            } @else if (results() !== null) {
+              <p [class.sr-only]="results()!.length > 0" class="text-sm text-muted-foreground">
+                {{ results()!.length === 0 ? text.noStudentFound : resultCount() }}
+              </p>
             }
           </div>
           <ul class="space-y-1">
@@ -137,6 +140,8 @@ export interface EnrollGroupData {
                     class="size-4 accent-[var(--primary)]"
                     [value]="s.id"
                     [checked]="studentId() === s.id"
+                    [attr.aria-invalid]="!!targetError('student')"
+                    [attr.aria-describedby]="targetError('student') ? 'enroll-student-error' : null"
                     (change)="chooseStudent(s.id)"
                   />
                   <span class="min-w-0 flex-1">
@@ -175,13 +180,21 @@ export interface EnrollGroupData {
             class="mt-1.5 text-xs text-muted-foreground"
             aria-live="polite"
           >
-            @if (selectedGroup(); as g) {
-              {{ facts() ?? text.groupFactsLoading }}
+            @if (selectedGroup()) {
+              {{ factsText() }}
               @if (isFull()) {
                 <span class="badge badge-warning ml-1">{{ text.full }}</span>
               }
             }
           </p>
+          @if (selectedGroup() && factsFailed()) {
+            <button type="button" class="btn btn-ghost btn-sm mt-1" (click)="retryFacts()">
+              {{ common.retry }}
+            </button>
+          }
+          @if (moreGroupsHint(); as hint) {
+            <p class="mt-1.5 text-xs text-muted-foreground">{{ hint }}</p>
+          }
           @if (targetError('group'); as m) {
             <p id="enroll-group-error" class="field-error">{{ m }}</p>
           }
@@ -234,6 +247,7 @@ export class EnrollDialog {
   protected readonly titleId = ENROLL_TITLE_ID;
   protected readonly text = ui.enrollments;
   protected readonly actions = ui.actions;
+  protected readonly common = ui.common;
   protected readonly title = this.fixedGroup
     ? ui.enrollments.enrollStudentTitle
     : ui.enrollments.enrollTitle;
@@ -246,11 +260,19 @@ export class EnrollDialog {
     () => this.fixedGroup ?? this.groups().find((g) => g.id === this.groupId()) ?? null,
   );
   protected readonly used = signal<number | null>(null);
+  protected readonly factsFailed = signal(false);
+  /** Shown when the school has more active groups than the select lists. */
+  protected readonly moreGroupsHint = signal<string | null>(null);
   protected readonly facts = computed(() => {
     const group = this.selectedGroup();
     const used = this.used();
     return group && used !== null ? groupFacts(group, used) : null;
   });
+  protected readonly factsText = computed(
+    () =>
+      this.facts() ??
+      (this.factsFailed() ? this.text.groupFactsFailed : this.text.groupFactsLoading),
+  );
   protected readonly isFull = computed(() => {
     const group = this.selectedGroup();
     const used = this.used();
@@ -260,6 +282,10 @@ export class EnrollDialog {
   protected readonly searchText = signal('');
   protected readonly results = signal<StudentListItemDto[] | null>(null);
   protected readonly studentId = signal(this.fixedStudent?.id ?? '');
+  protected readonly searchError = signal<string | null>(null);
+  protected readonly resultCount = computed(() =>
+    interpolate(this.text.resultCount, { count: this.results()?.length ?? 0 }),
+  );
 
   protected readonly saving = signal(false);
   protected readonly error = signal<string | null>(null);
@@ -301,6 +327,13 @@ export class EnrollDialog {
     this.used.set(null);
     if (id) {
       void this.loadFacts(id);
+    }
+  }
+
+  protected retryFacts(): void {
+    const group = this.selectedGroup();
+    if (group) {
+      void this.loadFacts(group.id);
     }
   }
 
@@ -397,6 +430,12 @@ export class EnrollDialog {
         pageSize: 100,
       });
       this.groups.set(page.items);
+      const total = Number(page.totalCount);
+      this.moreGroupsHint.set(
+        total > page.items.length
+          ? interpolate(this.text.moreGroups, { shown: page.items.length, total })
+          : null,
+      );
     } catch (err) {
       this.error.set(problemMessage(toProblem(err)));
     }
@@ -404,20 +443,28 @@ export class EnrollDialog {
 
   private async loadFacts(groupId: string): Promise<void> {
     const request = ++this.factsSequence;
+    this.factsFailed.set(false);
     try {
       const used = await activeCount(this.api, groupId);
       if (request === this.factsSequence) {
         this.used.set(used);
       }
     } catch {
-      // The numbers are a convenience; the API still enforces the capacity.
+      // The numbers are a convenience (the API enforces the capacity); offer a retry.
+      if (request === this.factsSequence) {
+        this.used.set(null);
+        this.factsFailed.set(true);
+      }
     }
   }
 
   private async search(term: string): Promise<void> {
     const request = ++this.searchSequence;
     if (term.length < 2) {
+      // Too short to search: nothing listed, so nothing may stay selected either.
       this.results.set(null);
+      this.studentId.set('');
+      this.searchError.set(null);
       return;
     }
     try {
@@ -428,6 +475,7 @@ export class EnrollDialog {
         pageSize: 10,
       });
       if (request === this.searchSequence) {
+        this.searchError.set(null);
         this.results.set(page.items);
         if (!page.items.some((s) => s.id === this.studentId())) {
           this.studentId.set('');
@@ -435,11 +483,17 @@ export class EnrollDialog {
       }
     } catch (err) {
       if (request === this.searchSequence) {
-        this.error.set(problemMessage(toProblem(err)));
+        this.results.set(null);
+        this.studentId.set('');
+        this.searchError.set(problemMessage(toProblem(err)));
       }
     }
   }
 }
+
+/** What the end dialog closes with when someone else ended the enrollment first. */
+export const ALREADY_ENDED = 'alreadyEnded' as const;
+export type EndEnrollmentResult = EnrollmentDto | typeof ALREADY_ENDED;
 
 export interface EndEnrollmentData {
   enrollment: EnrollmentDto;
@@ -494,7 +548,7 @@ export interface EndEnrollmentData {
 })
 export class EndEnrollmentDialog {
   private readonly api = inject(Api);
-  protected readonly ref = inject<DialogRef<EnrollmentDto>>(DialogRef);
+  protected readonly ref = inject<DialogRef<EndEnrollmentResult>>(DialogRef);
   protected readonly enrollment = inject<EndEnrollmentData>(DIALOG_DATA).enrollment;
 
   protected readonly dialogClass = dialogClass;
@@ -530,6 +584,11 @@ export class EndEnrollmentDialog {
       this.ref.close(ended);
     } catch (err) {
       const problem = toProblem(err);
+      if (problem.code === 'Enrollment.AlreadyEnded') {
+        // Nothing left to do here; the page reloads and says so.
+        this.ref.close(ALREADY_ENDED);
+        return;
+      }
       if (problem.code === 'Enrollment.InvalidEndDate' || problem.errors?.['date']) {
         this.dateError.set(
           problem.code === 'Enrollment.InvalidEndDate'

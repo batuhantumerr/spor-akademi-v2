@@ -18,13 +18,15 @@ import { apiV1StudentsIdEnrollmentsGet } from '../../api/functions';
 import { EnrollmentDto } from '../../api/models';
 import { problemMessage, toProblem } from '../../core/api/problem';
 import { formatDate } from '../../core/format/format';
-import { ui } from '../../core/i18n/tr';
+import { errorMessages, ui } from '../../core/i18n/tr';
 import { ToastService } from '../../shared/ui/toast.service';
 import {
+  ALREADY_ENDED,
   END_ENROLLMENT_TITLE_ID,
   ENROLL_TITLE_ID,
   EndEnrollmentData,
   EndEnrollmentDialog,
+  EndEnrollmentResult,
   EnrollDialog,
   EnrollStudentData,
 } from './enrollment-dialogs';
@@ -174,23 +176,27 @@ export class StudentEnrollmentsComponent {
       });
       if (await firstValueFrom(ref.closed)) {
         this.toasts.success(this.text.enrolled);
-        await this.load();
       }
+      // Reload whatever happened: someone else may have changed the enrollments meanwhile.
+      await this.load();
     });
   }
 
   protected async end(enrollment: EnrollmentDto): Promise<void> {
     await this.exclusive(async () => {
       const data: EndEnrollmentData = { enrollment };
-      const ref = this.dialog.open<EnrollmentDto>(EndEnrollmentDialog, {
+      const ref = this.dialog.open<EndEnrollmentResult>(EndEnrollmentDialog, {
         data,
         ariaLabelledBy: END_ENROLLMENT_TITLE_ID,
         backdropClass: ['bg-slate-900/60'],
       });
-      if (await firstValueFrom(ref.closed)) {
+      const result = await firstValueFrom(ref.closed);
+      if (result === ALREADY_ENDED) {
+        this.toasts.error(errorMessages['Enrollment.AlreadyEnded']);
+      } else if (result) {
         this.toasts.success(this.text.endedToast);
-        await this.load();
       }
+      await this.load();
     });
   }
 

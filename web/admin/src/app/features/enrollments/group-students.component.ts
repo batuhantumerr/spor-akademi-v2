@@ -14,18 +14,20 @@ import { LucideUserPlus } from '@lucide/angular';
 import { firstValueFrom } from 'rxjs';
 
 import { Api } from '../../api/api';
-import { apiV1GroupsIdEnrollmentsGet } from '../../api/functions';
+import { apiV1GroupsIdEnrollmentsGet, apiV1GroupsIdGet } from '../../api/functions';
 import { EnrollmentDto, EnrollmentStatus, GroupDto } from '../../api/models';
 import { formatDate } from '../../core/format/format';
-import { interpolate, ui } from '../../core/i18n/tr';
+import { errorMessages, interpolate, ui } from '../../core/i18n/tr';
 import { PagedList } from '../../shared/data/paged-list';
 import { PaginationComponent } from '../../shared/ui/pagination.component';
 import { ToastService } from '../../shared/ui/toast.service';
 import {
+  ALREADY_ENDED,
   END_ENROLLMENT_TITLE_ID,
   ENROLL_TITLE_ID,
   EndEnrollmentData,
   EndEnrollmentDialog,
+  EndEnrollmentResult,
   EnrollDialog,
   EnrollGroupData,
   activeCount,
@@ -59,13 +61,23 @@ type StatusFilter = EnrollmentStatus | '';
           <span id="capacity-label" class="font-medium">{{ text.capacity }}</span>
           <span class="font-mono" aria-hidden="true">{{ capacityText() }}</span>
         </div>
+        <!-- No value while unknown (loading/failed): an indeterminate bar, never "0 dolu". -->
         <progress
           class="capacity-bar mt-1 h-2 w-full"
+          aria-labelledby="capacity-label"
           [class.capacity-full]="full()"
-          [value]="used() ?? 0"
-          [max]="capacity()"
-          [attr.aria-label]="capacityLabel()"
+          [attr.value]="used()"
+          [attr.max]="capacity()"
+          [attr.aria-valuetext]="capacityValueText()"
         ></progress>
+        @if (countFailed()) {
+          <p class="mt-1 flex items-center gap-2 text-xs text-destructive">
+            {{ text.capacityFailed }}
+            <button type="button" class="btn btn-ghost btn-sm" (click)="loadCount()">
+              {{ common.retry }}
+            </button>
+          </p>
+        }
       </div>
 
       <div class="mb-3 max-w-xs">
@@ -158,14 +170,25 @@ export class GroupStudentsComponent {
   protected readonly busy = signal(false);
   /** Active enrollments (the used part of the capacity), whatever the list filter shows. */
   protected readonly used = signal<number | null>(null);
-  protected readonly capacity = computed(() => Number(this.group().capacity));
-  protected readonly full = computed(() => (this.used() ?? 0) >= this.capacity());
+  protected readonly countFailed = signal(false);
+  /** Re-read from the server on every refresh; the group input may be stale. */
+  private readonly serverCapacity = signal<number | null>(null);
+  protected readonly capacity = computed(
+    () => this.serverCapacity() ?? Number(this.group().capacity),
+  );
+  protected readonly full = computed(() => {
+    const used = this.used();
+    return used !== null && used >= this.capacity();
+  });
   protected readonly capacityText = computed(() =>
     interpolate(this.text.capacityValue, { used: this.used() ?? '–', capacity: this.capacity() }),
   );
-  protected readonly capacityLabel = computed(() =>
-    interpolate(this.text.capacityLabel, { used: this.used() ?? 0, capacity: this.capacity() }),
-  );
+  protected readonly capacityValueText = computed(() => {
+    if (this.used() !== null) {
+      return this.capacityText();
+    }
+    return this.countFailed() ? this.text.capacityUnknown : this.text.capacityLoading;
+  });
   protected readonly list = new PagedList<EnrollmentDto>((page) =>
     this.api.invoke(apiV1GroupsIdEnrollmentsGet, {
       id: this.group().id,
@@ -203,23 +226,27 @@ export class GroupStudentsComponent {
       });
       if (await firstValueFrom(ref.closed)) {
         this.toasts.success(this.text.enrolled);
-        await this.refresh();
       }
+      // Refresh whatever happened: a failed enroll (e.g. full) may mean the numbers changed.
+      await this.refresh();
     });
   }
 
   protected async end(enrollment: EnrollmentDto): Promise<void> {
     await this.exclusive(async () => {
       const data: EndEnrollmentData = { enrollment };
-      const ref = this.dialog.open<EnrollmentDto>(EndEnrollmentDialog, {
+      const ref = this.dialog.open<EndEnrollmentResult>(EndEnrollmentDialog, {
         data,
         ariaLabelledBy: END_ENROLLMENT_TITLE_ID,
         backdropClass: ['bg-slate-900/60'],
       });
-      if (await firstValueFrom(ref.closed)) {
+      const result = await firstValueFrom(ref.closed);
+      if (result === ALREADY_ENDED) {
+        this.toasts.error(errorMessages['Enrollment.AlreadyEnded']);
+      } else if (result) {
         this.toasts.success(this.text.endedToast);
-        await this.refresh();
       }
+      await this.refresh();
     });
   }
 
@@ -227,15 +254,25 @@ export class GroupStudentsComponent {
     await Promise.all([reset ? this.list.reset() : this.list.load(), this.loadCount()]);
   }
 
-  private async loadCount(): Promise<void> {
+  /** Capacity and used places straight from the server. */
+  protected async loadCount(): Promise<void> {
     const request = ++this.countSequence;
+    const id = this.group().id;
+    this.used.set(null);
+    this.countFailed.set(false);
     try {
-      const used = await activeCount(this.api, this.group().id);
+      const [used, group] = await Promise.all([
+        activeCount(this.api, id),
+        this.api.invoke(apiV1GroupsIdGet, { id }),
+      ]);
       if (request === this.countSequence) {
+        this.serverCapacity.set(Number(group.capacity));
         this.used.set(used);
       }
     } catch {
-      // The bar is informational; the list shows its own errors.
+      if (request === this.countSequence) {
+        this.countFailed.set(true);
+      }
     }
   }
 

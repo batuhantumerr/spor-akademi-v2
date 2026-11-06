@@ -213,6 +213,24 @@ describe('enrollment dialogs', () => {
       expect(close).not.toHaveBeenCalled();
     });
 
+    it('offers a retry when the capacity cannot be loaded', async () => {
+      const select = el<HTMLSelectElement>('enroll-group');
+      select.value = 'g1';
+      select.dispatchEvent(new Event('change'));
+      await settle(fixture);
+      countRequest('g1').flush(null, { status: 0, statusText: '' });
+      await settle(fixture);
+      expect(el('enroll-group-facts').textContent).toContain(ui.enrollments.groupFactsFailed);
+
+      [...root.querySelectorAll('button')]
+        .find((b) => b.textContent?.trim() === ui.common.retry)!
+        .click();
+      await settle(fixture);
+      countRequest('g1').flush(page([], 2));
+      await settle(fixture);
+      expect(el('enroll-group-facts').textContent).toContain('2 / 16');
+    });
+
     it('shows a lock timeout above the form and keeps the choice for a retry', async () => {
       await chooseGroup('g1', 3);
       await submit();
@@ -231,6 +249,15 @@ describe('enrollment dialogs', () => {
       await settle(fixture);
       expect(close).toHaveBeenCalledWith(enrollment);
     });
+  });
+
+  it('hints when the school has more active groups than listed', async () => {
+    await open(EnrollDialog, { student: { id: 'st1', name: 'Ayşe Yılmaz' } });
+    backend
+      .expectOne((r) => r.url === '/api/v1/groups')
+      .flush({ items: [group], page: 1, pageSize: 100, totalCount: 140, totalPages: 2 });
+    await settle(fixture);
+    expect(root.textContent).toContain('İlk 1 grup gösteriliyor (140 aktif grup var)');
   });
 
   describe('from a group', () => {
@@ -281,6 +308,93 @@ describe('enrollment dialogs', () => {
       expect(close).toHaveBeenCalled();
     });
 
+    async function searchFor(term: string, items: unknown[] | 'fail'): Promise<void> {
+      const search = el('enroll-search');
+      search.value = term;
+      search.dispatchEvent(new Event('input'));
+      await wait(STUDENT_SEARCH_DEBOUNCE_MS + 50);
+      if (term.trim().length >= 2) {
+        const request = backend.expectOne((r) => r.url === '/api/v1/students');
+        if (items === 'fail') {
+          request.flush(null, { status: 0, statusText: '' });
+        } else {
+          request.flush(page(items));
+        }
+      }
+      await settle(fixture);
+    }
+
+    const ayse = {
+      id: 'st1',
+      firstName: 'Ayşe',
+      lastName: 'Yılmaz',
+      birthDate: '2014-05-02',
+      gender: 'Female',
+      status: 'Active',
+      leftAt: null,
+    };
+
+    it('announces the result count and clears the choice when the term gets too short', async () => {
+      await searchFor('ayşe', [ayse]);
+      expect(root.querySelector('#enroll-student [aria-live]')?.textContent).toContain(
+        '1 öğrenci bulundu.',
+      );
+      (root.querySelector('input[type="radio"]') as HTMLInputElement).click();
+      await settle(fixture);
+
+      await searchFor('a', []);
+      await submit();
+      backend.expectNone('/api/v1/enrollments');
+      expect(el('enroll-student-error').textContent).toContain(ui.enrollments.chooseStudent);
+    });
+
+    it('clears a search error after a later successful search', async () => {
+      await searchFor('ayşe', 'fail');
+      expect(root.querySelector('#enroll-student')?.textContent).toContain('Sunucuya ulaşılamıyor');
+      await searchFor('ayşe y', [ayse]);
+      expect(root.querySelector('#enroll-student')?.textContent).not.toContain(
+        'Sunucuya ulaşılamıyor',
+      );
+    });
+
+    it('marks the radios, not the fieldset, as invalid for a student problem', async () => {
+      await searchFor('ayşe', [ayse]);
+      (root.querySelector('input[type="radio"]') as HTMLInputElement).click();
+      await settle(fixture);
+      await submit();
+      backend
+        .expectOne('/api/v1/enrollments')
+        .flush(
+          { code: 'Enrollment.BirthYearOutOfRange', args: { year: 2012, from: 2014, to: 2015 } },
+          { status: 422, statusText: 'Unprocessable' },
+        );
+      await settle(fixture);
+      countRequest('g1').flush(page([], 15));
+      await settle(fixture);
+
+      expect(el('enroll-student').hasAttribute('aria-invalid')).toBe(false);
+      const radio = root.querySelector('input[type="radio"]') as HTMLInputElement;
+      expect(radio.getAttribute('aria-invalid')).toBe('true');
+      expect(radio.getAttribute('aria-describedby')).toBe('enroll-student-error');
+    });
+
+    it('shows a lock timeout above the form in group mode too', async () => {
+      await searchFor('ayşe', [ayse]);
+      (root.querySelector('input[type="radio"]') as HTMLInputElement).click();
+      await settle(fixture);
+      await submit();
+      backend
+        .expectOne('/api/v1/enrollments')
+        .flush({ code: 'Lock.Timeout' }, { status: 409, statusText: 'Conflict' });
+      await settle(fixture);
+      countRequest('g1').flush(page([], 15));
+      await settle(fixture);
+
+      expect(el('enroll-error').textContent).toContain(errorMessages['Lock.Timeout']);
+      expect((root.querySelector('input[type="radio"]') as HTMLInputElement).checked).toBe(true);
+      expect(close).not.toHaveBeenCalled();
+    });
+
     it('asks to pick a student and shows student problems on the picker', async () => {
       await submit();
       backend.expectNone('/api/v1/enrollments');
@@ -313,6 +427,15 @@ describe('enrollment dialogs', () => {
       await submit();
       backend.expectNone('/api/v1/enrollments/e1/end');
       expect(el('end-date-error').textContent).toContain(ui.enrollments.endDateHint);
+    });
+
+    it('closes with a marker when the enrollment was already ended', async () => {
+      await submit();
+      backend
+        .expectOne('/api/v1/enrollments/e1/end')
+        .flush({ code: 'Enrollment.AlreadyEnded' }, { status: 422, statusText: 'Unprocessable' });
+      await settle(fixture);
+      expect(close).toHaveBeenCalledWith('alreadyEnded');
     });
 
     it('shows the API reason on the date', async () => {

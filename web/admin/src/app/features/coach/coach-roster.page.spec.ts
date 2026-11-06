@@ -58,6 +58,40 @@ describe('CoachRosterPage', () => {
     expect(root.querySelectorAll('button').length).toBe(0);
   });
 
+  it('shows only the four roster fields even if the API sends more', async () => {
+    backend.expectOne('/api/v1/groups/g1/roster').flush([
+      {
+        firstName: 'Ayşe',
+        lastName: 'Yılmaz',
+        birthYear: 2014,
+        emergencyContactPhone: '+905331112233',
+        id: 'st1',
+        email: 'gizli@example.test',
+        guardianName: 'Gizli Veli',
+        notes: 'Gizli not',
+      },
+    ]);
+    backend.expectOne('/api/v1/me/groups').flush([]);
+    await settle(fixture);
+
+    const text = root.textContent ?? '';
+    expect(text).toContain('Ayşe Yılmaz');
+    expect(text).not.toContain('gizli@example.test');
+    expect(text).not.toContain('Gizli Veli');
+    expect(text).not.toContain('Gizli not');
+    expect(root.querySelectorAll('a[href^="tel:"]').length).toBe(1);
+    expect(root.querySelectorAll('a[href^="/students"]').length).toBe(0);
+  });
+
+  it('tells the coach when the group does not exist', async () => {
+    backend
+      .expectOne('/api/v1/groups/g1/roster')
+      .flush({ code: 'Group.NotFound' }, { status: 404, statusText: 'Not Found' });
+    backend.expectOne('/api/v1/me/groups').flush([]);
+    await settle(fixture);
+    expect(root.querySelector('[role="alert"]')?.textContent).toContain(ui.roster.notFound);
+  });
+
   it('tells the coach when the group is not theirs', async () => {
     backend
       .expectOne('/api/v1/groups/g1/roster')
