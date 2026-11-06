@@ -1,6 +1,7 @@
 using System.Text.Json.Serialization;
 using SporAkademi.Api;
 using SporAkademi.Api.Authentication;
+using SporAkademi.Api.Endpoints.Organization;
 using SporAkademi.Api.Errors;
 using SporAkademi.Api.Observability;
 using SporAkademi.Api.OpenApi;
@@ -45,6 +46,7 @@ app.UseMiddleware<UserLogEnrichmentMiddleware>();
 app.UseAuthorization();
 
 app.MapHealthEndpoints();
+app.MapOrganizationEndpoints();
 app.MapApiDocument();
 
 await app.RunAsync();

@@ -4,6 +4,9 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using SporAkademi.Application.Abstractions.Authentication;
 using SporAkademi.Application.Abstractions.Data;
+using SporAkademi.Application.Groups.Contracts;
+using SporAkademi.Application.Organization;
+using SporAkademi.Infrastructure.Organization;
 using SporAkademi.Infrastructure.Persistence;
 
 namespace SporAkademi.Infrastructure;
@@ -38,6 +41,10 @@ public static class DependencyInjection
 
         services.AddScoped<DomainEventDispatcher>();
         services.AddScoped<IUnitOfWork, UnitOfWork>();
+
+        services.AddScoped<ISportRepository, SportRepository>();
+        services.AddScoped<IFacilityRepository, FacilityRepository>();
+        services.AddScoped<IGroupUsage, NoGroupUsage>();
 
         services.AddHealthChecks()
             .AddDbContextCheck<AppDbContext>("database", tags: ["ready"]);
