@@ -4,5 +4,6 @@
   "output": "src/app/api",
   "removeStaleFiles": true,
   "indexFile": true,
-  "skipJsonSuffix": true
+  "skipJsonSuffix": true,
+  "ignoreUnusedModels": false
 }
