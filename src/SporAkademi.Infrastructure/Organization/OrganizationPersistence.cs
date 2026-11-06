@@ -1,7 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using SporAkademi.Application.Abstractions;
-using SporAkademi.Application.Groups.Contracts;
 using SporAkademi.Application.Organization;
 using SporAkademi.Domain.Organization;
 using SporAkademi.Domain.Tenancy;
@@ -16,7 +15,7 @@ internal sealed class SportConfiguration : IEntityTypeConfiguration<Sport>
         builder.ToTable("sports", Schemas.Organization);
         builder.HasKey(s => s.Id);
         // ADR-0003 layer 3: (tenant_id, id) is the target of composite foreign keys from other modules.
-        builder.HasAlternateKey(s => new { s.TenantId, s.Id });
+        builder.HasAlternateKey(s => new { s.TenantId, s.Id }).HasName("ak_sports_tenant_id_id");
         builder.HasOne<School>().WithMany().HasForeignKey(s => s.TenantId).OnDelete(DeleteBehavior.Restrict);
 
         builder.Property(s => s.Name).HasMaxLength(Sport.NameMaxLength);
@@ -33,7 +32,7 @@ internal sealed class FacilityConfiguration : IEntityTypeConfiguration<Facility>
     {
         builder.ToTable("facilities", Schemas.Organization);
         builder.HasKey(f => f.Id);
-        builder.HasAlternateKey(f => new { f.TenantId, f.Id });
+        builder.HasAlternateKey(f => new { f.TenantId, f.Id }).HasName("ak_facilities_tenant_id_id");
         builder.HasOne<School>().WithMany().HasForeignKey(f => f.TenantId).OnDelete(DeleteBehavior.Restrict);
 
         builder.Property(f => f.Name).HasMaxLength(Facility.NameMaxLength);
@@ -126,12 +125,4 @@ internal sealed class FacilityRepository(AppDbContext db) : IFacilityRepository
             f.Capacity,
             f.IsArchived,
             EF.Property<uint>(f, ConcurrencyToken.PropertyName)));
-}
-
-/// <summary>Placeholder until the Groups module exists (P1-18): no group uses anything yet.</summary>
-internal sealed class NoGroupUsage : IGroupUsage
-{
-    public Task<bool> AnyGroupUsesSportAsync(SportId sportId, CancellationToken cancellationToken) => Task.FromResult(false);
-
-    public Task<bool> AnyActiveGroupUsesFacilityAsync(FacilityId facilityId, CancellationToken cancellationToken) => Task.FromResult(false);
 }
