@@ -15,7 +15,7 @@ Kapsamın tamamı ve maddelerin açıklamaları: [proje dokümanı, Ek G](proje-
 ## Faz 1 — MVP (`v0.1.0`)
 
 ### 1.1 Yapı taşları ve kimlik doğrulama
-- [ ] P1-01 Domain yapı taşları
+- [x] P1-01 Domain yapı taşları
 - [ ] P1-02 Value object'ler
 - [ ] P1-03 Application pipeline'ı
 - [ ] P1-04 Kalıcılık temeli
