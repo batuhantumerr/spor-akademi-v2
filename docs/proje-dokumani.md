@@ -1634,6 +1634,7 @@ API'nin döndüğü tüm hata ve uyarı kodlarının kataloğu. Kurallar:
 | --- | --- | --- | --- |
 | `Group.NotFound` | NotFound | Grup bulunamadı. | US-09, US-12 |
 | `Group.InvalidCapacity` | Validation | Kontenjan en az 1 olmalı. | US-09 |
+| `Group.NameTaken` | Conflict | Bu adda bir grup zaten var. | US-09 |
 | `Group.CapacityBelowActiveEnrollments` | BusinessRule | Kontenjan, gruptaki aktif öğrenci sayısının ({count}) altına düşürülemez. | US-11 |
 | `Group.Archived` | BusinessRule | Bu grup arşivlenmiş. | US-11 |
 | `Group.CoachNotFound` | BusinessRule | Seçilen antrenör bulunamadı veya aktif değil. | US-09 |
