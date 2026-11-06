@@ -258,6 +258,19 @@ public sealed class UnitOfWorkTests(DatabaseFixture database) : IntegrationTest(
         result.Error.ShouldBe(PersistenceErrors.LockTimeout);
     }
 
+    [Theory]
+    [InlineData("55P03", true)]
+    [InlineData("40P01", true)]
+    [InlineData("23505", false)]
+    public void Lock_timeouts_and_deadlocks_are_retryable_conflicts_not_500s(string sqlState, bool expected)
+    {
+        // DEC-166: PostgreSQL aborts one side of a deadlock; that side gets 409 Lock.Timeout like a timeout.
+        var postgres = new Npgsql.PostgresException("synthetic", "ERROR", "ERROR", sqlState);
+
+        UnitOfWork.IsLockTimeout(new DbUpdateException("save failed", postgres)).ShouldBe(expected);
+        UnitOfWork.IsLockTimeout(postgres).ShouldBe(expected);
+    }
+
     // Shadow properties are not tracked for no-tracking queries, so project them explicitly.
     private static Task<AuditColumns> AuditOfAsync(AppDbContext db, SchoolId id) =>
         db.Set<School>().Where(s => s.Id == id)

@@ -1073,6 +1073,8 @@ Acil durum kişisi bir veli olabilir, ama bilgileri öğrenci üzerinde ayrı tu
 
 **Aggregate'lar arası invariant'lar (kayıt politikası, bkz. bölüm 5):** öğrenci Active; doğum yılı grubun aralığında; grupta boş yer var; aynı grupta aktif kaydı yok; diğer aktif kayıtlarıyla çakışan program saati yok.
 
+Bu kurallar **kayıt anında** kontrol edilir. Bir grubun programı sonradan değiştirildiğinde öğrencilerin diğer gruplarıyla çakışma yeniden kontrol edilmez (US-10 sadece antrenör ve tesisi kontrol eder; DEC-162).
+
 Enrollment, Group'un bir parçası değil, ayrı bir aggregate'tır. Group'un içinde olsaydı, bir grubu yüklemek yılların kayıt geçmişini de yüklemek anlamına gelirdi ve her yoklama veya ödeme işlemi tüm grubu kilitlerdi. Bu seçimin bedeli, kontenjanın aggregate'lar arası bir kural haline gelmesi ve bir eşzamanlılık stratejisi gerektirmesidir (ADR-0005, adım 5).
 
 ##### 4.9 Session (aggregate root)
@@ -1510,6 +1512,7 @@ Roller: **PA** = Platform Admin, **SA** = Okul Admini, **CO** = Antrenör, **Her
 | Metot | Yol | Açıklama | Rol | Hikaye |
 | --- | --- | --- | --- | --- |
 | `POST` | `/enrollments` | Öğrenciyi gruba kaydeder (ADR-0005 kilitleriyle) | SA | US-17 |
+| `GET` | `/enrollments/{id}` | Tek kayıt (oluşturma yanıtındaki `Location` hedefi) | SA | US-17 |
 | `POST` | `/enrollments/{id}/end` | Kaydı bir tarihle sonlandırır | SA | US-18 |
 | `GET` | `/groups/{id}/enrollments` | Grubun kayıtları (`?status=`) | SA | US-17, US-18 |
 

@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
+using SporAkademi.Domain.Enrollments;
 using SporAkademi.Domain.Groups;
 using SporAkademi.Domain.Identity;
 using SporAkademi.Domain.Organization;
@@ -30,6 +31,8 @@ internal static class ConstraintErrors
         ["ix_facilities_tenant_id_name_key"] = FacilityErrors.NameTaken,
         ["ix_users_email"] = UserErrors.EmailTaken,
         ["ix_groups_tenant_id_name_key"] = GroupErrors.NameTaken,
+        // DEC-050: the partial unique index behind "already enrolled".
+        ["ix_enrollments_active_student_group"] = EnrollmentErrors.AlreadyEnrolled,
         ["ix_guardians_tenant_id_phone"] = GuardianErrors.PhoneTaken,
     };
 

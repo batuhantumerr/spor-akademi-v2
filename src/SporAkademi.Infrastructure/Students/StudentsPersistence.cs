@@ -17,7 +17,7 @@ internal sealed class StudentConfiguration : IEntityTypeConfiguration<Student>
             table.HasCheckConstraint("ck_students_left_at", "(status = 'Left') = (left_at IS NOT NULL)"));
         builder.HasKey(s => s.Id);
         // ADR-0003 layer 3: (tenant_id, id) is the target of composite foreign keys (guardian links, enrollments).
-        builder.HasAlternateKey(s => new { s.TenantId, s.Id });
+        builder.HasAlternateKey(s => new { s.TenantId, s.Id }).HasName("ak_students_tenant_id_id");
         builder.HasOne<School>().WithMany().HasForeignKey(s => s.TenantId).OnDelete(DeleteBehavior.Restrict);
 
         builder.Property(s => s.FirstName).HasMaxLength(PersonNames.MaxLength);
