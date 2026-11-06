@@ -203,19 +203,24 @@ public sealed class User : AggregateRoot<UserId>
     /// <summary>Logout: revokes the presented token only. Unknown or already revoked tokens are ignored.</summary>
     public void RevokeRefreshToken(string tokenHash, DateTimeOffset now) => FindToken(tokenHash)?.Revoke(now);
 
-    /// <summary>Sets the user's own password and ends every existing session (US-05).</summary>
-    public void ChangePassword(string newPasswordHash, DateTimeOffset now)
+    /// <summary>
+    /// Sets the user's own password (US-05): the temporary-password flag clears, every existing session
+    /// ends and a new session starts for the caller, so they stay signed in on this device only.
+    /// </summary>
+    public Result<RefreshToken> ChangePassword(string newPasswordHash, string refreshTokenHash, DateTimeOffset now)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(newPasswordHash);
+        if (Status != UserStatus.Active)
+        {
+            return Result.Failure<RefreshToken>(AuthErrors.AccountInactive);
+        }
+
         PasswordHash = newPasswordHash;
         MustChangePassword = false;
         RevokeAllRefreshTokens(now);
         Raise(new PasswordChanged(Id));
+        return Result.Success(StartSession(refreshTokenHash, now));
     }
-
-    /// <summary>Starts a session right after a password change, so the caller stays signed in.</summary>
-    public RefreshToken StartSessionAfterPasswordChange(string refreshTokenHash, DateTimeOffset now) =>
-        StartSession(refreshTokenHash, now);
 
     /// <summary>An admin gave the user a new temporary password: it must be changed, all sessions end, the lock is lifted.</summary>
     public void ResetPassword(string temporaryPasswordHash, DateTimeOffset now)

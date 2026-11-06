@@ -14,8 +14,9 @@ public sealed class PasswordChangeTests
         var first = user.CompleteLogin("h1", Now).Value;
         var second = user.CompleteLogin("h2", Now).Value;
 
-        user.ChangePassword("new-hash", Now.AddMinutes(1));
+        var session = user.ChangePassword("new-hash", "h3", Now.AddMinutes(1)).Value;
 
+        session.IsActive(Now.AddMinutes(1)).ShouldBeTrue();
         user.PasswordHash.ShouldBe("new-hash");
         user.MustChangePassword.ShouldBeFalse();
         first.RevokedAt.ShouldBe(Now.AddMinutes(1));
@@ -27,7 +28,7 @@ public sealed class PasswordChangeTests
     public void Admin_reset_sets_a_temporary_password_and_revokes_all_tokens()
     {
         var user = UserTests.NewCoach();
-        user.ChangePassword("own", Now);
+        user.ChangePassword("own", "h0", Now);
         var token = user.CompleteLogin("h1", Now).Value;
         for (var i = 0; i < 5; i++)
         {
@@ -55,5 +56,15 @@ public sealed class PasswordChangeTests
         user.Status.ShouldBe(UserStatus.Deactivated);
         token.RevokedAt.ShouldBe(Now);
         user.DomainEvents.OfType<UserDeactivated>().Count().ShouldBe(1);
+    }
+
+    [Fact]
+    public void Deactivated_user_cannot_change_the_password()
+    {
+        var user = UserTests.NewCoach();
+        user.Deactivate(Now);
+
+        user.ChangePassword("new-hash", "h1", Now).Error.ShouldBe(AuthErrors.AccountInactive);
+        user.RefreshTokens.ShouldBeEmpty();
     }
 }
