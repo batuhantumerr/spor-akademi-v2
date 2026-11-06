@@ -13,6 +13,7 @@ import {
   ChartTheme,
   attendanceOption,
   billingOption,
+  percent,
   periodLabel,
   sportsOption,
 } from './dashboard-charts';
@@ -65,7 +66,32 @@ const theme: ChartTheme = {
   text: '#777777',
 };
 
+describe('dashboard percent', () => {
+  it('never rounds a partial ratio up to %100 or down to %0', () => {
+    expect(percent(0.996)).toBe('%99,6');
+    expect(percent(0.9996)).toBe('%99,9');
+    expect(percent(0.004)).toBe('%0,4');
+    expect(percent(0.0004)).toBe('%0,1');
+    expect(percent(1)).toBe('%100');
+    expect(percent(0)).toBe('%0');
+    expect(percent(1.25)).toBe('%125');
+  });
+});
+
 describe('dashboard chart options', () => {
+  it('keeps an unknown period as is and escapes it in the tooltip', () => {
+    expect(periodLabel('bad<x>')).toBe('bad<x>');
+    const option = billingOption(
+      [{ period: 'bad<x>', collected: money('1.00'), due: money('2.00') }],
+      theme,
+    ) as Option;
+    const tooltip = (option['tooltip'] as { formatter: (p: unknown) => string }).formatter;
+    expect(tooltip([{ dataIndex: 0 }])).toContain('bad&lt;x&gt;');
+    const axis = (option['yAxis'] as { axisLabel: { formatter: (v: number) => string } }).axisLabel
+      .formatter;
+    expect(axis(12500)).toBe('₺12.500');
+  });
+
   it('plots collected as bars and due as a line, formatting tooltips from the amount text', () => {
     const months = dashboard().monthlyBilling;
     const option = billingOption(months, theme) as Option;
@@ -188,7 +214,7 @@ describe('DashboardPage', () => {
     expect(kpi('collected')).toContain('₺12.500,50');
     expect(kpi('outstanding')).toContain('₺3.000,00');
     expect(kpi('outstandingTotal')).toContain('₺1.234.567,89');
-    expect(kpi('attendance')).toContain('%86');
+    expect(kpi('attendance')).toContain('%85,7');
     expect(kpi('today')).toContain('1 / 4');
     expect(root.querySelector('[data-kpi="today"] a')?.getAttribute('href')).toBe('/attendance');
   });
@@ -229,9 +255,29 @@ describe('DashboardPage', () => {
     expect(table.hidden).toBe(false);
     expect(toggle.getAttribute('aria-expanded')).toBe('true');
     expect(table.textContent).toContain('₺15.500,00');
-    expect(root.querySelector('#attendance-table')?.textContent).toContain(
-      ui.dashboard.attendance.noRecords,
+    const weekRows = root.querySelectorAll('#attendance-table tbody tr');
+    expect(weekRows[0].textContent).toContain('%90');
+    expect(weekRows[1].textContent).toContain('02.11.2026 – 08.11.2026');
+    expect(weekRows[1].textContent).toContain(ui.dashboard.attendance.noRecords);
+    expect(weekRows[1].querySelectorAll('td')[1].textContent?.trim()).toBe('0');
+  });
+
+  it('gives every table toggle its own name', async () => {
+    request().flush(dashboard());
+    await settle(fixture);
+    const labels = [...root.querySelectorAll('button[aria-controls$="-table"]')].map((b) =>
+      b.getAttribute('aria-label'),
     );
+    expect(labels).toEqual([
+      `${ui.dashboard.showTable}: ${ui.dashboard.billing.title}`,
+      `${ui.dashboard.showTable}: ${ui.dashboard.attendance.title}`,
+      `${ui.dashboard.showTable}: ${ui.dashboard.sports.title}`,
+    ]);
+    (root.querySelector('button[aria-controls="billing-table"]') as HTMLButtonElement).click();
+    await settle(fixture);
+    expect(
+      root.querySelector('button[aria-controls="billing-table"]')?.getAttribute('aria-label'),
+    ).toBe(`${ui.dashboard.hideTable}: ${ui.dashboard.billing.title}`);
   });
 
   it('lists the fullest groups with a non-colour "full" cue and links', async () => {
@@ -268,9 +314,51 @@ describe('DashboardPage', () => {
     expect(colour()).toBe('#2563eb');
   });
 
+  it('treats sports with only zero counts as empty and labels blank names', async () => {
+    request().flush(
+      dashboard({
+        enrollmentsBySport: [
+          { sportId: 's1', sportName: ' ', activeEnrollments: 0 },
+          { sportId: 's2', sportName: 'Futbol', activeEnrollments: '0' },
+        ],
+      }),
+    );
+    await settle(fixture);
+    expect(root.textContent).toContain(ui.dashboard.sports.empty);
+    expect(root.querySelector('#sports-table')).toBeNull();
+  });
+
+  it('labels a blank sport name with a dash', async () => {
+    request().flush(
+      dashboard({ enrollmentsBySport: [{ sportId: 's1', sportName: '', activeEnrollments: 3 }] }),
+    );
+    await settle(fixture);
+    expect(root.querySelector('#sports-table th[scope="row"]')?.textContent?.trim()).toBe('—');
+  });
+
+  it('keeps the dashboard when only billing data exists', async () => {
+    const data = dashboard();
+    request().flush(dashboard({ kpis: { ...data.kpis, activeStudents: 0, activeGroups: 0 } }));
+    await settle(fixture);
+    expect(root.querySelector('[data-testid="dashboard-empty"]')).toBeNull();
+    expect(kpi('collected')).toContain('₺12.500,50');
+  });
+
   it('shows an empty state for a school without students or groups', async () => {
     const data = dashboard();
-    request().flush(dashboard({ kpis: { ...data.kpis, activeStudents: 0, activeGroups: '0' } }));
+    request().flush(
+      dashboard({
+        kpis: {
+          ...data.kpis,
+          activeStudents: 0,
+          activeGroups: '0',
+          collectedThisMonth: money('0.00'),
+          outstandingThisMonth: money('0.00'),
+          outstandingTotal: money('0.00'),
+        },
+        monthlyBilling: [{ period: '2026-11', collected: money('0.00'), due: money('0') }],
+      }),
+    );
     await settle(fixture);
 
     expect(root.querySelector('[data-testid="dashboard-empty"]')).not.toBeNull();

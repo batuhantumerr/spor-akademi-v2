@@ -1,7 +1,7 @@
-import { ChangeDetectionStrategy, Component, input, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, input, signal } from '@angular/core';
 import type { EChartsCoreOption } from 'echarts/core';
 
-import { ui } from '../../core/i18n/tr';
+import { interpolate, ui } from '../../core/i18n/tr';
 import { ChartComponent } from '../../shared/ui/chart.component';
 
 /**
@@ -30,6 +30,7 @@ import { ChartComponent } from '../../shared/ui/chart.component';
             class="btn btn-ghost btn-sm shrink-0"
             [attr.aria-expanded]="tableOpen()"
             [attr.aria-controls]="key() + '-table'"
+            [attr.aria-label]="toggleLabel()"
             (click)="tableOpen.set(!tableOpen())"
           >
             {{ tableOpen() ? text.hideTable : text.showTable }}
@@ -99,4 +100,11 @@ export class DashboardChartComponent {
 
   protected readonly text = ui.dashboard;
   protected readonly tableOpen = signal(false);
+  /** Unique name per card: "Tabloyu göster: Haftalık devam oranı". */
+  protected readonly toggleLabel = computed(() =>
+    interpolate(this.text.tableToggle, {
+      action: this.tableOpen() ? this.text.hideTable : this.text.showTable,
+      title: this.heading(),
+    }),
+  );
 }

@@ -30,10 +30,13 @@ import {
   billingSummary,
   chartTheme,
   count,
+  isZero,
+  noEnrollments,
   percentText,
   periodLabel,
   ratio,
   sportsOption,
+  sportName,
   sportsSummary,
   weekRange,
 } from './dashboard-charts';
@@ -182,7 +185,7 @@ interface Kpi {
             [options]="sports().options"
             [columns]="sports().columns"
             [rows]="sports().rows"
-            [empty]="sports().rows.length === 0 ? text.sports.empty : null"
+            [empty]="sports().empty ? text.sports.empty : null"
           />
           <section class="card flex min-w-0 flex-col" aria-labelledby="groups-title">
             <div class="px-4 pt-4">
@@ -262,7 +265,14 @@ export class DashboardPage {
   /** No active students and no active groups: nothing meaningful to chart yet. */
   readonly isEmpty = computed(() => {
     const kpis = this.data()?.kpis;
-    return !!kpis && count(kpis.activeStudents) === 0 && count(kpis.activeGroups) === 0;
+    const data = this.data();
+    return (
+      !!kpis &&
+      count(kpis.activeStudents) === 0 &&
+      count(kpis.activeGroups) === 0 &&
+      isZero(kpis.outstandingTotal) &&
+      (data?.monthlyBilling ?? []).every((m) => isZero(m.collected) && isZero(m.due))
+    );
   });
 
   readonly kpis = computed<Kpi[]>(() => {
@@ -389,7 +399,8 @@ export class DashboardPage {
       options: sportsOption(sports, this.palette()),
       summary: sportsSummary(sports),
       columns: [t.sport, t.enrollments],
-      rows: sports.map((s) => [s.sportName, formatNumber(count(s.activeEnrollments))]),
+      rows: sports.map((s) => [sportName(s), formatNumber(count(s.activeEnrollments))]),
+      empty: noEnrollments(sports),
     };
   });
 

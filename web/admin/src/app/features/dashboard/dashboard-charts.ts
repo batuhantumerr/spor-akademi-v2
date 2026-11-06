@@ -6,7 +6,7 @@ import {
   SportEnrollmentsDto,
   WeeklyAttendanceDto,
 } from '../../api/models';
-import { formatDate, formatNumber, formatPercent } from '../../core/format/format';
+import { formatDate, formatNumber } from '../../core/format/format';
 import { interpolate, ui } from '../../core/i18n/tr';
 import { LOCALE } from '../../core/i18n/locale';
 import { displayMoney } from '../../core/money/money';
@@ -38,21 +38,44 @@ export function ratio(value: number | string | null | undefined): number | null 
   return Number.isFinite(n) ? n : null;
 }
 
+/** "0", "0.00", "-0.00": nothing billed or collected. */
+export function isZero(amount: MoneyDto): boolean {
+  return /^-?0+(\.0+)?$/.test(amount.amount);
+}
+
 export function count(value: number | string | null | undefined): number {
   return ratio(value) ?? 0;
 }
 
 export function percentText(value: number | string | null | undefined): string {
   const r = ratio(value);
-  return r === null ? ui.dashboard.noValue : formatPercent(r);
+  return r === null ? ui.dashboard.noValue : percent(r);
 }
 
-const periodFormatter = new Intl.DateTimeFormat(LOCALE, { month: 'short', year: 'numeric' });
-const compactFormatter = new Intl.NumberFormat(LOCALE, {
-  notation: 'compact',
+const percentFormatter = new Intl.NumberFormat(LOCALE, {
+  style: 'percent',
   maximumFractionDigits: 1,
 });
 
+/**
+ * One fraction digit, and never a misleading extreme: a ratio strictly between 0 and 1 is kept
+ * within %0,1–%99,9, so 0.9996 is not "%100" and 0.0004 is not "%0".
+ */
+export function percent(r: number): string {
+  return percentFormatter.format(r > 0 && r < 1 ? Math.min(Math.max(r, 0.001), 0.999) : r);
+}
+
+/** Sport names are required by the API; a blank one still gets a visible label. */
+export function sportName(sport: SportEnrollmentsDto): string {
+  return sport.sportName.trim() || ui.dashboard.noValue;
+}
+
+/** True when every sport has zero active enrollments (or there are none). */
+export function noEnrollments(sports: SportEnrollmentsDto[]): boolean {
+  return sports.every((s) => count(s.activeEnrollments) === 0);
+}
+
+const periodFormatter = new Intl.DateTimeFormat(LOCALE, { month: 'short', year: 'numeric' });
 /** "2026-11" → "Kas 2026". */
 export function periodLabel(period: string): string {
   const match = /^(\d{4})-(\d{2})$/.exec(period);
@@ -116,7 +139,7 @@ export function billingOption(months: MonthlyBillingDto[], theme: ChartTheme): E
     xAxis: { type: 'category', data: months.map((m) => periodLabel(m.period)) },
     yAxis: {
       type: 'value',
-      axisLabel: { formatter: (value: number) => `₺${compactFormatter.format(value)}` },
+      axisLabel: { formatter: (value: number) => `₺${formatNumber(value)}` },
     },
     series: [
       {
@@ -155,7 +178,7 @@ export function attendanceOption(
           return '';
         }
         const rate = ratio(week.rate);
-        return `${weekRange(week)}<br/>${text.rate}: ${rate === null ? text.noRecords : formatPercent(rate)}<br/>${text.counted}: ${formatNumber(count(week.counted))}`;
+        return `${weekRange(week)}<br/>${text.rate}: ${rate === null ? text.noRecords : percent(rate)}<br/>${text.counted}: ${formatNumber(count(week.counted))}`;
       },
     },
     xAxis: { type: 'category', boundaryGap: false, data: weeks.map(weekLabel) },
@@ -189,7 +212,7 @@ export function sportsOption(sports: SportEnrollmentsDto[], theme: ChartTheme): 
       formatter: (params: unknown) => {
         const sport = sports[dataIndex(params)];
         return sport
-          ? `${escapeHtml(sport.sportName)}: ${formatNumber(count(sport.activeEnrollments))}`
+          ? `${escapeHtml(sportName(sport))}: ${formatNumber(count(sport.activeEnrollments))}`
           : '';
       },
     },
@@ -203,7 +226,7 @@ export function sportsOption(sports: SportEnrollmentsDto[], theme: ChartTheme): 
         label: { show: false },
         itemStyle: { borderColor: 'transparent', borderWidth: 2, borderRadius: 4 },
         data: sports.map((s, i) => ({
-          name: s.sportName,
+          name: sportName(s),
           value: count(s.activeEnrollments),
           itemStyle: { color: theme.series[i % theme.series.length] },
         })),
@@ -230,14 +253,14 @@ export function attendanceSummary(weeks: WeeklyAttendanceDto[]): string {
   const rate = last ? ratio(last.rate) : null;
   return interpolate(ui.dashboard.attendance.summary, {
     weeks: weeks.length,
-    rate: rate === null ? ui.dashboard.attendance.noRecords : formatPercent(rate),
+    rate: rate === null ? ui.dashboard.attendance.noRecords : percent(rate),
   });
 }
 
 export function sportsSummary(sports: SportEnrollmentsDto[]): string {
   return interpolate(ui.dashboard.sports.summary, {
     list: sports
-      .map((s) => `${s.sportName} ${formatNumber(count(s.activeEnrollments))}`)
+      .map((s) => `${sportName(s)} ${formatNumber(count(s.activeEnrollments))}`)
       .join(', '),
   });
 }

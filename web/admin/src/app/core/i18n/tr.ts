@@ -628,6 +628,7 @@ export const ui = {
     },
     showTable: 'Tabloyu göster',
     hideTable: 'Tabloyu gizle',
+    tableToggle: '{action}: {title}',
     empty: {
       title: 'Henüz gösterilecek veri yok',
       text: 'Okulunuzda aktif grup ya da öğrenci yok. Grup tanımlayıp öğrenci kaydettiğinizde özet burada görünür.',
