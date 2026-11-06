@@ -38,3 +38,4 @@
 | DEC-132 | Command'lar sadece id döner; endpoint ardından query ile güncel DTO'yu (yeni `version` dahil) okur. Böylece yanıttaki `version` her zaman kaydedilmiş satırınkidir. | Proposed |
 | DEC-133 | Benzersizlik ihlalleri (23505) kısıt adına göre beklenen hataya eşlenir (`School.SlugTaken`, `Sport.NameTaken`, `Facility.NameTaken`, `User.EmailTaken`): handler kontrolünü yarışla geçen eşzamanlı istekler 500 yerine 409 alır. Groups (P1-18) geldiğinde FK ihlalleri (23503) de `*.InUse`'a eşlenecek. | Proposed |
 | DEC-134 | Sürümlü güncellemeler her zaman `xmin` koşullu UPDATE çalıştırır (değişiklik olmasa bile); eksik `version` 400 `Field.Required`. Sayfa numarası en fazla 100.000. | Proposed |
+| DEC-112 | Grafik kütüphanesi Apache ECharts + ngx-echarts (Apache-2.0/MIT). ApexCharts çift lisanslı (2M USD üzeri gelir ve başkalarının kullandığı ürünlerde ücretli) olduğu için ticari lisans yasağı gereği reddedildi. ADR-0010 (Proposed). | Proposed |
