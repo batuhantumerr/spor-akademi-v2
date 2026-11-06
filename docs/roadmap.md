@@ -53,9 +53,9 @@ Kapsamın tamamı ve maddelerin açıklamaları: [proje dokümanı, Ek G](proje-
 - [ ] P1-30 US-21 Geçmiş
 
 ### 1.5 Aidat ve duyuru
-- [ ] P1-31 US-22 Aidat tanımı
-- [ ] P1-32 US-23 Ödeme kaydı ve iptali
-- [ ] P1-33 US-24 Ödenmemiş borçlar
+- [x] P1-31 US-22 Aidat tanımı
+- [x] P1-32 US-23 Ödeme kaydı ve iptali
+- [x] P1-33 US-24 Ödenmemiş borçlar
 - [ ] P1-34 US-25 Duyurular
 
 ### Sürüm hazırlığı
