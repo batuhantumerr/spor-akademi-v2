@@ -18,8 +18,9 @@ function isExpiredToken(error: HttpErrorResponse): boolean {
 }
 
 /**
- * Adds the in-memory access token to same-origin API calls. On a 401 it refreshes once and
- * retries; if the refresh fails, the session is over and the user goes back to the login page.
+ * Adds the in-memory access token to same-origin API calls. On a 401 it retries with a newer token
+ * if another call already refreshed, otherwise refreshes once and retries. Only a rejected refresh
+ * cookie ends the session; a network or server error during refresh is passed to the caller.
  */
 export const authInterceptor: HttpInterceptorFn = (request, next) => {
   const auth = inject(AuthService);
@@ -27,15 +28,25 @@ export const authInterceptor: HttpInterceptorFn = (request, next) => {
     return next(request);
   }
 
-  return next(withToken(request, auth.token())).pipe(
+  const sentToken = auth.token();
+  return next(withToken(request, sentToken)).pipe(
     catchError((error: unknown) => {
       if (!(error instanceof HttpErrorResponse) || error.status !== 401 || !isExpiredToken(error)) {
         return throwError(() => error);
       }
+      const current = auth.token();
+      if (current && current !== sentToken) {
+        // Another request refreshed while this one was on the wire.
+        return next(withToken(request, current));
+      }
+      const epoch = auth.epoch();
       return auth.refresh().pipe(
         switchMap((token) => {
           if (!token) {
-            auth.expireSession();
+            // Skip the redirect when the user already logged out meanwhile.
+            if (auth.epoch() === epoch) {
+              auth.expireSession();
+            }
             return throwError(() => error);
           }
           return next(withToken(request, token));

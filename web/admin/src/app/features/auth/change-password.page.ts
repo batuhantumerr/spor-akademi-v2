@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, ElementRef, inject, signal } from '@angular/core';
 import {
   AbstractControl,
   FormBuilder,
@@ -12,6 +12,7 @@ import { LucideCircleAlert, LucideKeyRound } from '@lucide/angular';
 import { fieldErrors, problemMessage, toProblem } from '../../core/api/problem';
 import { AuthService } from '../../core/auth/auth.service';
 import { errorMessages, ui } from '../../core/i18n/tr';
+import { focusFirstInvalid } from '../../shared/forms/focus-first-invalid';
 
 function matchingPasswords(group: AbstractControl): ValidationErrors | null {
   return group.get('newPassword')?.value === group.get('confirm')?.value
@@ -60,9 +61,11 @@ function matchingPasswords(group: AbstractControl): ValidationErrors | null {
               class="input"
               formControlName="currentPassword"
               autocomplete="current-password"
+              [attr.aria-invalid]="!!fieldError('currentPassword')"
+              [attr.aria-describedby]="fieldError('currentPassword') ? 'current-error' : null"
             />
-            @if (serverErrors()['currentPassword']; as message) {
-              <p class="field-error">{{ message }}</p>
+            @if (fieldError('currentPassword'); as message) {
+              <p id="current-error" class="field-error">{{ message }}</p>
             }
           </div>
           <div>
@@ -73,13 +76,14 @@ function matchingPasswords(group: AbstractControl): ValidationErrors | null {
               class="input"
               formControlName="newPassword"
               autocomplete="new-password"
-              [attr.aria-invalid]="
-                form.controls.newPassword.invalid && form.controls.newPassword.touched
+              [attr.aria-invalid]="!!fieldError('newPassword')"
+              [attr.aria-describedby]="
+                fieldError('newPassword') ? 'new-hint new-error' : 'new-hint'
               "
             />
-            <p class="mt-1.5 text-xs text-muted-foreground">{{ text.hint }}</p>
-            @if (serverErrors()['newPassword']; as message) {
-              <p class="field-error">{{ message }}</p>
+            <p id="new-hint" class="mt-1.5 text-xs text-muted-foreground">{{ text.hint }}</p>
+            @if (fieldError('newPassword'); as message) {
+              <p id="new-error" class="field-error">{{ message }}</p>
             }
           </div>
           <div>
@@ -90,9 +94,11 @@ function matchingPasswords(group: AbstractControl): ValidationErrors | null {
               class="input"
               formControlName="confirm"
               autocomplete="new-password"
+              [attr.aria-invalid]="!!fieldError('confirm')"
+              [attr.aria-describedby]="fieldError('confirm') ? 'confirm-error' : null"
             />
-            @if (form.hasError('mismatch') && form.controls.confirm.touched) {
-              <p class="field-error">{{ text.mismatch }}</p>
+            @if (fieldError('confirm'); as message) {
+              <p id="confirm-error" class="field-error">{{ message }}</p>
             }
           </div>
           <button type="submit" class="btn btn-primary w-full" [disabled]="submitting()">
@@ -106,6 +112,7 @@ function matchingPasswords(group: AbstractControl): ValidationErrors | null {
 export class ChangePasswordPage {
   protected readonly auth = inject(AuthService);
   private readonly router = inject(Router);
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
 
   protected readonly text = ui.changePassword;
   protected readonly submitting = signal(false);
@@ -121,12 +128,36 @@ export class ChangePasswordPage {
     { validators: matchingPasswords },
   );
 
+  /** Client-side or server-side message for a field, shown once the field was touched. */
+  protected fieldError(field: 'currentPassword' | 'newPassword' | 'confirm'): string | null {
+    const server = this.serverErrors()[field];
+    if (server) {
+      return server;
+    }
+    const control = this.form.controls[field];
+    if (!control.touched) {
+      return null;
+    }
+    if (control.hasError('required')) {
+      return errorMessages['Field.Required'];
+    }
+    if (field === 'newPassword' && control.hasError('minlength')) {
+      return errorMessages['Auth.PasswordTooWeak'];
+    }
+    if (field === 'confirm' && this.form.hasError('mismatch')) {
+      return this.text.mismatch;
+    }
+    return null;
+  }
+
   protected submit(): void {
     if (this.form.invalid) {
       this.form.markAllAsTouched();
-      if (this.form.controls.newPassword.hasError('minlength')) {
-        this.error.set(errorMessages['Auth.PasswordTooWeak']);
-      }
+      focusFirstInvalid(this.host.nativeElement, [
+        ['current', !!this.fieldError('currentPassword')],
+        ['new', !!this.fieldError('newPassword')],
+        ['confirm', !!this.fieldError('confirm')],
+      ]);
       return;
     }
     this.submitting.set(true);
@@ -140,6 +171,10 @@ export class ChangePasswordPage {
         const problem = toProblem(err);
         this.serverErrors.set(fieldErrors(problem));
         this.error.set(problemMessage(problem));
+        focusFirstInvalid(this.host.nativeElement, [
+          ['current', !!this.serverErrors()['currentPassword']],
+          ['new', !!this.serverErrors()['newPassword']],
+        ]);
       },
     });
   }

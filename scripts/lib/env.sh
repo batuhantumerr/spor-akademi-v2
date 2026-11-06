@@ -15,8 +15,8 @@ load_env() {
   while IFS= read -r line || [[ -n "$line" ]]; do
     line="${line%$'\r'}"
     [[ -z "$line" || "$line" == \#* ]] && continue
-    if [[ ! "$line" =~ ^([A-Z][A-Z0-9_]*)=([A-Za-z0-9._-]*)$ ]]; then
-      echo "error: .env has a malformed line (values may only contain letters, digits, '.', '_' and '-')." >&2
+    if [[ ! "$line" =~ ^([A-Z][A-Z0-9_]*)=([A-Za-z0-9._@+-]*)$ ]]; then
+      echo "error: .env has a malformed line (values may only contain letters, digits, '.', '_', '@', '+' and '-')." >&2
       return 1
     fi
     key="${BASH_REMATCH[1]}"

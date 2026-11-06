@@ -13,16 +13,18 @@ describe('SportsPage', () => {
     const fixture = TestBed.createComponent(SportsPage);
     const backend = TestBed.inject(HttpTestingController);
 
-    backend.expectOne((r) => r.url === '/api/v1/sports').flush({
-      items: [
-        { id: '1', name: 'Futbol', isArchived: false, version: 1 },
-        { id: '2', name: 'Yüzme', isArchived: true, version: 3 },
-      ],
-      page: 1,
-      pageSize: 50,
-      totalCount: 2,
-      totalPages: 1,
-    });
+    backend
+      .expectOne((r) => r.url === '/api/v1/sports')
+      .flush({
+        items: [
+          { id: '1', name: 'Futbol', isArchived: false, version: 1 },
+          { id: '2', name: 'Yüzme', isArchived: true, version: 3 },
+        ],
+        page: 1,
+        pageSize: 50,
+        totalCount: 2,
+        totalPages: 1,
+      });
     await fixture.whenStable();
 
     const text = (fixture.nativeElement as HTMLElement).textContent ?? '';

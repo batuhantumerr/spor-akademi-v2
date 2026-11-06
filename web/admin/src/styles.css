@@ -4,7 +4,8 @@
 @custom-variant dark (&:is(.dark *));
 
 :root {
-  --font-size: 14px;
+  /* 87.5% of the browser default (16px -> 14px) so the user's font-size setting still scales the UI. */
+  --font-size: 87.5%;
   --radius: 0.25rem;
 
   --background: #f8fafc;
@@ -18,17 +19,17 @@
   --secondary: #f1f5f9;
   --secondary-foreground: #475569;
   --muted: #f1f5f9;
-  --muted-foreground: #64748b;
+  --muted-foreground: #5b6b80;
   --accent: #1d4ed8;
   --accent-foreground: #ffffff;
-  --destructive: #e63946;
+  --destructive: #c81e2b;
   --destructive-foreground: #ffffff;
   --border: #e2e8f0;
   --input: #ffffff;
   --ring: #2563eb;
-  --success: #16a34a;
-  --warning: #d97706;
-  --info: #2563eb;
+  --success: #13733a;
+  --warning: #a34c06;
+  --info: #1d4ed8;
   --chart-1: #2563eb;
   --chart-2: #d97706;
   --chart-3: #16a34a;
@@ -53,14 +54,14 @@
   --muted-foreground: #a0aec0;
   --accent: #60a5fa;
   --accent-foreground: #121620;
-  --destructive: #e63946;
-  --destructive-foreground: #edf2f7;
+  --destructive: #f87171;
+  --destructive-foreground: #121620;
   --border: #2d3748;
   --input: #1a202c;
   --ring: #60a5fa;
   --success: #4ade80;
   --warning: #f39c12;
-  --info: #3b82f6;
+  --info: #60a5fa;
   --chart-1: #60a5fa;
   --chart-2: #ffb703;
   --chart-3: #4ade80;
@@ -108,11 +109,23 @@
   --radius-md: var(--radius);
   --radius-lg: calc(var(--radius) + 2px);
   --radius-xl: calc(var(--radius) + 4px);
+
+  /* Smallest text step is 12px at the default root size (Tailwind's 0.75rem would be 10.5px). */
+  --text-xs: calc(12rem / 14);
+  --text-xs--line-height: calc(16 / 12);
 }
 
 @layer base {
   html {
     font-size: var(--font-size);
+  }
+
+  html.light {
+    color-scheme: light;
+  }
+
+  html.dark {
+    color-scheme: dark;
   }
 
   * {
@@ -174,7 +187,7 @@
   }
 
   .btn-destructive {
-    @apply bg-red-600 text-white hover:bg-red-700;
+    @apply bg-destructive text-destructive-foreground hover:bg-destructive/90;
   }
 
   .btn-sm {
@@ -190,7 +203,7 @@
   }
 
   .input {
-    @apply h-10 w-full rounded-md border border-border bg-card/50 px-3 text-sm text-foreground transition-colors placeholder:text-muted-foreground/50 focus-visible:border-primary focus-visible:ring-[3px] focus-visible:ring-primary/20 focus-visible:outline-none aria-invalid:border-destructive;
+    @apply h-10 w-full rounded-md border border-border bg-card/50 px-3 text-sm text-foreground transition-colors placeholder:text-muted-foreground focus-visible:border-primary focus-visible:ring-[3px] focus-visible:ring-primary/20 focus-visible:outline-none aria-invalid:border-destructive;
   }
 
   .field-label {
@@ -202,7 +215,7 @@
   }
 
   .badge {
-    @apply inline-flex items-center rounded-full border px-2.5 py-0.5 text-[10px] font-bold tracking-wider uppercase;
+    @apply inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-bold tracking-wider uppercase;
   }
 
   .badge-success {
@@ -238,7 +251,7 @@
   }
 
   .data-table th {
-    @apply h-10 px-4 font-mono text-[10px] font-semibold tracking-wider whitespace-nowrap text-muted-foreground uppercase md:text-xs;
+    @apply h-10 px-4 font-mono text-xs font-semibold tracking-wider whitespace-nowrap text-muted-foreground uppercase;
   }
 
   .data-table td {

@@ -25,7 +25,7 @@ const toneClasses: Record<StatTone, { glow: string; icon: string }> = {
         [class]="tone().glow"
       ></div>
       <div class="flex items-start justify-between gap-3">
-        <p class="text-[11px] font-bold tracking-wider text-muted-foreground uppercase">
+        <p class="text-xs font-bold tracking-wider text-muted-foreground uppercase">
           {{ label() }}
         </p>
         @if (icon()) {
