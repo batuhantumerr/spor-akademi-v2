@@ -91,7 +91,12 @@ export const routes: Routes = [
         path: '',
         canActivate: [roleGuard('SchoolAdmin')],
         children: [
-          { path: 'dashboard', title: ui.nav.dashboard, ...placeholder(ui.nav.dashboard) },
+          {
+            path: 'dashboard',
+            title: ui.nav.dashboard,
+            loadComponent: () =>
+              import('./features/dashboard/dashboard.page').then((m) => m.DashboardPage),
+          },
           {
             path: 'sports',
             title: ui.nav.sports,
