@@ -4,6 +4,7 @@ Sahip yokken (2026-11-06 – 2026-11-09) agent'ın aldığı ve sahibin onayın�
 
 ## Kararlar
 - DEC-099 – DEC-103 ve sonrası: [karar-gunlugu-v2.md](karar-gunlugu-v2.md) içindeki **Proposed** satırları.
+- DEC-300 – DEC-304 (P2-F3 transactional outbox): yeni paket eklenmedi; `BackgroundService`, health check ve System.Text.Json paylaşılan ASP.NET Core çerçevesinden, `Decorate` mevcut Scrutor'dan geliyor.
 
 ## Paketler (gerekçe, lisans, alternatifler)
 | Paket | Neden | Lisans | Alternatifler |
