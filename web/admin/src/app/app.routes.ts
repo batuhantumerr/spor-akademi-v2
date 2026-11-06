@@ -38,7 +38,14 @@ export const routes: Routes = [
       {
         path: 'platform',
         canActivate: [roleGuard('PlatformAdmin')],
-        children: [{ path: 'schools', title: ui.nav.schools, ...placeholder(ui.nav.schools) }],
+        children: [
+          {
+            path: 'schools',
+            title: ui.nav.schools,
+            loadComponent: () =>
+              import('./features/platform/schools.page').then((m) => m.SchoolsPage),
+          },
+        ],
       },
       {
         path: 'coach',
@@ -65,7 +72,12 @@ export const routes: Routes = [
             loadComponent: () =>
               import('./features/organization/facilities.page').then((m) => m.FacilitiesPage),
           },
-          { path: 'coaches', title: ui.nav.coaches, ...placeholder(ui.nav.coaches) },
+          {
+            path: 'coaches',
+            title: ui.nav.coaches,
+            loadComponent: () =>
+              import('./features/coaches/coaches.page').then((m) => m.CoachesPage),
+          },
           { path: 'groups', title: ui.nav.groups, ...placeholder(ui.nav.groups) },
           { path: 'students', title: ui.nav.students, ...placeholder(ui.nav.students) },
           { path: 'attendance', title: ui.nav.attendance, ...placeholder(ui.nav.attendance) },
