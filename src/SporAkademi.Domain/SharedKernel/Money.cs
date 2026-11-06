@@ -22,9 +22,15 @@ public sealed record Money : IComparable<Money>
         Currency = currency;
     }
 
-    public decimal Amount { get; }
+    // For EF Core materialization only (records have a copy constructor EF cannot bind).
+    private Money()
+    {
+        Currency = TryCurrency;
+    }
 
-    public string Currency { get; }
+    public decimal Amount { get; private init; }
+
+    public string Currency { get; private init; }
 
     public static Result<Money> Create(decimal amount, string currency)
     {
