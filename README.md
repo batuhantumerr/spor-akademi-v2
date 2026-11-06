@@ -70,6 +70,22 @@ dotnet test --solution SporAkademi.slnx   # Docker gerekir (Testcontainers)
 cd web/admin && npm test
 ```
 
+### Uçtan uca testler (Playwright, P1-36)
+
+```bash
+docker compose up -d --wait                          # PostgreSQL
+cd web/admin && npm ci && npx playwright install     # bir kez (tarayıcılar)
+cd ../.. && bash scripts/e2e.sh                       # tüm projeler
+bash scripts/e2e.sh --project=chromium --project=mobile-chromium   # sadece Chromium
+```
+
+- Her çalıştırma compose PostgreSQL'inde ayrı bir `spor_akademi_e2e` veritabanını silip yeniden kurar ve migration'ları migrator rolüyle uygular; geliştirme veritabanına (`spor_akademi`) ve çalışan dev API'ye/arayüze dokunmaz. Okul, Okul Admini ve antrenörler çalıştırmaya özel üretilen şifrelerle API üzerinden oluşturulur; hiçbir şifre diske yazılmaz.
+- Playwright API'yi `http://127.0.0.1:5180`'de, admin'in production build'ini `https://localhost:4300`'de (çalıştırmaya özel self-signed sertifika, `/api` proxy'si `e2e/serve.mjs`) başlatır ve sonunda kapatır. Bu iki port boş olmalı.
+- Projeler: masaüstü `chromium`, `firefox`, `webkit` (Okul Admini akışları) ve telefon boyutunda `mobile-chromium` (360 px), `mobile-webkit` (antrenör yoklaması, süre loglanır). Ziyaret edilen ana sayfalarda axe çalışır; `serious`/`critical` bulgular testi kırar.
+- Rapor: `web/admin/playwright-report` (`npx playwright show-report`); hata olursa trace'ler `web/admin/test-results`'ta.
+- Git worktree'den çalıştırırken `.env` ana checkout'taysa: `SPOR_AKADEMI_ENV_FILE=/yol/.env bash scripts/e2e.sh`.
+- CI'da `e2e` işi aynı betiği geçici bir `.env` ile çalıştırır; zorunlu check değildir (DEC-240).
+
 ## Lisans
 
 Lisans yoktur. Tüm hakları saklıdır.
