@@ -142,6 +142,18 @@ public sealed class CoachTests(DatabaseFixture database) : IdentityTest(database
     }
 
     [Fact]
+    public async Task Update_without_a_version_is_rejected()
+    {
+        var (id, _) = await CreatedCoachAsync();
+
+        var response = await SendAsync(HttpMethod.Put, $"/api/v1/coaches/{id}", _adminToken, new { firstName = "Ayşe", lastName = "Yılmaz", phone = (string?)null });
+
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        (await response.Content.ReadFromJsonAsync<JsonElement>(TestContext.Current.CancellationToken))
+            .GetProperty("errors").GetProperty("version")[0].GetString().ShouldBe("Field.Required");
+    }
+
+    [Fact]
     public async Task Coaches_are_listed_by_last_name_with_status()
     {
         await CreatedCoachAsync("z@example.com", "Zorlu");
@@ -170,7 +182,7 @@ public sealed class CoachTests(DatabaseFixture database) : IdentityTest(database
         var otherAdmin = TestTokens.Create(Guid.CreateVersion7(), "SchoolAdmin", other.Value, Api.Clock.GetUtcNow());
 
         (await SendAsync(HttpMethod.Get, $"/api/v1/coaches/{id}", otherAdmin)).StatusCode.ShouldBe(HttpStatusCode.NotFound);
-        (await SendAsync(HttpMethod.Put, $"/api/v1/coaches/{id}", otherAdmin, new { firstName = "X", lastName = "Y", phone = (string?)null, version = 0u }))
+        (await SendAsync(HttpMethod.Put, $"/api/v1/coaches/{id}", otherAdmin, new { firstName = "X", lastName = "Y", phone = (string?)null, version = 1u }))
             .StatusCode.ShouldBe(HttpStatusCode.NotFound);
         var deactivate = await SendAsync(HttpMethod.Post, $"/api/v1/coaches/{id}/deactivate", otherAdmin);
         deactivate.StatusCode.ShouldBe(HttpStatusCode.NotFound);

@@ -62,6 +62,7 @@ internal sealed class UpdateCoachValidator : AbstractValidator<UpdateCoachComman
         RuleFor(c => c.FirstName).ValidName();
         RuleFor(c => c.LastName).ValidName();
         RuleFor(c => c.Phone).Must(p => CoachRules.ParsePhone(p).IsSuccess).WithErrorCode(PhoneNumber.Invalid.Code);
+        RuleFor(c => c.Version).GreaterThan(0u).WithErrorCode(CommonErrors.FieldRequired.Code);
     }
 }
 

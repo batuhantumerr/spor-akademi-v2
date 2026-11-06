@@ -34,8 +34,13 @@ internal sealed class UserRepository(AppDbContext dbContext) : IUserRepository
 
     public void Add(User user) => dbContext.Add(user);
 
-    public void ExpectVersion(User user, uint version) =>
-        dbContext.Entry(user).Property<uint>(ConcurrencyToken.PropertyName).OriginalValue = version;
+    public void ExpectVersion(User user, uint version)
+    {
+        var entry = dbContext.Entry(user);
+        entry.Property<uint>(ConcurrencyToken.PropertyName).OriginalValue = version;
+        // DEC-134: always issue the version-checked UPDATE, so a no-op edit with a stale version still conflicts.
+        entry.State = EntityState.Modified;
+    }
 
     public Task<User?> GetCoachAsync(SchoolId schoolId, UserId id, CancellationToken cancellationToken) =>
         UsersWithTokens.SingleOrDefaultAsync(u => u.Id == id && u.TenantId == schoolId && u.Role == UserRole.Coach, cancellationToken);
