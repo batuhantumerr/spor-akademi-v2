@@ -59,7 +59,7 @@ import { ThemeService } from '../../core/theme/theme.service';
             }
           </ul>
         </div>
-        <p class="relative text-xs text-white/60">© {{ year }} {{ text.appName }}</p>
+        <p class="relative text-xs text-white/80">© {{ year }} {{ text.appName }}</p>
       </section>
 
       <section class="relative flex items-center justify-center p-6">
