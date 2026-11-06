@@ -134,6 +134,44 @@ describe('TakeAttendancePage', () => {
     expect(root.textContent).toContain(ui.attendance.recorded);
   });
 
+  it('fills only unmarked students when reopened, keeping saved absences', async () => {
+    load(
+      session({
+        isRecorded: true,
+        students: [
+          { studentId: 's1', firstName: 'Ayşe', lastName: 'Yılmaz', status: 'Absent' },
+          { studentId: 's2', firstName: 'Can', lastName: 'Er', status: 'Excused' },
+          { studentId: 's3', firstName: 'Ece', lastName: 'Ak', status: null },
+        ],
+      }),
+    );
+    await settle(fixture);
+    radio('s2', 'Late').click();
+    await settle(fixture);
+
+    buttonWith(ui.attendance.allPresent)!.click();
+    await settle(fixture);
+    expect(radio('s1', 'Absent').checked).toBe(true);
+    expect(radio('s2', 'Late').checked).toBe(true);
+    expect(radio('s3', 'Present').checked).toBe(true);
+  });
+
+  it('marks the chosen option with a check icon and a ring, not colour alone', async () => {
+    load(session());
+    await settle(fixture);
+    radio('s1', 'Late').click();
+    await settle(fixture);
+
+    const chosen = radio('s1', 'Late').closest('label')!;
+    const other = radio('s1', 'Present').closest('label')!;
+    expect(chosen.querySelector('svg')).not.toBeNull();
+    expect(chosen.classList.contains('ring-2')).toBe(true);
+    expect(chosen.classList.contains('ring-current')).toBe(true);
+    expect(chosen.classList.contains('border-2')).toBe(true);
+    expect(other.querySelector('svg')).toBeNull();
+    expect(other.classList.contains('ring-2')).toBe(false);
+  });
+
   it('shows saved statuses when reopened', async () => {
     load(
       session({
@@ -292,6 +330,36 @@ describe('GroupAttendanceComponent', () => {
     expect(link.getAttribute('aria-label')).toBe('03.11.2026 17:00 yoklamasını düzenle');
   });
 
+  it('does not link sessions that have not happened yet', async () => {
+    backend
+      .expectOne((r) => r.url === '/api/v1/groups/g1/attendance')
+      .flush({
+        ...month,
+        sessions: [
+          ...month.sessions,
+          {
+            sessionKey: '2999-01-05T17:00',
+            date: '2999-01-05',
+            start: '17:00',
+            end: '18:30',
+            isRecorded: false,
+          },
+        ],
+        students: month.students.map((r) => ({
+          ...r,
+          cells: [...r.cells, { enrolled: true, status: null }],
+        })),
+      });
+    await settle(fixture);
+    const headers = root.querySelectorAll('thead th');
+    const last = headers[headers.length - 1];
+    expect(last.querySelector('a')).toBeNull();
+    expect(last.querySelector('span')?.getAttribute('aria-label')).toBe(
+      '05.01.2999 17:00 (henüz yapılmadı)',
+    );
+    expect(root.querySelectorAll('thead a').length).toBe(2);
+  });
+
   it('switches months', async () => {
     const first = backend.expectOne((r) => r.url === '/api/v1/groups/g1/attendance');
     const m = first.request.params.get('month')!;
@@ -388,6 +456,19 @@ describe('StudentAttendanceComponent', () => {
     await settle(fixture);
     expect(root.textContent).toContain(ui.attendance.rateUnknown);
     expect(root.textContent).toContain(ui.attendance.noHistory);
+
+    // An empty or reversed range cannot be requested.
+    const show = [...root.querySelectorAll('button')].find((b) =>
+      b.textContent?.includes(ui.attendance.show),
+    ) as HTMLButtonElement;
+    from.value = '2026-12-01';
+    from.dispatchEvent(new Event('input'));
+    await settle(fixture);
+    expect(show.disabled).toBe(true);
+    from.value = '';
+    from.dispatchEvent(new Event('input'));
+    await settle(fixture);
+    expect(show.disabled).toBe(true);
     backend.verify();
   });
 });

@@ -16,7 +16,7 @@ import { apiV1GroupsIdAttendanceGet } from '../../api/functions';
 import { GroupAttendanceMonthDto, MonthCellDto, MonthSessionDto } from '../../api/models';
 import { problemMessage, toProblem } from '../../core/api/problem';
 import { STATUSES, isMark, statusTone } from '../../core/attendance/attendance';
-import { formatTime } from '../../core/format/format';
+import { formatDate, formatTime } from '../../core/format/format';
 import { LOCALE } from '../../core/i18n/locale';
 import { interpolate, ui } from '../../core/i18n/tr';
 import { SchoolClock } from '../../core/time/school-clock';
@@ -124,17 +124,31 @@ export function addMonths(month: string, n: number): string {
                 <th scope="col" class="sticky left-0 bg-muted">{{ text.student }}</th>
                 @for (session of d.sessions; track session.sessionKey) {
                   <th scope="col" class="!px-1 text-center">
-                    <a
-                      class="block rounded px-1 py-1 text-primary underline-offset-2 hover:underline"
-                      [routerLink]="['/groups', groupId(), 'sessions', session.sessionKey]"
-                      [attr.aria-label]="editLabel(session)"
-                      [attr.title]="editLabel(session)"
-                    >
-                      {{ day(session.date) }}
-                      <span class="block text-xs font-normal normal-case">{{
-                        time(session.start)
-                      }}</span>
-                    </a>
+                    @if (isFuture(session)) {
+                      <!-- A session that has not happened yet cannot be recorded. -->
+                      <span
+                        class="block rounded px-1 py-1 text-muted-foreground"
+                        [attr.aria-label]="futureLabel(session)"
+                        [attr.title]="futureLabel(session)"
+                      >
+                        {{ day(session.date) }}
+                        <span class="block text-xs font-normal normal-case">{{
+                          time(session.start)
+                        }}</span>
+                      </span>
+                    } @else {
+                      <a
+                        class="block rounded px-1 py-1 text-primary underline-offset-2 hover:underline"
+                        [routerLink]="['/groups', groupId(), 'sessions', session.sessionKey]"
+                        [attr.aria-label]="editLabel(session)"
+                        [attr.title]="editLabel(session)"
+                      >
+                        {{ day(session.date) }}
+                        <span class="block text-xs font-normal normal-case">{{
+                          time(session.start)
+                        }}</span>
+                      </a>
+                    }
                   </th>
                 }
               </tr>
@@ -232,11 +246,22 @@ export class GroupAttendanceComponent {
   }
 
   protected editLabel(session: MonthSessionDto): string {
-    const [y, m, d] = session.date.split('-');
     return interpolate(this.text.editSession, {
-      date: `${d}.${m}.${y}`,
+      date: formatDate(session.date),
       time: formatTime(session.start),
     });
+  }
+
+  protected futureLabel(session: MonthSessionDto): string {
+    return interpolate(this.text.futureSession, {
+      date: formatDate(session.date),
+      time: formatTime(session.start),
+    });
+  }
+
+  /** After the school's today: not linked (attendance cannot be taken yet). */
+  protected isFuture(session: MonthSessionDto): boolean {
+    return session.date > this.clock.today();
   }
 
   async load(): Promise<void> {

@@ -12,7 +12,7 @@ import {
   untracked,
 } from '@angular/core';
 import { RouterLink } from '@angular/router';
-import { LucideArrowLeft, LucideCheckCheck } from '@lucide/angular';
+import { LucideArrowLeft, LucideCheck, LucideCheckCheck } from '@lucide/angular';
 
 import { Api } from '../../api/api';
 import {
@@ -37,7 +37,7 @@ import { ToastService } from '../../shared/ui/toast.service';
 @Component({
   selector: 'app-take-attendance-page',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [RouterLink, LucideArrowLeft, LucideCheckCheck],
+  imports: [RouterLink, LucideArrowLeft, LucideCheck, LucideCheckCheck],
   template: `
     <div class="mx-auto w-full max-w-xl pb-28">
       <a [routerLink]="backLink()" class="btn btn-ghost mb-2 -ml-2 h-11">
@@ -48,7 +48,7 @@ import { ToastService } from '../../shared/ui/toast.service';
         <div role="alert" class="card flex flex-col gap-3 p-4 text-sm text-destructive">
           <span>{{ message }}</span>
           <button type="button" class="btn btn-secondary h-12" (click)="load()">
-            {{ text.retry }}
+            {{ common.retry }}
           </button>
         </div>
       } @else if (!session()) {
@@ -74,7 +74,7 @@ import { ToastService } from '../../shared/ui/toast.service';
             <span>{{ message }}</span>
             @if (offline()) {
               <button type="button" class="btn btn-secondary h-12" (click)="save()">
-                {{ text.retry }}
+                {{ common.retry }}
               </button>
             }
           </div>
@@ -100,7 +100,7 @@ import { ToastService } from '../../shared/ui/toast.service';
                         class="relative flex min-h-12 cursor-pointer items-center justify-center rounded-lg border px-1 text-center text-sm font-semibold select-none has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-primary/50"
                         [class]="
                           marks()[student.studentId] === status
-                            ? tone[status]
+                            ? tone[status] + ' ' + selectedCue
                             : 'border-border text-muted-foreground'
                         "
                       >
@@ -112,6 +112,9 @@ import { ToastService } from '../../shared/ui/toast.service';
                           [checked]="marks()[student.studentId] === status"
                           (change)="mark(student.studentId, status)"
                         />
+                        @if (marks()[student.studentId] === status) {
+                          <svg lucideCheck class="mr-1 size-4 shrink-0" aria-hidden="true"></svg>
+                        }
                         {{ labels[status] }}
                       </label>
                     }
@@ -158,6 +161,11 @@ export class TakeAttendancePage {
   protected readonly statuses = STATUSES;
   protected readonly labels = ui.attendance.statuses;
   protected readonly tone = statusTone;
+  /**
+   * Not colour alone: the chosen option also gets a check icon, a thicker border and a ring in
+   * its own text colour (currentColor), which works in both themes.
+   */
+  protected readonly selectedCue = 'border-2 ring-2 ring-current ring-offset-1 ring-offset-card';
 
   protected readonly session = signal<SessionAttendanceDto | null>(null);
   protected readonly loadError = signal<string | null>(null);
@@ -237,9 +245,16 @@ export class TakeAttendancePage {
   }
 
   /** One tap for the common case; individual rows can then be changed. */
+  /**
+   * One tap for the common case: marks everyone still unmarked as present. Existing choices
+   * (including saved Gelmedi / Geç / Mazeretli) are never overwritten.
+   */
   protected allPresent(): void {
     const students = this.session()?.students ?? [];
-    this.marks.set(Object.fromEntries(students.map((s) => [s.studentId, 'Present' as Mark])));
+    this.marks.update((current) => ({
+      ...Object.fromEntries(students.map((s) => [s.studentId, 'Present' as Mark])),
+      ...current,
+    }));
   }
 
   protected async save(): Promise<void> {

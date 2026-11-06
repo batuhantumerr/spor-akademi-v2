@@ -59,7 +59,9 @@ import { SchoolClock } from '../../core/time/school-clock';
             aria-describedby="att-range-hint"
           />
         </div>
-        <button type="submit" class="btn btn-secondary">{{ text.show }}</button>
+        <button type="submit" class="btn btn-secondary" [disabled]="!rangeValid()">
+          {{ text.show }}
+        </button>
         <p id="att-range-hint" class="w-full text-xs text-muted-foreground">{{ text.rangeHint }}</p>
       </form>
 
@@ -125,6 +127,10 @@ export class StudentAttendanceComponent {
   protected readonly to = signal(this.clock.today());
   protected readonly from = signal(addDays(this.clock.today(), -29));
   protected readonly data = signal<StudentAttendanceDto | null>(null);
+  /** Both dates set and in order. */
+  protected readonly rangeValid = computed(
+    () => !!this.from() && !!this.to() && this.from() <= this.to(),
+  );
   protected readonly loading = signal(false);
   protected readonly error = signal<string | null>(null);
   protected readonly rate = computed(() => {
@@ -168,7 +174,9 @@ export class StudentAttendanceComponent {
   }
 
   protected apply(): void {
-    void this.load();
+    if (this.rangeValid()) {
+      void this.load();
+    }
   }
 
   async load(): Promise<void> {
