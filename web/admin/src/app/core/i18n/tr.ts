@@ -113,6 +113,7 @@ export const ui = {
     payments: 'Ödemeler',
     dues: 'Ödenmemiş borçlar',
     myGroups: 'Gruplarım',
+    announcements: 'Duyurular',
     today: 'Bugün',
   },
   roles: {
@@ -515,6 +516,23 @@ export const ui = {
     title: 'Gruplarım',
     description: 'Size atanmış aktif gruplar.',
     empty: 'Size atanmış grup yok.',
+  },
+  announcements: {
+    title: 'Duyurular',
+    groupTitle: 'Grup duyuruları',
+    publish: 'Duyuru yayımla',
+    publishing: 'Yayımlanıyor…',
+    titleLabel: 'Başlık',
+    bodyLabel: 'Duyuru metni',
+    bodyHint: 'Düz metin; satır sonları korunur.',
+    counter: '{count} / {max} karakter',
+    published: 'Duyuru yayımlandı.',
+    empty: 'Bu grupta henüz duyuru yok.',
+    emptyCoach: 'Henüz duyuru yok.',
+    archivedGroup: 'Arşivlenmiş gruplarda duyuru yayımlanamaz.',
+    all: 'Tüm duyurular',
+    back: 'Bugüne dön',
+    groupLabel: 'Grup: {name}',
   },
 };
 
