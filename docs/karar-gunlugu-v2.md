@@ -11,3 +11,4 @@
 | DEC-101 | Trivy `v0.76.1` (doküman sürümü); `v0.76.2` 2026-11-05'te çıktığı için 7 günlük cooldown'a takılıyor. | Proposed |
 | DEC-102 | `IDE0005` (gereksiz using) build'de hata olarak zorlanmıyor: `GenerateDocumentationFile` gerektiriyor; bunun yerine CI'daki `dotnet format --verify-no-changes` kullanılıyor. | Proposed |
 | DEC-103 | Admin arayüzü teması sahibin başka projesindeki görsel dilden (slate nötrler, kart/tablo/sidebar kalıpları) uyarlanır, ana renk mavi; grafikler ApexCharts. Ayrıntı: [ui-tema.md](ui-tema.md). Sahibin 2026-11-06 isteği. | Proposed |
+| DEC-104 | Admin imajında geçici `apk upgrade --no-cache zlib` (CVE-2026-85091, HIGH). En güncel stable `nginx-unprivileged:1.30.6-alpine-slim` hâlâ `zlib 1.3.2-r0` taşıyor; base imaj düzelince satır kaldırılır (Dependabot güncellemesinde kontrol). | Proposed |
