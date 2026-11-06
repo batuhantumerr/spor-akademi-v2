@@ -88,7 +88,7 @@ public sealed class ModuleRulesTests
     [Fact]
     public void Handlers_are_internal_and_sealed()
     {
-        var handlerInterfaces = new[] { "ICommandHandler`2", "IQueryHandler`2", "IDomainEventConsumer`1" };
+        var handlerInterfaces = new[] { "ICommandHandler`2", "IQueryHandler`2", "IDomainEventConsumer`1", "IOutboxMessageHandler`1" };
         var offenders = Assemblies.Application.GetTypes()
             .Where(t => t is { IsClass: true, IsAbstract: false } && t.Namespace?.StartsWith("SporAkademi.Application.Abstractions", StringComparison.Ordinal) != true)
             .Where(t => t.GetInterfaces().Any(i => handlerInterfaces.Contains(i.Name)))
