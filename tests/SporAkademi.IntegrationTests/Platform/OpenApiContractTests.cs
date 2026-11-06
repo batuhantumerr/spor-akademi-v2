@@ -22,6 +22,8 @@ public sealed class OpenApiContractTests(DatabaseFixture database) : Integration
 
         if (Environment.GetEnvironmentVariable("UPDATE_OPENAPI") == "1")
         {
+            // Regenerating in CI would compare the file with itself and hide drift.
+            Environment.GetEnvironmentVariable("CI").ShouldBeNullOrEmpty("UPDATE_OPENAPI must not be used in CI.");
             Directory.CreateDirectory(Path.GetDirectoryName(path)!);
             await File.WriteAllTextAsync(path, actual, TestContext.Current.CancellationToken);
         }
