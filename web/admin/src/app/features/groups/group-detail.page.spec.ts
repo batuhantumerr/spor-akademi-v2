@@ -1,12 +1,20 @@
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
+import { Component, input } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
 
 import { GroupDto } from '../../api/models';
 import { ui } from '../../core/i18n/tr';
 import { ToastService } from '../../shared/ui/toast.service';
+import { GroupStudentsComponent } from '../enrollments/group-students.component';
 import { GroupDetailPage } from './group-detail.page';
+
+/** The students section has its own tests; here it is a stub. */
+@Component({ selector: 'app-group-students', template: '' })
+class GroupStudentsStub {
+  readonly group = input<GroupDto>();
+}
 
 const group: GroupDto = {
   id: 'g1',
@@ -42,6 +50,10 @@ describe('GroupDetailPage', () => {
         { provide: ToastService, useValue: { success: vi.fn(), error: vi.fn() } },
       ],
     });
+    TestBed.overrideComponent(GroupDetailPage, {
+      remove: { imports: [GroupStudentsComponent] },
+      add: { imports: [GroupStudentsStub] },
+    });
     fixture = TestBed.createComponent(GroupDetailPage);
     fixture.componentRef.setInput('id', 'g1');
     backend = TestBed.inject(HttpTestingController);
@@ -64,7 +76,11 @@ describe('GroupDetailPage', () => {
     await settle(fixture);
   });
 
-  afterEach(() => backend.verify());
+  afterEach(() => {
+    // The students section loads on its own; it has its own tests.
+    backend.match((r) => r.url.includes('/enrollments'));
+    backend.verify();
+  });
 
   const save = async () => {
     (

@@ -1,4 +1,5 @@
 import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/core';
+import { RouterLink } from '@angular/router';
 import { LucideCalendarDays, LucideMapPin, LucideUsers } from '@lucide/angular';
 
 import { Api } from '../../api/api';
@@ -13,7 +14,7 @@ import { PageHeaderComponent } from '../../shared/ui/page-header.component';
 @Component({
   selector: 'app-coach-groups-page',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [PageHeaderComponent, LucideCalendarDays, LucideMapPin, LucideUsers],
+  imports: [RouterLink, PageHeaderComponent, LucideCalendarDays, LucideMapPin, LucideUsers],
   template: `
     <div class="mx-auto w-full max-w-xl">
       <app-page-header [title]="text.title" [description]="text.description" />
@@ -58,6 +59,13 @@ import { PageHeaderComponent } from '../../shared/ui/page-header.component';
                 <svg lucideMapPin class="size-4 shrink-0" aria-hidden="true"></svg>
                 <span class="sr-only">{{ groupsText.facility }}: </span>{{ group.facility.name }}
               </p>
+              <a
+                class="btn btn-secondary mt-4 h-12 w-full"
+                [routerLink]="['/coach/groups', group.id]"
+                [attr.aria-label]="rosterText.open + ': ' + group.name"
+              >
+                <svg lucideUsers></svg>{{ rosterText.open }}
+              </a>
             </li>
           }
         </ul>
@@ -70,6 +78,7 @@ export class CoachGroupsPage {
 
   protected readonly text = ui.coachGroups;
   protected readonly groupsText = ui.groups;
+  protected readonly rosterText = ui.roster;
   protected readonly common = ui.common;
   protected readonly groups = signal<GroupDto[] | null>(null);
   protected readonly error = signal<string | null>(null);
