@@ -88,6 +88,80 @@ namespace SporAkademi.Infrastructure.Migrations
                     b.ToTable("announcements", "announcements");
                 });
 
+            modelBuilder.Entity("SporAkademi.Domain.Enrollments.Enrollment", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid?>("CreatedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("created_by");
+
+                    b.Property<DateOnly?>("EndDate")
+                        .HasColumnType("date")
+                        .HasColumnName("end_date");
+
+                    b.Property<Guid>("GroupId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("group_id");
+
+                    b.Property<DateOnly>("StartDate")
+                        .HasColumnType("date")
+                        .HasColumnName("start_date");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .HasColumnName("status");
+
+                    b.Property<Guid>("StudentId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("student_id");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("tenant_id");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<Guid?>("UpdatedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("updated_by");
+
+                    b.Property<uint>("Version")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
+
+                    b.HasKey("Id")
+                        .HasName("pk_enrollments");
+
+                    b.HasAlternateKey("TenantId", "Id")
+                        .HasName("ak_enrollments_tenant_id_id");
+
+                    b.HasIndex("TenantId", "GroupId", "Status")
+                        .HasDatabaseName("ix_enrollments_tenant_id_group_id_status");
+
+                    b.HasIndex("TenantId", "StudentId", "GroupId")
+                        .IsUnique()
+                        .HasDatabaseName("ix_enrollments_active_student_group")
+                        .HasFilter("status = 'Active'");
+
+                    b.ToTable("enrollments", "enrollments", t =>
+                        {
+                            t.HasCheckConstraint("ck_enrollments_end_date", "(status = 'Ended') = (end_date IS NOT NULL) AND (end_date IS NULL OR end_date >= start_date)");
+                        });
+                });
+
             modelBuilder.Entity("SporAkademi.Domain.Groups.Group", b =>
                 {
                     b.Property<Guid>("Id")
@@ -905,6 +979,32 @@ namespace SporAkademi.Infrastructure.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired()
                         .HasConstraintName("fk_announcements_group_tenant_id_group_id");
+                });
+
+            modelBuilder.Entity("SporAkademi.Domain.Enrollments.Enrollment", b =>
+                {
+                    b.HasOne("SporAkademi.Domain.Tenancy.School", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_enrollments_school_tenant_id");
+
+                    b.HasOne("SporAkademi.Domain.Groups.Group", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId", "GroupId")
+                        .HasPrincipalKey("TenantId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_enrollments_group_tenant_id_group_id");
+
+                    b.HasOne("SporAkademi.Domain.Students.Student", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId", "StudentId")
+                        .HasPrincipalKey("TenantId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_enrollments_student_tenant_id_student_id");
                 });
 
             modelBuilder.Entity("SporAkademi.Domain.Groups.Group", b =>

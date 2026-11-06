@@ -41,11 +41,11 @@ Kapsamın tamamı ve maddelerin açıklamaları: [proje dokümanı, Ek G](proje-
 
 ### 1.3 Öğrenciler ve kayıt
 - [x] P1-22 US-13 Öğrenci kaydı
-- [ ] P1-23 US-14 Antrenör görünümü
+- [x] P1-23 US-14 Antrenör görünümü
 - [x] P1-24 US-15 Ayrıldı
 - [x] P1-25 US-16 Arama ve listeleme
-- [ ] P1-26 US-17 Kayıt
-- [ ] P1-27 US-18 Kaydı sonlandırma
+- [x] P1-26 US-17 Kayıt
+- [x] P1-27 US-18 Kaydı sonlandırma
 
 ### 1.4 Yoklama
 - [ ] P1-28 US-19 Yoklama alma

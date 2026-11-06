@@ -13,8 +13,8 @@ using SporAkademi.Infrastructure.Persistence;
 namespace SporAkademi.Infrastructure.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    [Migration("20261106182152_AddAnnouncements")]
-    partial class AddAnnouncements
+    [Migration("20261106180352_AddEnrollments")]
+    partial class AddEnrollments
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -26,21 +26,11 @@ namespace SporAkademi.Infrastructure.Migrations
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
-            modelBuilder.Entity("SporAkademi.Domain.Announcements.Announcement", b =>
+            modelBuilder.Entity("SporAkademi.Domain.Enrollments.Enrollment", b =>
                 {
                     b.Property<Guid>("Id")
                         .HasColumnType("uuid")
                         .HasColumnName("id");
-
-                    b.Property<Guid>("AuthorId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("author_id");
-
-                    b.Property<string>("Body")
-                        .IsRequired()
-                        .HasMaxLength(4000)
-                        .HasColumnType("character varying(4000)")
-                        .HasColumnName("body");
 
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("timestamp with time zone")
@@ -50,23 +40,31 @@ namespace SporAkademi.Infrastructure.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("created_by");
 
+                    b.Property<DateOnly?>("EndDate")
+                        .HasColumnType("date")
+                        .HasColumnName("end_date");
+
                     b.Property<Guid>("GroupId")
                         .HasColumnType("uuid")
                         .HasColumnName("group_id");
 
-                    b.Property<DateTimeOffset>("PublishedAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("published_at");
+                    b.Property<DateOnly>("StartDate")
+                        .HasColumnType("date")
+                        .HasColumnName("start_date");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .HasColumnName("status");
+
+                    b.Property<Guid>("StudentId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("student_id");
 
                     b.Property<Guid>("TenantId")
                         .HasColumnType("uuid")
                         .HasColumnName("tenant_id");
-
-                    b.Property<string>("Title")
-                        .IsRequired()
-                        .HasMaxLength(150)
-                        .HasColumnType("character varying(150)")
-                        .HasColumnName("title");
 
                     b.Property<DateTimeOffset>("UpdatedAt")
                         .HasColumnType("timestamp with time zone")
@@ -83,12 +81,23 @@ namespace SporAkademi.Infrastructure.Migrations
                         .HasColumnName("xmin");
 
                     b.HasKey("Id")
-                        .HasName("pk_announcements");
+                        .HasName("pk_enrollments");
 
-                    b.HasIndex("TenantId", "GroupId", "PublishedAt")
-                        .HasDatabaseName("ix_announcements_tenant_id_group_id_published_at");
+                    b.HasAlternateKey("TenantId", "Id")
+                        .HasName("ak_enrollments_tenant_id_id");
 
-                    b.ToTable("announcements", "announcements");
+                    b.HasIndex("TenantId", "GroupId", "Status")
+                        .HasDatabaseName("ix_enrollments_tenant_id_group_id_status");
+
+                    b.HasIndex("TenantId", "StudentId", "GroupId")
+                        .IsUnique()
+                        .HasDatabaseName("ix_enrollments_active_student_group")
+                        .HasFilter("status = 'Active'");
+
+                    b.ToTable("enrollments", "enrollments", t =>
+                        {
+                            t.HasCheckConstraint("ck_enrollments_end_date", "(status = 'Ended') = (end_date IS NOT NULL) AND (end_date IS NULL OR end_date >= start_date)");
+                        });
                 });
 
             modelBuilder.Entity("SporAkademi.Domain.Groups.Group", b =>
@@ -892,14 +901,14 @@ namespace SporAkademi.Infrastructure.Migrations
                     b.ToTable("schools", "tenancy");
                 });
 
-            modelBuilder.Entity("SporAkademi.Domain.Announcements.Announcement", b =>
+            modelBuilder.Entity("SporAkademi.Domain.Enrollments.Enrollment", b =>
                 {
                     b.HasOne("SporAkademi.Domain.Tenancy.School", null)
                         .WithMany()
                         .HasForeignKey("TenantId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired()
-                        .HasConstraintName("fk_announcements_school_tenant_id");
+                        .HasConstraintName("fk_enrollments_school_tenant_id");
 
                     b.HasOne("SporAkademi.Domain.Groups.Group", null)
                         .WithMany()
@@ -907,7 +916,15 @@ namespace SporAkademi.Infrastructure.Migrations
                         .HasPrincipalKey("TenantId", "Id")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired()
-                        .HasConstraintName("fk_announcements_group_tenant_id_group_id");
+                        .HasConstraintName("fk_enrollments_group_tenant_id_group_id");
+
+                    b.HasOne("SporAkademi.Domain.Students.Student", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId", "StudentId")
+                        .HasPrincipalKey("TenantId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_enrollments_student_tenant_id_student_id");
                 });
 
             modelBuilder.Entity("SporAkademi.Domain.Groups.Group", b =>
