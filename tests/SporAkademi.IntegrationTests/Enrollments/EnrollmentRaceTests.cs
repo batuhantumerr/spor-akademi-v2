@@ -348,5 +348,15 @@ public sealed class EnrollmentRaceTests(DatabaseFixture database) : EnrollmentsT
 
         public Task<IReadOnlyList<StudentId>> ActiveStudentsOfGroupsAsync(IReadOnlyCollection<GroupId> groupIds, CancellationToken cancellationToken) =>
             inner.ActiveStudentsOfGroupsAsync(groupIds, cancellationToken);
+
+        public Task<IReadOnlyList<Enrollment>> ListOfStudentsAsync(IReadOnlyCollection<StudentId> studentIds, CancellationToken cancellationToken)
+        {
+            throw new NotImplementedException();
+        }
+
+        public Task<IReadOnlyList<Enrollment>> ListOfGroupBetweenAsync(GroupId groupId, DateOnly firstDay, DateOnly lastDay, CancellationToken cancellationToken)
+        {
+            throw new NotImplementedException();
+        }
     }
 }

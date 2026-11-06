@@ -21,6 +21,7 @@ public static class DependencyInjection
         services.AddScoped<IEnrollmentCounts>(sp => sp.GetRequiredService<EnrollmentModule>());
         services.AddScoped<IEnrollmentEnder>(sp => sp.GetRequiredService<EnrollmentModule>());
         services.AddScoped<IStudentGroupFilter>(sp => sp.GetRequiredService<EnrollmentModule>());
+        services.AddScoped<IEnrollmentHistory>(sp => sp.GetRequiredService<EnrollmentModule>());
         return services.AddHandlersFrom(typeof(DependencyInjection).Assembly);
     }
 
