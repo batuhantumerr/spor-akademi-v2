@@ -55,11 +55,15 @@ internal sealed class EnrollmentRepository(AppDbContext db) : IEnrollmentReposit
     public Task<int> CountActiveAsync(GroupId groupId, CancellationToken cancellationToken) =>
         db.Set<Enrollment>().CountAsync(e => e.GroupId == groupId && e.Status == EnrollmentStatus.Active, cancellationToken);
 
+    // Ordered by id: transactions that end overlapping sets of enrollments (a group archive and a
+    // student leaving) then update the rows in the same order and cannot deadlock on them (DEC-166).
     public async Task<IReadOnlyList<Enrollment>> ListActiveOfGroupAsync(GroupId groupId, CancellationToken cancellationToken) =>
-        await db.Set<Enrollment>().Where(e => e.GroupId == groupId && e.Status == EnrollmentStatus.Active).ToListAsync(cancellationToken);
+        await db.Set<Enrollment>().Where(e => e.GroupId == groupId && e.Status == EnrollmentStatus.Active)
+            .OrderBy(e => e.Id).ToListAsync(cancellationToken);
 
     public async Task<IReadOnlyList<Enrollment>> ListActiveOfStudentAsync(StudentId studentId, CancellationToken cancellationToken) =>
-        await db.Set<Enrollment>().Where(e => e.StudentId == studentId && e.Status == EnrollmentStatus.Active).ToListAsync(cancellationToken);
+        await db.Set<Enrollment>().Where(e => e.StudentId == studentId && e.Status == EnrollmentStatus.Active)
+            .OrderBy(e => e.Id).ToListAsync(cancellationToken);
 
     public Task<Enrollment?> FindAsync(EnrollmentId id, CancellationToken cancellationToken) =>
         db.Set<Enrollment>().AsNoTracking().SingleOrDefaultAsync(e => e.Id == id, cancellationToken);

@@ -13,7 +13,7 @@ using SporAkademi.Infrastructure.Persistence;
 namespace SporAkademi.Infrastructure.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    [Migration("20261106182842_AddBilling")]
+    [Migration("20261106184424_AddBilling")]
     partial class AddBilling
     {
         /// <inheritdoc />

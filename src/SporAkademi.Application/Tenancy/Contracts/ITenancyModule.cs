@@ -10,4 +10,7 @@ public interface ITenancyModule
 
     /// <summary>Today's date in the school's time zone ("today" of US-11 and US-12).</summary>
     Task<DateOnly> TodayAsync(SchoolId schoolId, CancellationToken cancellationToken);
+
+    /// <summary>The school's IANA time zone (e.g. <c>Europe/Istanbul</c>), or null for an unknown school.</summary>
+    Task<string?> TimeZoneAsync(SchoolId schoolId, CancellationToken cancellationToken);
 }
