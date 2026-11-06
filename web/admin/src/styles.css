@@ -259,6 +259,31 @@
     @apply h-auto py-3 font-sans text-sm font-semibold tracking-normal whitespace-normal text-foreground normal-case;
   }
 
+  /* Capacity bar (<progress>): primary fill, amber when the group is full. */
+  .capacity-bar {
+    @apply appearance-none overflow-hidden rounded-full border-0 bg-muted;
+  }
+
+  .capacity-bar::-webkit-progress-bar {
+    @apply bg-muted;
+  }
+
+  .capacity-bar::-webkit-progress-value {
+    @apply rounded-full bg-primary;
+  }
+
+  .capacity-bar::-moz-progress-bar {
+    @apply rounded-full bg-primary;
+  }
+
+  .capacity-full::-webkit-progress-value {
+    @apply bg-warning;
+  }
+
+  .capacity-full::-moz-progress-bar {
+    @apply bg-warning;
+  }
+
   .data-table td {
     @apply px-4 py-3 font-medium;
   }

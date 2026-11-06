@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
+using SporAkademi.Application.Abstractions.Data;
 using SporAkademi.Domain.Enrollments;
 using SporAkademi.Domain.Groups;
 using SporAkademi.Domain.Identity;
@@ -7,6 +8,7 @@ using SporAkademi.Domain.Organization;
 using SporAkademi.Domain.SharedKernel;
 using SporAkademi.Domain.Students;
 using SporAkademi.Domain.Tenancy;
+using SporAkademi.Infrastructure.Attendance;
 
 namespace SporAkademi.Infrastructure.Persistence;
 
@@ -35,6 +37,9 @@ internal static class ConstraintErrors
         // DEC-050: the partial unique index behind "already enrolled".
         ["ix_enrollments_active_student_group"] = EnrollmentErrors.AlreadyEnrolled,
         ["ix_guardians_tenant_id_phone"] = GuardianErrors.PhoneTaken,
+        // DEC-173: a concurrent first save of the same session or student record; the caller retries.
+        [SessionConfiguration.UniqueKeyIndex] = PersistenceErrors.ConcurrencyConflict,
+        [AttendanceRecordConfiguration.PrimaryKey] = PersistenceErrors.ConcurrencyConflict,
     };
 
     /// <summary>

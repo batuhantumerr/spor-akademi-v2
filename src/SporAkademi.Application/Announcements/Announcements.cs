@@ -39,10 +39,17 @@ internal sealed class PublishAnnouncementValidator : AbstractValidator<PublishAn
 {
     public PublishAnnouncementValidator()
     {
-        RuleFor(c => c.Title).NotEmpty().WithErrorCode("Field.Required")
-            .MaximumLength(Announcement.TitleMaxLength).WithErrorCode("Field.TooLong");
-        RuleFor(c => c.Body).NotEmpty().WithErrorCode("Field.Required")
-            .MaximumLength(Announcement.BodyMaxLength).WithErrorCode("Field.TooLong");
+        // The same normalisation the domain stores (DEC-192): lengths count after collapsing/trimming.
+        RuleFor(c => c.Title).Custom((title, context) => AddFailure(context, "title", Announcement.CleanTitle(title)));
+        RuleFor(c => c.Body).Custom((body, context) => AddFailure(context, "body", Announcement.CleanBody(body)));
+    }
+
+    private static void AddFailure(ValidationContext<PublishAnnouncementCommand> context, string field, Result<string> cleaned)
+    {
+        if (cleaned.IsFailure)
+        {
+            context.AddFailure(new FluentValidation.Results.ValidationFailure(field, cleaned.Error.Description) { ErrorCode = cleaned.Error.Code });
+        }
     }
 }
 
@@ -88,8 +95,9 @@ internal sealed class PublishAnnouncementHandler(
             currentUser.RequireTenant(), command.GroupId, UserId.From(author), command.Title, command.Body, timeProvider.GetUtcNow());
         if (published.IsFailure)
         {
-            // Backstop of the validator: the body or title was blank or too long after trimming.
-            return Result.Failure<AnnouncementId>(ValidationErrors.ForField("body", published.Error));
+            // Backstop of the validator, reported on the field that failed.
+            var field = Announcement.CleanTitle(command.Title).IsFailure ? "title" : "body";
+            return Result.Failure<AnnouncementId>(ValidationErrors.ForField(field, published.Error));
         }
 
         announcements.Add(published.Value);

@@ -11,9 +11,14 @@ public sealed record GroupInfo(
     BirthYearRange BirthYears,
     int Capacity,
     Guid? CoachId,
-    IReadOnlyList<ScheduleSlot> Slots)
+    IReadOnlyList<ScheduleSlot> Slots,
+    DateOnly? ArchivedOn = null)
 {
     public bool IsArchived => Status == GroupStatus.Archived;
+
+    /// <summary>The planned sessions between two dates, both inclusive (<see cref="SessionCalendar"/>).</summary>
+    public IReadOnlyList<PlannedSession> PlannedBetween(DateOnly from, DateOnly to) =>
+        SessionCalendar.Between(GroupId.From(Id), Slots, ArchivedOn, from, to);
 }
 
 /// <summary>Read contract of the Groups module (used by Enrollments).</summary>
@@ -26,4 +31,7 @@ public interface IGroupDirectory
 
     /// <summary>Ids of every group (any status) of the sport.</summary>
     Task<IReadOnlyList<GroupId>> ListIdsOfSportAsync(SportId sportId, CancellationToken cancellationToken);
+
+    /// <summary>Ids of the active groups the coach currently leads (what a coach may see, US-12).</summary>
+    Task<IReadOnlyList<GroupId>> ListActiveIdsOfCoachAsync(Guid coachId, CancellationToken cancellationToken);
 }

@@ -48,9 +48,9 @@ Kapsamın tamamı ve maddelerin açıklamaları: [proje dokümanı, Ek G](proje-
 - [x] P1-27 US-18 Kaydı sonlandırma
 
 ### 1.4 Yoklama
-- [ ] P1-28 US-19 Yoklama alma
-- [ ] P1-29 US-20 Düzeltme (48 saat)
-- [ ] P1-30 US-21 Geçmiş
+- [x] P1-28 US-19 Yoklama alma
+- [x] P1-29 US-20 Düzeltme (48 saat)
+- [x] P1-30 US-21 Geçmiş
 
 ### 1.5 Aidat ve duyuru
 - [x] P1-31 US-22 Aidat tanımı
