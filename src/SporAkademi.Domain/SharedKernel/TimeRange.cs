@@ -13,9 +13,14 @@ public sealed record TimeRange
         End = end;
     }
 
-    public TimeOnly Start { get; }
+    // For EF Core materialization only (records have a copy constructor EF cannot bind).
+    private TimeRange()
+    {
+    }
 
-    public TimeOnly End { get; }
+    public TimeOnly Start { get; private init; }
+
+    public TimeOnly End { get; private init; }
 
     public TimeSpan Duration => End - Start;
 
