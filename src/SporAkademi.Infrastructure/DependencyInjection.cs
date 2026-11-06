@@ -4,13 +4,17 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using SporAkademi.Application.Abstractions.Authentication;
 using SporAkademi.Application.Abstractions.Data;
+using SporAkademi.Application.Enrollments.Contracts;
 using SporAkademi.Application.Groups.Contracts;
 using SporAkademi.Application.Identity;
 using SporAkademi.Application.Organization;
+using SporAkademi.Application.Students;
 using SporAkademi.Application.Tenancy.Contracts;
+using SporAkademi.Infrastructure.Enrollments;
 using SporAkademi.Infrastructure.Identity;
 using SporAkademi.Infrastructure.Organization;
 using SporAkademi.Infrastructure.Persistence;
+using SporAkademi.Infrastructure.Students;
 using SporAkademi.Infrastructure.Tenancy;
 
 namespace SporAkademi.Infrastructure;
@@ -53,6 +57,10 @@ public static class DependencyInjection
         services.AddScoped<ISportRepository, SportRepository>();
         services.AddScoped<IFacilityRepository, FacilityRepository>();
         services.AddScoped<IGroupUsage, NoGroupUsage>();
+        services.AddScoped<IStudentRepository, StudentRepository>();
+        services.AddScoped<IGuardianRepository, GuardianRepository>();
+        services.AddScoped<IEnrollmentEnder, NoEnrollmentEnder>();
+        services.AddScoped<IStudentGroupFilter, NoStudentGroupFilter>();
 
         services.AddHealthChecks()
             .AddDbContextCheck<AppDbContext>("database", tags: ["ready"]);

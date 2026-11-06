@@ -3,6 +3,7 @@ using Npgsql;
 using SporAkademi.Domain.Identity;
 using SporAkademi.Domain.Organization;
 using SporAkademi.Domain.SharedKernel;
+using SporAkademi.Domain.Students;
 using SporAkademi.Domain.Tenancy;
 
 namespace SporAkademi.Infrastructure.Persistence;
@@ -22,6 +23,7 @@ internal static class ConstraintErrors
         ["ix_sports_tenant_id_name_key"] = SportErrors.NameTaken,
         ["ix_facilities_tenant_id_name_key"] = FacilityErrors.NameTaken,
         ["ix_users_email"] = UserErrors.EmailTaken,
+        ["ix_guardians_tenant_id_phone"] = GuardianErrors.PhoneTaken,
     };
 
     public static bool TryMap(DbUpdateException exception, out Error error)
