@@ -116,9 +116,15 @@ public sealed class User : AggregateRoot<UserId>
             : Result.Failure<User>(names.Error);
     }
 
-    /// <summary>Changes the editable profile (US-08: name and phone). The e-mail is the login and does not change here.</summary>
+    /// <summary>Changes the editable profile (US-08: name and phone) of an active account. The e-mail is the login and does not change here.</summary>
     public Result UpdateProfile(string firstName, string lastName, PhoneNumber? phone)
     {
+        // DEC-126: a deactivated account is read-only.
+        if (Status == UserStatus.Deactivated)
+        {
+            return Result.Failure(UserErrors.AlreadyInactive);
+        }
+
         var names = CheckNames(firstName, lastName);
         if (names.IsFailure)
         {

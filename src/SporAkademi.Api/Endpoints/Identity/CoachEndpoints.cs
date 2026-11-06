@@ -23,7 +23,7 @@ internal static class CoachEndpoints
         coaches.MapGet("/", ListCoaches).Produces<PageResponse<CoachDto>>().ProducesProblems(400);
         coaches.MapGet("/{id:guid}", GetCoach).Produces<CoachDto>().ProducesProblems(404);
         coaches.MapPost("/", CreateCoach).Produces<CoachCreatedResponse>(StatusCodes.Status201Created).ProducesProblems(400, 409);
-        coaches.MapPut("/{id:guid}", UpdateCoach).Produces<CoachDto>().ProducesProblems(400, 404, 409);
+        coaches.MapPut("/{id:guid}", UpdateCoach).Produces<CoachDto>().ProducesProblems(400, 404, 409, 422);
         coaches.MapPost("/{id:guid}/deactivate", DeactivateCoach).Produces<CoachDto>().ProducesProblems(404, 422);
         return app;
     }

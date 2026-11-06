@@ -55,6 +55,17 @@ public sealed class UserTests
     }
 
     [Fact]
+    [Trait("Story", "US-08")]
+    public void Deactivated_accounts_cannot_be_edited()
+    {
+        var user = NewCoach();
+        user.Deactivate(Now);
+
+        user.UpdateProfile("Elif", "Demir", null).Error.ShouldBe(UserErrors.AlreadyInactive);
+        user.FirstName.ShouldBe("Ayşe");
+    }
+
+    [Fact]
     public void Names_are_required_and_bounded()
     {
         var email = Email.Create("a@example.com").Value;

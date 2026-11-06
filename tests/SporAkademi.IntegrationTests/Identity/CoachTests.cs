@@ -142,6 +142,20 @@ public sealed class CoachTests(DatabaseFixture database) : IdentityTest(database
     }
 
     [Fact]
+    public async Task Deactivated_coaches_cannot_be_edited()
+    {
+        var (id, _) = await CreatedCoachAsync();
+        await SendAsync(HttpMethod.Post, $"/api/v1/coaches/{id}/deactivate", _adminToken);
+        var version = (await GetCoachAsync(id)).GetProperty("version").GetUInt32();
+
+        var response = await SendAsync(HttpMethod.Put, $"/api/v1/coaches/{id}", _adminToken, new { firstName = "Yeni", lastName = "Ad", phone = (string?)null, version });
+
+        response.StatusCode.ShouldBe(HttpStatusCode.UnprocessableEntity);
+        (await ErrorCodeAsync(response)).ShouldBe("User.AlreadyInactive");
+        (await GetCoachAsync(id)).GetProperty("firstName").GetString().ShouldBe("Ayşe");
+    }
+
+    [Fact]
     public async Task Update_without_a_version_is_rejected()
     {
         var (id, _) = await CreatedCoachAsync();
