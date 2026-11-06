@@ -29,6 +29,7 @@ import { AuthService } from '../core/auth/auth.service';
 import { ui } from '../core/i18n/tr';
 import { ThemeService } from '../core/theme/theme.service';
 import { navigationFor } from './navigation';
+import { LOCALE } from '../core/i18n/locale';
 
 /** Tailwind's `lg` breakpoint: the sidebar is a fixed rail above it and a drawer below. */
 const DESKTOP_QUERY = '(min-width: 64rem)';
@@ -254,7 +255,7 @@ export class ShellComponent {
   protected readonly initials = computed(() => {
     const user = this.auth.user();
     return user
-      ? `${user.firstName.charAt(0)}${user.lastName.charAt(0)}`.toLocaleUpperCase('tr-TR')
+      ? `${user.firstName.charAt(0)}${user.lastName.charAt(0)}`.toLocaleUpperCase(LOCALE)
       : '';
   });
 

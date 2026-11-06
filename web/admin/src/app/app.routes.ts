@@ -38,14 +38,31 @@ export const routes: Routes = [
       {
         path: 'platform',
         canActivate: [roleGuard('PlatformAdmin')],
-        children: [{ path: 'schools', title: ui.nav.schools, ...placeholder(ui.nav.schools) }],
+        children: [
+          {
+            path: 'schools',
+            title: ui.nav.schools,
+            loadComponent: () =>
+              import('./features/platform/schools.page').then((m) => m.SchoolsPage),
+          },
+        ],
       },
       {
         path: 'coach',
         canActivate: [roleGuard('Coach')],
         children: [
-          { path: 'today', title: ui.nav.today, ...placeholder(ui.nav.today) },
-          { path: 'groups', title: ui.nav.myGroups, ...placeholder(ui.nav.myGroups) },
+          {
+            path: 'today',
+            title: ui.nav.today,
+            loadComponent: () =>
+              import('./features/coach/coach-today.page').then((m) => m.CoachTodayPage),
+          },
+          {
+            path: 'groups',
+            title: ui.nav.myGroups,
+            loadComponent: () =>
+              import('./features/coach/coach-groups.page').then((m) => m.CoachGroupsPage),
+          },
         ],
       },
       {
@@ -65,8 +82,23 @@ export const routes: Routes = [
             loadComponent: () =>
               import('./features/organization/facilities.page').then((m) => m.FacilitiesPage),
           },
-          { path: 'coaches', title: ui.nav.coaches, ...placeholder(ui.nav.coaches) },
-          { path: 'groups', title: ui.nav.groups, ...placeholder(ui.nav.groups) },
+          {
+            path: 'coaches',
+            title: ui.nav.coaches,
+            loadComponent: () =>
+              import('./features/coaches/coaches.page').then((m) => m.CoachesPage),
+          },
+          {
+            path: 'groups',
+            title: ui.nav.groups,
+            loadComponent: () => import('./features/groups/groups.page').then((m) => m.GroupsPage),
+          },
+          {
+            path: 'groups/:id',
+            title: ui.nav.groups,
+            loadComponent: () =>
+              import('./features/groups/group-detail.page').then((m) => m.GroupDetailPage),
+          },
           {
             path: 'students',
             title: ui.nav.students,
