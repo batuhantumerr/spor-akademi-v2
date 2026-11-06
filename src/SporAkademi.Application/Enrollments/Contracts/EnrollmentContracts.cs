@@ -11,6 +11,27 @@ public interface IEnrollmentCounts
 }
 
 /// <summary>
+/// A student's membership period in a group. The student counts as enrolled on every day from
+/// <see cref="StartDate"/> to <see cref="EndDate"/>, both inclusive (DEC-170).
+/// </summary>
+public sealed record EnrollmentPeriod(StudentId StudentId, GroupId GroupId, DateOnly StartDate, DateOnly? EndDate)
+{
+    public bool Covers(DateOnly date) => StartDate <= date && (EndDate is not { } end || date <= end);
+
+    public bool Overlaps(DateOnly firstDay, DateOnly lastDay) => StartDate <= lastDay && (EndDate is not { } end || end >= firstDay);
+}
+
+/// <summary>Read contract of the Enrollments module: who was enrolled when (attendance, US-19, US-21).</summary>
+public interface IEnrollmentHistory
+{
+    /// <summary>Enrollments of the group that overlap the dates, both inclusive.</summary>
+    Task<IReadOnlyList<EnrollmentPeriod>> ListOfGroupAsync(GroupId groupId, DateOnly firstDay, DateOnly lastDay, CancellationToken cancellationToken);
+
+    /// <summary>Every enrollment of the student, in any group.</summary>
+    Task<IReadOnlyList<EnrollmentPeriod>> ListOfStudentAsync(StudentId studentId, CancellationToken cancellationToken);
+}
+
+/// <summary>
 /// Write contract of the Enrollments module, called inside the transaction of the triggering change (ADR-0009):
 /// ends active enrollments on the given date.
 /// </summary>

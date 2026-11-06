@@ -79,6 +79,11 @@ internal sealed class EnrollmentRepository(AppDbContext db) : IEnrollmentReposit
             .OrderByDescending(e => e.StartDate).ThenByDescending(e => e.Id)
             .ToListAsync(cancellationToken);
 
+    public async Task<IReadOnlyList<Enrollment>> ListOfGroupBetweenAsync(GroupId groupId, DateOnly firstDay, DateOnly lastDay, CancellationToken cancellationToken) =>
+        await db.Set<Enrollment>().AsNoTracking()
+            .Where(e => e.GroupId == groupId && e.StartDate <= lastDay && (e.EndDate == null || e.EndDate >= firstDay))
+            .ToListAsync(cancellationToken);
+
     public async Task<IReadOnlyList<StudentId>> ActiveStudentsOfGroupsAsync(IReadOnlyCollection<GroupId> groupIds, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(groupIds);

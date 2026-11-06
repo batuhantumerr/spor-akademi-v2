@@ -255,8 +255,16 @@ internal sealed class GetRosterHandler(
 
 /// <summary>The Enrollments module's contracts for other modules (counts, ending, student filters).</summary>
 internal sealed class EnrollmentModule(IEnrollmentRepository enrollments, IGroupDirectory groups)
-    : IEnrollmentCounts, IEnrollmentEnder, IStudentGroupFilter
+    : IEnrollmentCounts, IEnrollmentEnder, IStudentGroupFilter, IEnrollmentHistory
 {
+    public async Task<IReadOnlyList<EnrollmentPeriod>> ListOfGroupAsync(GroupId groupId, DateOnly firstDay, DateOnly lastDay, CancellationToken cancellationToken) =>
+        [.. (await enrollments.ListOfGroupBetweenAsync(groupId, firstDay, lastDay, cancellationToken)).Select(ToPeriod)];
+
+    public async Task<IReadOnlyList<EnrollmentPeriod>> ListOfStudentAsync(StudentId studentId, CancellationToken cancellationToken) =>
+        [.. (await enrollments.ListOfStudentAsync(studentId, cancellationToken)).Select(ToPeriod)];
+
+    private static EnrollmentPeriod ToPeriod(Enrollment e) => new(e.StudentId, e.GroupId, e.StartDate, e.EndDate);
+
     public Task<int> CountActiveAsync(GroupId groupId, CancellationToken cancellationToken) =>
         enrollments.CountActiveAsync(groupId, cancellationToken);
 
