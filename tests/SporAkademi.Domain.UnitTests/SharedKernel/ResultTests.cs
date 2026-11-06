@@ -80,3 +80,36 @@ public sealed class ResultTests
         error.Arguments.ShouldContainKeyAndValue("count", 12);
     }
 }
+
+public sealed class ErrorTests
+{
+    [Fact]
+    public void Errors_are_equal_by_code_and_type()
+    {
+        Error.Conflict("A.B", "one").ShouldBe(Error.Conflict("A.B", "two"));
+        Error.Conflict("A.B", "d").ShouldNotBe(Error.BusinessRule("A.B", "d"));
+    }
+
+    [Fact]
+    public void With_argument_returns_a_new_error_and_keeps_the_original()
+    {
+        var original = Error.BusinessRule("A.B", "d");
+
+        var withArgument = original.WithArgument("count", 3);
+
+        original.Arguments.ShouldBeEmpty();
+        withArgument.Arguments["count"].ShouldBe(3);
+    }
+
+    [Fact]
+    public void Generic_failure_with_none_is_a_programmer_error()
+    {
+        Should.Throw<ArgumentException>(() => Result.Failure<int>(Error.None));
+    }
+
+    [Fact]
+    public void Blank_codes_are_programmer_errors()
+    {
+        Should.Throw<ArgumentException>(() => Error.Validation(" ", "d"));
+    }
+}

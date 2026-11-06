@@ -13,13 +13,22 @@ public sealed class EntityTests
     }
 
     [Fact]
-    public void New_ids_are_unique_and_time_ordered()
+    public void New_ids_are_unique()
     {
-        var first = EntityId.New<SampleId>();
-        var second = EntityId.New<SampleId>();
+        // UUID v7 is only ordered across milliseconds, so ordering is not asserted here.
+        var ids = Enumerable.Range(0, 1000).Select(_ => EntityId.New<SampleId>()).ToHashSet();
 
-        first.ShouldNotBe(second);
-        string.CompareOrdinal(first.Value.ToString(), second.Value.ToString()).ShouldBeLessThanOrEqualTo(0);
+        ids.Count.ShouldBe(1000);
+    }
+
+    [Fact]
+    public void Hash_codes_and_inequality_follow_equality()
+    {
+        var id = EntityId.New<SampleId>();
+
+        new SampleAggregate(id).GetHashCode().ShouldBe(new SampleAggregate(id).GetHashCode());
+        (new SampleAggregate(id) != new SampleAggregate(EntityId.New<SampleId>())).ShouldBeTrue();
+        new SampleAggregate(id).Equals(null).ShouldBeFalse();
     }
 
     [Fact]
