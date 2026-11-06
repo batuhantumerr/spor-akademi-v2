@@ -5,5 +5,10 @@
     <ProjectReference Include="..\SporAkademi.Infrastructure\SporAkademi.Infrastructure.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <PackageReference Include="Serilog.AspNetCore" />
+    <PackageReference Include="Serilog.Sinks.Seq" />
+    <PackageReference Include="Serilog.Formatting.Compact" />
+  </ItemGroup>
 
 </Project>
