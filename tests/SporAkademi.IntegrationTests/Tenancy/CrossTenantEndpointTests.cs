@@ -170,6 +170,7 @@ public sealed partial class CrossTenantEndpointTests(DatabaseFixture database) :
             (Admin, "/api/v1/facilities", _a.Facility),
             (Admin, "/api/v1/guardians" + ListQueries["/api/v1/guardians"], _a.Guardian),
             (Admin, "/api/v1/dues/outstanding", _a.UnpaidStudent),
+            (Admin, "/api/v1/dashboard", _a.Group),
             (ayse, "/api/v1/me", _a.Coach),
             (ayse, "/api/v1/me/groups", _a.Group),
             (ayse, "/api/v1/me/sessions", _a.Group),
@@ -261,6 +262,7 @@ public sealed partial class CrossTenantEndpointTests(DatabaseFixture database) :
         CollectionEndpoints().Select(e => e.Route).ShouldBe(
         [
             "/api/v1/coaches",
+            "/api/v1/dashboard",
             "/api/v1/dues/outstanding",
             "/api/v1/facilities",
             "/api/v1/groups",

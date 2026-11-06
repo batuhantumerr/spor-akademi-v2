@@ -7,7 +7,7 @@ namespace SporAkademi.ArchitectureTests;
 public sealed class ModuleRulesTests
 {
     public static readonly string[] Modules =
-        ["Tenancy", "Identity", "Organization", "Groups", "Students", "Enrollments", "Attendance", "Billing", "Announcements"];
+        ["Tenancy", "Identity", "Organization", "Groups", "Students", "Enrollments", "Attendance", "Billing", "Announcements", "Dashboard"];
 
     /// <summary>Modules without a tenant: schools themselves, and users (the Platform Admin has no school).</summary>
     private static readonly string[] ModulesWithoutTenantFilter = ["Tenancy", "Identity"];

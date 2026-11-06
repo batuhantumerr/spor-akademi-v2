@@ -64,6 +64,12 @@ public interface IPaymentRepository
         YearMonth lastPeriod,
         CancellationToken cancellationToken);
 
+    /// <summary>
+    /// Sum of <see cref="PaymentStatus.Recorded"/> payments per month of the payment date (cash basis) between
+    /// <paramref name="firstDay"/> and <paramref name="lastDay"/>, inclusive; months without payments are omitted.
+    /// </summary>
+    Task<IReadOnlyDictionary<YearMonth, decimal>> CollectedByPaymentMonthAsync(DateOnly firstDay, DateOnly lastDay, CancellationToken cancellationToken);
+
     /// <summary>Sum of the <see cref="PaymentStatus.Recorded"/> payments of one enrollment and period.</summary>
     Task<decimal> RecordedTotalAsync(EnrollmentId enrollmentId, YearMonth period, CancellationToken cancellationToken);
 }
