@@ -23,6 +23,7 @@ import { formatDate, formatTime } from '../../core/format/format';
 import { ui } from '../../core/i18n/tr';
 import { SlotDraft, addDays, summarizeSchedule, weekdayName } from '../../core/schedule/schedule';
 import { SchoolClock } from '../../core/time/school-clock';
+import { ConflictState } from '../../shared/data/conflict-state';
 import { ConflictNoticeComponent } from '../../shared/ui/conflict-notice.component';
 import { PageHeaderComponent } from '../../shared/ui/page-header.component';
 import { ToastService } from '../../shared/ui/toast.service';
@@ -127,11 +128,11 @@ const UPCOMING_DAYS = 14;
           @if (g.status !== 'Active') {
             <p class="mb-3 text-sm text-muted-foreground">{{ text.archivedNotice }}</p>
           }
-          @if (conflict()) {
+          @if (conflictState.open()) {
             <div class="mb-3">
               <app-conflict-notice
-                [ready]="freshGroup() !== null"
-                [loadError]="freshError()"
+                [ready]="conflictState.fresh() !== null"
+                [loadError]="conflictState.error()"
                 [busy]="saving()"
                 (applyMine)="applyMine()"
                 (loadServer)="loadServer()"
@@ -204,9 +205,9 @@ export class GroupDetailPage {
   protected readonly errorSlot = signal<SlotDraft | null>(null);
   protected readonly saving = signal(false);
   /** After a 409: the user's unsaved slots stay in the editor; the fresh version loads aside. */
-  protected readonly conflict = signal(false);
-  protected readonly freshGroup = signal<GroupDto | null>(null);
-  protected readonly freshError = signal<string | null>(null);
+  protected readonly conflictState = new ConflictState<GroupDto>(() =>
+    this.api.invoke(apiV1GroupsIdGet, { id: this.group()!.id }),
+  );
   protected readonly summary = computed(() => summarizeSchedule(this.group()?.slots ?? []));
 
   private readonly clock = inject(SchoolClock);
@@ -275,7 +276,7 @@ export class GroupDetailPage {
 
   /** Re-send the user's slots on top of the fresh version. */
   protected async applyMine(): Promise<void> {
-    const fresh = this.freshGroup();
+    const fresh = this.conflictState.fresh();
     const slots = this.pendingSlots;
     if (!fresh || !slots || this.saving()) {
       return;
@@ -285,7 +286,7 @@ export class GroupDetailPage {
 
   /** Discard the user's slots and show the server's version. */
   protected loadServer(): void {
-    const fresh = this.freshGroup();
+    const fresh = this.conflictState.fresh();
     if (!fresh) {
       return;
     }
@@ -295,17 +296,9 @@ export class GroupDetailPage {
     this.group.set(fresh);
   }
 
-  async loadFresh(): Promise<void> {
-    const group = this.group();
-    if (!group) {
-      return;
-    }
-    this.freshError.set(null);
-    try {
-      this.freshGroup.set(await this.api.invoke(apiV1GroupsIdGet, { id: group.id }));
-    } catch (err) {
-      this.freshError.set(problemMessage(toProblem(err)));
-    }
+  /** Retry after a failed load of the server version. */
+  protected loadFresh(): Promise<void> {
+    return this.conflictState.load();
   }
 
   private async put(id: string, slots: SlotDraft[], version: number): Promise<void> {
@@ -318,8 +311,7 @@ export class GroupDetailPage {
         id,
         body: { slots, version },
       });
-      const base = this.freshGroup() ?? this.group();
-      this.clearConflict();
+      const base = this.conflictState.close() ?? this.group();
       if (base) {
         this.group.set({ ...base, slots: result.slots, version: result.version });
       }
@@ -331,9 +323,7 @@ export class GroupDetailPage {
       const problem = toProblem(err);
       if (problem.code === 'Concurrency.Conflict') {
         // Keep the user's slots in the editor; load the server's version next to them.
-        this.conflict.set(true);
-        this.freshGroup.set(null);
-        await this.loadFresh();
+        await this.conflictState.start();
       } else {
         // e.g. Schedule.CoachUnavailable carries the other group's name; slots[i] names the row.
         this.scheduleError.set(problemMessage(problem));
@@ -365,9 +355,7 @@ export class GroupDetailPage {
   }
 
   private clearConflict(): void {
-    this.conflict.set(false);
-    this.freshGroup.set(null);
-    this.freshError.set(null);
+    this.conflictState.close();
     this.pendingSlots = null;
   }
 

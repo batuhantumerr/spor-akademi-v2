@@ -19,6 +19,7 @@ import { FacilityDto, FacilityType } from '../../api/models';
 import { fieldErrors, problemMessage, toProblem } from '../../core/api/problem';
 import { errorMessages, ui } from '../../core/i18n/tr';
 import { focusFirstInvalid } from '../../shared/forms/focus-first-invalid';
+import { ConflictState } from '../../shared/data/conflict-state';
 import { ConflictNoticeComponent } from '../../shared/ui/conflict-notice.component';
 
 const types: FacilityType[] = ['Field', 'Pool', 'Court', 'Other'];
@@ -70,11 +71,11 @@ const fieldIds: Record<Field, string> = {
           {{ error() }}
         </p>
       }
-      @if (conflict()) {
+      @if (conflictState.open()) {
         <div class="mt-3">
           <app-conflict-notice
-            [ready]="fresh() !== null"
-            [loadError]="freshError()"
+            [ready]="conflictState.fresh() !== null"
+            [loadError]="conflictState.error()"
             [busy]="saving()"
             (applyMine)="applyMine()"
             (loadServer)="loadServer()"
@@ -200,9 +201,7 @@ export class FacilityFormDialog {
   protected readonly saving = signal(false);
   protected readonly error = signal<string | null>(null);
   /** After a 409 the form keeps the typed values; the server's version loads aside. */
-  protected readonly conflict = signal(false);
-  protected readonly fresh = signal<FacilityDto | null>(null);
-  protected readonly freshError = signal<string | null>(null);
+  protected readonly conflictState = new ConflictState<FacilityDto>(() => this.fetchFresh());
   private readonly serverErrors = signal<Record<string, string>>({});
 
   protected readonly form = inject(FormBuilder).group({
@@ -251,7 +250,7 @@ export class FacilityFormDialog {
   }
 
   protected async save(): Promise<void> {
-    if (this.saving() || this.conflict()) {
+    if (this.saving() || this.conflictState.open()) {
       return;
     }
     if (this.form.invalid) {
@@ -284,9 +283,7 @@ export class FacilityFormDialog {
       const problem = toProblem(err);
       this.saving.set(false);
       if (problem.code === 'Concurrency.Conflict' && facility) {
-        this.conflict.set(true);
-        this.fresh.set(null);
-        await this.loadFresh();
+        await this.conflictState.start();
         return;
       }
       this.serverErrors.set(fieldErrors(problem));
@@ -297,44 +294,33 @@ export class FacilityFormDialog {
 
   /** Re-send the typed values on top of the fresh version. */
   protected async applyMine(): Promise<void> {
-    const fresh = this.fresh();
+    const fresh = this.conflictState.fresh();
     if (!fresh || this.saving()) {
       return;
     }
     this.facility.set(fresh);
-    this.clearConflict();
+    this.conflictState.close();
     await this.save();
   }
 
   /** Discard the typed values and show the server's version. */
   protected loadServer(): void {
-    const fresh = this.fresh();
+    const fresh = this.conflictState.fresh();
     if (!fresh) {
       return;
     }
     this.facility.set(fresh);
     this.fill(fresh);
-    this.clearConflict();
+    this.conflictState.close();
   }
 
-  /** Loads the server's version next to the user's values. */
-  async loadFresh(): Promise<void> {
-    const facility = this.facility();
-    if (!facility) {
-      return;
-    }
-    this.freshError.set(null);
-    try {
-      this.fresh.set(await this.api.invoke(apiV1FacilitiesIdGet, { id: facility.id }));
-    } catch (err) {
-      this.freshError.set(problemMessage(toProblem(err)));
-    }
+  /** Retry after a failed load of the server version. */
+  protected async loadFresh(): Promise<void> {
+    await this.conflictState.load();
   }
 
-  private clearConflict(): void {
-    this.conflict.set(false);
-    this.fresh.set(null);
-    this.freshError.set(null);
+  private fetchFresh(): Promise<FacilityDto> {
+    return this.api.invoke(apiV1FacilitiesIdGet, { id: this.facility()!.id });
   }
 
   private fill(facility: FacilityDto | null): void {

@@ -154,6 +154,58 @@ describe('FacilityFormDialog', () => {
     await settle(fixture);
   }
 
+  it('moves focus to the conflict notice and announces its state politely', async () => {
+    await facilityConflict();
+    const notice = root.querySelector('.conflict-notice') as HTMLElement;
+    expect(document.activeElement).toBe(notice);
+    expect(notice.querySelector('[aria-live="polite"]')?.textContent).toContain(ui.conflict.help);
+  });
+
+  it('opens the notice again when applying hits a second conflict', async () => {
+    await facilityConflict();
+    buttonWith(ui.conflict.applyMine)!.click();
+    await settle(fixture);
+    backend
+      .expectOne('/api/v1/facilities/f1')
+      .flush({ code: 'Concurrency.Conflict' }, { status: 409, statusText: 'Conflict' });
+    await settle(fixture);
+    backend.expectOne('/api/v1/facilities/f1').flush({ ...facility, version: 8 });
+    await settle(fixture);
+
+    expect(root.textContent).toContain(ui.conflict.title);
+    expect(input('f-name').value).toBe('Benim adım');
+    buttonWith(ui.conflict.applyMine)!.click();
+    await settle(fixture);
+    const retry = backend.expectOne('/api/v1/facilities/f1');
+    expect(retry.request.body).toEqual(expect.objectContaining({ name: 'Benim adım', version: 8 }));
+    retry.flush(facility);
+    await settle(fixture);
+    expect(close).toHaveBeenCalledWith(true);
+  });
+
+  it('ignores a server version that arrives after the user already chose', async () => {
+    await open(facility);
+    await type('f-name', 'Benim adım');
+    await submit();
+    backend
+      .expectOne('/api/v1/facilities/f1')
+      .flush({ code: 'Concurrency.Conflict' }, { status: 409, statusText: 'Conflict' });
+    await settle(fixture);
+    // The first load fails; a retry is in flight when the late first answer would land.
+    backend.expectOne('/api/v1/facilities/f1').flush(null, { status: 0, statusText: '' });
+    await settle(fixture);
+    buttonWith(ui.common.retry)!.click();
+    await settle(fixture);
+    const retryLoad = backend.expectOne('/api/v1/facilities/f1');
+    retryLoad.flush({ ...facility, name: 'Taze', version: 9 });
+    await settle(fixture);
+    buttonWith(ui.conflict.loadServer)!.click();
+    await settle(fixture);
+
+    expect(input('f-name').value).toBe('Taze');
+    expect(root.querySelector('.conflict-notice')).toBeNull();
+  });
+
   it('keeps the typed values after a conflict and applies them on the fresh version', async () => {
     await facilityConflict();
     expect(root.textContent).toContain(ui.conflict.title);
