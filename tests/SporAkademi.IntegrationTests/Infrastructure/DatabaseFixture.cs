@@ -41,7 +41,7 @@ public sealed partial class DatabaseFixture : IAsyncLifetime
             .UseNpgsql(MigratorConnectionString, npgsql => npgsql.MigrationsHistoryTable("__ef_migrations_history", "public"))
             .UseSnakeCaseNamingConvention()
             .Options;
-        await using (var context = new AppDbContext(options))
+        await using (var context = new AppDbContext(options, new AnonymousCurrentUser()))
         {
             await context.Database.MigrateAsync();
         }

@@ -19,9 +19,9 @@ Kapsamın tamamı ve maddelerin açıklamaları: [proje dokümanı, Ek G](proje-
 - [x] P1-02 Value object'ler
 - [x] P1-03 Application pipeline'ı
 - [x] P1-04 Kalıcılık temeli
-- [ ] P1-05 Tenancy
-- [ ] P1-06 Hata yönetimi
-- [ ] P1-07 Mimari testleri
+- [x] P1-05 Tenancy
+- [x] P1-06 Hata yönetimi
+- [x] P1-07 Mimari testleri
 - [x] P1-08 Entegrasyon test altyapısı
 - [ ] P1-09 US-03 Giriş
 - [ ] P1-10 US-04 Refresh ve çıkış

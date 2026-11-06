@@ -23,6 +23,7 @@ public sealed class ApiFactory(string appConnectionString) : WebApplicationFacto
             ["ConnectionStrings:App"] = appConnectionString,
             ["Jwt:SigningKey"] = JwtSigningKey,
             ["Seq:ServerUrl"] = null,
+            ["Serilog:MinimumLevel:Default"] = "Fatal",
         }));
         builder.ConfigureServices(services => services.Replace(ServiceDescriptor.Singleton<TimeProvider>(Clock)));
     }

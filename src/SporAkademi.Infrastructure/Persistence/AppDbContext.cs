@@ -1,11 +1,17 @@
 using Microsoft.EntityFrameworkCore;
+using SporAkademi.Application.Abstractions.Authentication;
 using SporAkademi.Domain.SharedKernel;
 using SporAkademi.Domain.Tenancy;
 
 namespace SporAkademi.Infrastructure.Persistence;
 
-public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(options)
+public sealed class AppDbContext(DbContextOptions<AppDbContext> options, ICurrentUser currentUser) : DbContext(options)
 {
+    private static readonly SchoolId NoTenant = SchoolId.From(Guid.Empty);
+
+    /// <summary>Read by the tenant query filters for every query; an empty id matches no rows.</summary>
+    internal SchoolId CurrentTenantId => currentUser.TenantId is { } tenant ? SchoolId.From(tenant) : NoTenant;
+
     protected override void ConfigureConventions(ModelConfigurationBuilder configurationBuilder)
     {
         ArgumentNullException.ThrowIfNull(configurationBuilder);
@@ -39,6 +45,7 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(AppDbContext).Assembly);
         modelBuilder.AddAuditColumns();
         modelBuilder.AddConcurrencyTokens();
+        modelBuilder.AddTenantQueryFilters(this);
     }
 
     private static bool IsEntityIdInterface(Type type) =>
