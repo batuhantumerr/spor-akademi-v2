@@ -98,7 +98,14 @@ type Field = 'title' | 'body';
             }
           </div>
           <div class="flex justify-end">
-            <button type="submit" class="btn btn-primary" [disabled]="publishing()">
+            <!-- Stays focusable while publishing (aria-disabled, not disabled) so focus is not lost. -->
+            <button
+              type="submit"
+              class="btn btn-primary"
+              [class.opacity-60]="publishing()"
+              [attr.aria-disabled]="publishing()"
+              [attr.aria-busy]="publishing()"
+            >
               <svg lucideMegaphone></svg>{{ publishing() ? text.publishing : text.publish }}
             </button>
           </div>
@@ -106,6 +113,11 @@ type Field = 'title' | 'body';
       } @else {
         <p class="text-sm text-muted-foreground">{{ text.archivedGroup }}</p>
       }
+
+      <!-- Announces a publish and list refreshes without moving focus. -->
+      <p class="sr-only" aria-live="polite" data-testid="announcements-live">
+        {{ announcement() }}
+      </p>
 
       <div class="mt-4 border-t border-border/60 pt-3">
         @if (list.error(); as message) {
@@ -161,6 +173,8 @@ export class GroupAnnouncementsComponent {
   protected readonly publishing = signal(false);
   protected readonly submitted = signal(false);
   protected readonly error = signal<string | null>(null);
+  /** Polite live region text: only the list reload that follows a successful publish. */
+  protected readonly announcement = signal('');
   private readonly serverErrors = signal<Partial<Record<Field, string>>>({});
   protected readonly titleCount = computed(() =>
     interpolate(this.text.counter, { count: this.title().length, max: TITLE_MAX }),
@@ -224,7 +238,15 @@ export class GroupAnnouncementsComponent {
       this.body.set('');
       this.submitted.set(false);
       this.toasts.success(this.text.published);
+      // Clear first so a repeat of the same text is announced again.
+      this.announcement.set('');
       await this.list.reset();
+      // The toast already says "published"; a failed reload shows its own alert, so stay silent then.
+      if (!this.list.error()) {
+        this.announcement.set(
+          interpolate(this.text.listUpdated, { count: this.list.totalCount() }),
+        );
+      }
     } catch (err) {
       const problem = toProblem(err);
       const fields = fieldErrors(problem);
