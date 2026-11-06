@@ -5,6 +5,7 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 using SporAkademi.Application.Abstractions.Authentication;
 using SporAkademi.Application.Abstractions.Data;
 using SporAkademi.Application.Identity;
+using SporAkademi.Application.Tenancy;
 using SporAkademi.Application.Tenancy.Contracts;
 using SporAkademi.Infrastructure.Identity;
 using SporAkademi.Infrastructure.Persistence;
@@ -47,6 +48,7 @@ public static class DependencyInjection
         services.AddScoped<IUserRepository, UserRepository>();
         services.AddSingleton<IPasswordHasher, AspNetPasswordHasher>();
         services.AddSingleton<IRefreshTokenFactory, RefreshTokenFactory>();
+        services.AddScoped<ISchoolRepository, SchoolRepository>();
 
         services.AddHealthChecks()
             .AddDbContextCheck<AppDbContext>("database", tags: ["ready"]);

@@ -1,5 +1,8 @@
+using SporAkademi.Application.Abstractions;
+using SporAkademi.Application.Identity.Contracts;
 using SporAkademi.Domain.Identity;
 using SporAkademi.Domain.SharedKernel;
+using SporAkademi.Domain.Tenancy;
 
 namespace SporAkademi.Application.Identity;
 
@@ -52,4 +55,25 @@ public interface IUserRepository
     Task<User?> GetByRefreshTokenHashAsync(string tokenHash, CancellationToken cancellationToken);
 
     Task<UserSummary?> GetSummaryAsync(UserId id, CancellationToken cancellationToken);
+
+    Task<bool> EmailExistsAsync(Email email, CancellationToken cancellationToken);
+
+    void Add(User user);
+
+    /// <summary>Optimistic concurrency: the save fails with <c>Concurrency.Conflict</c> if the row changed since <paramref name="version"/>.</summary>
+    void ExpectVersion(User user, uint version);
+
+    /// <summary>A coach of <paramref name="schoolId"/> with its tokens; other roles and schools are not found (DEC-105: explicit tenant).</summary>
+    Task<User?> GetCoachAsync(SchoolId schoolId, UserId id, CancellationToken cancellationToken);
+
+    Task<CoachDto?> FindCoachDtoAsync(SchoolId schoolId, UserId id, CancellationToken cancellationToken);
+
+    /// <summary>Coaches of the school by last name, then first name.</summary>
+    Task<PagedResult<CoachDto>> ListCoachesAsync(SchoolId schoolId, PageRequest page, CancellationToken cancellationToken);
+
+    Task<IReadOnlyDictionary<SchoolId, SchoolAdminSummary>> GetFirstSchoolAdminsAsync(IReadOnlyCollection<SchoolId> schoolIds, CancellationToken cancellationToken);
+
+    Task<IReadOnlySet<Guid>> GetActiveCoachIdsAsync(SchoolId schoolId, IReadOnlyCollection<Guid> coachIds, CancellationToken cancellationToken);
 }
+
+public sealed record CoachDto(Guid Id, string FirstName, string LastName, string Email, string? Phone, UserStatus Status, uint Version);
