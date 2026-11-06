@@ -21,6 +21,25 @@ public sealed class DueCalculatorTests
         new() { [Group] = [.. rates.Select(r => new FeeRate(r.From, Money.Try(r.Amount)))] };
 
     [Fact]
+    [Trait("Story", "US-24")]
+    public void Charges_validates_its_arguments_before_enumeration()
+    {
+        // Nothing is enumerated: the checks must fire on the call itself, not later inside a caller's loop.
+        Should.Throw<ArgumentNullException>(() => DueCalculator.Charges(null!, Fees(), M(2027, 1)));
+        Should.Throw<ArgumentNullException>(() => DueCalculator.Charges([], null!, M(2027, 1)));
+        Should.Throw<ArgumentNullException>(() => DueCalculator.Charges([], Fees(), null!));
+    }
+
+    [Fact]
+    [Trait("Story", "US-24")]
+    public void Charges_are_the_full_fee_of_every_active_period_before_payments()
+    {
+        var charges = DueCalculator.Charges([Enrollment("2027-01-20", "2027-03-01")], Fees((M(2027, 1), 1000m), (M(2027, 3), 1200m)), M(2027, 4));
+
+        charges.Select(c => (c.Period, c.Fee.Amount)).ShouldBe([(M(2027, 1), 1000m), (M(2027, 2), 1000m), (M(2027, 3), 1200m)]);
+    }
+
+    [Fact]
     public void Every_month_with_at_least_one_active_day_owes_the_full_fee()
     {
         // Started on the last day of November, ended on the first day of January: three full months (DEC-017).

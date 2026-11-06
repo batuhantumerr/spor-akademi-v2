@@ -123,6 +123,18 @@ internal sealed class PaymentRepository(AppDbContext db) : IPaymentRepository
         return totals.ToDictionary(t => (t.EnrollmentId, t.Period), t => t.Total);
     }
 
+    public async Task<IReadOnlyDictionary<YearMonth, decimal>> CollectedByPaymentMonthAsync(DateOnly firstDay, DateOnly lastDay, CancellationToken cancellationToken)
+    {
+        // Grouped by the payment date's month in the database; the (tenant_id, paid_on) index serves the range.
+        var totals = await db.Set<Payment>().AsNoTracking()
+            .Where(p => p.Status == PaymentStatus.Recorded && p.PaidOn >= firstDay && p.PaidOn <= lastDay)
+            .GroupBy(p => new { p.PaidOn.Year, p.PaidOn.Month })
+            .Select(g => new { g.Key.Year, g.Key.Month, Total = g.Sum(p => p.Amount.Amount) })
+            .ToListAsync(cancellationToken);
+
+        return totals.ToDictionary(t => YearMonth.Create(t.Year, t.Month).Value, t => t.Total);
+    }
+
     public Task<decimal> RecordedTotalAsync(EnrollmentId enrollmentId, YearMonth period, CancellationToken cancellationToken) =>
         db.Set<Payment>().AsNoTracking()
             .Where(p => p.EnrollmentId == enrollmentId && p.Period == period && p.Status == PaymentStatus.Recorded)
