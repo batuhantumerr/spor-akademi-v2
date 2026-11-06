@@ -5,6 +5,13 @@ namespace SporAkademi.Application.Abstractions.Messaging;
 /// <summary>A request that changes state. Runs inside a transaction (ADR-0004).</summary>
 public interface ICommand<TResponse>;
 
+/// <summary>
+/// Marks a command whose expected failures still change state that must be kept, so the transaction
+/// commits on a failed result as well: a wrong password counts towards the lockout, a reused refresh
+/// token revokes the user's sessions (DEC-113).
+/// </summary>
+public interface IKeepChangesOnFailure;
+
 /// <summary>A read-only request. Projects straight to a DTO; never runs in the transaction decorator.</summary>
 public interface IQuery<TResponse>;
 

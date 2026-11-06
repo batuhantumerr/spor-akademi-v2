@@ -5,9 +5,13 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 using SporAkademi.Application.Abstractions.Authentication;
 using SporAkademi.Application.Abstractions.Data;
 using SporAkademi.Application.Groups.Contracts;
+using SporAkademi.Application.Identity;
 using SporAkademi.Application.Organization;
+using SporAkademi.Application.Tenancy.Contracts;
+using SporAkademi.Infrastructure.Identity;
 using SporAkademi.Infrastructure.Organization;
 using SporAkademi.Infrastructure.Persistence;
+using SporAkademi.Infrastructure.Tenancy;
 
 namespace SporAkademi.Infrastructure;
 
@@ -42,6 +46,10 @@ public static class DependencyInjection
         services.AddScoped<DomainEventDispatcher>();
         services.AddScoped<IUnitOfWork, UnitOfWork>();
 
+        services.AddScoped<ITenancyModule, TenancyModule>();
+        services.AddScoped<IUserRepository, UserRepository>();
+        services.AddSingleton<IPasswordHasher, AspNetPasswordHasher>();
+        services.AddSingleton<IRefreshTokenFactory, RefreshTokenFactory>();
         services.AddScoped<ISportRepository, SportRepository>();
         services.AddScoped<IFacilityRepository, FacilityRepository>();
         services.AddScoped<IGroupUsage, NoGroupUsage>();
