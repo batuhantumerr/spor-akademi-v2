@@ -174,6 +174,35 @@ describe('CoachesPage', () => {
     expect(pageState(fixture.componentInstance)).not.toContain('tmp-789');
   });
 
+  it('says a new password was generated when it could not be shown', async () => {
+    await loadWith([mert]);
+    show.mockRejectedValueOnce(new Error('overlay failed'));
+    byLabel(`${ui.coaches.resetPassword}: Mert Kaya`)!.click();
+    await settle(fixture);
+    backend.expectOne('/api/v1/coaches/c1/reset-password').flush({ temporaryPassword: 'tmp-000' });
+    await settle(fixture);
+
+    expect(toast.error).toHaveBeenCalledWith(ui.temporaryPassword.shownFailed);
+  });
+
+  it('clears the password from the API result right after handing it over', async () => {
+    await loadWith([mert]);
+    let handedOver: { password: string } | undefined;
+    show.mockImplementationOnce(async (data: { password: string }) => {
+      handedOver = { password: data.password };
+    });
+    const result = { kind: 'created', name: 'Mert Kaya', temporaryPassword: 'tmp-111' };
+    open.mockReturnValue({ closed: of(result) });
+
+    (root.querySelector('.btn-primary') as HTMLButtonElement).click();
+    await settle(fixture);
+    list().flush(pageOf([mert]));
+    await settle(fixture);
+
+    expect(handedOver?.password).toBe('tmp-111');
+    expect(result.temporaryPassword).toBe('');
+  });
+
   it('does not reset when the confirmation is declined', async () => {
     await loadWith([mert]);
     confirm.mockResolvedValueOnce(false);

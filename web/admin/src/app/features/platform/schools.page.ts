@@ -53,12 +53,12 @@ import { CreatedSchool, SCHOOL_FORM_TITLE_ID, SchoolFormDialog } from './school-
         class="table-shell transition-opacity"
         tabindex="0"
         role="region"
-        [attr.aria-label]="text.caption"
+        aria-labelledby="schools-caption"
         [class.opacity-60]="list.refreshing()"
         [attr.aria-busy]="list.refreshing()"
       >
         <table class="data-table min-w-[40rem]">
-          <caption class="sr-only">
+          <caption id="schools-caption" class="sr-only">
             {{
               text.caption
             }}
@@ -149,10 +149,12 @@ export class SchoolsPage {
       this.toasts.success(this.text.created);
       void this.list.load();
       // The password goes straight into the one-time dialog; nothing here keeps it.
-      await this.temporaryPassword.show({
+      const shown = this.temporaryPassword.show({
         name: `${created.adminName} (${created.schoolName})`,
         password: created.temporaryPassword,
       });
+      created.temporaryPassword = '';
+      await shown;
     } finally {
       this.busy.set(false);
     }

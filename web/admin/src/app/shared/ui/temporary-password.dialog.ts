@@ -2,10 +2,12 @@ import { DIALOG_DATA, Dialog, DialogRef } from '@angular/cdk/dialog';
 import {
   ChangeDetectionStrategy,
   Component,
+  ElementRef,
   Injectable,
   OnDestroy,
   inject,
   signal,
+  viewChild,
 } from '@angular/core';
 import { LucideCopy, LucideKeyRound, LucideTriangleAlert } from '@lucide/angular';
 import { firstValueFrom } from 'rxjs';
@@ -45,6 +47,7 @@ const WARNING_ID = 'temporary-password-warning';
       <div class="mt-2 flex items-stretch gap-2">
         <label class="sr-only" for="temporary-password">{{ text.label }}</label>
         <input
+          #passwordInput
           id="temporary-password"
           class="input min-w-0 flex-1 font-mono text-base tracking-wider"
           readonly
@@ -88,6 +91,7 @@ export class TemporaryPasswordDialog implements OnDestroy {
   /** Readable by tests to prove the value is wiped on close. */
   readonly password = signal(this.data.password);
   protected readonly copied = signal<boolean | null>(null);
+  private readonly input = viewChild<ElementRef<HTMLInputElement>>('passwordInput');
 
   constructor() {
     // Drop the caller's reference too; the dialog's copy is the only one left.
@@ -108,11 +112,21 @@ export class TemporaryPasswordDialog implements OnDestroy {
   }
 
   protected close(): void {
+    this.wipe();
     this.ref.close();
   }
 
   ngOnDestroy(): void {
+    this.wipe();
+  }
+
+  /** Clears the value from the signal and from the input element (it may outlive the view). */
+  private wipe(): void {
     this.password.set('');
+    const input = this.input();
+    if (input) {
+      input.nativeElement.value = '';
+    }
   }
 }
 
@@ -129,6 +143,8 @@ export class TemporaryPasswordService {
       ariaDescribedBy: WARNING_ID,
       // Only the explicit button closes it, so a stray click or Escape cannot lose the password.
       disableClose: true,
+      // Navigation (back button, route change, logout) must not destroy it either.
+      closeOnNavigation: false,
       backdropClass: ['bg-slate-900/60'],
     });
     await firstValueFrom(ref.closed);

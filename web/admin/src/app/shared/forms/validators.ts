@@ -2,7 +2,8 @@ import { AbstractControl, ValidationErrors } from '@angular/forms';
 
 /**
  * Mirrors the API's PhoneNumber rule: a Turkish number given as 10 digits, 0 + 10 digits or
- * +90 / 90 + 10 digits (spaces, dashes, dots and parentheses allowed), starting with 2–5.
+ * +90 / 90 + 10 digits, starting with 2–5. Like the API, only space, '-', '(', ')', '.' and '+'
+ * are ignored; tabs or other whitespace make the number invalid.
  */
 export function isTurkishPhone(value: string): boolean {
   const trimmed = value.trim();
@@ -10,7 +11,7 @@ export function isTurkishPhone(value: string): boolean {
     return false;
   }
   const hasPlus = trimmed.startsWith('+');
-  const digits = trimmed.replace(/[\s\-().+]/g, '');
+  const digits = trimmed.replace(/[ \-().+]/g, '');
   if (!/^\d+$/.test(digits)) {
     return false;
   }

@@ -15,7 +15,7 @@ import {
   apiV1CoachesIdDeactivatePost,
   apiV1CoachesIdResetPasswordPost,
 } from '../../api/functions';
-import { CoachDto } from '../../api/models';
+import { CoachDto, TemporaryPasswordIssued } from '../../api/models';
 import { problemMessage, toProblem } from '../../core/api/problem';
 import { formatPhone } from '../../core/format/format';
 import { ui } from '../../core/i18n/tr';
@@ -73,12 +73,12 @@ import { COACH_FORM_TITLE_ID, CoachFormDialog, CoachFormResult } from './coach-f
         class="table-shell transition-opacity"
         tabindex="0"
         role="region"
-        [attr.aria-label]="text.caption"
+        aria-labelledby="coaches-caption"
         [class.opacity-60]="list.refreshing()"
         [attr.aria-busy]="list.refreshing()"
       >
         <table class="data-table min-w-[44rem]">
-          <caption class="sr-only">
+          <caption id="coaches-caption" class="sr-only">
             {{
               text.caption
             }}
@@ -198,11 +198,13 @@ export class CoachesPage {
       void this.list.load();
       if (result?.kind === 'created') {
         this.toasts.success(this.text.created);
-        // Straight into the one-time dialog; the page never stores the password.
-        await this.temporaryPassword.show({
+        // Straight into the one-time dialog; the source field is cleared right away.
+        const shown = this.temporaryPassword.show({
           name: result.name,
           password: result.temporaryPassword,
         });
+        result.temporaryPassword = '';
+        await shown;
       } else if (result?.kind === 'saved') {
         this.toasts.success(this.text.saved);
       }
@@ -241,14 +243,24 @@ export class CoachesPage {
       if (!ok) {
         return;
       }
+      let issued: TemporaryPasswordIssued;
       try {
-        const issued = await this.api.invoke(apiV1CoachesIdResetPasswordPost, { id: coach.id });
-        await this.temporaryPassword.show({
+        issued = await this.api.invoke(apiV1CoachesIdResetPasswordPost, { id: coach.id });
+      } catch (err) {
+        this.toasts.error(problemMessage(toProblem(err)));
+        return;
+      }
+      try {
+        const shown = this.temporaryPassword.show({
           name: this.fullName(coach),
           password: issued.temporaryPassword,
         });
-      } catch (err) {
-        this.toasts.error(problemMessage(toProblem(err)));
+        issued.temporaryPassword = '';
+        await shown;
+      } catch {
+        // The old password is already revoked; the only way forward is another reset.
+        issued.temporaryPassword = '';
+        this.toasts.error(ui.temporaryPassword.shownFailed);
       }
     });
   }

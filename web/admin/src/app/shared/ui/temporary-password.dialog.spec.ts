@@ -49,7 +49,9 @@ describe('TemporaryPasswordService', () => {
 
     expect(closed).toBe(true);
     expect(dialog.password()).toBe('');
-    expect(document.body.innerHTML).not.toContain(password);
+    // The detached input element must not keep the value either.
+    expect(input.value).toBe('');
+    expect(document.querySelector('#temporary-password')).toBeNull();
   });
 
   it('does not close on Escape, so the password cannot be lost by accident', async () => {
@@ -62,6 +64,33 @@ describe('TemporaryPasswordService', () => {
     await settle();
 
     expect(TestBed.inject(Dialog).openDialogs.length).toBe(1);
+  });
+
+  it('stays open when the app navigates', async () => {
+    void TestBed.inject(TemporaryPasswordService).show({ name: 'X', password });
+    await settle();
+    expect(TestBed.inject(Dialog).openDialogs[0].config.closeOnNavigation).toBe(false);
+  });
+
+  it('tells the user to copy by hand when the clipboard is unavailable', async () => {
+    const writeText = vi.fn().mockRejectedValue(new Error('denied'));
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
+    void TestBed.inject(TemporaryPasswordService).show({ name: 'X', password });
+    await settle();
+
+    const copy = [...document.querySelectorAll('button')].find((b) =>
+      b.textContent?.includes(ui.temporaryPassword.copy),
+    ) as HTMLButtonElement;
+    copy.click();
+    await settle();
+    TestBed.inject(Dialog).openDialogs[0].componentRef?.changeDetectorRef.detectChanges();
+
+    expect(document.querySelector('[role="status"]')?.textContent).toContain(
+      ui.temporaryPassword.copyFailed,
+    );
+    expect(document.querySelector('[role="status"]')?.textContent).not.toContain(
+      ui.temporaryPassword.copied,
+    );
   });
 
   it('copies to the clipboard and announces the result', async () => {

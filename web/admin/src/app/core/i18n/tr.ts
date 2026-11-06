@@ -262,13 +262,17 @@ export const ui = {
     resetTitle: 'Şifre sıfırlansın mı?',
     resetText:
       'Antrenörün mevcut şifresi ve açık oturumları geçersiz olur; yeni bir geçici şifre oluşturulur.',
+    inactiveNow: 'Bu antrenör bu arada pasif yapılmış; bilgileri değiştirilemez.',
+    reloadFailed: 'Antrenörün güncel bilgileri yüklenemedi. Kaydetmeden önce tekrar deneyin.',
     statuses: { Active: 'Aktif', Deactivated: 'Pasif' } as Record<string, string>,
   },
   temporaryPassword: {
     title: 'Geçici şifre',
     intro: '{name} için geçici şifre:',
     warning:
-      'Bu şifre bir daha gösterilmeyecek. Şimdi kopyalayıp kişiye güvenli bir yoldan iletin; ilk girişte değiştirmesi istenecek.',
+      'Bu şifre bir daha gösterilmeyecek ve ekranda açık yazılır; çevrenizde görebilecek kimse olmadığından emin olun. Kopyala düğmesi şifreyi panoya alır: kişiye güvenli bir yoldan hemen iletin, ardından panoyu temizleyin (başka bir şey kopyalayın). İlk girişte şifresini değiştirmesi istenecek.',
+    shownFailed:
+      'Yeni bir geçici şifre oluşturuldu ancak gösterilemedi. Önceki şifre artık geçersiz; lütfen şifreyi tekrar sıfırlayın.',
     label: 'Geçici şifre',
     copy: 'Kopyala',
     copied: 'Şifre panoya kopyalandı.',
