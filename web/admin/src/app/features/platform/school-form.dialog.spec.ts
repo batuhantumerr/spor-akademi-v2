@@ -67,9 +67,14 @@ describe('SchoolFormDialog', () => {
     expect((root.querySelector('#s-timezone') as HTMLSelectElement).value).toBe('Europe/Istanbul');
   });
 
-  it('suggests a slug and checks its format while typing', async () => {
-    await type('s-name', 'Kartal Spor');
-    expect(input('s-slug').value).toBe('kartal-spor');
+  it('suggests a slug without judging it, and checks it once the user edits it', async () => {
+    // A short name gives a too-short suggestion; it is not announced as an error.
+    await type('s-name', 'Ab');
+    expect(input('s-slug').value).toBe('ab');
+    expect(input('s-slug').getAttribute('aria-invalid')).toBe('false');
+    expect(root.querySelector('#s-slug-status')?.textContent?.trim()).toBe('');
+
+    await type('s-slug', 'kartal-spor');
     expect(root.querySelector('#s-slug-status')?.textContent).toContain(ui.schools.slugValid);
 
     await type('s-slug', 'Kartal_Spor');
@@ -141,6 +146,36 @@ describe('SchoolFormDialog', () => {
       errorMessages['User.EmailTaken'],
     );
     expect(close).not.toHaveBeenCalled();
+  });
+
+  it('judges a suggested slug on submit', async () => {
+    await type('s-name', 'Ab');
+    await submit();
+    expect(root.querySelector('#s-slug-status')?.textContent).toContain(
+      errorMessages['Slug.Invalid'],
+    );
+  });
+
+  it('trims the admin e-mail before validating and sending', async () => {
+    await fillValid();
+    await type('s-admin-email', '  ayse@example.test ');
+    await submit();
+    const post = backend.expectOne('/api/v1/platform/schools');
+    expect((post.request.body as { admin: { email: string } }).admin.email).toBe(
+      'ayse@example.test',
+    );
+    post.flush({
+      adminId: 'a1',
+      temporaryPassword: 'tmp',
+      school: {
+        id: 's1',
+        name: 'Kartal Spor',
+        slug: 'kartal-spor',
+        status: 'Active',
+        timeZone: 'Europe/Istanbul',
+      },
+    });
+    await settle(fixture);
   });
 
   it('focuses the first invalid field instead of calling the API', async () => {

@@ -50,12 +50,17 @@ const ids: Record<Field, string> = {
         {{ coach() ? text.edit : text.add }}
       </h2>
       @if (error()) {
-        <p
+        <div
           role="alert"
-          class="mt-3 rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive"
+          class="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive"
         >
-          {{ error() }}
-        </p>
+          <span>{{ error() }}</span>
+          @if (blocked() === 'reloadFailed') {
+            <button type="button" class="btn btn-secondary btn-sm" (click)="retryReload()">
+              {{ common.retry }}
+            </button>
+          }
+        </div>
       }
       <div class="mt-4 grid gap-4 sm:grid-cols-2">
         <div>
@@ -109,6 +114,7 @@ const ids: Record<Field, string> = {
               formControlName="email"
               autocomplete="off"
               autocapitalize="none"
+              (blur)="trimEmail()"
               [attr.aria-invalid]="!!message('email')"
               [attr.aria-describedby]="message('email') ? ids.email + '-error' : null"
             />
@@ -144,7 +150,7 @@ const ids: Record<Field, string> = {
         <button type="button" class="btn btn-secondary" (click)="ref.close()">
           {{ actions.cancel }}
         </button>
-        <button type="submit" class="btn btn-primary" [disabled]="saving()">
+        <button type="submit" class="btn btn-primary" [disabled]="saving() || blocked() !== null">
           {{ coach() ? actions.save : text.add }}
         </button>
       </div>
@@ -164,6 +170,12 @@ export class CoachFormDialog {
   protected readonly titleId = COACH_FORM_TITLE_ID;
   protected readonly saving = signal(false);
   protected readonly error = signal<string | null>(null);
+  protected readonly common = ui.common;
+  /**
+   * Saving is blocked after a conflict when the fresh copy could not be loaded (a retry would
+   * only hit 409 again) or when the coach has been deactivated meanwhile.
+   */
+  protected readonly blocked = signal<'reloadFailed' | 'inactive' | null>(null);
   private readonly server = new ServerFieldErrors<Field>(
     { firstName: 'firstName', lastName: 'lastName', email: 'email', phone: 'phone' },
     { 'User.EmailTaken': 'email' },
@@ -184,6 +196,14 @@ export class CoachFormDialog {
     }
     this.fill(coach);
     this.server.watch(this.form.controls, inject(DestroyRef));
+  }
+
+  /** Pasted addresses often carry spaces; trim before the e-mail rule runs. */
+  protected trimEmail(): void {
+    const email = this.form.controls.email;
+    if (email.enabled && email.value !== email.value.trim()) {
+      email.setValue(email.value.trim());
+    }
   }
 
   protected message(field: Field): string | null {
@@ -211,9 +231,10 @@ export class CoachFormDialog {
   }
 
   protected async save(): Promise<void> {
-    if (this.saving()) {
+    if (this.saving() || this.blocked()) {
       return;
     }
+    this.trimEmail();
     if (this.form.invalid) {
       this.form.markAllAsTouched();
       this.focusFirstInvalid();
@@ -257,16 +278,39 @@ export class CoachFormDialog {
     }
   }
 
+  protected async retryReload(): Promise<void> {
+    const coach = this.coach();
+    if (coach && !this.saving()) {
+      this.saving.set(true);
+      await this.reload(coach.id);
+      this.saving.set(false);
+    }
+  }
+
   /** Someone else saved first: show their version so the next save carries the fresh version. */
   private async reload(id: string): Promise<void> {
     try {
       const fresh = await this.api.invoke(apiV1CoachesIdGet, { id });
       this.coach.set(fresh);
       this.fill(fresh);
+      if (fresh.status !== 'Active') {
+        this.block('inactive');
+        this.error.set(this.text.inactiveNow);
+        return;
+      }
+      this.blocked.set(null);
+      this.form.enable();
+      this.form.controls.email.disable();
       this.error.set(ui.common.conflictReloaded);
-    } catch (err) {
-      this.error.set(problemMessage(toProblem(err)));
+    } catch {
+      this.block('reloadFailed');
+      this.error.set(this.text.reloadFailed);
     }
+  }
+
+  private block(reason: 'reloadFailed' | 'inactive'): void {
+    this.blocked.set(reason);
+    this.form.disable();
   }
 
   private fill(coach: CoachDto | null): void {

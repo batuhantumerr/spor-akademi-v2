@@ -133,6 +133,61 @@ describe('CoachFormDialog', () => {
     expect(close).toHaveBeenCalledWith({ kind: 'saved' });
   });
 
+  async function conflict(): Promise<void> {
+    await type('c-first', 'Mertcan');
+    await submit();
+    backend
+      .expectOne('/api/v1/coaches/c1')
+      .flush({ code: 'Concurrency.Conflict' }, { status: 409, statusText: 'Conflict' });
+    await settle(fixture);
+  }
+
+  const saveButton = () => root.querySelector('button[type="submit"]') as HTMLButtonElement;
+
+  it('blocks saving with a retry when the fresh copy cannot be loaded', async () => {
+    await open(coach);
+    await conflict();
+    backend.expectOne('/api/v1/coaches/c1').flush(null, { status: 0, statusText: '' });
+    await settle(fixture);
+
+    expect(root.querySelector('[role="alert"]')?.textContent).toContain(ui.coaches.reloadFailed);
+    expect(saveButton().disabled).toBe(true);
+    expect(input('c-first').disabled).toBe(true);
+
+    const retry = [...root.querySelectorAll('button')].find(
+      (b) => b.textContent?.trim() === ui.common.retry,
+    ) as HTMLButtonElement;
+    retry.click();
+    await settle(fixture);
+    backend.expectOne('/api/v1/coaches/c1').flush({ ...coach, version: 9 });
+    await settle(fixture);
+
+    expect(saveButton().disabled).toBe(false);
+    expect(input('c-first').disabled).toBe(false);
+    expect(input('c-email').readOnly).toBe(true);
+  });
+
+  it('blocks saving when the coach was deactivated meanwhile', async () => {
+    await open(coach);
+    await conflict();
+    backend.expectOne('/api/v1/coaches/c1').flush({ ...coach, status: 'Deactivated', version: 9 });
+    await settle(fixture);
+
+    expect(root.querySelector('[role="alert"]')?.textContent).toContain(ui.coaches.inactiveNow);
+    expect(saveButton().disabled).toBe(true);
+    await submit();
+    backend.expectNone('/api/v1/coaches/c1');
+  });
+
+  it('trims a pasted e-mail before validating', async () => {
+    await open(null);
+    await type('c-email', ' mert@example.test  ');
+    input('c-email').dispatchEvent(new Event('blur'));
+    await settle(fixture);
+    expect(input('c-email').value).toBe('mert@example.test');
+    expect(input('c-email').getAttribute('aria-invalid')).toBe('false');
+  });
+
   it('reloads the coach after a version conflict and saves with the fresh version', async () => {
     await open(coach);
     await type('c-first', 'Mertcan');

@@ -117,7 +117,7 @@ const ids: Record<Field, string> = {
           <p [id]="ids.slug + '-status'" aria-live="polite">
             @if (message('slug'); as m) {
               <span class="field-error block">{{ m }}</span>
-            } @else if (form.controls.slug.value) {
+            } @else if (slugChecked() && form.controls.slug.value) {
               <span class="mt-1.5 block text-xs text-success">{{ text.slugValid }}</span>
             }
           </p>
@@ -184,6 +184,7 @@ const ids: Record<Field, string> = {
               formControlName="email"
               autocomplete="off"
               autocapitalize="none"
+              (blur)="trimEmail()"
               [attr.aria-invalid]="!!message('email')"
               [attr.aria-describedby]="
                 message('email') ? ids.email + '-error s-admin-hint' : 's-admin-hint'
@@ -218,6 +219,7 @@ export class SchoolFormDialog {
   protected readonly titleId = SCHOOL_FORM_TITLE_ID;
   protected readonly zones = timeZones();
   protected readonly saving = signal(false);
+  private readonly submitted = signal(false);
   protected readonly error = signal<string | null>(null);
   private readonly server = new ServerFieldErrors<Field>(
     {
@@ -257,6 +259,18 @@ export class SchoolFormDialog {
     destroyRef.onDestroy(() => subscription.unsubscribe());
   }
 
+  protected slugChecked(): boolean {
+    return this.form.controls.slug.dirty || this.submitted();
+  }
+
+  /** Pasted addresses often carry spaces; trim before the e-mail rule runs. */
+  protected trimEmail(): void {
+    const email = this.form.controls.email;
+    if (email.value !== email.value.trim()) {
+      email.setValue(email.value.trim());
+    }
+  }
+
   /** Server error first, then the client rule; client errors appear once the field was used. */
   protected message(field: Field): string | null {
     const server = this.server.get(field);
@@ -264,9 +278,8 @@ export class SchoolFormDialog {
       return server;
     }
     const control = this.form.controls[field];
-    // The slug is checked live as the user types (or as it is suggested from the name).
-    const shown =
-      field === 'slug' ? control.value !== '' || control.touched : control.touched || control.dirty;
+    // A suggested slug is not judged; only one the user typed (or a submitted form) is.
+    const shown = field === 'slug' ? this.slugChecked() : control.touched || control.dirty;
     if (!shown || control.valid) {
       return null;
     }
@@ -289,6 +302,8 @@ export class SchoolFormDialog {
     if (this.saving()) {
       return;
     }
+    this.submitted.set(true);
+    this.trimEmail();
     if (this.form.invalid) {
       this.form.markAllAsTouched();
       this.focusFirstInvalid();
@@ -304,7 +319,11 @@ export class SchoolFormDialog {
           name: v.name.trim(),
           slug: v.slug,
           timeZone: v.timeZone,
-          admin: { firstName: v.firstName.trim(), lastName: v.lastName.trim(), email: v.email },
+          admin: {
+            firstName: v.firstName.trim(),
+            lastName: v.lastName.trim(),
+            email: v.email.trim(),
+          },
         },
       });
       this.ref.close({
