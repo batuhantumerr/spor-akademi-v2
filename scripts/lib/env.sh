@@ -6,7 +6,8 @@ set -euo pipefail
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 
 load_env() {
-  local file="$REPO_ROOT/.env"
+  # SPOR_AKADEMI_ENV_FILE points to another .env file (e.g. the main checkout's, from a git worktree).
+  local file="${SPOR_AKADEMI_ENV_FILE:-$REPO_ROOT/.env}"
   if [[ ! -f "$file" ]]; then
     echo "error: .env not found. Copy .env.example to .env and fill it in (see README)." >&2
     return 1
@@ -36,7 +37,8 @@ require_env() {
 }
 
 connection_string() {
-  # $1 = role name, $2 = password variable name
+  # $1 = role name, $2 = password variable name. SPOR_AKADEMI_DB_NAME selects another database on the
+  # same server (scripts/e2e.sh uses a throwaway one).
   local port="${POSTGRES_HOST_PORT:-55432}"
-  printf 'Host=127.0.0.1;Port=%s;Database=spor_akademi;Username=%s;Password=%s' "$port" "$1" "${!2}"
+  printf 'Host=127.0.0.1;Port=%s;Database=%s;Username=%s;Password=%s' "$port" "${SPOR_AKADEMI_DB_NAME:-spor_akademi}" "$1" "${!2}"
 }
