@@ -4,6 +4,7 @@ using SporAkademi.Api.Authentication;
 using SporAkademi.Api.Endpoints.Identity;
 using SporAkademi.Api.Errors;
 using SporAkademi.Api.Observability;
+using SporAkademi.Api.OpenApi;
 using SporAkademi.Application;
 using SporAkademi.Application.Abstractions.Authentication;
 using SporAkademi.Infrastructure;
@@ -33,6 +34,7 @@ builder.Services.AddLoginRateLimiting();
 builder.Services.ConfigureHttpJsonOptions(json => json.SerializerOptions.Converters.Add(new JsonStringEnumConverter()));
 builder.Services.AddProblemDetails(options => options.CustomizeProblemDetails = ProblemShape.Complete);
 builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
+builder.Services.AddApiDocument();
 
 var app = builder.Build();
 
@@ -48,6 +50,7 @@ app.UseMiddleware<PasswordChangeRequiredMiddleware>();
 
 app.MapHealthEndpoints();
 app.MapIdentityEndpoints();
+app.MapApiDocument();
 
 await app.RunAsync();
 

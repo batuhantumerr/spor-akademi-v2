@@ -27,6 +27,7 @@ Sahiple ve dokümanlarda Türkçe; kod, isimler, enum'lar, commit'ler İngilizce
 ## Komutlar
 - `bash scripts/setup-env.sh` (bir kez), `docker compose up -d --wait`, `bash scripts/ef.sh database update`, `bash scripts/run-api.sh`, `cd web/admin && npm start`.
 - Migration: `bash scripts/ef.sh migrations add <Name>`; her zaman migrator rolüyle.
+- API sözleşmesi değişince: `UPDATE_OPENAPI=1 dotnet test --project tests/SporAkademi.IntegrationTests -- --filter-class "*OpenApiContractTests"` ve `web/admin/openapi/spor-akademi.json`'ı commit et. Angular client (`src/app/api`, commit edilmez) `npm run generate:api` ile build/test/lint/start öncesi otomatik üretilir.
 
 ## Güvenlik
 `.env` hiçbir yoldan okunmaz. `printenv`, `docker inspect`, `docker compose config`, `dotnet user-secrets list` çalıştırılmaz. Loglarda kişisel veri yok. Sadece sentetik veri.
