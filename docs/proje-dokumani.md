@@ -1624,7 +1624,7 @@ API'nin döndüğü tüm hata ve uyarı kodlarının kataloğu. Kurallar:
 | `Sport.InUse` | Conflict | Bu branşa bağlı gruplar olduğu için silinemez. Arşivleyebilirsiniz. | US-06 |
 | `Sport.Archived` | BusinessRule | Arşivlenmiş bir branş için yeni grup oluşturulamaz. | US-06 |
 | `Sport.NotFound` | NotFound | Branş bulunamadı. | US-06 |
-| `Facility.InUse` | Conflict | Bu tesisi aktif gruplar kullandığı için silinemez. Arşivleyebilirsiniz. | US-07 |
+| `Facility.InUse` | Conflict | Bu tesisi kullanan gruplar olduğu için silinemez. Arşivleyebilirsiniz. | US-07 |
 | `Facility.Archived` | BusinessRule | Arşivlenmiş bir tesis gruplara atanamaz. | US-07 |
 | `Facility.NotFound` | NotFound | Tesis bulunamadı. | US-07 |
 
