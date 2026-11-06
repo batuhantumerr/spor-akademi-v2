@@ -34,6 +34,9 @@ public sealed class LogPrivacyTests(DatabaseFixture database) : IdentityTest(dat
     private const string EmergencyPhone = "0533 876 54 32";
     private const string GuardianPhone = "0534 765 43 21";
 
+    /// <summary>Free text an admin might write; it can name people, so it must not reach the logs either.</summary>
+    private const string CancelReason = "Saklisoyadli ailesi yanlış aya ödedi";
+
     [Fact]
     public async Task Logs_never_contain_personal_data_passwords_or_tokens()
     {
@@ -83,10 +86,43 @@ public sealed class LogPrivacyTests(DatabaseFixture database) : IdentityTest(dat
                 new { newGuardian = new { firstName = GuardianFirstName, lastName = StudentLastName, phone = GuardianPhone, email = GuardianEmail }, relationship = "Mother" },
             },
         };
-        (await client.PostAsJsonAsync("/api/v1/students", student, ct)).StatusCode.ShouldBe(HttpStatusCode.Created);
+        var registered = await client.PostAsJsonAsync("/api/v1/students", student, ct);
+        registered.StatusCode.ShouldBe(HttpStatusCode.Created);
+        var studentId = await IdOfAsync(registered);
         (await client.PostAsJsonAsync("/api/v1/students", student with { }, ct)).StatusCode.ShouldNotBe(HttpStatusCode.InternalServerError);
         (await client.PostAsJsonAsync("/api/v1/students", new { firstName = StudentFirstName, email = "bozuk-eposta" }, ct)).StatusCode.ShouldBe(HttpStatusCode.BadRequest);
         (await client.GetAsync(new Uri($"/api/v1/students?search={StudentLastName}", UriKind.Relative), ct)).StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        // Enrollment, a fee, a payment and its cancellation with a free-text reason.
+        var sport = await IdOfAsync(await client.PostAsJsonAsync("/api/v1/sports", new { name = "Yüzme" }, ct));
+        var facility = await IdOfAsync(await client.PostAsJsonAsync("/api/v1/facilities", new
+        {
+            name = "Kapalı Havuz",
+            type = "Pool",
+            address = new { line = "Deniz Cad. No:5", district = "Kadıköy", city = "İstanbul" },
+            capacity = 40,
+        }, ct));
+        var group = await IdOfAsync(await client.PostAsJsonAsync("/api/v1/groups", new
+        {
+            sportId = sport,
+            name = "Minikler",
+            birthYearRange = new { from = 2015, to = 2016 },
+            capacity = 10,
+            facilityId = facility,
+        }, ct));
+        (await client.PostAsJsonAsync($"/api/v1/groups/{group}/fees", new { effectiveFrom = "2027-01", amount = new { amount = "1250.00", currency = "TRY" } }, ct))
+            .StatusCode.ShouldBe(HttpStatusCode.Created);
+        var enrollment = await IdOfAsync(await client.PostAsJsonAsync("/api/v1/enrollments", new { studentId, groupId = group, startDate = "2027-01-04" }, ct));
+        var payment = await IdOfAsync(await client.PostAsJsonAsync("/api/v1/payments", new
+        {
+            enrollmentId = enrollment,
+            period = "2027-01",
+            amount = new { amount = "750.00", currency = "TRY" },
+            method = "Cash",
+            paidOn = "2027-01-10",
+        }, ct));
+        (await client.PostAsJsonAsync($"/api/v1/payments/{payment}/cancel", new { reason = CancelReason }, ct)).StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await client.GetAsync(new Uri($"/api/v1/dues/outstanding?groupId={group}", UriKind.Relative), ct)).StatusCode.ShouldBe(HttpStatusCode.OK);
 
         // Password change (old and new passwords in the body) and a wrong current password.
         (await client.PostAsJsonAsync("/api/v1/auth/change-password", new { currentPassword = "Yanlis-Sifre-987", newPassword = "Gizli-Yeni-Sifre-55" }, ct))
@@ -99,6 +135,7 @@ public sealed class LogPrivacyTests(DatabaseFixture database) : IdentityTest(dat
         // The test must see real request logs, otherwise it proves nothing.
         events.ShouldContain(e => e.Contains("LoginCommand", StringComparison.Ordinal) && e.Contains("Auth.InvalidCredentials", StringComparison.Ordinal));
         events.ShouldContain(e => e.Contains("RegisterStudentCommand", StringComparison.Ordinal));
+        events.ShouldContain(e => e.Contains("RecordPaymentCommand", StringComparison.Ordinal));
 
         string[] forbidden =
         [
@@ -108,12 +145,19 @@ public sealed class LogPrivacyTests(DatabaseFixture database) : IdentityTest(dat
             BirthDate, "23.07.2015",
             "9876543", "987 65 43", "8765432", "7654321",
             OwnPassword, "Yanlis-Sifre-987", "Gizli-Yeni-Sifre-55",
+            CancelReason, "Saklisoyadli ailesi",
             session.AccessToken, session.RefreshToken, newSession.AccessToken, newSession.RefreshToken,
         ];
         foreach (var value in forbidden)
         {
             events.Where(e => e.Contains(value, StringComparison.OrdinalIgnoreCase)).ShouldBeEmpty($"'{value}' leaked into the logs.");
         }
+    }
+
+    private static async Task<Guid> IdOfAsync(HttpResponseMessage response)
+    {
+        response.StatusCode.ShouldBe(HttpStatusCode.Created);
+        return (await response.Content.ReadFromJsonAsync<JsonElement>(TestContext.Current.CancellationToken)).GetProperty("id").GetGuid();
     }
 
     /// <summary>Keeps every event rendered with its message, properties and exception.</summary>

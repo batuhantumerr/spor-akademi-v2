@@ -24,7 +24,7 @@ Test sınıfları `tests/` altındaki yollarıyla verilir (`IntegrationTests/...
 | NFR-SEC-12 | Girdi sınırları (1 MB, sınırda doğrulama) | ✅ | Kestrel limiti + `RequestSizeLimitMiddleware`; `ErrorHandlingTests.Bodies_over_one_megabyte_are_rejected`; FluentValidation decorator'ı (`Decorators.cs`, `PipelineTests`). |
 | NFR-SEC-13 | Güvenlik başlıkları (CSP vb.) | ⛔ | Faz 4. Şimdilik sadece `Cache-Control: no-store` (`NoStoreMiddleware`, `AuthHardeningTests`). Bkz. Fikirler 2. |
 | NFR-SEC-14 | Rate limiting (giriş) | ✅ | `AuthRateLimiting.cs` (giriş, refresh, şifre değiştirme; IP + yol başına 10/dk), hesap kilidi (DEC-010); `LoginTests`, `AuthHardeningTests`. Proxy arkasında forwarded header Deploy bloğunda. |
-| NFR-PRV-03 | Loglarda kişisel veri yok | ✅ | `LogPrivacyTests` (DEC-201): giriş (hatalı/başarılı), refresh, kişisel verili öğrenci kaydı, doğrulama hatası, arama ve şifre değiştirme tüm log seviyeleri açıkken çalışır; hiçbir olayda e-posta, telefon, isim, doğum tarihi, şifre veya token geçmez. Decorator'lar sadece istek tipi ve hata kodu loglar (`Decorators.cs`). |
+| NFR-PRV-03 | Loglarda kişisel veri yok | ✅ | `LogPrivacyTests` (DEC-201): giriş (hatalı/başarılı), refresh, kişisel verili öğrenci kaydı, doğrulama hatası, arama, grup/aidat/kayıt, ödeme ve serbest metinli iptal gerekçesi, borç listesi ve şifre değiştirme tüm log seviyeleri açıkken çalışır; hiçbir olayda e-posta, telefon, isim, doğum tarihi, şifre veya token geçmez. Decorator'lar sadece istek tipi ve hata kodu loglar (`Decorators.cs`). |
 | DEC-054 | Aynı origin, CORS yok | ✅ | `IntegrationTests/Security/CorsTests`: CORS servisi kayıtlı değil; yabancı origin'den gelen istek ve preflight'larda hiçbir `Access-Control-*` başlığı yok. |
 
 ## 2. OWASP ASVS 4.0.3 Seviye 1
@@ -137,6 +137,6 @@ Sadece bu uygulamaya uygulanabilen maddeler listelenir (dosya yükleme, SOAP, Gr
 6. **Güvenlik denetim kaydı:** başarısız giriş, kilit, şifre değişimi/sıfırlama, pasifleştirme için ayrı, kişisel veri içermeyen audit event'leri ve Seq/alarm.
 7. **Arama terimi sorgu dizesinde:** `GET /students?search=` isim/telefon parçası taşır; proxy erişim loglarında sorgu dizesi maskelenmeli veya arama `POST` gövdesine taşınmalı.
 8. **Kişisel veri envanteri (NFR-PRV-01):** her kişisel veri alanını, amacını ve saklama süresini listeleyen doküman; faz geçişinde gözden geçirilir.
-9. **Log gizliliği testinin kapsamı:** ödeme kaydı (Billing, PR #40) bu dal açıldığında main'de değildi; birleşince `LogPrivacyTests`'e eklenmeli. Yeni modüller (yoklama, duyurular) da eklenmeli.
+9. **Log gizliliği testinin kapsamı:** ödeme, aidat, kayıt ve iptal gerekçesi artık `LogPrivacyTests`'te; yeni modüller (yoklama, duyurular) eklendikçe teste eklenmeli.
 11. **Peşin ödemeli kaydın erken bitirilmesi:** ileri bir ay için ödemesi olan kayıt o aydan önce bitirilebiliyor (DEC-184); iade akışı veya uyarı değerlendirilmeli.
 10. **Refresh token yarışı:** aynı token'la eşzamanlı iki sekme birini `409` ile düşürür (DEC-119); kısa bir tolerans penceresi değerlendirilebilir.
