@@ -1,8 +1,18 @@
-import { ChangeDetectionStrategy, Component, inject, input, output } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  ElementRef,
+  Injector,
+  afterNextRender,
+  inject,
+  input,
+  output,
+} from '@angular/core';
 import { ReactiveFormsModule } from '@angular/forms';
 import { LucideLink, LucideSearch, LucideTrash2, LucideUserPlus } from '@lucide/angular';
 
 import { Api } from '../../api/api';
+import { GuardianDto } from '../../api/models';
 import { formatPhone } from '../../core/format/format';
 import { interpolate, ui } from '../../core/i18n/tr';
 import { GuardianEntry } from './guardian-entry';
@@ -30,8 +40,9 @@ const apiPaths: Record<EntryField, string> = {
     @let e = entry();
     @let id = 'gd-' + e.key;
     <fieldset
+      [id]="id + '-section'"
       tabindex="-1"
-      class="rounded-lg border border-border p-4"
+      class="min-w-0 rounded-lg border border-border p-4"
       [formGroup]="e.form"
       [attr.aria-describedby]="slotError() ? id + '-slot-error' : null"
     >
@@ -91,14 +102,15 @@ const apiPaths: Record<EntryField, string> = {
                 <button
                   type="button"
                   class="btn btn-primary btn-sm mt-2"
-                  (click)="e.link(guardian)"
+                  [id]="id + '-link'"
+                  (click)="link(guardian)"
                 >
                   <svg lucideLink></svg>{{ text.link }}
                 </button>
               </div>
             }
           </div>
-          <button type="button" class="btn btn-ghost btn-sm mt-2" (click)="e.startNew()">
+          <button type="button" class="btn btn-ghost btn-sm mt-2" (click)="startNew()">
             <svg lucideUserPlus></svg>{{ text.enterNew }}
           </button>
         }
@@ -108,7 +120,12 @@ const apiPaths: Record<EntryField, string> = {
             <p class="font-mono text-xs text-muted-foreground">
               {{ phone(e.linked()?.phone ?? '') }}
             </p>
-            <button type="button" class="btn btn-ghost btn-sm mt-1" (click)="e.reset()">
+            <button
+              type="button"
+              class="btn btn-ghost btn-sm mt-1"
+              [id]="id + '-unlink'"
+              (click)="backToLookup()"
+            >
               {{ text.unlink }}
             </button>
           </div>
@@ -198,7 +215,7 @@ const apiPaths: Record<EntryField, string> = {
               {{ text.addAddress }}
             </button>
           }
-          <button type="button" class="btn btn-ghost btn-sm mt-2" (click)="e.reset()">
+          <button type="button" class="btn btn-ghost btn-sm mt-2" (click)="backToLookup()">
             <svg lucideSearch></svg>{{ text.lookup }}
           </button>
         }
@@ -217,6 +234,8 @@ const apiPaths: Record<EntryField, string> = {
 })
 export class GuardianEntryComponent {
   private readonly api = inject(Api);
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
+  private readonly injector = inject(Injector);
 
   readonly entry = input.required<GuardianEntry>();
   readonly index = input.required<number>();
@@ -272,8 +291,38 @@ export class GuardianEntryComponent {
     return control.touched || control.dirty || this.submitted() ? clientMessage(control) : null;
   }
 
-  protected lookup(): Promise<void> {
-    return this.entry().lookup(this.api);
+  /** A miss opens the "new guardian" fields; focus goes to the first of them. */
+  protected async lookup(): Promise<void> {
+    const outcome = await this.entry().lookup(this.api);
+    if (outcome === 'new') {
+      this.focusAfterRender('firstName');
+    } else if (outcome === 'found') {
+      this.focusAfterRender('link');
+    }
+  }
+
+  protected link(guardian: GuardianDto): void {
+    this.entry().link(guardian);
+    // Linked: the remaining choice in the slot is the relationship.
+    this.focusAfterRender('relationship');
+  }
+
+  protected startNew(): void {
+    this.entry().startNew();
+    this.focusAfterRender('firstName');
+  }
+
+  protected backToLookup(): void {
+    this.entry().reset();
+    this.focusAfterRender('lookup');
+  }
+
+  private focusAfterRender(part: string): void {
+    const id = `gd-${this.entry().key}-${part}`;
+    afterNextRender(
+      () => this.host.nativeElement.querySelector<HTMLElement>(`[id="${id}"]`)?.focus(),
+      { injector: this.injector },
+    );
   }
 }
 

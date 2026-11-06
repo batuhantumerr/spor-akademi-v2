@@ -20,6 +20,9 @@ import { optionalTurkishPhone } from '../../shared/forms/validators';
  */
 export type GuardianMode = 'lookup' | 'linked' | 'new';
 
+/** What a lookup ended with; `stale` means a newer lookup or a phone change superseded it. */
+export type LookupOutcome = 'found' | 'new' | 'error' | 'stale';
+
 let nextKey = 1;
 
 function required(control: AbstractControl): ValidationErrors | null {
@@ -34,6 +37,8 @@ export class GuardianEntry {
   readonly linked = signal<GuardianDto | null>(null);
   readonly searching = signal(false);
   readonly lookupError = signal<string | null>(null);
+  /** Bumped by every lookup and phone edit; only the latest lookup may change the slot. */
+  private lookupSequence = 0;
 
   readonly form = new FormGroup({
     lookupPhone: new FormControl('', { nonNullable: true }),
@@ -68,32 +73,49 @@ export class GuardianEntry {
 
   constructor() {
     this.syncEnabled();
+    // A result belongs to the phone it was searched for: editing the phone drops it and makes
+    // any lookup still in flight stale.
+    this.form.controls.lookupPhone.valueChanges.subscribe(() => {
+      this.lookupSequence++;
+      this.searching.set(false);
+      this.found.set(undefined);
+      this.lookupError.set(null);
+    });
   }
 
   /** Looks the phone up; a found guardian is offered for linking, otherwise "new" opens. */
-  async lookup(api: Api): Promise<void> {
+  async lookup(api: Api): Promise<LookupOutcome> {
     const phone = this.form.controls.lookupPhone.value.trim();
-    if (this.searching()) {
-      return;
-    }
     if (phone === '' || optionalTurkishPhone(this.form.controls.lookupPhone) !== null) {
       this.lookupError.set(errorMessages[phone === '' ? 'Field.Required' : 'PhoneNumber.Invalid']);
-      return;
+      return 'error';
     }
+    const request = ++this.lookupSequence;
     this.searching.set(true);
     this.lookupError.set(null);
     try {
       const result = await api.invoke(apiV1GuardiansGet, { phone });
+      if (request !== this.lookupSequence) {
+        return 'stale';
+      }
       const guardian = result.items[0] ?? null;
       this.found.set(guardian);
       if (!guardian) {
         this.startNew(phone);
+        return 'new';
       }
+      return 'found';
     } catch (err) {
+      if (request !== this.lookupSequence) {
+        return 'stale';
+      }
       const problem = toProblem(err);
       this.lookupError.set(fieldErrors(problem)['phone'] ?? problemMessage(problem));
+      return 'error';
     } finally {
-      this.searching.set(false);
+      if (request === this.lookupSequence) {
+        this.searching.set(false);
+      }
     }
   }
 

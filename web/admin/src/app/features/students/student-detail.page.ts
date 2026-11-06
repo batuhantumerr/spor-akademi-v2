@@ -199,10 +199,17 @@ export class StudentDetailPage {
     return age === null ? '' : `(${interpolate(this.list.age, { age })})`;
   });
 
+  private loadSequence = 0;
+
   constructor() {
     effect(() => {
       this.id();
-      untracked(() => void this.load());
+      untracked(() => {
+        // A new route id never shows the previous student, even for a moment.
+        this.student.set(null);
+        this.loadError.set(null);
+        void this.load();
+      });
     });
   }
 
@@ -214,12 +221,19 @@ export class StudentDetailPage {
     return formatPhone(value);
   }
 
+  /** Loads the student of the current route; a response for an older request is ignored. */
   async load(): Promise<void> {
+    const request = ++this.loadSequence;
     this.loadError.set(null);
     try {
-      this.student.set(await this.api.invoke(apiV1StudentsIdGet, { id: this.id() }));
+      const student = await this.api.invoke(apiV1StudentsIdGet, { id: this.id() });
+      if (request === this.loadSequence) {
+        this.student.set(student);
+      }
     } catch (err) {
-      this.loadError.set(problemMessage(toProblem(err)));
+      if (request === this.loadSequence) {
+        this.loadError.set(problemMessage(toProblem(err)));
+      }
     }
   }
 

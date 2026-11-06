@@ -151,6 +151,25 @@ describe('StudentDetailPage', () => {
     );
   });
 
+  it('starts clean on a new route id and ignores a late answer for the old one', async () => {
+    fixture.componentRef.setInput('id', 'st2');
+    await settle(fixture);
+    expect(root.textContent).not.toContain('Ayşe Yılmaz');
+    const st2 = backend.expectOne('/api/v1/students/st2');
+
+    fixture.componentRef.setInput('id', 'st3');
+    await settle(fixture);
+    backend
+      .expectOne('/api/v1/students/st3')
+      .flush({ ...student, id: 'st3', firstName: 'Can', lastName: 'Er' });
+    await settle(fixture);
+    st2.flush({ ...student, id: 'st2', firstName: 'Eski', lastName: 'Yanıt' });
+    await settle(fixture);
+
+    expect(root.querySelector('h1')?.textContent).toContain('Can Er');
+    expect(root.textContent).not.toContain('Eski Yanıt');
+  });
+
   it('reactivates a student who left after confirmation', async () => {
     fixture.componentRef.setInput('id', 'st2');
     await settle(fixture);

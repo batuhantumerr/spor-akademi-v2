@@ -32,6 +32,10 @@ export class PathErrors {
     this.errors.set(next);
   }
 
+  set(path: string, message: string): void {
+    this.errors.update((all) => ({ ...all, [path]: message }));
+  }
+
   clear(path: string): void {
     if (this.errors()[path] !== undefined) {
       this.errors.update((all) => {

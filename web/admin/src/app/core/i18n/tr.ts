@@ -245,6 +245,7 @@ export const ui = {
     copied: 'Veli bilgileri acil durum kişisine kopyalandı.',
     emergencyRelations: { Mother: 'Anne', Father: 'Baba', Other: 'Veli' } as Record<string, string>,
     guardianIncomplete: 'Kayıtlı bir veliyi bağlayın veya yeni veli bilgilerini girin.',
+    summaryTitle: 'Kaydetmeden önce {count} sorunu düzeltin',
     duplicateGuardian: 'Aynı veli birden fazla kez eklenmiş.',
     submit: 'Öğrenciyi kaydet',
     saving: 'Kaydediliyor…',

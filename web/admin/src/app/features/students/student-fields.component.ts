@@ -38,7 +38,7 @@ function fieldMessage(
   imports: [ReactiveFormsModule],
   template: `
     @let f = form();
-    <fieldset class="card p-4 sm:p-6" [formGroup]="f">
+    <fieldset class="card min-w-0 p-4 sm:p-6" [id]="prefix() + 'student-section'" [formGroup]="f">
       <legend class="sr-only">{{ text.studentSection }}</legend>
       <h2 class="mb-4 text-base font-semibold" aria-hidden="true">{{ text.studentSection }}</h2>
       <div class="grid gap-4 sm:grid-cols-2">
@@ -209,8 +209,9 @@ export interface CopySource {
   template: `
     @let f = form();
     <fieldset
-      class="card p-4 sm:p-6"
+      class="card min-w-0 p-4 sm:p-6"
       tabindex="-1"
+      [id]="prefix() + 'emergency-section'"
       [formGroup]="f"
       [attr.aria-describedby]="sectionError() ? prefix() + 'emergency-error' : null"
     >

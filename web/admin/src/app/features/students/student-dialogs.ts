@@ -515,7 +515,7 @@ export class GuardianEditDialog {
   imports: [ReactiveFormsModule],
   template: `
     <form
-      class="w-[min(28rem,calc(100vw-2rem))] rounded-lg border border-border bg-background p-6 shadow-lg"
+      class="max-h-[calc(100dvh-2rem)] w-[min(28rem,calc(100vw-2rem))] overflow-y-auto rounded-lg border border-border bg-background p-6 shadow-lg"
       (submit)="$event.preventDefault(); save()"
       novalidate
     >

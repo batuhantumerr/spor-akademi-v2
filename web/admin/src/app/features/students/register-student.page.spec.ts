@@ -1,9 +1,11 @@
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
+import { signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { Router, provideRouter } from '@angular/router';
 
 import { GuardianDto } from '../../api/models';
+import { AuthService } from '../../core/auth/auth.service';
 import { errorMessages, ui } from '../../core/i18n/tr';
 import { ToastService } from '../../shared/ui/toast.service';
 import { RegisterStudentPage } from './register-student.page';
@@ -194,6 +196,12 @@ describe('RegisterStudentPage', () => {
     await submit();
     backend.expectNone('/api/v1/students');
     expect(el('#guardians-error').textContent).toContain(errorMessages['Student.GuardianRequired']);
+    // The error summary lists the problem and takes focus; its link jumps to the section.
+    const summary = el<HTMLElement>('#error-summary');
+    expect(document.activeElement).toBe(summary);
+    expect(summary.textContent).toContain('1 sorunu düzeltin');
+    expect(summary.textContent).toContain(errorMessages['Student.GuardianRequired']);
+    (summary.querySelector('a[href="#guardians-section"]') as HTMLAnchorElement).click();
     expect(document.activeElement).toBe(el('#guardians-section'));
 
     await type('#s-birthDate', adultBirthDate());
@@ -233,7 +241,13 @@ describe('RegisterStudentPage', () => {
       errorMessages['PhoneNumber.Invalid'],
     );
     expect(el('#s-emergencyPhone').getAttribute('aria-invalid')).toBe('true');
-    expect(document.activeElement?.getAttribute('aria-invalid')).toBe('true');
+    const summary = el<HTMLElement>('#error-summary');
+    expect(document.activeElement).toBe(summary);
+    expect(summary.querySelectorAll('li').length).toBe(2);
+    expect(summary.querySelector(`a[href="${g}-email"]`)?.textContent).toContain(
+      errorMessages['Email.Invalid'],
+    );
+    expect(summary.querySelector('a[href="#s-emergencyPhone"]')).not.toBeNull();
 
     // Editing a field clears its API error.
     await type('#s-emergencyPhone', '0533 111 22 34');
@@ -252,11 +266,135 @@ describe('RegisterStudentPage', () => {
     );
   });
 
+  it('ignores a lookup answer that arrives after the phone was changed', async () => {
+    const g = await addGuardian();
+    await type(`${g}-lookup`, '0532 123 45 67');
+    buttonWith(ui.studentForm.lookup)!.click();
+    await settle(fixture);
+    const first = backend.expectOne((r) => r.url === '/api/v1/guardians');
+
+    await type(`${g}-lookup`, '0532 999 88 77');
+    first.flush({ items: [mother], page: 1, pageSize: 20, totalCount: 1, totalPages: 1 });
+    await settle(fixture);
+
+    expect(root.textContent).not.toContain('Kayıtlı veli bulundu');
+    expect(buttonWith(ui.studentForm.link)).toBeUndefined();
+  });
+
+  it('moves focus sensibly after a lookup, a link and an unlink', async () => {
+    const g = await addGuardian();
+    await type(`${g}-lookup`, '0532 123 45 67');
+    buttonWith(ui.studentForm.lookup)!.click();
+    await settle(fixture);
+    backend
+      .expectOne((r) => r.url === '/api/v1/guardians')
+      .flush({ items: [mother], page: 1, pageSize: 20, totalCount: 1, totalPages: 1 });
+    await settle(fixture);
+    await settle(fixture);
+    expect(document.activeElement).toBe(el(`${g}-link`));
+
+    buttonWith(ui.studentForm.link)!.click();
+    await settle(fixture);
+    expect(document.activeElement).toBe(el(`${g}-relationship`));
+
+    buttonWith(ui.studentForm.unlink)!.click();
+    await settle(fixture);
+    expect(document.activeElement).toBe(el(`${g}-lookup`));
+
+    buttonWith(ui.studentForm.enterNew)!.click();
+    await settle(fixture);
+    expect(document.activeElement).toBe(el(`${g}-firstName`));
+  });
+
+  it('focuses the first new-guardian field when the lookup finds nobody', async () => {
+    const g = await addGuardian();
+    await type(`${g}-lookup`, '0532 999 88 77');
+    buttonWith(ui.studentForm.lookup)!.click();
+    await settle(fixture);
+    backend
+      .expectOne((r) => r.url === '/api/v1/guardians')
+      .flush({ items: [], page: 1, pageSize: 20, totalCount: 0, totalPages: 0 });
+    await settle(fixture);
+    await settle(fixture);
+    expect(document.activeElement).toBe(el(`${g}-firstName`));
+  });
+
+  it('puts Guardian.PhoneTaken on the phone of the only new guardian', async () => {
+    await fillStudent(childBirthDate());
+    const g = await addGuardian();
+    buttonWith(ui.studentForm.enterNew)!.click();
+    await settle(fixture);
+    await type(`${g}-firstName`, 'Mehmet');
+    await type(`${g}-lastName`, 'Yılmaz');
+    await type(`${g}-phone`, '0532 999 88 77');
+    await fillEmergency();
+    await submit();
+    backend
+      .expectOne('/api/v1/students')
+      .flush({ code: 'Guardian.PhoneTaken' }, { status: 409, statusText: 'Conflict' });
+    await settle(fixture);
+    await settle(fixture);
+
+    expect(el(`${g}-phone-error`).textContent).toContain(errorMessages['Guardian.PhoneTaken']);
+    expect(el('#guardians-error')).toBeNull();
+  });
+
   it('allows at most four guardians', async () => {
     for (let i = 0; i < 4; i++) {
       await addGuardian();
     }
     expect(buttonWith(ui.studentForm.addGuardian)!.disabled).toBe(true);
     expect(root.textContent).toContain(ui.studentForm.maxGuardians);
+  });
+});
+
+describe('RegisterStudentPage age hint on the school date', () => {
+  beforeEach(() => {
+    vi.stubEnv('TZ', 'UTC');
+    vi.useFakeTimers({ toFake: ['Date'] });
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.unstubAllEnvs();
+  });
+
+  async function render(): Promise<{ root: HTMLElement; fixture: ComponentFixture<unknown> }> {
+    TestBed.configureTestingModule({
+      imports: [RegisterStudentPage],
+      providers: [
+        provideRouter([]),
+        provideHttpClient(),
+        provideHttpClientTesting(),
+        { provide: ToastService, useValue: { success: vi.fn(), error: vi.fn() } },
+        {
+          provide: AuthService,
+          useValue: { user: signal({ schoolTimeZone: 'Europe/Istanbul' }) },
+        },
+      ],
+    });
+    const fixture = TestBed.createComponent(RegisterStudentPage);
+    await settle(fixture);
+    return { root: fixture.nativeElement as HTMLElement, fixture };
+  }
+
+  async function hintFor(birthDate: string): Promise<string> {
+    const { root, fixture } = await render();
+    const input = root.querySelector('#s-birthDate') as HTMLInputElement;
+    input.value = birthDate;
+    input.dispatchEvent(new Event('input'));
+    await settle(fixture);
+    return root.querySelector('#s-age-hint')?.textContent ?? '';
+  }
+
+  it('treats a 29 February birthday as a year older on 1 March (school date)', async () => {
+    // 22:30 UTC on 28 Feb is already 1 March in Istanbul.
+    vi.setSystemTime(new Date('2026-02-28T22:30:00Z'));
+    expect(await hintFor('2008-02-29')).toContain('Yetişkin (18 yaş)');
+  });
+
+  it('keeps a 29 February birthday a minor on 28 February', async () => {
+    vi.setSystemTime(new Date('2026-02-28T09:00:00Z'));
+    expect(await hintFor('2008-02-29')).toContain('18 yaşından küçük (17 yaş)');
   });
 });

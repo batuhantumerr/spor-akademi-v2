@@ -15,10 +15,10 @@ import { LucideArrowLeft, LucidePlus } from '@lucide/angular';
 import { Api } from '../../api/api';
 import { apiV1StudentsPost } from '../../api/functions';
 import { formatPhone } from '../../core/format/format';
-import { errorMessages, ui } from '../../core/i18n/tr';
+import { errorMessages, interpolate, ui } from '../../core/i18n/tr';
 import { SchoolClock } from '../../core/time/school-clock';
 import { ToastService } from '../../shared/ui/toast.service';
-import { toProblem, problemMessage } from '../../core/api/problem';
+import { ApiProblem, problemMessage, toProblem } from '../../core/api/problem';
 import { PageHeaderComponent } from '../../shared/ui/page-header.component';
 import { GuardianEntry } from './guardian-entry';
 import { GuardianEntryComponent } from './guardian-entry.component';
@@ -36,6 +36,13 @@ import {
   studentCodePaths,
   studentFieldsForm,
 } from './student-fields';
+
+interface SummaryItem {
+  /** Id of the field or section to jump to. */
+  target: string;
+  label: string;
+  message: string;
+}
 
 /** Same limit as the API (Student.MaxGuardians). */
 export const MAX_GUARDIANS = 4;
@@ -60,8 +67,34 @@ export const MAX_GUARDIANS = 4;
     <app-page-header [title]="text.title" [description]="text.description" />
 
     <form class="mx-auto max-w-3xl space-y-4" (submit)="$event.preventDefault(); save()" novalidate>
+      @if (summary().length > 0) {
+        <div
+          id="error-summary"
+          tabindex="-1"
+          aria-labelledby="error-summary-title"
+          class="rounded-lg border border-destructive/30 bg-destructive/10 p-4 text-sm"
+        >
+          <h2 id="error-summary-title" class="font-semibold text-destructive">
+            {{ summaryTitle() }}
+          </h2>
+          <ul class="mt-2 list-disc space-y-1 pl-5 text-destructive">
+            @for (item of summary(); track item.target + item.message) {
+              <li>
+                <a
+                  class="underline underline-offset-2"
+                  [href]="'#' + item.target"
+                  (click)="$event.preventDefault(); focusTarget(item.target)"
+                  >{{ item.label }}: {{ item.message }}</a
+                >
+              </li>
+            }
+          </ul>
+        </div>
+      }
       @if (error()) {
         <p
+          id="form-error"
+          tabindex="-1"
           role="alert"
           class="rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive"
         >
@@ -76,7 +109,7 @@ export const MAX_GUARDIANS = 4;
       />
 
       <fieldset
-        class="card p-4 sm:p-6"
+        class="card min-w-0 p-4 sm:p-6"
         id="guardians-section"
         tabindex="-1"
         [attr.aria-describedby]="'guardians-hint' + (guardiansError() ? ' guardians-error' : '')"
@@ -150,6 +183,10 @@ export class RegisterStudentPage {
   protected readonly saving = signal(false);
   protected readonly submitted = signal(false);
   protected readonly error = signal<string | null>(null);
+  protected readonly summary = signal<SummaryItem[]>([]);
+  protected readonly summaryTitle = computed(() =>
+    interpolate(this.text.summaryTitle, { count: this.summary().length }),
+  );
   /** Client-side section problem (minor without a guardian), shown until guardians change. */
   private readonly guardiansClientError = signal<string | null>(null);
   /** Bumped on guardian edits so the copy buttons follow typed names. */
@@ -209,7 +246,7 @@ export class RegisterStudentPage {
     this.destroyRef.onDestroy(() => sub.unsubscribe());
     this.entries.update((list) => [...list, entry]);
     this.onGuardiansChanged();
-    afterNextRender(() => this.focus(`gd-${entry.key}-lookup`), { injector: this.injector });
+    afterNextRender(() => this.focusTarget(`gd-${entry.key}-lookup`), { injector: this.injector });
   }
 
   protected removeGuardian(entry: GuardianEntry): void {
@@ -217,7 +254,7 @@ export class RegisterStudentPage {
     // Slot numbers shift, so per-slot API errors no longer line up.
     this.errors.clearUnder('guardians[');
     this.onGuardiansChanged();
-    afterNextRender(() => this.focus('guardians-section'), { injector: this.injector });
+    afterNextRender(() => this.focusTarget('guardians-section'), { injector: this.injector });
   }
 
   protected async save(): Promise<void> {
@@ -225,10 +262,11 @@ export class RegisterStudentPage {
       return;
     }
     this.submitted.set(true);
+    this.summary.set([]);
     this.form.markAllAsTouched();
     const invalid = this.clientProblems();
     if (invalid) {
-      this.focus(invalid);
+      this.showSummary(invalid);
       return;
     }
     this.saving.set(true);
@@ -243,9 +281,10 @@ export class RegisterStudentPage {
     } catch (err) {
       const problem = toProblem(err);
       this.errors.apply(problem);
+      this.placePhoneTaken(problem);
       this.error.set(problemMessage(problem));
       this.saving.set(false);
-      afterNextRender(() => this.focusFirstError(), { injector: this.injector });
+      this.showSummary('form-error');
     }
   }
 
@@ -298,15 +337,75 @@ export class RegisterStudentPage {
     this.errors.clear('guardians');
   }
 
-  /** After an API error: the first field or section marked invalid in the DOM. */
-  private focusFirstError(): void {
-    const target = this.host.nativeElement.querySelector<HTMLElement>(
-      '[aria-invalid="true"], fieldset[aria-describedby*="error"]',
-    );
-    target?.focus();
+  /**
+   * `Guardian.PhoneTaken` concerns one new guardian's phone. Put it on that slot when the API
+   * names the slot or only one new guardian was sent; otherwise it stays on the section.
+   */
+  private placePhoneTaken(problem: ApiProblem): void {
+    if (problem.code !== 'Guardian.PhoneTaken') {
+      return;
+    }
+    const named = Object.keys(problem.errors ?? {})
+      .map((k) => /^guardians\[(\d+)\]/.exec(k)?.[1])
+      .find((i) => i !== undefined);
+    const newOnes = this.entries()
+      .map((e, i) => (e.mode() === 'new' ? i : -1))
+      .filter((i) => i >= 0);
+    const index = named !== undefined ? Number(named) : newOnes.length === 1 ? newOnes[0] : -1;
+    if (index >= 0) {
+      this.errors.clear('guardians');
+      this.errors.set(`guardians[${index}].newGuardian.phone`, problemMessage(problem));
+    }
   }
 
-  private focus(id: string): void {
+  /**
+   * Lists every problem on the page as links (count + field + message) and focuses the list;
+   * built from the rendered errors so client and API problems look the same. Falls back to
+   * `fallback` when nothing is marked (e.g. an unexpected server error).
+   */
+  private showSummary(fallback: string): void {
+    afterNextRender(
+      () => {
+        const items = this.collectProblems();
+        this.summary.set(items);
+        afterNextRender(() => this.focusTarget(items.length > 0 ? 'error-summary' : fallback), {
+          injector: this.injector,
+        });
+      },
+      { injector: this.injector },
+    );
+  }
+
+  private collectProblems(): SummaryItem[] {
+    const root = this.host.nativeElement;
+    const text = (el: Element | null) => (el?.textContent ?? '').replace(/\*/g, '').trim();
+    const items: SummaryItem[] = [];
+    const marked = root.querySelectorAll<HTMLElement>(
+      '[aria-invalid="true"], #guardians-error, [id$="-slot-error"], [id$="emergency-error"]',
+    );
+    for (const el of Array.from(marked)) {
+      if (el.matches('[aria-invalid="true"]')) {
+        items.push({
+          target: el.id,
+          label: text(root.querySelector(`label[for="${el.id}"]`)),
+          message: text(root.querySelector(`[id="${el.id}-error"]`)),
+        });
+        continue;
+      }
+      const target = el.id
+        .replace(/^guardians-error$/, 'guardians-section')
+        .replace(/-slot-error$/, '-section')
+        .replace(/emergency-error$/, 'emergency-section');
+      items.push({
+        target,
+        label: text(root.querySelector(`[id="${target}"] > legend`)),
+        message: text(el),
+      });
+    }
+    return items.filter((i) => i.message !== '');
+  }
+
+  protected focusTarget(id: string): void {
     this.host.nativeElement.querySelector<HTMLElement>(`[id="${id}"]`)?.focus();
   }
 }
