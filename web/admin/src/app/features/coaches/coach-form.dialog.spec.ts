@@ -144,27 +144,26 @@ describe('CoachFormDialog', () => {
 
   const saveButton = () => root.querySelector('button[type="submit"]') as HTMLButtonElement;
 
-  it('blocks saving with a retry when the fresh copy cannot be loaded', async () => {
+  const buttonWith = (text: string) =>
+    [...root.querySelectorAll('button')].find((b) => b.textContent?.includes(text)) as
+      HTMLButtonElement | undefined;
+
+  it('keeps the edits and offers a retry when the fresh copy cannot be loaded', async () => {
     await open(coach);
     await conflict();
     backend.expectOne('/api/v1/coaches/c1').flush(null, { status: 0, statusText: '' });
     await settle(fixture);
 
-    expect(root.querySelector('[role="alert"]')?.textContent).toContain(ui.coaches.reloadFailed);
+    expect(root.textContent).toContain(ui.coaches.reloadFailed);
+    expect(input('c-first').value).toBe('Mertcan');
     expect(saveButton().disabled).toBe(true);
-    expect(input('c-first').disabled).toBe(true);
 
-    const retry = [...root.querySelectorAll('button')].find(
-      (b) => b.textContent?.trim() === ui.common.retry,
-    ) as HTMLButtonElement;
-    retry.click();
+    buttonWith(ui.common.retry)!.click();
     await settle(fixture);
     backend.expectOne('/api/v1/coaches/c1').flush({ ...coach, version: 9 });
     await settle(fixture);
-
-    expect(saveButton().disabled).toBe(false);
-    expect(input('c-first').disabled).toBe(false);
-    expect(input('c-email').readOnly).toBe(true);
+    expect(buttonWith(ui.conflict.applyMine)).toBeDefined();
+    expect(input('c-first').value).toBe('Mertcan');
   });
 
   it('blocks saving when the coach was deactivated meanwhile', async () => {
@@ -188,25 +187,36 @@ describe('CoachFormDialog', () => {
     expect(input('c-email').getAttribute('aria-invalid')).toBe('false');
   });
 
-  it('reloads the coach after a version conflict and saves with the fresh version', async () => {
+  it('keeps the edits after a conflict and applies them on the fresh version', async () => {
     await open(coach);
-    await type('c-first', 'Mertcan');
-    await submit();
-    backend
-      .expectOne('/api/v1/coaches/c1')
-      .flush({ code: 'Concurrency.Conflict' }, { status: 409, statusText: 'Conflict' });
-    await settle(fixture);
-    backend.expectOne('/api/v1/coaches/c1').flush({ ...coach, firstName: 'Mehmet', version: 8 });
+    await conflict();
+    backend.expectOne('/api/v1/coaches/c1').flush({ ...coach, lastName: 'Kaya-Demir', version: 8 });
     await settle(fixture);
 
-    expect(root.querySelector('[role="alert"]')?.textContent).toContain(ui.common.conflictReloaded);
-    expect(input('c-first').value).toBe('Mehmet');
+    expect(root.textContent).toContain(ui.conflict.title);
+    expect(input('c-first').value).toBe('Mertcan');
 
-    await submit();
+    buttonWith(ui.conflict.applyMine)!.click();
+    await settle(fixture);
     const retry = backend.expectOne('/api/v1/coaches/c1');
-    expect(retry.request.body).toEqual(expect.objectContaining({ version: 8 }));
+    expect(retry.request.body).toEqual(
+      expect.objectContaining({ firstName: 'Mertcan', lastName: 'Kaya', version: 8 }),
+    );
     retry.flush(coach);
     await settle(fixture);
     expect(close).toHaveBeenCalledWith({ kind: 'saved' });
+  });
+
+  it('can take the server version instead after a conflict', async () => {
+    await open(coach);
+    await conflict();
+    backend.expectOne('/api/v1/coaches/c1').flush({ ...coach, lastName: 'Kaya-Demir', version: 8 });
+    await settle(fixture);
+
+    buttonWith(ui.conflict.loadServer)!.click();
+    await settle(fixture);
+    expect(input('c-first').value).toBe('Mert');
+    expect(input('c-last').value).toBe('Kaya-Demir');
+    expect(saveButton().disabled).toBe(false);
   });
 });

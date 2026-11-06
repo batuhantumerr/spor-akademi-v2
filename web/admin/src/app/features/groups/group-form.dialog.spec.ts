@@ -186,7 +186,7 @@ describe('GroupFormDialog', () => {
   it('keeps the edits after a version conflict and can apply them on the fresh version', async () => {
     await conflict();
 
-    expect(root.querySelector('[role="alert"]')?.textContent).toContain(ui.conflict.title);
+    expect(root.querySelector('.conflict-notice')?.textContent).toContain(ui.conflict.title);
     // Nothing the user typed was dropped.
     expect(el('g-name').value).toBe('U12 Lacivert');
     expect(el('g-capacity').value).toBe('24');
