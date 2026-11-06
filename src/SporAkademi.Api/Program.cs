@@ -2,6 +2,7 @@ using System.Text.Json.Serialization;
 using SporAkademi.Api;
 using SporAkademi.Api.Authentication;
 using SporAkademi.Api.Endpoints.Announcements;
+using SporAkademi.Api.Endpoints.Billing;
 using SporAkademi.Api.Endpoints.Enrollments;
 using SporAkademi.Api.Endpoints.Groups;
 using SporAkademi.Api.Endpoints.Identity;
@@ -64,6 +65,7 @@ app.MapStudentEndpoints();
 app.MapGroupsEndpoints();
 app.MapAnnouncementEndpoints();
 app.MapEnrollmentEndpoints();
+app.MapBillingEndpoints();
 app.MapApiDocument();
 
 await app.RunAsync();
