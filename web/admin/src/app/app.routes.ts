@@ -150,8 +150,17 @@ export const routes: Routes = [
               import('./features/students/student-detail.page').then((m) => m.StudentDetailPage),
           },
           { path: 'attendance', title: ui.nav.attendance, ...placeholder(ui.nav.attendance) },
-          { path: 'payments', title: ui.nav.payments, ...placeholder(ui.nav.payments) },
-          { path: 'dues', title: ui.nav.dues, ...placeholder(ui.nav.dues) },
+          {
+            path: 'payments',
+            title: ui.nav.payments,
+            loadComponent: () =>
+              import('./features/billing/payments.page').then((m) => m.PaymentsPage),
+          },
+          {
+            path: 'dues',
+            title: ui.nav.dues,
+            loadComponent: () => import('./features/billing/dues.page').then((m) => m.DuesPage),
+          },
         ],
       },
     ],
