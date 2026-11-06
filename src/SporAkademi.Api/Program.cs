@@ -1,11 +1,7 @@
 using SporAkademi.Api;
-<<<<<<< HEAD
 using SporAkademi.Api.Authentication;
 using SporAkademi.Application;
 using SporAkademi.Application.Abstractions.Authentication;
-=======
-using SporAkademi.Application;
->>>>>>> origin/main
 using SporAkademi.Infrastructure;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -20,11 +16,8 @@ builder.Host.UseDefaultServiceProvider(options =>
 
 builder.AddStructuredLogging();
 builder.Services.AddSingleton(TimeProvider.System);
-<<<<<<< HEAD
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<ICurrentUser, HttpCurrentUser>(); // before AddInfrastructure, which only adds a fallback
-=======
->>>>>>> origin/main
 builder.Services.AddApplication();
 builder.Services.AddInfrastructure(builder.Configuration);
 
