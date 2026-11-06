@@ -23,21 +23,31 @@ import { AnnouncementItemComponent } from './announcement-item.component';
         </h2>
         <a routerLink="/coach/announcements" class="btn btn-ghost btn-sm h-11">{{ text.all }}</a>
       </div>
-      @if (list.error(); as message) {
-        <p role="alert" class="text-sm text-destructive">{{ message }}</p>
-      } @else if (list.loading()) {
-        <p role="status" class="text-sm text-muted-foreground">{{ common.loading }}</p>
-      } @else if (list.isEmpty()) {
-        <p class="text-sm text-muted-foreground">{{ text.emptyCoach }}</p>
-      } @else {
-        <ul class="divide-y divide-border/60">
-          @for (a of list.items(); track a.id) {
-            <li class="py-2">
-              <app-announcement-item [announcement]="a" [showGroup]="true" [compact]="true" />
-            </li>
-          }
-        </ul>
-      }
+      <div [attr.aria-busy]="list.loading() || list.refreshing()">
+        @if (list.error(); as message) {
+          <div
+            role="alert"
+            class="flex flex-wrap items-center justify-between gap-2 text-sm text-destructive"
+          >
+            <span>{{ message }}</span>
+            <button type="button" class="btn btn-secondary btn-sm h-11" (click)="list.load()">
+              {{ common.retry }}
+            </button>
+          </div>
+        } @else if (list.loading()) {
+          <p role="status" class="text-sm text-muted-foreground">{{ common.loading }}</p>
+        } @else if (list.isEmpty()) {
+          <p class="text-sm text-muted-foreground">{{ text.emptyCoach }}</p>
+        } @else {
+          <ul class="divide-y divide-border/60">
+            @for (a of list.items(); track a.id) {
+              <li class="py-2">
+                <app-announcement-item [announcement]="a" [showGroup]="true" [compact]="true" />
+              </li>
+            }
+          </ul>
+        }
+      </div>
     </section>
   `,
 })

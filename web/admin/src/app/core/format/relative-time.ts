@@ -1,45 +1,72 @@
 import { LOCALE } from '../i18n/locale';
+import { dateIn } from '../time/school-clock';
 
-const relative = new Intl.RelativeTimeFormat(LOCALE, { numeric: 'auto' });
-const absolute = new Intl.DateTimeFormat(LOCALE, {
-  day: '2-digit',
-  month: '2-digit',
-  year: 'numeric',
-  hour: '2-digit',
-  minute: '2-digit',
-  hourCycle: 'h23',
-});
+/** "şimdi", "dün"… only where they read naturally; otherwise "2 gün önce" (not "evvelsi gün"). */
+const natural = new Intl.RelativeTimeFormat(LOCALE, { numeric: 'auto' });
+const relative = new Intl.RelativeTimeFormat(LOCALE, { numeric: 'always' });
 
 const MINUTE = 60_000;
 const HOUR = 60 * MINUTE;
-const DAY = 24 * HOUR;
+const DAY_MS = 24 * HOUR;
+
+/** Whole calendar days between two ISO dates (<c>YYYY-MM-DD</c>). */
+function calendarDays(from: string, to: string): number {
+  const utc = (iso: string) => {
+    const [y, m, d] = iso.split('-').map(Number);
+    return Date.UTC(y, m - 1, d);
+  };
+  return Math.round((utc(to) - utc(from)) / DAY_MS);
+}
 
 /**
- * "şimdi", "5 dakika önce", "3 saat önce", "dün", "4 gün önce"; older than a week falls back to
- * the date (gg.AA.yyyy SS:dd). Future instants (clock skew) read as "şimdi".
+ * "şimdi", "5 dakika önce", "3 saat önce", "dün", "4 gün önce"; a week or more falls back to the
+ * date. Days are calendar days in the school's time zone (so "dün" means the school's yesterday,
+ * whatever the browser's zone), and the fallback date is in that zone too. Future instants (clock
+ * skew) read as "şimdi".
  */
-export function relativeTime(iso: string, now: Date = new Date()): string {
+export function relativeTime(
+  iso: string,
+  now: Date = new Date(),
+  timeZone: string | null = null,
+): string {
   const then = new Date(iso);
   const diff = now.getTime() - then.getTime();
   if (Number.isNaN(diff)) {
     return '';
   }
   if (diff < MINUTE) {
-    return relative.format(0, 'second');
+    return natural.format(0, 'second');
   }
-  if (diff < HOUR) {
-    return relative.format(-Math.floor(diff / MINUTE), 'minute');
+  const days = calendarDays(dateIn(then, timeZone), dateIn(now, timeZone));
+  if (days === 0) {
+    return diff < HOUR
+      ? relative.format(-Math.floor(diff / MINUTE), 'minute')
+      : relative.format(-Math.floor(diff / HOUR), 'hour');
   }
-  if (diff < DAY) {
-    return relative.format(-Math.floor(diff / HOUR), 'hour');
+  if (days === 1) {
+    return natural.format(-1, 'day');
   }
-  if (diff < 7 * DAY) {
-    return relative.format(-Math.floor(diff / DAY), 'day');
+  if (days < 7) {
+    return relative.format(-days, 'day');
   }
-  return absoluteTime(iso);
+  return absoluteTime(iso, timeZone);
 }
 
-/** "14.01.2027 17:05" for tooltips and the <time> element. */
-export function absoluteTime(iso: string): string {
-  return absolute.format(new Date(iso)).replace(',', '');
+/** "14.01.2027 17:05" in the school's time zone, for tooltips and the fallback. */
+export function absoluteTime(iso: string, timeZone: string | null = null): string {
+  const options: Intl.DateTimeFormatOptions = {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
+  };
+  try {
+    return new Intl.DateTimeFormat(LOCALE, timeZone ? { ...options, timeZone } : options)
+      .format(new Date(iso))
+      .replace(',', '');
+  } catch {
+    return new Intl.DateTimeFormat(LOCALE, options).format(new Date(iso)).replace(',', '');
+  }
 }

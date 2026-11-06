@@ -36,7 +36,7 @@ import { AnnouncementItemComponent } from './announcement-item.component';
         <ul class="space-y-3" [attr.aria-busy]="list.refreshing()">
           @for (a of list.items(); track a.id) {
             <li class="card p-4">
-              <app-announcement-item [announcement]="a" [showGroup]="true" />
+              <app-announcement-item [announcement]="a" [showGroup]="true" [headingLevel]="2" />
             </li>
           }
         </ul>

@@ -1,10 +1,12 @@
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
+import { signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
 
 import { AnnouncementDto, GroupDto } from '../../api/models';
-import { relativeTime } from '../../core/format/relative-time';
+import { AuthService } from '../../core/auth/auth.service';
+import { absoluteTime, relativeTime } from '../../core/format/relative-time';
 import { errorMessages, ui } from '../../core/i18n/tr';
 import { ToastService } from '../../shared/ui/toast.service';
 import { AnnouncementItemComponent } from './announcement-item.component';
@@ -61,7 +63,50 @@ describe('relativeTime', () => {
   });
 });
 
+describe('relativeTime in the school time zone (browser on UTC)', () => {
+  beforeEach(() => vi.stubEnv('TZ', 'UTC'));
+  afterEach(() => vi.unstubAllEnvs());
+
+  // 22:30 UTC on 14 Jan is 01:30 on 15 Jan in Istanbul.
+  const now = new Date('2027-01-14T22:30:00Z');
+
+  it("counts days on the school's calendar", () => {
+    // 20:00 UTC = 23:00 on 14 Jan in Istanbul: yesterday for the school, same day for the browser.
+    expect(relativeTime('2027-01-14T20:00:00Z', now, 'Europe/Istanbul')).toBe('dün');
+    expect(relativeTime('2027-01-14T20:00:00Z', now, null)).toBe('2 saat önce');
+    // 21:45 UTC = 00:45 on 15 Jan in Istanbul: still today for the school.
+    expect(relativeTime('2027-01-14T21:45:00Z', now, 'Europe/Istanbul')).toBe('45 dakika önce');
+    expect(relativeTime('2027-01-12T22:00:00Z', now, 'Europe/Istanbul')).toBe('2 gün önce');
+  });
+
+  it('formats older and absolute dates in the school zone', () => {
+    expect(absoluteTime('2027-01-01T22:30:00Z', 'Europe/Istanbul')).toBe('02.01.2027 01:30');
+    expect(absoluteTime('2027-01-01T22:30:00Z', null)).toBe('01.01.2027 22:30');
+    expect(relativeTime('2027-01-01T22:30:00Z', now, 'Europe/Istanbul')).toBe('02.01.2027 01:30');
+  });
+});
+
 describe('AnnouncementItemComponent', () => {
+  it("uses the school's zone for relative and absolute dates", async () => {
+    vi.stubEnv('TZ', 'UTC');
+    TestBed.configureTestingModule({
+      providers: [
+        { provide: AuthService, useValue: { user: signal({ schoolTimeZone: 'Europe/Istanbul' }) } },
+      ],
+    });
+    const fixture = TestBed.createComponent(AnnouncementItemComponent);
+    fixture.componentRef.setInput(
+      'announcement',
+      announcement('a1', { createdAt: '2027-01-14T20:00:00Z' }),
+    );
+    fixture.componentRef.setInput('now', new Date('2027-01-14T22:30:00Z'));
+    await settle(fixture);
+    const time = (fixture.nativeElement as HTMLElement).querySelector('time')!;
+    expect(time.textContent).toContain('dün');
+    expect(time.getAttribute('title')).toBe('14.01.2027 23:00');
+    vi.unstubAllEnvs();
+  });
+
   it('keeps line breaks and never renders HTML', async () => {
     const fixture = TestBed.createComponent(AnnouncementItemComponent);
     fixture.componentRef.setInput(
@@ -252,6 +297,43 @@ describe('coach announcements', () => {
     expect(root.querySelector('h1')?.textContent).toContain(ui.announcements.title);
     expect(root.querySelector('p.whitespace-pre-line')?.textContent).toBe('Uzun\nmetin');
     expect(root.querySelector('p.line-clamp-2')).toBeNull();
+  });
+
+  it('keeps heading levels in order on the full page (h1 then h2)', async () => {
+    const fixture = TestBed.createComponent(CoachAnnouncementsPage);
+    await settle(fixture);
+    backend
+      .expectOne((r) => r.url === '/api/v1/me/announcements')
+      .flush(page([announcement('a1')]));
+    await settle(fixture);
+    const root = fixture.nativeElement as HTMLElement;
+    expect(root.querySelector('h1')).not.toBeNull();
+    expect(root.querySelector('h2')?.textContent).toContain('Başlık a1');
+    expect(root.querySelector('h3')).toBeNull();
+  });
+
+  it('marks the compact list busy while loading and offers a retry on error', async () => {
+    const fixture = TestBed.createComponent(CoachAnnouncementsComponent);
+    await settle(fixture);
+    const root = fixture.nativeElement as HTMLElement;
+    expect(root.querySelector('[aria-busy="true"]')).not.toBeNull();
+
+    backend
+      .expectOne((r) => r.url === '/api/v1/me/announcements')
+      .flush(null, { status: 0, statusText: '' });
+    await settle(fixture);
+    expect(root.querySelector('[aria-busy="true"]')).toBeNull();
+    expect(root.querySelector('[role="alert"]')?.textContent).toContain('Sunucuya ulaşılamıyor');
+
+    [...root.querySelectorAll('button')]
+      .find((b) => b.textContent?.trim() === ui.common.retry)!
+      .click();
+    await settle(fixture);
+    backend
+      .expectOne((r) => r.url === '/api/v1/me/announcements')
+      .flush(page([announcement('a1')]));
+    await settle(fixture);
+    expect(root.textContent).toContain('Başlık a1');
   });
 
   it('says when there is nothing yet', async () => {
