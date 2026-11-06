@@ -73,7 +73,7 @@ public sealed class SearchStudentsTests(DatabaseFixture database) : StudentsTest
     }
 
     [Fact]
-    public async Task Before_enrollments_exist_no_student_is_in_a_group_or_sport()
+    public async Task No_student_is_in_an_unknown_group_or_sport()
     {
         await RegisterAsync(Minor("Ali"));
 
