@@ -22,3 +22,18 @@ public interface IEnrollmentEnder
     /// <summary>The student's active enrollments in every group (US-15, <see cref="StudentLeft"/>).</summary>
     Task<Result> EndActiveEnrollmentsOfStudentAsync(StudentId studentId, DateOnly endDate, CancellationToken cancellationToken);
 }
+
+/// <summary>
+/// The only way to take enrollment locks (ADR-0005, DEC-049): <c>SELECT ... FOR UPDATE</c> on the rows,
+/// always the student before the group so two transactions never wait on each other in a cycle. Must be
+/// called inside the unit of work's transaction; waits end after <c>lock_timeout</c> (5 s) with
+/// <c>Lock.Timeout</c>. Unknown or other schools' rows are simply not locked.
+/// </summary>
+public interface IEnrollmentLocks
+{
+    /// <summary>For enrolling: the student, then the group.</summary>
+    Task LockStudentAndGroupAsync(StudentId studentId, GroupId groupId, CancellationToken cancellationToken);
+
+    /// <summary>For changes that depend on the group's active enrollments, e.g. lowering the capacity.</summary>
+    Task LockGroupAsync(GroupId groupId, CancellationToken cancellationToken);
+}
