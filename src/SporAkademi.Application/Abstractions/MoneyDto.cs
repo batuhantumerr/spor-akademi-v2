@@ -27,6 +27,7 @@ public sealed partial record MoneyDto(string Amount, string Currency)
         return Money.Create(decimal.Parse(Amount, NumberStyles.AllowDecimalPoint, CultureInfo.InvariantCulture), Currency);
     }
 
-    [GeneratedRegex(@"^\d{1,10}(\.\d{1,2})?\z", RegexOptions.CultureInvariant, matchTimeoutMilliseconds: 100)]
+    // [0-9], not \d: \d also matches other scripts' digits (e.g. Arabic-Indic), which decimal.Parse rejects.
+    [GeneratedRegex(@"^[0-9]{1,10}(\.[0-9]{1,2})?\z", RegexOptions.CultureInvariant, matchTimeoutMilliseconds: 100)]
     private static partial Regex AmountPattern();
 }

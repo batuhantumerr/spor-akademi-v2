@@ -28,9 +28,10 @@ internal sealed class PaymentConfiguration : IEntityTypeConfiguration<Payment>
         builder.HasOne<School>().WithMany().HasForeignKey(p => p.TenantId).OnDelete(DeleteBehavior.Restrict);
 
         // ADR-0003 layer 3: a payment only references an enrollment, student and group of its own school.
+        // DEC-185: one FK over the enrollment and the denormalized student and group, so they can never diverge.
         builder.HasOne<Enrollment>().WithMany()
-            .HasForeignKey(p => new { p.TenantId, p.EnrollmentId })
-            .HasPrincipalKey(e => new { e.TenantId, e.Id })
+            .HasForeignKey(p => new { p.TenantId, p.EnrollmentId, p.StudentId, p.GroupId })
+            .HasPrincipalKey(e => new { e.TenantId, e.Id, e.StudentId, e.GroupId })
             .OnDelete(DeleteBehavior.Restrict);
         builder.HasOne<Student>().WithMany()
             .HasForeignKey(p => new { p.TenantId, p.StudentId })
@@ -94,24 +95,36 @@ internal sealed class PaymentRepository(AppDbContext db) : IPaymentRepository
         return new PagedResult<Payment>(items, page.Page, page.PageSize, total);
     }
 
-    public async Task<IReadOnlyDictionary<(EnrollmentId Enrollment, YearMonth Period), Money>> RecordedTotalsAsync(
-        IReadOnlyCollection<EnrollmentId> enrollmentIds,
+    public async Task<IReadOnlyDictionary<(EnrollmentId Enrollment, YearMonth Period), decimal>> RecordedTotalsAsync(
+        GroupId? groupId,
+        YearMonth firstPeriod,
+        YearMonth lastPeriod,
         CancellationToken cancellationToken)
     {
-        ArgumentNullException.ThrowIfNull(enrollmentIds);
-        if (enrollmentIds.Count == 0)
+        ArgumentNullException.ThrowIfNull(firstPeriod);
+        ArgumentNullException.ThrowIfNull(lastPeriod);
+
+        // The window has at most a few dozen months (DEC-183), so the period list stays small.
+        var periods = new List<YearMonth>();
+        for (var period = firstPeriod; period <= lastPeriod; period = period.Next())
         {
-            return new Dictionary<(EnrollmentId, YearMonth), Money>();
+            periods.Add(period);
         }
 
-        var ids = enrollmentIds.Distinct().ToList();
-        var recorded = await db.Set<Payment>().AsNoTracking()
-            .Where(p => ids.Contains(p.EnrollmentId) && p.Status == PaymentStatus.Recorded)
+        // Grouped and summed in the database (numeric, exact); the indexes on (tenant, group, period) serve it.
+        var totals = await db.Set<Payment>().AsNoTracking()
+            .Where(p => p.Status == PaymentStatus.Recorded
+                && periods.Contains(p.Period)
+                && (groupId == null || p.GroupId == groupId))
+            .GroupBy(p => new { p.EnrollmentId, p.Period })
+            .Select(g => new { g.Key.EnrollmentId, g.Key.Period, Total = g.Sum(p => p.Amount.Amount) })
             .ToListAsync(cancellationToken);
 
-        // Summed with Money in memory: exact decimal arithmetic, no database rounding.
-        return recorded
-            .GroupBy(p => (p.EnrollmentId, p.Period))
-            .ToDictionary(g => g.Key, g => g.Aggregate(Money.Zero, (sum, p) => sum.Add(p.Amount)));
+        return totals.ToDictionary(t => (t.EnrollmentId, t.Period), t => t.Total);
     }
+
+    public Task<decimal> RecordedTotalAsync(EnrollmentId enrollmentId, YearMonth period, CancellationToken cancellationToken) =>
+        db.Set<Payment>().AsNoTracking()
+            .Where(p => p.EnrollmentId == enrollmentId && p.Period == period && p.Status == PaymentStatus.Recorded)
+            .SumAsync(p => p.Amount.Amount, cancellationToken);
 }

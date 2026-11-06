@@ -31,6 +31,9 @@ public sealed class MoneyDtoTests
     [InlineData("", "TRY")]
     [InlineData("10.00", "USD")]
     [InlineData("10000000000.00", "TRY")]
+    [InlineData("١٢٣", "TRY")]
+    [InlineData("١٢.٣٤", "TRY")]
+    [InlineData("１０", "TRY")]
     public void Anything_else_is_invalid(string text, string currency)
     {
         new MoneyDto(text, currency).ToMoney().Error.ShouldBe(Money.Invalid);

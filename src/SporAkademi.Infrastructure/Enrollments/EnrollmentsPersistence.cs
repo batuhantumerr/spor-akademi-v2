@@ -24,6 +24,9 @@ internal sealed class EnrollmentConfiguration : IEntityTypeConfiguration<Enrollm
             "(status = 'Ended') = (end_date IS NOT NULL) AND (end_date IS NULL OR end_date >= start_date)"));
         builder.HasKey(e => e.Id);
         builder.HasAlternateKey(e => new { e.TenantId, e.Id }).HasName("ak_enrollments_tenant_id_id");
+        // Target of Billing's composite FK (DEC-185): a payment's denormalized student and group must be the
+        // enrollment's own. Student and group of an enrollment never change.
+        builder.HasAlternateKey(e => new { e.TenantId, e.Id, e.StudentId, e.GroupId }).HasName("ak_enrollments_tenant_id_id_student_id_group_id");
         builder.HasOne<School>().WithMany().HasForeignKey(e => e.TenantId).OnDelete(DeleteBehavior.Restrict);
 
         // ADR-0003 layer 3: an enrollment can only join a student and a group of its own school.
@@ -131,8 +134,23 @@ internal sealed class EnrollmentLocks(AppDbContext db, ICurrentUser currentUser)
 }
 
 /// <summary>Enrollments of the current school for other modules (tenant filter applies).</summary>
-internal sealed class EnrollmentDirectory(AppDbContext db) : IEnrollmentDirectory
+internal sealed class EnrollmentDirectory(AppDbContext db, ICurrentUser currentUser) : IEnrollmentDirectory
 {
+    public async Task<EnrollmentInfo?> FindLockedAsync(EnrollmentId enrollmentId, CancellationToken cancellationToken)
+    {
+        if (db.Database.CurrentTransaction is null)
+        {
+            throw new InvalidOperationException("Enrollment locks are only taken inside the unit of work's transaction.");
+        }
+
+        // Raw SQL bypasses the tenant filter, so the school is part of the condition (section 5.4).
+        var tenant = currentUser.TenantId ?? throw new InvalidOperationException("Enrollment locks need a school.");
+        await db.Database.ExecuteSqlAsync(
+            $"SELECT id FROM enrollments.enrollments WHERE tenant_id = {tenant} AND id = {enrollmentId.Value} FOR NO KEY UPDATE",
+            cancellationToken);
+        return await FindAsync(enrollmentId, cancellationToken);
+    }
+
     public async Task<EnrollmentInfo?> FindAsync(EnrollmentId enrollmentId, CancellationToken cancellationToken) =>
         await db.Set<Enrollment>().AsNoTracking()
             .Where(e => e.Id == enrollmentId)

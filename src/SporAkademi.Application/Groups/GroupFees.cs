@@ -48,6 +48,9 @@ internal sealed class DefineGroupFeeHandler(IGroupRepository groups, ITenancyMod
         }
 
         var today = await tenancy.TodayAsync(currentUser.RequireTenant(), cancellationToken);
+        // DEC-184: the fee row alone would not touch the group row, so a concurrent archive could slip in after the
+        // check below; the version-checked group update turns that race into Concurrency.Conflict.
+        groups.ExpectUnchangedSinceLoad(group);
         var defined = group.DefineFee(period.Value, amount.Value, YearMonth.From(today));
         return defined.IsSuccess ? Result.Success(Unit.Value) : Result.Failure<Unit>(defined.Error);
     }

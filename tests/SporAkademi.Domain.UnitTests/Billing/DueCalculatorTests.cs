@@ -26,7 +26,7 @@ public sealed class DueCalculatorTests
         // Started on the last day of November, ended on the first day of January: three full months (DEC-017).
         var enrollment = Enrollment("2026-11-30", "2027-01-01");
 
-        var dues = DueCalculator.Outstanding([enrollment], Fees((M(2026, 1), 1000m)), new Dictionary<(EnrollmentId, YearMonth), Money>(), M(2027, 3));
+        var dues = DueCalculator.Outstanding([enrollment], Fees((M(2026, 1), 1000m)), new Dictionary<(EnrollmentId, YearMonth), decimal>(), M(2027, 3));
 
         dues.Select(d => d.Period).ShouldBe([M(2026, 11), M(2026, 12), M(2027, 1)]);
         dues.ShouldAllBe(d => d.Fee == Money.Try(1000m) && d.Remaining == Money.Try(1000m) && d.Paid == Money.Zero);
@@ -35,7 +35,7 @@ public sealed class DueCalculatorTests
     [Fact]
     public void Open_enrollments_owe_up_to_the_current_month_only()
     {
-        var dues = DueCalculator.Outstanding([Enrollment("2027-01-20")], Fees((M(2027, 1), 500m)), new Dictionary<(EnrollmentId, YearMonth), Money>(), M(2027, 2));
+        var dues = DueCalculator.Outstanding([Enrollment("2027-01-20")], Fees((M(2027, 1), 500m)), new Dictionary<(EnrollmentId, YearMonth), decimal>(), M(2027, 2));
 
         dues.Select(d => d.Period).ShouldBe([M(2027, 1), M(2027, 2)]);
     }
@@ -44,11 +44,11 @@ public sealed class DueCalculatorTests
     public void Recorded_payments_reduce_the_due_and_full_or_over_payment_clears_it()
     {
         var enrollment = Enrollment("2027-01-01");
-        var paid = new Dictionary<(EnrollmentId, YearMonth), Money>
+        var paid = new Dictionary<(EnrollmentId, YearMonth), decimal>
         {
-            [(enrollment.Id, M(2027, 1))] = Money.Try(400m),
-            [(enrollment.Id, M(2027, 2))] = Money.Try(1000m),
-            [(enrollment.Id, M(2027, 3))] = Money.Try(1500m),
+            [(enrollment.Id, M(2027, 1))] = 400m,
+            [(enrollment.Id, M(2027, 2))] = 1000m,
+            [(enrollment.Id, M(2027, 3))] = 1500m,
         };
 
         var dues = DueCalculator.Outstanding([enrollment], Fees((M(2027, 1), 1000m)), paid, M(2027, 3));
@@ -60,12 +60,21 @@ public sealed class DueCalculatorTests
     }
 
     [Fact]
+    public void Totals_beyond_the_money_bound_do_not_overflow()
+    {
+        var enrollment = Enrollment("2027-01-01");
+        var paid = new Dictionary<(EnrollmentId, YearMonth), decimal> { [(enrollment.Id, M(2027, 1))] = Money.MaxAmount * 3 };
+
+        DueCalculator.Outstanding([enrollment], Fees((M(2027, 1), 1000m)), paid, M(2027, 1)).ShouldBeEmpty();
+    }
+
+    [Fact]
     public void A_fee_change_mid_year_keeps_past_periods()
     {
         var dues = DueCalculator.Outstanding(
             [Enrollment("2027-01-01")],
             Fees((M(2026, 9), 1000m), (M(2027, 3), 1250m)),
-            new Dictionary<(EnrollmentId, YearMonth), Money>(),
+            new Dictionary<(EnrollmentId, YearMonth), decimal>(),
             M(2027, 4));
 
         dues.Select(d => d.Fee.Amount).ShouldBe([1000m, 1000m, 1250m, 1250m]);
@@ -74,10 +83,10 @@ public sealed class DueCalculatorTests
     [Fact]
     public void Months_without_a_fee_owe_nothing()
     {
-        var dues = DueCalculator.Outstanding([Enrollment("2027-01-01")], Fees((M(2027, 3), 800m)), new Dictionary<(EnrollmentId, YearMonth), Money>(), M(2027, 3));
+        var dues = DueCalculator.Outstanding([Enrollment("2027-01-01")], Fees((M(2027, 3), 800m)), new Dictionary<(EnrollmentId, YearMonth), decimal>(), M(2027, 3));
 
         dues.Select(d => d.Period).ShouldBe([M(2027, 3)]);
-        DueCalculator.Outstanding([Enrollment("2027-01-01")], new Dictionary<GroupId, IReadOnlyList<FeeRate>>(), new Dictionary<(EnrollmentId, YearMonth), Money>(), M(2027, 3))
+        DueCalculator.Outstanding([Enrollment("2027-01-01")], new Dictionary<GroupId, IReadOnlyList<FeeRate>>(), new Dictionary<(EnrollmentId, YearMonth), decimal>(), M(2027, 3))
             .ShouldBeEmpty();
     }
 

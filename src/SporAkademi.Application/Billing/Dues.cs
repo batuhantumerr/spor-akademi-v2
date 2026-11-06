@@ -13,8 +13,8 @@ using SporAkademi.Domain.SharedKernel;
 namespace SporAkademi.Application.Billing;
 
 /// <summary>
-/// US-24: unpaid dues up to the school's current month, optionally of one group and/or one period
-/// (<c>YYYY-MM</c>). Oldest period first, then group and student name.
+/// US-24: unpaid dues of the last 24 months up to the school's current month, or of one period (<c>YYYY-MM</c>),
+/// optionally of one group. Oldest period first, then group and student name.
 /// </summary>
 public sealed record ListOutstandingDuesQuery(Guid? GroupId, string? Period, PageRequest Page) : IQuery<PagedResult<OutstandingDueDto>>;
 
@@ -46,20 +46,25 @@ internal sealed class ListOutstandingDuesHandler(
             return Result.Success(new PagedResult<OutstandingDueDto>([], query.Page.Page, query.Page.PageSize, 0));
         }
 
+        // DEC-183: without a period the list covers the last DuesHorizonMonths months, so the work is bounded by the
+        // window, not by the school's whole history; every query below is limited to it.
+        var from = period ?? YearMonth.From(currentPeriod.FirstDay.AddMonths(1 - DuesHorizonMonths));
+        var to = period ?? currentPeriod;
         var groupId = query.GroupId is { } id ? GroupId.From(id) : (GroupId?)null;
-        var active = await enrollments.ListActiveBetweenAsync(groupId, period?.FirstDay, (period ?? currentPeriod).LastDay, cancellationToken);
+        var active = await enrollments.ListActiveBetweenAsync(groupId, from.FirstDay, to.LastDay, cancellationToken);
 
         var groupFees = await fees.GetFeesAsync([.. active.Select(e => e.GroupId).Distinct()], cancellationToken);
         var rates = groupFees.ToDictionary(
             g => g.Key,
             g => (IReadOnlyList<FeeRate>)[.. g.Value.Select(f => new FeeRate(f.EffectiveFrom, f.Amount))]);
-        var paid = await payments.RecordedTotalsAsync([.. active.Select(e => e.Id)], cancellationToken);
+        var paid = await payments.RecordedTotalsAsync(groupId, from, to, cancellationToken);
 
         var dues = DueCalculator.Outstanding(
                 active.Select(e => new DueEnrollment(e.Id, e.GroupId, e.StartDate, e.EndDate)),
                 rates,
                 paid,
-                period ?? currentPeriod)
+                to,
+                from)
             .Where(d => period is null || d.Period == period)
             .ToList();
 
@@ -94,6 +99,9 @@ internal sealed class ListOutstandingDuesHandler(
         var page = rows.Skip(query.Page.Skip).Take(query.Page.PageSize).ToList();
         return Result.Success(new PagedResult<OutstandingDueDto>(page, query.Page.Page, query.Page.PageSize, rows.Count));
     }
+
+    /// <summary>How far back the unfiltered list looks (DEC-183): two years, like the default personal data retention.</summary>
+    public const int DuesHorizonMonths = 24;
 
     private static readonly System.Globalization.CultureInfo TurkishCulture = System.Globalization.CultureInfo.GetCultureInfo("tr-TR");
 }

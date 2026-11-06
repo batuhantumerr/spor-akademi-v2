@@ -198,6 +198,9 @@ namespace SporAkademi.Infrastructure.Migrations
                     b.HasIndex("TenantId", "GroupId", "Period")
                         .HasDatabaseName("ix_payments_tenant_id_group_id_period");
 
+                    b.HasIndex("TenantId", "EnrollmentId", "StudentId", "GroupId")
+                        .HasDatabaseName("ix_payments_tenant_id_enrollment_id_student_id_group_id");
+
                     b.ToTable("payments", "billing", t =>
                         {
                             t.HasCheckConstraint("ck_payments_amount", "amount > 0");
@@ -265,6 +268,9 @@ namespace SporAkademi.Infrastructure.Migrations
 
                     b.HasAlternateKey("TenantId", "Id")
                         .HasName("ak_enrollments_tenant_id_id");
+
+                    b.HasAlternateKey("TenantId", "Id", "StudentId", "GroupId")
+                        .HasName("ak_enrollments_tenant_id_id_student_id_group_id");
 
                     b.HasIndex("TenantId", "GroupId", "Status")
                         .HasDatabaseName("ix_enrollments_tenant_id_group_id_status");
@@ -1169,14 +1175,6 @@ namespace SporAkademi.Infrastructure.Migrations
                         .IsRequired()
                         .HasConstraintName("fk_payments_school_tenant_id");
 
-                    b.HasOne("SporAkademi.Domain.Enrollments.Enrollment", null)
-                        .WithMany()
-                        .HasForeignKey("TenantId", "EnrollmentId")
-                        .HasPrincipalKey("TenantId", "Id")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired()
-                        .HasConstraintName("fk_payments_enrollment_tenant_id_enrollment_id");
-
                     b.HasOne("SporAkademi.Domain.Groups.Group", null)
                         .WithMany()
                         .HasForeignKey("TenantId", "GroupId")
@@ -1192,6 +1190,14 @@ namespace SporAkademi.Infrastructure.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired()
                         .HasConstraintName("fk_payments_student_tenant_id_student_id");
+
+                    b.HasOne("SporAkademi.Domain.Enrollments.Enrollment", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId", "EnrollmentId", "StudentId", "GroupId")
+                        .HasPrincipalKey("TenantId", "Id", "StudentId", "GroupId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_payments_enrollment_tenant_id_enrollment_id_student_id_grou");
                 });
 
             modelBuilder.Entity("SporAkademi.Domain.Enrollments.Enrollment", b =>

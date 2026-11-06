@@ -46,12 +46,17 @@ public static class DueCalculator
         }
     }
 
-    /// <summary>Unpaid dues (remaining &gt; 0), ordered by period.</summary>
+    /// <summary>
+    /// Unpaid dues (remaining &gt; 0) from <paramref name="fromPeriod"/> (or the enrollment's start) up to
+    /// <paramref name="currentPeriod"/>, ordered by period. <paramref name="recordedPayments"/> sums Recorded
+    /// payments per enrollment and period.
+    /// </summary>
     public static IReadOnlyList<Due> Outstanding(
         IEnumerable<DueEnrollment> enrollments,
         IReadOnlyDictionary<GroupId, IReadOnlyList<FeeRate>> fees,
-        IReadOnlyDictionary<(EnrollmentId Enrollment, YearMonth Period), Money> recordedPayments,
-        YearMonth currentPeriod)
+        IReadOnlyDictionary<(EnrollmentId Enrollment, YearMonth Period), decimal> recordedPayments,
+        YearMonth currentPeriod,
+        YearMonth? fromPeriod = null)
     {
         ArgumentNullException.ThrowIfNull(enrollments);
         ArgumentNullException.ThrowIfNull(fees);
@@ -67,15 +72,21 @@ public static class DueCalculator
 
             foreach (var period in ActivePeriods(enrollment.StartDate, enrollment.EndDate, currentPeriod))
             {
+                if (fromPeriod is not null && period < fromPeriod)
+                {
+                    continue;
+                }
+
                 if (FeeRate.For(rates, period) is not { } fee)
                 {
                     continue;
                 }
 
-                var paid = recordedPayments.GetValueOrDefault((enrollment.Id, period)) ?? Money.Zero;
-                if (paid < fee)
+                // Totals are plain decimals: a large overpayment can never overflow Money and break the report.
+                var paid = recordedPayments.GetValueOrDefault((enrollment.Id, period));
+                if (paid < fee.Amount)
                 {
-                    dues.Add(new Due(enrollment.Id, enrollment.GroupId, period, fee, paid, fee.Subtract(paid)));
+                    dues.Add(new Due(enrollment.Id, enrollment.GroupId, period, fee, Money.Try(paid), Money.Try(fee.Amount - paid)));
                 }
             }
         }

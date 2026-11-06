@@ -51,6 +51,12 @@ public interface IGroupRepository
     /// <summary>Optimistic concurrency: the save fails with Concurrency.Conflict if the row changed since <paramref name="version"/>.</summary>
     void ExpectVersion(Group group, uint version);
 
+    /// <summary>
+    /// The save checks the version the group was loaded with, even if only its children changed: a concurrent
+    /// change to the group row (e.g. archiving it) makes this save fail with Concurrency.Conflict.
+    /// </summary>
+    void ExpectUnchangedSinceLoad(Group group);
+
     /// <summary>Other active groups that share the coach or the facility: the candidates for schedule conflicts.</summary>
     Task<IReadOnlyList<GroupWeek>> ListActiveWeeksAsync(GroupId except, UserId? coachId, FacilityId facilityId, CancellationToken cancellationToken);
 

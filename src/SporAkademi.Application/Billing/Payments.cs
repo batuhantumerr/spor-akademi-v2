@@ -89,13 +89,23 @@ internal sealed class RecordPaymentHandler(
             return Result.Failure<PaymentId>(ValidationErrors.ForField("paidOn", CommonErrors.FieldInvalid));
         }
 
-        var enrollment = await enrollments.FindAsync(EnrollmentId.From(command.EnrollmentId), cancellationToken);
+        // DEC-184: the enrollment row stays locked until commit, so ending it concurrently waits for this payment,
+        // and two payments of one enrollment are serialized (the period total below stays exact).
+        var enrollment = await enrollments.FindLockedAsync(EnrollmentId.From(command.EnrollmentId), cancellationToken);
         if (enrollment is null)
         {
             return Result.Failure<PaymentId>(EnrollmentErrors.NotFound);
         }
 
         var period = YearMonth.Parse(command.Period).Value;
+        var amount = command.Amount.ToMoney().Value;
+
+        // A period's recorded total stays within the money bound, so totals and reports never overflow.
+        if (await payments.RecordedTotalAsync(enrollment.Id, period, cancellationToken) + amount.Amount > Money.MaxAmount)
+        {
+            return Result.Failure<PaymentId>(ValidationErrors.ForField("amount", Money.Invalid));
+        }
+
         var groupFees = await fees.GetFeesAsync([enrollment.GroupId], cancellationToken);
         var feeDefined = groupFees.TryGetValue(enrollment.GroupId, out var rates)
             && FeeRate.For(rates.Select(r => new FeeRate(r.EffectiveFrom, r.Amount)), period) is not null;
@@ -104,7 +114,7 @@ internal sealed class RecordPaymentHandler(
             tenant,
             new PaidEnrollment(enrollment.Id, enrollment.StudentId, enrollment.GroupId, enrollment.StartDate, enrollment.EndDate),
             period,
-            command.Amount.ToMoney().Value,
+            amount,
             command.Method,
             paidOn,
             feeDefined);

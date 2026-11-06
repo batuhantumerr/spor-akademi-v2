@@ -53,8 +53,17 @@ public interface IPaymentRepository
     /// <summary>Newest payment date first.</summary>
     Task<PagedResult<Payment>> ListAsync(PaymentFilter filter, PageRequest page, CancellationToken cancellationToken);
 
-    /// <summary>Sum of <see cref="PaymentStatus.Recorded"/> payments per enrollment and period.</summary>
-    Task<IReadOnlyDictionary<(EnrollmentId Enrollment, YearMonth Period), Money>> RecordedTotalsAsync(
-        IReadOnlyCollection<EnrollmentId> enrollmentIds,
+    /// <summary>
+    /// Sum of <see cref="PaymentStatus.Recorded"/> payments per enrollment and period, for periods from
+    /// <paramref name="firstPeriod"/> to <paramref name="lastPeriod"/> (inclusive), optionally of one group. Summed in the
+    /// database as plain decimals, so no total can overflow <see cref="Money"/>.
+    /// </summary>
+    Task<IReadOnlyDictionary<(EnrollmentId Enrollment, YearMonth Period), decimal>> RecordedTotalsAsync(
+        GroupId? groupId,
+        YearMonth firstPeriod,
+        YearMonth lastPeriod,
         CancellationToken cancellationToken);
+
+    /// <summary>Sum of the <see cref="PaymentStatus.Recorded"/> payments of one enrollment and period.</summary>
+    Task<decimal> RecordedTotalAsync(EnrollmentId enrollmentId, YearMonth period, CancellationToken cancellationToken);
 }

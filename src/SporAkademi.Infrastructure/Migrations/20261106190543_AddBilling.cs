@@ -14,6 +14,12 @@ namespace SporAkademi.Infrastructure.Migrations
             migrationBuilder.EnsureSchema(
                 name: "billing");
 
+            migrationBuilder.AddUniqueConstraint(
+                name: "ak_enrollments_tenant_id_id_student_id_group_id",
+                schema: "enrollments",
+                table: "enrollments",
+                columns: new[] { "tenant_id", "id", "student_id", "group_id" });
+
             migrationBuilder.CreateTable(
                 name: "group_fees",
                 schema: "groups",
@@ -73,11 +79,11 @@ namespace SporAkademi.Infrastructure.Migrations
                     table.CheckConstraint("ck_payments_amount", "amount > 0");
                     table.CheckConstraint("ck_payments_cancellation", "(status = 'Cancelled') = (cancel_reason IS NOT NULL) AND (status = 'Cancelled') = (cancelled_at IS NOT NULL) AND (status = 'Cancelled') = (cancelled_by IS NOT NULL)");
                     table.ForeignKey(
-                        name: "fk_payments_enrollment_tenant_id_enrollment_id",
-                        columns: x => new { x.tenant_id, x.enrollment_id },
+                        name: "fk_payments_enrollment_tenant_id_enrollment_id_student_id_grou",
+                        columns: x => new { x.tenant_id, x.enrollment_id, x.student_id, x.group_id },
                         principalSchema: "enrollments",
                         principalTable: "enrollments",
-                        principalColumns: new[] { "tenant_id", "id" },
+                        principalColumns: new[] { "tenant_id", "id", "student_id", "group_id" },
                         onDelete: ReferentialAction.Restrict);
                     table.ForeignKey(
                         name: "fk_payments_group_tenant_id_group_id",
@@ -116,6 +122,12 @@ namespace SporAkademi.Infrastructure.Migrations
                 columns: new[] { "tenant_id", "enrollment_id", "period" });
 
             migrationBuilder.CreateIndex(
+                name: "ix_payments_tenant_id_enrollment_id_student_id_group_id",
+                schema: "billing",
+                table: "payments",
+                columns: new[] { "tenant_id", "enrollment_id", "student_id", "group_id" });
+
+            migrationBuilder.CreateIndex(
                 name: "ix_payments_tenant_id_group_id_period",
                 schema: "billing",
                 table: "payments",
@@ -132,11 +144,41 @@ namespace SporAkademi.Infrastructure.Migrations
                 schema: "billing",
                 table: "payments",
                 columns: new[] { "tenant_id", "student_id" });
+
+            // DEC-186: payments are audit records. Whoever connects, a row is never deleted and only the cancel
+            // transition (Recorded -> Cancelled with its reason, author and time) may change it.
+            migrationBuilder.Sql("""
+                CREATE FUNCTION billing.payments_guard() RETURNS trigger
+                LANGUAGE plpgsql AS $$
+                BEGIN
+                    IF TG_OP = 'DELETE' THEN
+                        RAISE EXCEPTION 'billing.payments rows are never deleted' USING ERRCODE = 'restrict_violation';
+                    END IF;
+                    IF (NEW.id, NEW.tenant_id, NEW.enrollment_id, NEW.student_id, NEW.group_id, NEW.period,
+                        NEW.amount, NEW.currency, NEW.method, NEW.paid_on, NEW.created_at, NEW.created_by)
+                       IS DISTINCT FROM
+                       (OLD.id, OLD.tenant_id, OLD.enrollment_id, OLD.student_id, OLD.group_id, OLD.period,
+                        OLD.amount, OLD.currency, OLD.method, OLD.paid_on, OLD.created_at, OLD.created_by) THEN
+                        RAISE EXCEPTION 'billing.payments rows are never edited' USING ERRCODE = 'restrict_violation';
+                    END IF;
+                    IF NOT (OLD.status = 'Recorded' AND NEW.status = 'Cancelled') THEN
+                        RAISE EXCEPTION 'a payment can only be cancelled, once' USING ERRCODE = 'restrict_violation';
+                    END IF;
+                    RETURN NEW;
+                END;
+                $$;
+
+                CREATE TRIGGER trg_payments_guard
+                    BEFORE UPDATE OR DELETE ON billing.payments
+                    FOR EACH ROW EXECUTE FUNCTION billing.payments_guard();
+                """);
         }
 
         /// <inheritdoc />
         protected override void Down(MigrationBuilder migrationBuilder)
         {
+            migrationBuilder.Sql("DROP TRIGGER IF EXISTS trg_payments_guard ON billing.payments; DROP FUNCTION IF EXISTS billing.payments_guard();");
+
             migrationBuilder.DropTable(
                 name: "group_fees",
                 schema: "groups");
@@ -144,6 +186,11 @@ namespace SporAkademi.Infrastructure.Migrations
             migrationBuilder.DropTable(
                 name: "payments",
                 schema: "billing");
+
+            migrationBuilder.DropUniqueConstraint(
+                name: "ak_enrollments_tenant_id_id_student_id_group_id",
+                schema: "enrollments",
+                table: "enrollments");
         }
     }
 }

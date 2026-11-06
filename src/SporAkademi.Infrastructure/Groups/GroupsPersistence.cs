@@ -95,6 +95,8 @@ internal sealed class GroupRepository(AppDbContext db) : IGroupRepository
 
     public void Add(Group group) => db.Add(group);
 
+    public void ExpectUnchangedSinceLoad(Group group) => db.Entry(group).State = EntityState.Modified;
+
     public void ExpectVersion(Group group, uint version)
     {
         var entry = db.Entry(group);

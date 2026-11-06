@@ -10,7 +10,6 @@ using SporAkademi.Api.Endpoints.Organization;
 using SporAkademi.Api.Endpoints.Students;
 using SporAkademi.Api.Endpoints.Tenancy;
 using SporAkademi.Api.Errors;
-using SporAkademi.Api.Json;
 using SporAkademi.Api.Observability;
 using SporAkademi.Api.OpenApi;
 using SporAkademi.Application;
@@ -39,11 +38,7 @@ builder.Services.AddInfrastructure(builder.Configuration);
 builder.Services.AddJwtAuthentication();
 builder.Services.AddAuthRateLimiting();
 
-builder.Services.ConfigureHttpJsonOptions(json =>
-{
-    json.SerializerOptions.Converters.Add(new JsonStringEnumConverter());
-    json.SerializerOptions.Converters.Add(new MoneyJsonConverter());
-});
+builder.Services.ConfigureHttpJsonOptions(json => json.SerializerOptions.Converters.Add(new JsonStringEnumConverter()));
 builder.Services.AddProblemDetails(options => options.CustomizeProblemDetails = ProblemShape.Complete);
 builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
 builder.Services.AddApiDocument();
