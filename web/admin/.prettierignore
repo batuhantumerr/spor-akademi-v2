@@ -5,3 +5,5 @@ coverage
 package-lock.json
 src/app/api
 openapi
+playwright-report
+test-results
