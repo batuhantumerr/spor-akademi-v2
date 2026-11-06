@@ -1,0 +1,7 @@
+#!/bin/sh
+# DEC-035: commits carry only the owner's name. Removes AI attribution lines.
+msg_file="$1"
+tmp="$(mktemp)"
+grep -v -i -E '^(co-authored-by:.*(claude|anthropic|copilot|openai|gpt))|(generated with .*(claude|ai))|(🤖)' "$msg_file" > "$tmp" || true
+cat "$tmp" > "$msg_file"
+rm -f "$tmp"

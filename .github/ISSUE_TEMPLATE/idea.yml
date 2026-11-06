@@ -1,0 +1,8 @@
+name: Fikir
+description: Roadmap dışında kalan bir iyileştirme fikri (kapsam disiplini).
+labels: ["type:idea"]
+body:
+  - type: textarea
+    id: idea
+    attributes: { label: Fikir ve gerekçe }
+    validations: { required: true }

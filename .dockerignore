@@ -1,0 +1,15 @@
+# Allow-list (DEC-081): everything is excluded unless listed below.
+*
+!global.json
+!Directory.Build.props
+!Directory.Packages.props
+!.editorconfig
+!.config/dotnet-tools.json
+!src/**
+!web/admin/**
+!docker/admin/nginx.conf
+**/bin
+**/obj
+web/admin/node_modules
+web/admin/dist
+web/admin/.angular

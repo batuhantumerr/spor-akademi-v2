@@ -1,0 +1,36 @@
+# Local development dependencies. The PostgreSQL image here is the single source of truth:
+# Testcontainers reads the same reference (P1-08), so local, CI and tests run one version.
+name: spor-akademi-v2
+
+services:
+  postgres:
+    image: postgres:18.6-alpine@sha256:123b17998ccaf47e53b502e8c6a1e79afd8f579c6f3eec83c563da026f957395
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      SPOR_AKADEMI_DB: spor_akademi
+      SPOR_AKADEMI_MIGRATOR_PASSWORD: ${SPOR_AKADEMI_MIGRATOR_PASSWORD:?set SPOR_AKADEMI_MIGRATOR_PASSWORD in .env}
+      SPOR_AKADEMI_APP_PASSWORD: ${SPOR_AKADEMI_APP_PASSWORD:?set SPOR_AKADEMI_APP_PASSWORD in .env}
+    ports:
+      - "127.0.0.1:${POSTGRES_HOST_PORT:-55432}:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql
+      - ./docker/postgres/initdb:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d spor_akademi"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  seq:
+    image: datalust/seq:2026.1.17526@sha256:76f6ecdf9f742442f5b7e31eb9b94084b952af0575049d5c1e9d9101a6c8100f
+    environment:
+      ACCEPT_EULA: "Y"
+      SEQ_FIRSTRUN_NOAUTHENTICATION: "true"
+    ports:
+      - "127.0.0.1:${SEQ_HOST_PORT:-5341}:80"
+    volumes:
+      - seq-data:/data
+
+volumes:
+  postgres-data:
+  seq-data:

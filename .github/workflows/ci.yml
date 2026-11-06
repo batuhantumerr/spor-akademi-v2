@@ -1,0 +1,181 @@
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  # Cancel superseded PR runs only; every commit on main is built and published.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+  DOTNET_NOLOGO: "1"
+  DOTNET_CLI_UI_LANGUAGE: en
+  TRIVY_VERSION: 0.76.1
+  TRIVY_SHA256: c7cbe3137fb8a48a17574bede3dd6beb16742d1e9772929940fc90082c39d9c0
+
+jobs:
+  backend:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6.1.0
+        with:
+          global-json-file: global.json
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.nuget/packages
+          key: nuget-${{ runner.os }}-${{ hashFiles('**/packages.lock.json', '.config/dotnet-tools.json') }}
+      - name: Restore
+        run: |
+          dotnet tool restore
+          dotnet restore SporAkademi.slnx --locked-mode
+      - name: Build
+        run: dotnet build SporAkademi.slnx --no-restore -c Release
+      - name: Format
+        run: dotnet format SporAkademi.slnx --no-restore --verify-no-changes
+      - name: Test
+        run: dotnet test --solution SporAkademi.slnx --no-build -c Release
+      - name: Model matches migrations
+        run: dotnet tool run dotnet-ef migrations has-pending-model-changes --project src/SporAkademi.Infrastructure --startup-project src/SporAkademi.Infrastructure --no-build --configuration Release
+
+  frontend:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: web/admin
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: web/admin/.nvmrc
+          cache: npm
+          cache-dependency-path: web/admin/package-lock.json
+      - run: npm ci --no-fund
+      - run: npm run lint
+      - run: npm run format:check
+      - run: npm test
+      - run: npm run build
+      - name: Audit (high and critical fail the build, DEC-080)
+        run: npm audit --audit-level=high
+
+  repo-checks:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Line endings are LF (DEC-077)
+        run: |
+          bad=$(git ls-files --eol | awk '$2 ~ /crlf|mixed/ {print $4}' | grep -v 'packages.lock.json' || true)
+          if [ -n "$bad" ]; then echo "CRLF line endings in:"; echo "$bad"; exit 1; fi
+      - name: Forbidden packages (DEC-048, DEC-061)
+        run: |
+          if git grep -n -i -E '"(mediatr|automapper|fluentassertions)[".]|Include="(MediatR|AutoMapper|FluentAssertions)' -- '*.csproj' '*.props' '**/packages.lock.json'; then
+            echo "Forbidden package referenced."; exit 1
+          fi
+      - name: dotnet-ef matches EF Core version
+        run: |
+          tool=$(jq -r '.tools["dotnet-ef"].version' .config/dotnet-tools.json)
+          ef=$(grep -oP 'Include="Microsoft.EntityFrameworkCore" Version="\K[^"]+' Directory.Packages.props)
+          echo "dotnet-ef=$tool efcore=$ef"
+          test "$tool" = "$ef"
+
+  images:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Build images
+        run: |
+          docker build -f docker/api/Dockerfile -t spor-akademi-api:ci .
+          docker build -f docker/migrator/Dockerfile -t spor-akademi-migrator:ci .
+          docker build -f docker/admin/Dockerfile -t spor-akademi-admin:ci .
+      - name: Smoke test migrator and API against a fresh database
+        run: |
+          set -euo pipefail
+          pg_image=$(grep -oP '^\s*image:\s*\Kpostgres:\S+' compose.yaml)
+          docker network create smoke
+          docker run -d --name pg --network smoke \
+            -e POSTGRES_PASSWORD=smokepg -e SPOR_AKADEMI_DB=spor_akademi \
+            -e SPOR_AKADEMI_MIGRATOR_PASSWORD=smokemigrator -e SPOR_AKADEMI_APP_PASSWORD=smokeapp \
+            -v "$PWD/docker/postgres/initdb:/docker-entrypoint-initdb.d:ro" "$pg_image"
+          for i in $(seq 1 60); do docker exec pg pg_isready -U postgres -d spor_akademi >/dev/null 2>&1 && break; sleep 1; done
+          sleep 2
+          docker run --rm --network smoke \
+            spor-akademi-migrator:ci --connection "Host=pg;Database=spor_akademi;Username=spor_akademi_migrator;Password=smokemigrator"
+          # The app role must not reach the migrations history (ADR-0011).
+          denied=$(docker exec pg psql -U postgres -d spor_akademi -At -c "select has_schema_privilege('spor_akademi_app','public','usage')")
+          test "$denied" = "f"
+          # Every module table must be usable by the app role.
+          missing=$(docker exec pg psql -U postgres -d spor_akademi -At -c "select count(*) from pg_tables where schemaname not in ('public','pg_catalog','information_schema') and not has_table_privilege('spor_akademi_app', schemaname||'.'||tablename, 'select,insert,update,delete')")
+          test "$missing" = "0"
+          docker run -d --name api --network smoke -p 127.0.0.1:8080:8080 \
+            -e ConnectionStrings__App="Host=pg;Database=spor_akademi;Username=spor_akademi_app;Password=smokeapp" \
+            -e Jwt__SigningKey=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef \
+            spor-akademi-api:ci
+          for i in $(seq 1 30); do curl -fsS http://127.0.0.1:8080/health/live >/dev/null 2>&1 && break; sleep 1; done
+          curl -fsS --max-time 10 http://127.0.0.1:8080/health/live
+          curl -fsS --max-time 10 http://127.0.0.1:8080/health/ready
+          docker logs api | tail -20
+      - name: Smoke test admin
+        run: |
+          docker run -d --name admin -p 127.0.0.1:8081:8080 spor-akademi-admin:ci
+          for i in $(seq 1 15); do curl -fsS http://127.0.0.1:8081/ >/dev/null 2>&1 && break; sleep 1; done
+          curl -fsS --max-time 10 http://127.0.0.1:8081/some/deep/link | grep -q '<app-root'
+          curl -fsSI http://127.0.0.1:8081/index.html | grep -qi 'cache-control: no-cache'
+      - name: Install Trivy (pinned binary + checksum)
+        run: |
+          curl -fsSLo trivy.tgz "https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/trivy_${TRIVY_VERSION}_Linux-64bit.tar.gz"
+          echo "${TRIVY_SHA256}  trivy.tgz" | sha256sum -c -
+          tar -xzf trivy.tgz trivy && sudo mv trivy /usr/local/bin/trivy
+      - name: Scan images (high/critical fail, DEC-080)
+        run: |
+          for img in api migrator admin; do
+            trivy image --quiet --severity HIGH,CRITICAL --ignore-unfixed --exit-code 1 "spor-akademi-$img:ci"
+          done
+      - name: Save tested images
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: docker save spor-akademi-api:ci spor-akademi-migrator:ci spor-akademi-admin:ci | gzip > images.tar.gz
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        with:
+          name: images
+          path: images.tar.gz
+          retention-days: 3
+
+  publish:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: [backend, frontend, repo-checks, images]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: images
+      - name: Push the tested images to GHCR (DEC-089)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          gunzip -c images.tar.gz | docker load
+          echo "$GH_TOKEN" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+          owner=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
+          for img in api migrator admin; do
+            target="ghcr.io/$owner/spor-akademi-$img:${{ github.sha }}"
+            docker tag "spor-akademi-$img:ci" "$target"
+            docker push "$target"
+            digest=$(docker buildx imagetools inspect "$target" --format '{{json .Manifest.Digest}}')
+            echo "$target -> $digest"
+            test -n "$digest"
+          done

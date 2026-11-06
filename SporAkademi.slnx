@@ -1,0 +1,14 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/SporAkademi.Api/SporAkademi.Api.csproj" />
+    <Project Path="src/SporAkademi.Application/SporAkademi.Application.csproj" />
+    <Project Path="src/SporAkademi.Domain/SporAkademi.Domain.csproj" />
+    <Project Path="src/SporAkademi.Infrastructure/SporAkademi.Infrastructure.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/SporAkademi.Application.UnitTests/SporAkademi.Application.UnitTests.csproj" />
+    <Project Path="tests/SporAkademi.ArchitectureTests/SporAkademi.ArchitectureTests.csproj" />
+    <Project Path="tests/SporAkademi.Domain.UnitTests/SporAkademi.Domain.UnitTests.csproj" />
+    <Project Path="tests/SporAkademi.IntegrationTests/SporAkademi.IntegrationTests.csproj" />
+  </Folder>
+</Solution>

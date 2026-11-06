@@ -1,0 +1,6 @@
+{
+  "printWidth": 110,
+  "singleQuote": true,
+  "endOfLine": "lf",
+  "overrides": [{ "files": "*.html", "options": { "parser": "angular" } }]
+}

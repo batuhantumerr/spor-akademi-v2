@@ -1,0 +1,16 @@
+name: Roadmap maddesi
+description: Yol haritasındaki bir maddeye başlarken açılır.
+title: "P1-xx: "
+labels: ["type:feature"]
+body:
+  - type: input
+    id: item
+    attributes: { label: Roadmap maddesi, placeholder: P1-15 }
+    validations: { required: true }
+  - type: input
+    id: stories
+    attributes: { label: Kullanıcı hikayeleri, placeholder: US-06 }
+  - type: textarea
+    id: scope
+    attributes: { label: Kapsam ve kabul kriterleri }
+    validations: { required: true }

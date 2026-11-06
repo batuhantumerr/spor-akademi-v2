@@ -1,0 +1,27 @@
+# secrets
+.env
+.env.*
+!.env.example
+
+# .NET
+bin/
+obj/
+*.user
+.vs/
+TestResults/
+*.trx
+coverage/
+
+# Node / Angular
+node_modules/
+web/admin/dist/
+web/admin/.angular/
+web/admin/test-results/
+web/admin/playwright-report/
+
+# IDE / OS
+.idea/
+.vscode/*
+!.vscode/extensions.json
+.DS_Store
+Thumbs.db
