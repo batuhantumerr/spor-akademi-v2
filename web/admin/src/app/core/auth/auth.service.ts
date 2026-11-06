@@ -30,6 +30,8 @@ export interface CurrentUser {
   role: Role;
   tenantId: string | null;
   mustChangePassword: boolean;
+  /** IANA zone of the user's school (null for the Platform Admin); "today" is computed in it. */
+  schoolTimeZone?: string | null;
 }
 
 interface TokenResponse {
