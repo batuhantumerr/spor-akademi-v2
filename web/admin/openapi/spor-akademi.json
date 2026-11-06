@@ -4946,6 +4946,45 @@
           }
         }
       }
+    },
+    "/api/v1/dashboard": {
+      "get": {
+        "tags": [
+          "Dashboard"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DashboardDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -5302,6 +5341,133 @@
           },
           "admin": {
             "$ref": "#/components/schemas/NewSchoolAdmin"
+          }
+        }
+      },
+      "DashboardDto": {
+        "required": [
+          "today",
+          "currentPeriod",
+          "kpis",
+          "monthlyBilling",
+          "weeklyAttendance",
+          "enrollmentsBySport",
+          "groupUtilisation",
+          "todaySessions"
+        ],
+        "type": "object",
+        "properties": {
+          "today": {
+            "type": "string",
+            "format": "date"
+          },
+          "currentPeriod": {
+            "type": "string"
+          },
+          "kpis": {
+            "$ref": "#/components/schemas/DashboardKpisDto"
+          },
+          "monthlyBilling": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MonthlyBillingDto"
+            }
+          },
+          "weeklyAttendance": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/WeeklyAttendanceDto"
+            }
+          },
+          "enrollmentsBySport": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SportEnrollmentsDto"
+            }
+          },
+          "groupUtilisation": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/GroupUtilisationDto"
+            }
+          },
+          "todaySessions": {
+            "$ref": "#/components/schemas/TodaySessionsDto"
+          }
+        }
+      },
+      "DashboardKpisDto": {
+        "required": [
+          "activeStudents",
+          "activeGroups",
+          "totalCapacity",
+          "activeEnrollments",
+          "capacityUtilisation",
+          "collectedThisMonth",
+          "outstandingThisMonth",
+          "outstandingTotal",
+          "attendanceRateLast30Days"
+        ],
+        "type": "object",
+        "properties": {
+          "activeStudents": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "activeGroups": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "totalCapacity": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "activeEnrollments": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "capacityUtilisation": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d\u002B)?$",
+            "type": [
+              "null",
+              "number",
+              "string"
+            ],
+            "format": "double"
+          },
+          "collectedThisMonth": {
+            "$ref": "#/components/schemas/MoneyDto"
+          },
+          "outstandingThisMonth": {
+            "$ref": "#/components/schemas/MoneyDto"
+          },
+          "outstandingTotal": {
+            "$ref": "#/components/schemas/MoneyDto"
+          },
+          "attendanceRateLast30Days": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d\u002B)?$",
+            "type": [
+              "null",
+              "number",
+              "string"
+            ],
+            "format": "double"
           }
         }
       },
@@ -5716,6 +5882,49 @@
           "Archived"
         ]
       },
+      "GroupUtilisationDto": {
+        "required": [
+          "groupId",
+          "groupName",
+          "activeEnrollments",
+          "capacity",
+          "utilisation"
+        ],
+        "type": "object",
+        "properties": {
+          "groupId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "groupName": {
+            "type": "string"
+          },
+          "activeEnrollments": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "capacity": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "utilisation": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d\u002B)?$",
+            "type": [
+              "number",
+              "string"
+            ],
+            "format": "double"
+          }
+        }
+      },
       "GuardianAddressDto": {
         "required": [
           "line",
@@ -5887,6 +6096,25 @@
                 "$ref": "#/components/schemas/AttendanceStatus"
               }
             ]
+          }
+        }
+      },
+      "MonthlyBillingDto": {
+        "required": [
+          "period",
+          "collected",
+          "due"
+        ],
+        "type": "object",
+        "properties": {
+          "period": {
+            "type": "string"
+          },
+          "collected": {
+            "$ref": "#/components/schemas/MoneyDto"
+          },
+          "due": {
+            "$ref": "#/components/schemas/MoneyDto"
           }
         }
       },
@@ -7321,6 +7549,31 @@
           }
         }
       },
+      "SportEnrollmentsDto": {
+        "required": [
+          "sportId",
+          "sportName",
+          "activeEnrollments"
+        ],
+        "type": "object",
+        "properties": {
+          "sportId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "sportName": {
+            "type": "string"
+          },
+          "activeEnrollments": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          }
+        }
+      },
       "SportRequest": {
         "required": [
           "name"
@@ -7582,6 +7835,31 @@
         "properties": {
           "temporaryPassword": {
             "type": "string"
+          }
+        }
+      },
+      "TodaySessionsDto": {
+        "required": [
+          "planned",
+          "recorded"
+        ],
+        "type": "object",
+        "properties": {
+          "planned": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "recorded": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
           }
         }
       },
@@ -7885,6 +8163,42 @@
             "type": "object"
           }
         }
+      },
+      "WeeklyAttendanceDto": {
+        "required": [
+          "weekStart",
+          "weekEnd",
+          "counted",
+          "rate"
+        ],
+        "type": "object",
+        "properties": {
+          "weekStart": {
+            "type": "string",
+            "format": "date"
+          },
+          "weekEnd": {
+            "type": "string",
+            "format": "date"
+          },
+          "counted": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "rate": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d\u002B)?$",
+            "type": [
+              "null",
+              "number",
+              "string"
+            ],
+            "format": "double"
+          }
+        }
       }
     },
     "securitySchemes": {
@@ -7935,6 +8249,9 @@
     },
     {
       "name": "Payments"
+    },
+    {
+      "name": "Dashboard"
     }
   ]
 }
