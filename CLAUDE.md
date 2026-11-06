@@ -16,6 +16,8 @@ Sahiple ve dokümanlarda Türkçe; kod, isimler, enum'lar, commit'ler İngilizce
 - Beklenen hata `Result`/`Error`, beklenmeyen exception. API sabit hata kodu döner.
 - Multi-tenancy: `TenantId` + global filter + yazma koruması + bileşik FK + tenant'lı unique index. Başka okulun kaydı `404`.
 - Zaman `TimeProvider`'dan (`DateTime.Now/UtcNow` yasak); ID'ler `Guid.CreateVersion7()`.
+- EF Core: aggregate'ların ve çok alanlı value object'lerin sadece EF için private parametresiz constructor'ı vardır (record copy constructor bağlanamıyor). Çok alanlı VO'lar `AppDbContext.ConfigureConventions` içinde `ComplexProperties<T>()` ile kaydedilir; tek alanlı VO'lar (Slug, Email, PhoneNumber, YearMonth) converter ile. ID'ler ve enum'lar convention ile.
+- Domain event işleyicileri `IDomainEventConsumer<T>` (CA1711 `EventHandler` sonekini yasaklıyor); `UnitOfWork` kaydet → event'leri işle → kaydet döngüsüyle commit'ten önce çalıştırır.
 - Kayıt kilitleri sadece `IEnrollmentLocks`: önce öğrenci, sonra grup, `lock_timeout` 5 sn.
 
 ## Test

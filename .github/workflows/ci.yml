@@ -76,6 +76,9 @@ jobs:
         run: |
           bad=$(git ls-files --eol | awk '$2 ~ /crlf|mixed/ {print $4}' | grep -v 'packages.lock.json' || true)
           if [ -n "$bad" ]; then echo "CRLF line endings in:"; echo "$bad"; exit 1; fi
+      - name: No merge conflict markers
+        run: |
+          if git grep -n -E "^(<<<<<<<|>>>>>>>) " -- . ":!*.md"; then echo "Conflict markers committed."; exit 1; fi
       - name: Forbidden packages (DEC-048, DEC-061)
         run: |
           if git grep -n -i -E '"(mediatr|automapper|fluentassertions)[".]|Include="(MediatR|AutoMapper|FluentAssertions)' -- '*.csproj' '*.props' '**/packages.lock.json'; then

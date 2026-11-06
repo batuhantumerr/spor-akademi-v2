@@ -1,5 +1,7 @@
 using SporAkademi.Api;
+using SporAkademi.Api.Authentication;
 using SporAkademi.Application;
+using SporAkademi.Application.Abstractions.Authentication;
 using SporAkademi.Infrastructure;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -14,6 +16,8 @@ builder.Host.UseDefaultServiceProvider(options =>
 
 builder.AddStructuredLogging();
 builder.Services.AddSingleton(TimeProvider.System);
+builder.Services.AddHttpContextAccessor();
+builder.Services.AddScoped<ICurrentUser, HttpCurrentUser>(); // before AddInfrastructure, which only adds a fallback
 builder.Services.AddApplication();
 builder.Services.AddInfrastructure(builder.Configuration);
 

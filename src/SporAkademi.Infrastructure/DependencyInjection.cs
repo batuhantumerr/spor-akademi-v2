@@ -1,6 +1,9 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
+using SporAkademi.Application.Abstractions.Authentication;
+using SporAkademi.Application.Abstractions.Data;
 using SporAkademi.Infrastructure.Persistence;
 
 namespace SporAkademi.Infrastructure;
@@ -14,9 +17,16 @@ public static class DependencyInjection
         var connectionString = configuration.GetConnectionString("App")
             ?? throw new InvalidOperationException("Connection string 'App' is not configured.");
 
-        services.AddDbContext<AppDbContext>(options => options
+        services.TryAddScoped<ICurrentUser, AnonymousCurrentUser>();
+        services.TryAddSingleton(TimeProvider.System);
+        services.AddScoped<AuditingInterceptor>();
+        services.AddDbContext<AppDbContext>((provider, options) => options
             .UseNpgsql(connectionString, npgsql => npgsql.MigrationsHistoryTable("__ef_migrations_history", "public"))
-            .UseSnakeCaseNamingConvention());
+            .UseSnakeCaseNamingConvention()
+            .AddInterceptors(provider.GetRequiredService<AuditingInterceptor>()));
+
+        services.AddScoped<DomainEventDispatcher>();
+        services.AddScoped<IUnitOfWork, UnitOfWork>();
 
         services.AddHealthChecks()
             .AddDbContextCheck<AppDbContext>("database", tags: ["ready"]);

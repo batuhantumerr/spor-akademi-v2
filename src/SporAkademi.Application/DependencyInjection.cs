@@ -21,6 +21,8 @@ public static class DependencyInjection
             .AddClasses(c => c.AssignableTo(typeof(ICommandHandler<,>)), publicOnly: false)
                 .AsImplementedInterfaces().WithScopedLifetime()
             .AddClasses(c => c.AssignableTo(typeof(IQueryHandler<,>)), publicOnly: false)
+                .AsImplementedInterfaces().WithScopedLifetime()
+            .AddClasses(c => c.AssignableTo(typeof(IDomainEventConsumer<>)), publicOnly: false)
                 .AsImplementedInterfaces().WithScopedLifetime());
 
         services.AddValidatorsFromAssembly(assembly, ServiceLifetime.Singleton, includeInternalTypes: true);
