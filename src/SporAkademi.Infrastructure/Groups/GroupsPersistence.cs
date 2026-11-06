@@ -196,3 +196,13 @@ internal sealed class GroupFeeSchedule(AppDbContext db) : IGroupFeeSchedule
                 g => (IReadOnlyList<GroupFeeInfo>)[.. g.Fees.Select(f => new GroupFeeInfo(f.EffectiveFrom, f.Amount))]);
     }
 }
+
+/// <summary>Active groups of a coach for other modules (tenant filter applies).</summary>
+internal sealed class CoachGroups(AppDbContext db) : ICoachGroups
+{
+    public async Task<IReadOnlyList<GroupId>> ListActiveGroupIdsAsync(UserId coachId, CancellationToken cancellationToken) =>
+        await db.Set<Group>()
+            .Where(g => g.CoachId == coachId && g.Status == GroupStatus.Active)
+            .Select(g => g.Id)
+            .ToListAsync(cancellationToken);
+}
