@@ -171,6 +171,8 @@ export const ui = {
     name: 'Branş adı',
     showArchived: 'Arşivlenenleri göster',
     empty: 'Henüz branş eklenmedi. İlk branşınızı yukarıdan ekleyin.',
+    emptyActive:
+      'Aktif branş yok. Arşivlenmiş branşları görmek için “Arşivlenenleri göster”i işaretleyin.',
     created: 'Branş eklendi.',
     renamed: 'Branş adı güncellendi.',
     archived: 'Branş arşivlendi.',
@@ -196,6 +198,8 @@ export const ui = {
     city: 'İl',
     showArchived: 'Arşivlenenleri göster',
     empty: 'Henüz tesis eklenmedi.',
+    emptyActive:
+      'Aktif tesis yok. Arşivlenmiş tesisleri görmek için “Arşivlenenleri göster”i işaretleyin.',
     saved: 'Tesis kaydedildi.',
     archived: 'Tesis arşivlendi.',
     deleted: 'Tesis silindi.',
@@ -219,13 +223,15 @@ export const ui = {
   },
   common: {
     loading: 'Yükleniyor…',
-    save: 'Kaydet',
-    cancel: 'İptal',
     retry: 'Tekrar dene',
     close: 'Kapat',
     pagination: 'Sayfalama',
     previousPage: 'Önceki sayfa',
     nextPage: 'Sonraki sayfa',
+    totalRecords: 'Toplam {count} kayıt',
+    pageOf: '{page} / {total}',
+    conflictReloaded:
+      'Bu kayıt siz düzenlerken başka biri tarafından değiştirildi. Güncel hâli yüklendi; kontrol edip tekrar kaydedin.',
     empty: 'Henüz kayıt yok.',
     comingSoon: 'Bu bölüm hazırlanıyor.',
     notFoundTitle: 'Sayfa bulunamadı',

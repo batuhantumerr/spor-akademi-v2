@@ -195,7 +195,7 @@
   }
 
   .btn-icon {
-    @apply size-10 px-0;
+    @apply size-10 px-0 pointer-coarse:size-11;
   }
 
   .card {
