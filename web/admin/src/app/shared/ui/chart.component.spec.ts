@@ -1,4 +1,7 @@
-import { deepMerge, themedOption } from './chart.component';
+import { TestBed } from '@angular/core/testing';
+
+import { ThemeService } from '../../core/theme/theme.service';
+import { ChartComponent, deepMerge, themedOption } from './chart.component';
 
 type Option = Record<string, unknown>;
 
@@ -38,5 +41,46 @@ describe('themedOption', () => {
 
   it('replaces arrays instead of merging them', () => {
     expect(deepMerge({ a: [1, 2], b: { c: 1 } }, { a: [3] })).toEqual({ a: [3], b: { c: 1 } });
+  });
+});
+
+describe('ChartComponent', () => {
+  let tokens: HTMLStyleElement;
+
+  beforeEach(() => {
+    // jsdom has no matchMedia; ThemeService reads the system preference from it.
+    Object.defineProperty(window, 'matchMedia', {
+      configurable: true,
+      value: () => ({ matches: false, addEventListener: () => undefined }),
+    });
+    tokens = document.createElement('style');
+    tokens.textContent = ':root { --chart-1: #2563eb; } .dark { --chart-1: #60a5fa; }';
+    document.head.appendChild(tokens);
+    // No canvas in jsdom: keep the component's logic, drop the echarts directive.
+    TestBed.overrideComponent(ChartComponent, { set: { imports: [], template: '' } });
+  });
+
+  afterEach(() => {
+    tokens.remove();
+    document.documentElement.classList.remove('dark', 'light');
+    try {
+      localStorage.removeItem('sa-theme');
+    } catch {
+      // ignore
+    }
+  });
+
+  it('re-reads the token colours when the theme flips', () => {
+    const theme = TestBed.inject(ThemeService);
+    theme.set('light');
+    const fixture = TestBed.createComponent(ChartComponent);
+    fixture.componentRef.setInput('options', { series: [] });
+    const merged = () => (fixture.componentInstance['merged']() as Option)['color'] as string[];
+
+    expect(merged()[0]).toBe('#2563eb');
+    theme.set('dark');
+    expect(merged()[0]).toBe('#60a5fa');
+    theme.set('light');
+    expect(merged()[0]).toBe('#2563eb');
   });
 });

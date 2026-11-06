@@ -2,34 +2,28 @@ import { ChangeDetectionStrategy, Component, computed, inject, input } from '@an
 import { NgxEchartsDirective, provideEchartsCore } from 'ngx-echarts';
 import type { EChartsCoreOption } from 'echarts/core';
 import * as echarts from 'echarts/core';
-import { BarChart, HeatmapChart, LineChart, PieChart } from 'echarts/charts';
+import { BarChart, LineChart, PieChart } from 'echarts/charts';
 import {
   AriaComponent,
-  DatasetComponent,
   GridComponent,
   LegendComponent,
-  TitleComponent,
   TooltipComponent,
-  VisualMapComponent,
 } from 'echarts/components';
 import { CanvasRenderer } from 'echarts/renderers';
 
 import { ThemeService } from '../../core/theme/theme.service';
 
-// Only the chart types and components the app uses are bundled (tree-shaken ECharts core).
+// Only the chart types and components the app uses are bundled (tree-shaken ECharts core);
+// register more here when a chart needs them (e.g. HeatmapChart + VisualMapComponent).
 // AriaComponent adds a generated text description for screen readers (NFR-USA).
 echarts.use([
   BarChart,
   LineChart,
   PieChart,
-  HeatmapChart,
   AriaComponent,
-  DatasetComponent,
   GridComponent,
   LegendComponent,
-  TitleComponent,
   TooltipComponent,
-  VisualMapComponent,
   CanvasRenderer,
 ]);
 
