@@ -18,14 +18,14 @@ Test sınıfları `tests/` altındaki yollarıyla verilir (`IntegrationTests/...
 | NFR-SEC-06 | Tarayıcıda token saklama | ✅ | Refresh token `HttpOnly; Secure; SameSite=Strict; Path=/api/v1/auth` (`LoginTests`); access token sadece yanıt gövdesinde, istemci bellekte tutar (`web/admin/src/app/core/auth/auth.service.ts`). |
 | NFR-SEC-07 | Varsayılan olarak yetki | ✅ | `tests/SporAkademi.ArchitectureTests/EndpointSecurityTests` (fallback policy + gözden geçirilmiş anonim endpoint listesi); `IntegrationTests/Platform/ErrorHandlingTests`. |
 | NFR-SEC-08 | Tenant izolasyonu | ✅ | `ModuleRulesTests` (tenant'a bağlı aggregate'lar), `IntegrationTests/Tenancy/TenantIsolationTests` ve her modülün `*TenantIsolationTests` sınıfı; yazma koruması `TenantWriteGuardInterceptor`. Tam izolasyon paketi P1-35'te. |
-| NFR-SEC-09 | Repoda / imajda / logda gizli bilgi yok | ✅ | CI `repo-checks` → gitleaks ile tüm geçmiş taraması (DEC-200, `.gitleaks.toml`); `.env` git-ignored ve hiçbir betikçe yazdırılmaz (`scripts/lib/env.sh`); imajlarda gizli bilgi yok (`docker/*/Dockerfile`, yapılandırma ortam değişkeninden). Loglar: `LogPrivacyTests`. |
+| NFR-SEC-09 | Repoda / imajda / logda gizli bilgi yok | 🟡 | **Repo (otomatik):** CI `repo-checks` → gitleaks varsayılan kurallarıyla tüm geçmiş taraması (DEC-200). İzin listesi (`.gitleaks.toml`, DEC-250) her sentetik test değerini sadece onu tutan dosyalarda ve sadece `generic-api-key` kuralı için kabul eder (yol **ve** değer eşleşmeli); yol glob'u veya repo genelinde geçerli değer kalıbı yok. gitleaks'in tanımadığı biçimdeki bir sır yakalanmaz. `.env` git-ignored ve hiçbir betikçe yazdırılmaz (`scripts/lib/env.sh`). **İmaj (elle):** Dockerfile'lar gizli bilgi kopyalamaz, yapılandırma ortam değişkeninden gelir (`docker/*/Dockerfile`); otomatik bir imaj sır taraması iddia edilmez. **Log:** `LogPrivacyTests`'in kapsadığı yollar (NFR-PRV-03). |
 | NFR-SEC-10 | Veritabanı yetkileri (uygulama ≠ migrator) | ✅ | `docker/postgres/initdb/10-create-roles.sh`; CI `images` smoke testi uygulama rolünün migration geçmişine erişemediğini ve tüm modül tablolarını kullanabildiğini doğrular; `DatabaseFixture` testleri uygulama rolüyle çalıştırır. |
 | NFR-SEC-11 | Bağımlılık açıkları | ✅ | CI: NuGet audit `NuGetAuditMode=all` + high/critical hata (`Directory.Build.props`, DEC-080), `npm audit --audit-level=high` (`frontend` işi), Trivy imaj taraması (`images` işi), Dependabot. |
 | NFR-SEC-12 | Girdi sınırları (1 MB, sınırda doğrulama) | ✅ | Kestrel limiti + `RequestSizeLimitMiddleware`; `ErrorHandlingTests.Bodies_over_one_megabyte_are_rejected`; FluentValidation decorator'ı (`Decorators.cs`, `PipelineTests`). |
 | NFR-SEC-13 | Güvenlik başlıkları (CSP vb.) | ⛔ | Faz 4. Şimdilik sadece `Cache-Control: no-store` (`NoStoreMiddleware`, `AuthHardeningTests`). Bkz. Fikirler 2. |
 | NFR-SEC-14 | Rate limiting (giriş) | ✅ | `AuthRateLimiting.cs` (giriş, refresh, şifre değiştirme; IP + yol başına 10/dk), hesap kilidi (DEC-010); `LoginTests`, `AuthHardeningTests`. Proxy arkasında forwarded header Deploy bloğunda. |
-| NFR-PRV-03 | Loglarda kişisel veri yok | ✅ | `LogPrivacyTests` (DEC-201): giriş (hatalı/başarılı), refresh, kişisel verili öğrenci kaydı, doğrulama hatası, arama, grup/aidat/kayıt, ödeme ve serbest metinli iptal gerekçesi, borç listesi ve şifre değiştirme tüm log seviyeleri açıkken çalışır; hiçbir olayda e-posta, telefon, isim, doğum tarihi, şifre veya token geçmez. Decorator'lar sadece istek tipi ve hata kodu loglar (`Decorators.cs`). |
-| DEC-054 | Aynı origin, CORS yok | ✅ | `IntegrationTests/Security/CorsTests`: CORS servisi kayıtlı değil; yabancı origin'den gelen istek ve preflight'larda hiçbir `Access-Control-*` başlığı yok. |
+| NFR-PRV-03 | Loglarda kişisel veri yok | 🟡 | Test edilen yollar için ✅, genel iddia değil. `LogPrivacyTests` (DEC-201) tüm yapılandırılabilir log seviyeleri en ayrıntılıyken (ASP.NET Core ve EF Core için de `Verbose` istenir) çalışır: (1) giriş (hatalı/başarılı), refresh, kişisel verili öğrenci kaydı, doğrulama hatası, arama, grup/aidat/kayıt, ödeme ve serbest metinli iptal gerekçesi, borç listesi ve şifre değiştirme; (2) **500 yolu:** gövdesinde, sorgu dizesinde, cookie'sinde ve token'ında kişisel veri olan bir istek gerçek bir veritabanı hatasıyla (e-posta unique ihlali) düşer; loglanan exception ve ProblemDetails yanıtı bunların hiçbirini içermez (Npgsql `Include Error Detail` kapalı; açılınca test kırmızı). Her iki testte de olayların gerçekten loglandığı (ör. `Unhandled exception` + `23505`) doğrulanır. ASP.NET Core istek logları (`Request starting ...?search=`) yapılandırmayla açılamaz: `Logging.cs` `Microsoft.AspNetCore` ve EF Core'u kodda `Warning`'e sabitler, test bunu doğrular. Kapsam dışı: yoklama ve duyuru uç noktaları (Fikirler 9) ve geliştiricinin kendi yazdığı exception mesajları (kod incelemesiyle). Decorator'lar sadece istek tipi ve hata kodu loglar (`Decorators.cs`). |
+| DEC-054 | Aynı origin, CORS yok | ✅ | `IntegrationTests/Security/CorsTests`: CORS servisi kayıtlı değil; yabancı origin'den gelen istek ve preflight'larda hiçbir `Access-Control-*` başlığı yok. **Pozitif kontroller:** CORS yabancı origin için açılmış bir test host'unda aynı kontrol preflight'ta (`204`) ve gerçek istekte `Access-Control-Allow-Origin` başlığını bulur (negatif test boşa geçemez); admin uygulamasının kendi origin'inden (`Origin` = API origin'i) giriş ve `GET /me` normal yanıt alır. Aynı origin'de tarayıcı preflight göndermez, bu yüzden "izinli admin origin'i" için ayrı bir CORS politikası yoktur. |
 
 ## 2. OWASP ASVS 4.0.3 Seviye 1
 
@@ -84,8 +84,8 @@ Sadece bu uygulamaya uygulanabilen maddeler listelenir (dosya yükleme, SOAP, Gr
 ### V7 Hata yönetimi ve loglama
 | Madde | Durum | Kanıt / not |
 | --- | --- | --- |
-| 7.1.1 – 7.1.2 Loglarda kimlik bilgisi/kişisel veri yok | ✅ | `LogPrivacyTests`. |
-| 7.4.1 Genel hata mesajı, iz kimliği | ✅ | `ErrorHandlingTests.Unexpected_exceptions_become_a_bare_500_problem` (sadece `Unexpected.Error` + `traceId`). |
+| 7.1.1 – 7.1.2 Loglarda kimlik bilgisi/kişisel veri yok | 🟡 | `LogPrivacyTests`; kapsamı NFR-PRV-03'te. |
+| 7.4.1 Genel hata mesajı, iz kimliği | ✅ | `ErrorHandlingTests.Unexpected_exceptions_become_a_bare_500_problem` (sadece `Unexpected.Error` + `traceId`); veritabanı hatasında da yanıt kişisel veri, constraint adı veya `duplicate key` içermez (`LogPrivacyTests.Unhandled_exceptions_log_no_personal_data`). |
 | Güvenlik olaylarının loglanması (giriş hatası, kilit) | 🟡 | Hata kodları loglanıyor (`LoginCommand failed with Auth.InvalidCredentials`), ayrı bir denetim (audit) kaydı yok; Fikirler 6. |
 
 ### V8 Veri koruma
@@ -125,7 +125,8 @@ Sadece bu uygulamaya uygulanabilen maddeler listelenir (dosya yükleme, SOAP, Gr
 | 14.3.2 Hata ayıklama modu kapalı | ✅ | OpenAPI dokümanı sadece Development/Testing'de (`OpenApiSetup.cs`); production imajında geliştirici hata sayfası yok (`GlobalExceptionHandler`). |
 | 14.3.3 Sürüm bilgisi sızmaz | 🟡 | nginx `server_tokens off` (`docker/admin/nginx.conf`); Kestrel `Server` başlığı kapatılmadı. Fikirler 2. |
 | 14.4 Güvenlik başlıkları (CSP, nosniff, frame, Referrer-Policy) | ⛔ | NFR-SEC-13 (faz 4). Fikirler 2. |
-| 14.5.3 CORS izin listesi | ✅ | CORS yok (`CorsTests`). |
+| 14.5.3 CORS izin listesi | ✅ | CORS yok (`CorsTests`, pozitif kontrollerle). |
+| Değişiklik denetimi (CI, imaj, betik, kaynak, ADR) | 🟡 | `.github/CODEOWNERS` güvenlikle ilgili yolları (`.github/`, `.gitleaks.toml`, `docker/`, `scripts/`, `src/`, `tests/`, `docs/adr/`, paket dosyaları) sahibe atar; ruleset'te code-owner incelemesinin zorunlu olup olmayacağı sahibin kararı (`pazartesi-onay-listesi.md`). |
 
 ## 3. Fikirler (`type:idea` adayları, issue açılmadı)
 
@@ -137,6 +138,6 @@ Sadece bu uygulamaya uygulanabilen maddeler listelenir (dosya yükleme, SOAP, Gr
 6. **Güvenlik denetim kaydı:** başarısız giriş, kilit, şifre değişimi/sıfırlama, pasifleştirme için ayrı, kişisel veri içermeyen audit event'leri ve Seq/alarm.
 7. **Arama terimi sorgu dizesinde:** `GET /students?search=` isim/telefon parçası taşır; proxy erişim loglarında sorgu dizesi maskelenmeli veya arama `POST` gövdesine taşınmalı.
 8. **Kişisel veri envanteri (NFR-PRV-01):** her kişisel veri alanını, amacını ve saklama süresini listeleyen doküman; faz geçişinde gözden geçirilir.
-9. **Log gizliliği testinin kapsamı:** ödeme, aidat, kayıt ve iptal gerekçesi artık `LogPrivacyTests`'te; yeni modüller (yoklama, duyurular) eklendikçe teste eklenmeli.
+9. **Log gizliliği testinin kapsamı:** ödeme, aidat, kayıt, iptal gerekçesi ve 500 yolu artık `LogPrivacyTests`'te; yoklama (not alanı) ve duyurular (serbest metin) henüz yok, teste eklenmeli.
 11. **Peşin ödemeli kaydın erken bitirilmesi:** ileri bir ay için ödemesi olan kayıt o aydan önce bitirilebiliyor (DEC-184); iade akışı veya uyarı değerlendirilmeli.
 10. **Refresh token yarışı:** aynı token'la eşzamanlı iki sekme birini `409` ile düşürür (DEC-119); kısa bir tolerans penceresi değerlendirilebilir.
