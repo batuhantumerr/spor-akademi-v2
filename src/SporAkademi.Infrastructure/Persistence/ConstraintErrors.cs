@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
+using SporAkademi.Domain.Groups;
 using SporAkademi.Domain.Identity;
 using SporAkademi.Domain.Organization;
 using SporAkademi.Domain.SharedKernel;
@@ -8,32 +9,58 @@ using SporAkademi.Domain.Tenancy;
 namespace SporAkademi.Infrastructure.Persistence;
 
 /// <summary>
-/// Handlers check uniqueness before saving, but two concurrent requests can both pass the check;
-/// the database index is the backstop (NFR-REL-08). This maps such violations to the same expected
-/// error the check would have returned, instead of a 500.
+/// Handlers check uniqueness and usage before saving, but two concurrent requests can both pass the
+/// check, and some rules are only enforced by the database; the constraints are the backstop
+/// (NFR-REL-08). This maps such violations to the same expected error the check would have returned,
+/// instead of a 500 (DEC-133).
 /// </summary>
 internal static class ConstraintErrors
 {
     private const string UniqueViolation = "23505";
+    private const string ForeignKeyViolation = "23503";
 
-    private static readonly Dictionary<string, Error> ByConstraint = new(StringComparer.Ordinal)
+    /// <summary>A delete blocked by an <c>ON DELETE RESTRICT</c> foreign key.</summary>
+    private const string RestrictViolation = "23001";
+
+    private static readonly Dictionary<string, Error> UniqueByConstraint = new(StringComparer.Ordinal)
     {
         ["ix_schools_slug"] = SchoolErrors.SlugTaken,
         ["ix_sports_tenant_id_name_key"] = SportErrors.NameTaken,
         ["ix_facilities_tenant_id_name_key"] = FacilityErrors.NameTaken,
         ["ix_users_email"] = UserErrors.EmailTaken,
+        ["ix_groups_tenant_id_name_key"] = GroupErrors.NameTaken,
+    };
+
+    /// <summary>
+    /// Deleting a row that is still referenced (restrict or foreign key violation). Only mapped when the save deletes a row of the referenced
+    /// type: the same constraint failing on an insert (an unknown or other school's id) is a programmer
+    /// error or an attack and stays a 500.
+    /// </summary>
+    private static readonly Dictionary<string, (Type Deleted, Error Error)> InUseByConstraint = new(StringComparer.Ordinal)
+    {
+        // A facility used only by archived groups passes the handler's check (US-07) but not the key.
+        ["fk_groups_facility_tenant_id_facility_id"] = (typeof(Facility), FacilityErrors.InUse),
+        ["fk_groups_sport_tenant_id_sport_id"] = (typeof(Sport), SportErrors.InUse),
     };
 
     public static bool TryMap(DbUpdateException exception, out Error error)
     {
-        if (exception.InnerException is PostgresException { SqlState: UniqueViolation, ConstraintName: { } name }
-            && ByConstraint.TryGetValue(name, out var mapped))
+        switch (exception.InnerException)
         {
-            error = mapped;
-            return true;
-        }
+            case PostgresException { SqlState: UniqueViolation, ConstraintName: { } name }
+                when UniqueByConstraint.TryGetValue(name, out var taken):
+                error = taken;
+                return true;
 
-        error = Error.None;
-        return false;
+            case PostgresException { SqlState: ForeignKeyViolation or RestrictViolation, ConstraintName: { } name }
+                when InUseByConstraint.TryGetValue(name, out var inUse)
+                    && exception.Entries.Any(e => e.State == EntityState.Deleted && e.Metadata.ClrType == inUse.Deleted):
+                error = inUse.Error;
+                return true;
+
+            default:
+                error = Error.None;
+                return false;
+        }
     }
 }
