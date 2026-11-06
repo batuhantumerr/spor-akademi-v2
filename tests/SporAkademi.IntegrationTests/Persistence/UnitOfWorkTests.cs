@@ -33,7 +33,7 @@ public sealed class UnitOfWorkTests(DatabaseFixture database) : IntegrationTest(
             var stored = await db.Set<School>().AsNoTracking().SingleAsync(s => s.Id == school.Id, TestContext.Current.CancellationToken);
             stored.Slug.Value.ShouldBe("test-okulu");
             stored.RetentionPolicy.ShouldBe(RetentionPolicy.Default);
-            db.Entry(stored).Property<DateTimeOffset>("CreatedAt").CurrentValue.ShouldBe(Api.Clock.GetUtcNow());
+            (await AuditOfAsync(db, school.Id)).CreatedAt.ShouldBe(Api.Clock.GetUtcNow());
         });
     }
 
@@ -118,6 +118,114 @@ public sealed class UnitOfWorkTests(DatabaseFixture database) : IntegrationTest(
             await db.SaveChangesAsync(TestContext.Current.CancellationToken);
         }));
     }
+
+    [Fact]
+    public async Task Xmin_is_a_system_column_not_a_table_column()
+    {
+        var columns = await InScopeAsync(sp => sp.GetRequiredService<AppDbContext>().Database
+            .SqlQuery<string>($"select column_name as \"Value\" from information_schema.columns where table_schema = 'tenancy' and table_name = 'schools'")
+            .ToListAsync(TestContext.Current.CancellationToken));
+
+        columns.ShouldNotContain("xmin");
+        columns.ShouldContain("status");
+    }
+
+    [Fact]
+    public async Task Enums_are_stored_as_text_and_updates_restamp_only_updated_columns()
+    {
+        var school = NewSchool();
+        await InScopeAsync(async sp =>
+        {
+            var db = sp.GetRequiredService<AppDbContext>();
+            db.Add(school);
+            await db.SaveChangesAsync(TestContext.Current.CancellationToken);
+        });
+        var created = Api.Clock.GetUtcNow();
+        Api.Clock.Advance(TimeSpan.FromHours(1));
+
+        await InScopeAsync(async sp =>
+        {
+            var db = sp.GetRequiredService<AppDbContext>();
+            var stored = await db.Set<School>().SingleAsync(s => s.Id == school.Id, TestContext.Current.CancellationToken);
+            db.Entry(stored).Property(s => s.Name).CurrentValue = "Yeni Ad";
+            await db.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+            var status = await db.Database
+                .SqlQuery<string>($"select status as \"Value\" from tenancy.schools where id = {school.Id.Value}")
+                .SingleAsync(TestContext.Current.CancellationToken);
+            status.ShouldBe("Active");
+
+            var audit = await AuditOfAsync(db, school.Id);
+            audit.CreatedAt.ShouldBe(created);
+            audit.UpdatedAt.ShouldBe(Api.Clock.GetUtcNow());
+            audit.CreatedBy.ShouldBeNull();
+        });
+    }
+
+    [Fact]
+    public async Task Nested_unit_of_work_joins_the_outer_transaction()
+    {
+        var result = await InScopeAsync(sp =>
+        {
+            var unitOfWork = sp.GetRequiredService<IUnitOfWork>();
+            return unitOfWork.ExecuteInTransactionAsync(
+                ct => unitOfWork.ExecuteInTransactionAsync(
+                    _ =>
+                    {
+                        sp.GetRequiredService<AppDbContext>().Add(NewSchool());
+                        return Task.FromResult(Result.Success(1));
+                    },
+                    ct),
+                TestContext.Current.CancellationToken);
+        });
+
+        result.IsSuccess.ShouldBeTrue();
+        (await CountSchoolsAsync()).ShouldBe(1);
+    }
+
+    [Fact]
+    public async Task Waiting_on_a_locked_row_times_out_as_a_lock_timeout_error()
+    {
+        var school = NewSchool();
+        await InScopeAsync(async sp =>
+        {
+            var db = sp.GetRequiredService<AppDbContext>();
+            db.Add(school);
+            await db.SaveChangesAsync(TestContext.Current.CancellationToken);
+        });
+
+        // Another connection holds the row lock for longer than lock_timeout.
+        await using var holder = new Npgsql.NpgsqlConnection(Database.AppConnectionString);
+        await holder.OpenAsync(TestContext.Current.CancellationToken);
+        await using var holderTransaction = await holder.BeginTransactionAsync(TestContext.Current.CancellationToken);
+        await using (var command = new Npgsql.NpgsqlCommand("select 1 from tenancy.schools where id = @id for update", holder, holderTransaction))
+        {
+            command.Parameters.AddWithValue("id", school.Id.Value);
+            await command.ExecuteNonQueryAsync(TestContext.Current.CancellationToken);
+        }
+
+        var result = await InScopeAsync(sp => sp.GetRequiredService<IUnitOfWork>().ExecuteInTransactionAsync(
+            async ct =>
+            {
+                await sp.GetRequiredService<AppDbContext>().Database
+                    .ExecuteSqlAsync($"select 1 from tenancy.schools where id = {school.Id.Value} for update", ct);
+                return Result.Success(true);
+            },
+            TestContext.Current.CancellationToken));
+
+        result.Error.ShouldBe(PersistenceErrors.LockTimeout);
+    }
+
+    // Shadow properties are not tracked for no-tracking queries, so project them explicitly.
+    private static Task<AuditColumns> AuditOfAsync(AppDbContext db, SchoolId id) =>
+        db.Set<School>().Where(s => s.Id == id)
+            .Select(s => new AuditColumns(
+                EF.Property<DateTimeOffset>(s, "CreatedAt"),
+                EF.Property<Guid?>(s, "CreatedBy"),
+                EF.Property<DateTimeOffset>(s, "UpdatedAt")))
+            .SingleAsync(TestContext.Current.CancellationToken);
+
+    private sealed record AuditColumns(DateTimeOffset CreatedAt, Guid? CreatedBy, DateTimeOffset UpdatedAt);
 
     private Task<int> CountSchoolsAsync() =>
         InScopeAsync(sp => sp.GetRequiredService<AppDbContext>().Set<School>().CountAsync(TestContext.Current.CancellationToken));
