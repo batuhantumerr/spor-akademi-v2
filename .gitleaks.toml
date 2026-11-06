@@ -1,18 +1,57 @@
-# Secret scan configuration (DEC-200). The default gitleaks rules apply; only synthetic test values are
-# allowed. Never add a real secret's value here: rotate it and remove it from history instead.
+# Secret scan configuration (DEC-200, narrowed in DEC-250). The default gitleaks rules apply everywhere.
+# Each allowlist below covers one synthetic test value and only in the files that hold it:
+# condition = "AND" means the file path AND the detected secret must both match, and targetRules limits it to
+# the rule that flags it. A new file with the same value, or a new value in a listed file, is still reported.
+# Never add a real secret's value here: rotate it and remove it from history instead.
 title = "spor-akademi-v2"
 
 [extend]
 useDefault = true
 
 [[allowlists]]
-description = "Synthetic test credentials: test projects, frontend specs and the fixed 64-hex test JWT key"
+description = "Fixed 64-hex test JWT signing key: integration test host and the CI image smoke test"
+targetRules = ["generic-api-key"]
+condition = "AND"
 paths = [
-  '''^tests/''',
-  '''^web/admin/src/.*\.spec\.ts$''',
+  '''^\.github/workflows/ci\.yml$''',
+  '''^tests/SporAkademi\.IntegrationTests/Infrastructure/ApiFactory\.cs$''',
 ]
-regexes = [
-  # Test JWT signing keys (ApiFactory, the CI smoke test, EndpointSecurityTests).
-  '''0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef''',
-  '''a{64}''',
+regexes = ['''^0123456789abcdef(?:0123456789abcdef){3}$''']
+
+[[allowlists]]
+description = "Deliberately wrong passwords sent by auth, API-surface, CORS and log-privacy tests"
+targetRules = ["generic-api-key"]
+condition = "AND"
+paths = [
+  '''^tests/SporAkademi\.IntegrationTests/Identity/(?:AuthHardeningTests|PasswordTests)\.cs$''',
+  '''^tests/SporAkademi\.IntegrationTests/Security/(?:ApiSurfaceTests|CorsTests|LogPrivacyTests)\.cs$''',
 ]
+regexes = ['''^Yanlis-Sifre-\d{3}$''']
+
+[[allowlists]]
+description = "Synthetic user password seeded by the identity test base class"
+targetRules = ["generic-api-key"]
+condition = "AND"
+paths = ['''^tests/SporAkademi\.IntegrationTests/Identity/IdentityTest\.cs$''']
+regexes = ['''^Kendi-Sifrem-2027$''']
+
+[[allowlists]]
+description = "Synthetic first Platform Admin password of the seed test"
+targetRules = ["generic-api-key"]
+condition = "AND"
+paths = ['''^tests/SporAkademi\.IntegrationTests/Identity/PlatformAdminSeedTests\.cs$''']
+regexes = ['''^Ilk-Platform-Sifresi-2027$''']
+
+[[allowlists]]
+description = "Synthetic demo account password of the demo seed test"
+targetRules = ["generic-api-key"]
+condition = "AND"
+paths = ['''^tests/SporAkademi\.IntegrationTests/DemoSeed/DemoSeedTests\.cs$''']
+regexes = ['''^Demo-Sifre-2027$''']
+
+[[allowlists]]
+description = "Throwaway migrator role password of the Testcontainers database (container lives for one test run)"
+targetRules = ["generic-api-key"]
+condition = "AND"
+paths = ['''^tests/SporAkademi\.IntegrationTests/Infrastructure/DatabaseFixture\.cs$''']
+regexes = ['''^migratorTestPassword1$''']

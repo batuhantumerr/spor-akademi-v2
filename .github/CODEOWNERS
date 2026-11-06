@@ -1,0 +1,27 @@
+# Security-relevant paths need the owner's review once the ruleset requires code-owner review
+# (owner decision, see docs/pazartesi-onay-listesi.md). Later rules win; keep specific paths below.
+
+# CI, secret-scan and dependency configuration
+/.github/                     @batuhantumerr
+/.gitleaks.toml               @batuhantumerr
+/.githooks/                   @batuhantumerr
+/.config/                     @batuhantumerr
+/Directory.Build.props        @batuhantumerr
+/Directory.Packages.props     @batuhantumerr
+/global.json                  @batuhantumerr
+/compose.yaml                 @batuhantumerr
+/.env.example                 @batuhantumerr
+
+# Images, database roles and scripts
+/docker/                      @batuhantumerr
+/scripts/                     @batuhantumerr
+
+# Application code and tests that guard it
+/src/                         @batuhantumerr
+/tests/                       @batuhantumerr
+/web/admin/package.json       @batuhantumerr
+/web/admin/package-lock.json  @batuhantumerr
+
+# Architecture decisions and the security checklist
+/docs/adr/                    @batuhantumerr
+/docs/guvenlik-kontrol-listesi.md @batuhantumerr
