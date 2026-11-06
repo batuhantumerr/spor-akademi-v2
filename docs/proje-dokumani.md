@@ -1544,6 +1544,12 @@ Yoklamanın kaydedilmesi neden `POST` değil `PUT`: aynı istek iki kez gönderi
 | `GET` | `/groups/{id}/announcements` | Grubun duyuruları | SA, CO (kendi) | US-25 |
 | `POST` | `/groups/{id}/announcements` | Duyuru yayınlar | SA | US-25 |
 
+##### 2.12 Ana sayfa — `Dashboard` (okuma modeli)
+
+| Metot | Yol | Açıklama | Rol | Hikaye |
+| --- | --- | --- | --- | --- |
+| `GET` | `/dashboard` | Okul Admini ana sayfasının tüm sayıları tek yanıtta: KPI'lar, son 6 ayın tahsilat/borç serisi, son 8 haftanın devam oranı, branş bazında kayıtlar, en dolu 10 grup, bugünkü antrenmanlar (DEC-210) | SA | — |
+
 #### 3. Kapsam kontrolü
 
 Her Must ve Should kullanıcı hikayesinin en az bir endpoint'i vardır. Kullanıcı hikayelerinde açıkça geçmeyen ama arayüzün çalışması için gereken endpoint'ler: `GET /me`, `GET /guardians`, `POST /students/{id}/reactivate`, `PUT /guardians/{id}` ve Platform Admin'in okul listesi. Bunlar ilgili hikayelerin parçası olarak geliştirilir.

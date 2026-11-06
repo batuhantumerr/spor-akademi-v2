@@ -16,6 +16,7 @@ public static class DependencyInjection
     {
         services.AddScoped<AccountOpening>();
         services.AddScoped<Billing.PaymentViews>();
+        services.AddScoped<Billing.Contracts.IBillingSummary, Billing.BillingSummaryService>();
         services.AddScoped<IIdentityModule, IdentityModule>();
         services.AddScoped<EnrollmentModule>();
         services.AddScoped<IEnrollmentCounts>(sp => sp.GetRequiredService<EnrollmentModule>());

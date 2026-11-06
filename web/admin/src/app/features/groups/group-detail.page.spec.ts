@@ -62,6 +62,9 @@ describe('GroupDetailPage', () => {
     backend.expectOne('/api/v1/groups/g1').flush(group);
     await settle(fixture);
     backend
+      .expectOne((r) => r.url === '/api/v1/groups/g1/announcements')
+      .flush({ items: [], page: 1, pageSize: 10, totalCount: 0, totalPages: 0 });
+    backend
       .expectOne((r) => r.url === '/api/v1/groups/g1/sessions')
       .flush([
         {
@@ -77,6 +80,8 @@ describe('GroupDetailPage', () => {
   });
 
   afterEach(() => {
+    // The announcements section loads on its own; it has its own tests.
+    backend.match((r) => r.url.includes('/announcements'));
     // The students section loads on its own; it has its own tests.
     backend.match((r) => /\/(enrollments|attendance)/.test(r.url));
     backend.verify();

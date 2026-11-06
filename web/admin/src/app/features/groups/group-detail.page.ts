@@ -28,6 +28,7 @@ import { ConflictNoticeComponent } from '../../shared/ui/conflict-notice.compone
 import { PageHeaderComponent } from '../../shared/ui/page-header.component';
 import { ToastService } from '../../shared/ui/toast.service';
 import { GroupAttendanceComponent } from '../attendance/group-attendance.component';
+import { GroupAnnouncementsComponent } from '../announcements/group-announcements.component';
 import { GroupStudentsComponent } from '../enrollments/group-students.component';
 import { ScheduleEditorComponent } from './schedule-editor.component';
 
@@ -42,6 +43,7 @@ const UPCOMING_DAYS = 14;
     PageHeaderComponent,
     ScheduleEditorComponent,
     ConflictNoticeComponent,
+    GroupAnnouncementsComponent,
     GroupStudentsComponent,
     GroupAttendanceComponent,
     LucideArrowLeft,
@@ -125,6 +127,10 @@ const UPCOMING_DAYS = 14;
           }
         </dl>
       </section>
+
+      <div class="mb-4">
+        <app-group-announcements [group]="g" />
+      </div>
 
       <div class="grid gap-4 lg:grid-cols-[2fr_1fr]">
         <section class="card p-4" aria-labelledby="schedule-title">

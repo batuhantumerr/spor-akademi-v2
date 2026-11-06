@@ -63,6 +63,43 @@ public static class DueCalculator
         ArgumentNullException.ThrowIfNull(recordedPayments);
 
         var dues = new List<Due>();
+        foreach (var (enrollment, period, fee) in Charges(enrollments, fees, currentPeriod, fromPeriod))
+        {
+            // Totals are plain decimals: a large overpayment can never overflow Money and break the report.
+            var paid = recordedPayments.GetValueOrDefault((enrollment.Id, period));
+            if (paid < fee.Amount)
+            {
+                dues.Add(new Due(enrollment.Id, enrollment.GroupId, period, fee, Money.Try(paid), Money.Try(fee.Amount - paid)));
+            }
+        }
+
+        return [.. dues.OrderBy(d => d.Period)];
+    }
+
+    /// <summary>
+    /// The full fee owed per enrollment and period before any payment: every period with at least one active
+    /// day from <paramref name="fromPeriod"/> (or the start) up to <paramref name="currentPeriod"/> that has a
+    /// fee. <see cref="Outstanding"/> subtracts the payments from these; the dashboard sums them as "due".
+    /// </summary>
+    public static IEnumerable<(DueEnrollment Enrollment, YearMonth Period, Money Fee)> Charges(
+        IEnumerable<DueEnrollment> enrollments,
+        IReadOnlyDictionary<GroupId, IReadOnlyList<FeeRate>> fees,
+        YearMonth currentPeriod,
+        YearMonth? fromPeriod = null)
+    {
+        // Validated eagerly; the iterator below only runs when enumerated.
+        ArgumentNullException.ThrowIfNull(enrollments);
+        ArgumentNullException.ThrowIfNull(fees);
+        ArgumentNullException.ThrowIfNull(currentPeriod);
+        return EnumerateCharges(enrollments, fees, currentPeriod, fromPeriod);
+    }
+
+    private static IEnumerable<(DueEnrollment Enrollment, YearMonth Period, Money Fee)> EnumerateCharges(
+        IEnumerable<DueEnrollment> enrollments,
+        IReadOnlyDictionary<GroupId, IReadOnlyList<FeeRate>> fees,
+        YearMonth currentPeriod,
+        YearMonth? fromPeriod)
+    {
         foreach (var enrollment in enrollments)
         {
             if (!fees.TryGetValue(enrollment.GroupId, out var rates))
@@ -72,25 +109,11 @@ public static class DueCalculator
 
             foreach (var period in ActivePeriods(enrollment.StartDate, enrollment.EndDate, currentPeriod))
             {
-                if (fromPeriod is not null && period < fromPeriod)
+                if ((fromPeriod is null || period >= fromPeriod) && FeeRate.For(rates, period) is { } fee)
                 {
-                    continue;
-                }
-
-                if (FeeRate.For(rates, period) is not { } fee)
-                {
-                    continue;
-                }
-
-                // Totals are plain decimals: a large overpayment can never overflow Money and break the report.
-                var paid = recordedPayments.GetValueOrDefault((enrollment.Id, period));
-                if (paid < fee.Amount)
-                {
-                    dues.Add(new Due(enrollment.Id, enrollment.GroupId, period, fee, Money.Try(paid), Money.Try(fee.Amount - paid)));
+                    yield return (enrollment, period, fee);
                 }
             }
         }
-
-        return [.. dues.OrderBy(d => d.Period)];
     }
 }

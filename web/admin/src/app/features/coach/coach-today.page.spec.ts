@@ -38,7 +38,11 @@ describe('CoachTodayPage', () => {
     root = fixture.nativeElement as HTMLElement;
   });
 
-  afterEach(() => backend.verify());
+  afterEach(() => {
+    // The announcements section loads on its own; it has its own tests.
+    backend.match((r) => r.url.includes('/announcements'));
+    backend.verify();
+  });
 
   const sessionsFor = (date: string) =>
     backend.expectOne((r) => r.url === '/api/v1/me/sessions' && r.params.get('date') === date);

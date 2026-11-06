@@ -49,6 +49,8 @@ describe('CoachTodayPage in the school time zone', () => {
   });
 
   afterEach(() => {
+    // The announcements section loads on its own; it has its own tests.
+    backend.match((r) => r.url.includes('/announcements'));
     backend.verify();
     vi.useRealTimers();
     vi.unstubAllEnvs();
