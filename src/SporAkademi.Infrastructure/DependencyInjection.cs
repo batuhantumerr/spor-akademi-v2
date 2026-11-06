@@ -49,6 +49,8 @@ public static class DependencyInjection
         services.AddSingleton<IPasswordHasher, AspNetPasswordHasher>();
         services.AddSingleton<IRefreshTokenFactory, RefreshTokenFactory>();
         services.AddScoped<ISchoolRepository, SchoolRepository>();
+        services.AddSingleton<PlatformAdminSeed>();
+        services.AddHostedService(provider => provider.GetRequiredService<PlatformAdminSeed>());
 
         services.AddHealthChecks()
             .AddDbContextCheck<AppDbContext>("database", tags: ["ready"]);
