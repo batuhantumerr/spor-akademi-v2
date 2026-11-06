@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, ElementRef, inject, signal } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
 import {
@@ -15,6 +15,7 @@ import { toProblem, problemMessage } from '../../core/api/problem';
 import { AuthService } from '../../core/auth/auth.service';
 import { errorMessages, ui } from '../../core/i18n/tr';
 import { ThemeService } from '../../core/theme/theme.service';
+import { focusFirstInvalid } from '../../shared/forms/focus-first-invalid';
 
 @Component({
   selector: 'app-login-page',
@@ -108,9 +109,10 @@ import { ThemeService } from '../../core/theme/theme.service';
                 formControlName="email"
                 autocomplete="username"
                 [attr.aria-invalid]="showError('email')"
+                [attr.aria-describedby]="showError('email') ? 'email-error' : null"
               />
               @if (showError('email')) {
-                <p class="field-error">
+                <p id="email-error" class="field-error">
                   {{
                     form.controls.email.hasError('required')
                       ? messages['Field.Required']
@@ -129,13 +131,16 @@ import { ThemeService } from '../../core/theme/theme.service';
                   autocomplete="current-password"
                   [type]="showPassword() ? 'text' : 'password'"
                   [attr.aria-invalid]="showError('password')"
+                  [attr.aria-describedby]="showError('password') ? 'password-error' : null"
                 />
+                <!-- Toggle button: a fixed label plus aria-pressed announces the state. -->
                 <button
                   type="button"
                   class="absolute inset-y-0 right-0 grid w-10 place-items-center text-muted-foreground hover:text-foreground"
-                  [attr.aria-label]="
-                    showPassword() ? text.login.hidePassword : text.login.showPassword
-                  "
+                  aria-controls="password"
+                  [attr.aria-label]="text.login.showPassword"
+                  [attr.aria-pressed]="showPassword()"
+                  [attr.title]="showPassword() ? text.login.hidePassword : text.login.showPassword"
                   (click)="showPassword.set(!showPassword())"
                 >
                   @if (showPassword()) {
@@ -146,7 +151,7 @@ import { ThemeService } from '../../core/theme/theme.service';
                 </button>
               </div>
               @if (showError('password')) {
-                <p class="field-error">{{ messages['Field.Required'] }}</p>
+                <p id="password-error" class="field-error">{{ messages['Field.Required'] }}</p>
               }
             </div>
             <button type="submit" class="btn btn-primary w-full" [disabled]="submitting()">
@@ -162,6 +167,7 @@ export class LoginPage {
   private readonly auth = inject(AuthService);
   private readonly router = inject(Router);
   private readonly route = inject(ActivatedRoute);
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
   protected readonly theme = inject(ThemeService);
 
   protected readonly text = ui;
@@ -186,6 +192,10 @@ export class LoginPage {
   protected submit(): void {
     if (this.form.invalid) {
       this.form.markAllAsTouched();
+      focusFirstInvalid(this.host.nativeElement, [
+        ['email', this.form.controls.email.invalid],
+        ['password', this.form.controls.password.invalid],
+      ]);
       return;
     }
     this.submitting.set(true);
