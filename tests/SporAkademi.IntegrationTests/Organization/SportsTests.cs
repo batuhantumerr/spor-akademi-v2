@@ -124,10 +124,25 @@ public sealed class SportsTests(DatabaseFixture database) : IntegrationTest(data
         (await coach.GetAsync(new Uri("/api/v1/sports", UriKind.Relative), Ct)).StatusCode.ShouldBe(HttpStatusCode.Forbidden);
     }
 
-    [Fact]
-    public async Task Page_size_over_100_is_rejected()
+    [Theory]
+    [InlineData("pageSize=101", "pageSize")]
+    [InlineData("page=0", "page")]
+    [InlineData("page=2147483647&pageSize=100", "page")]
+    public async Task Out_of_range_paging_is_a_field_error(string query, string field)
     {
-        (await _admin.GetAsync(new Uri("/api/v1/sports?pageSize=101", UriKind.Relative), Ct)).StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        var response = await _admin.GetAsync(new Uri($"/api/v1/sports?{query}", UriKind.Relative), Ct);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        (await response.Content.ReadFromJsonAsync<JsonElement>(Ct)).GetProperty("errors").TryGetProperty(field, out _).ShouldBeTrue();
+    }
+
+    [Fact]
+    public async Task Concurrent_creates_with_the_same_name_never_fail_with_500()
+    {
+        var responses = await Task.WhenAll(Enumerable.Range(0, 6).Select(_ => _admin.PostAsJsonAsync("/api/v1/sports", new { name = "Voleybol" }, Ct)));
+
+        responses.Count(r => r.StatusCode == HttpStatusCode.Created).ShouldBe(1);
+        responses.Where(r => r.StatusCode != HttpStatusCode.Created).ShouldAllBe(r => r.StatusCode == HttpStatusCode.Conflict);
     }
 
     private static CancellationToken Ct => TestContext.Current.CancellationToken;

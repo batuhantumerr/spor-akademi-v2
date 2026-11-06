@@ -63,6 +63,10 @@ internal sealed class UnitOfWork(AppDbContext dbContext, DomainEventDispatcher d
         {
             return Result.Failure<T>(PersistenceErrors.ConcurrencyConflict);
         }
+        catch (DbUpdateException exception) when (ConstraintErrors.TryMap(exception, out var violation))
+        {
+            return Result.Failure<T>(violation);
+        }
         catch (Exception exception) when (IsLockTimeout(exception))
         {
             return Result.Failure<T>(PersistenceErrors.LockTimeout);

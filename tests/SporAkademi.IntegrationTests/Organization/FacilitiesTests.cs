@@ -109,6 +109,45 @@ public sealed class FacilitiesTests(DatabaseFixture database) : IntegrationTest(
         (await response.Content.ReadFromJsonAsync<JsonElement>(Ct)).GetProperty("code").GetString().ShouldBe("Facility.NameTaken");
     }
 
+    [Fact]
+    public async Task Other_schools_cannot_see_or_change_a_facility_and_coaches_are_forbidden()
+    {
+        var created = await (await _admin.PostAsJsonAsync("/api/v1/facilities", NewFacility(), Ct)).Content.ReadFromJsonAsync<FacilityDto>(Json, Ct);
+        var other = await TestSchools.CreateAsync(Api, "okul-b");
+        using var otherAdmin = Api.SchoolAdminClient(other);
+        using var coach = Api.CoachClient(_school);
+
+        (await otherAdmin.GetAsync(new Uri($"/api/v1/facilities/{created!.Id}", UriKind.Relative), Ct)).StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        (await otherAdmin.DeleteAsync(new Uri($"/api/v1/facilities/{created.Id}", UriKind.Relative), Ct)).StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        (await coach.GetAsync(new Uri("/api/v1/facilities", UriKind.Relative), Ct)).StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+    }
+
+    [Fact]
+    public async Task Stale_version_conflicts_even_when_nothing_changes()
+    {
+        var created = await (await _admin.PostAsJsonAsync("/api/v1/facilities", NewFacility(), Ct)).Content.ReadFromJsonAsync<FacilityDto>(Json, Ct);
+        await _admin.PostAsync(new Uri($"/api/v1/facilities/{created!.Id}/archive", UriKind.Relative), null, Ct);
+
+        var stale = await _admin.PutAsJsonAsync($"/api/v1/facilities/{created.Id}", new
+        {
+            name = created.Name,
+            type = "Field",
+            address = new { line = created.Address.Line, district = created.Address.District, city = created.Address.City },
+            capacity = created.Capacity,
+            version = created.Version,
+        }, Ct);
+
+        stale.StatusCode.ShouldBe(HttpStatusCode.Conflict);
+    }
+
+    [Fact]
+    public async Task Unused_facility_can_be_deleted()
+    {
+        var created = await (await _admin.PostAsJsonAsync("/api/v1/facilities", NewFacility(), Ct)).Content.ReadFromJsonAsync<FacilityDto>(Json, Ct);
+
+        (await _admin.DeleteAsync(new Uri($"/api/v1/facilities/{created!.Id}", UriKind.Relative), Ct)).StatusCode.ShouldBe(HttpStatusCode.NoContent);
+    }
+
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web) { Converters = { new System.Text.Json.Serialization.JsonStringEnumConverter() } };
 
     private static CancellationToken Ct => TestContext.Current.CancellationToken;

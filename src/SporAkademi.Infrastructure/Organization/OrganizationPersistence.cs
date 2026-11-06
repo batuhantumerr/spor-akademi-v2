@@ -62,8 +62,13 @@ internal sealed class SportRepository(AppDbContext db) : ISportRepository
 
     public void Remove(Sport sport) => db.Remove(sport);
 
-    public void ExpectVersion(Sport sport, uint version) =>
-        db.Entry(sport).Property<uint>(ConcurrencyToken.PropertyName).OriginalValue = version;
+    public void ExpectVersion(Sport sport, uint version)
+    {
+        var entry = db.Entry(sport);
+        entry.Property<uint>(ConcurrencyToken.PropertyName).OriginalValue = version;
+        // Always issue the version-checked UPDATE, so a no-op edit with a stale version still conflicts.
+        entry.State = EntityState.Modified;
+    }
 
     public Task<SportDto?> FindDtoAsync(SportId id, CancellationToken cancellationToken) =>
         Project(db.Set<Sport>().Where(s => s.Id == id)).SingleOrDefaultAsync(cancellationToken);
@@ -93,8 +98,13 @@ internal sealed class FacilityRepository(AppDbContext db) : IFacilityRepository
 
     public void Remove(Facility facility) => db.Remove(facility);
 
-    public void ExpectVersion(Facility facility, uint version) =>
-        db.Entry(facility).Property<uint>(ConcurrencyToken.PropertyName).OriginalValue = version;
+    public void ExpectVersion(Facility facility, uint version)
+    {
+        var entry = db.Entry(facility);
+        entry.Property<uint>(ConcurrencyToken.PropertyName).OriginalValue = version;
+        // Always issue the version-checked UPDATE, so a no-op edit with a stale version still conflicts.
+        entry.State = EntityState.Modified;
+    }
 
     public Task<FacilityDto?> FindDtoAsync(FacilityId id, CancellationToken cancellationToken) =>
         Project(db.Set<Facility>().Where(f => f.Id == id)).SingleOrDefaultAsync(cancellationToken);

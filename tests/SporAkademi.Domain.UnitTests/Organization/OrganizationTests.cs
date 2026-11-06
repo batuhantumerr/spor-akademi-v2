@@ -15,6 +15,8 @@ public sealed class OrganizationTests
     [InlineData("Masa   Tenisi", "Masa Tenisi", "masa tenisi")]
     [InlineData("İZCİLİK", "İZCİLİK", "izcilik")]
     [InlineData("IRMAK", "IRMAK", "ırmak")]
+    [InlineData("IŞIK", "IŞIK", "ışık")]
+    [InlineData("Iğdır", "Iğdır", "ığdır")]
     public void Sport_names_are_tidied_and_keyed_with_turkish_casing(string input, string name, string key)
     {
         var sport = Sport.Create(School, input).Value;

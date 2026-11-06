@@ -31,3 +31,5 @@
 | DEC-130 | `Facility.NameTaken` (409) hata koduna eklendi: tesis adları da okul bazında büyük-küçük harf duyarsız benzersiz (US-07, branşla aynı kural). | Proposed |
 | DEC-131 | Branş ve tesis silme kontrolü Groups modülünün `IGroupUsage` sözleşmesi üzerinden yapılır; Groups (P1-18) gelene kadar yer tutucu "kullanımda değil" der. | Proposed |
 | DEC-132 | Command'lar sadece id döner; endpoint ardından query ile güncel DTO'yu (yeni `version` dahil) okur. Böylece yanıttaki `version` her zaman kaydedilmiş satırınkidir. | Proposed |
+| DEC-133 | Benzersizlik ihlalleri (23505) kısıt adına göre beklenen hataya eşlenir (`School.SlugTaken`, `Sport.NameTaken`, `Facility.NameTaken`, `User.EmailTaken`): handler kontrolünü yarışla geçen eşzamanlı istekler 500 yerine 409 alır. Groups (P1-18) geldiğinde FK ihlalleri (23503) de `*.InUse`'a eşlenecek. | Proposed |
+| DEC-134 | Sürümlü güncellemeler her zaman `xmin` koşullu UPDATE çalıştırır (değişiklik olmasa bile); eksik `version` 400 `Field.Required`. Sayfa numarası en fazla 100.000. | Proposed |

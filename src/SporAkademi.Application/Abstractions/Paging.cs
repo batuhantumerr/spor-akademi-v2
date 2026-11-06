@@ -10,6 +10,9 @@ public sealed record PageRequest(int Page = 1, int PageSize = PageRequest.Defaul
     public const int DefaultPageSize = 20;
     public const int MaxPageSize = 100;
 
+    /// <summary>Upper bound so (Page - 1) * PageSize can never overflow.</summary>
+    public const int MaxPage = 100_000;
+
     public int Skip => (Page - 1) * PageSize;
 }
 
@@ -22,7 +25,7 @@ public sealed class PageRequestValidator : AbstractValidator<PageRequest>
 {
     public PageRequestValidator()
     {
-        RuleFor(p => p.Page).GreaterThanOrEqualTo(1).WithErrorCode("Field.Invalid");
+        RuleFor(p => p.Page).InclusiveBetween(1, PageRequest.MaxPage).WithErrorCode("Field.Invalid");
         RuleFor(p => p.PageSize).InclusiveBetween(1, PageRequest.MaxPageSize).WithErrorCode("Field.Invalid");
     }
 }

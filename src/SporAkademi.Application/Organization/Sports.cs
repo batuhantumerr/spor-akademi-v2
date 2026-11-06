@@ -29,14 +29,22 @@ internal sealed class SportNameValidator : AbstractValidator<CreateSportCommand>
 
 internal sealed class RenameSportValidator : AbstractValidator<RenameSportCommand>
 {
-    public RenameSportValidator() =>
+    public RenameSportValidator()
+    {
         RuleFor(c => c.Name).NotEmpty().WithErrorCode("Field.Required")
             .MaximumLength(Sport.NameMaxLength).WithErrorCode("Field.TooLong");
+        RuleFor(c => c.Version).GreaterThan(0u).WithErrorCode("Field.Required");
+    }
 }
 
 internal sealed class ListSportsValidator : AbstractValidator<ListSportsQuery>
 {
-    public ListSportsValidator() => RuleFor(q => q.Page).SetValidator(new PageRequestValidator());
+    public ListSportsValidator()
+    {
+        // Paging errors use the query-string names (page, pageSize).
+        RuleFor(q => q.Page.Page).InclusiveBetween(1, PageRequest.MaxPage).WithErrorCode("Field.Invalid").OverridePropertyName("page");
+        RuleFor(q => q.Page.PageSize).InclusiveBetween(1, PageRequest.MaxPageSize).WithErrorCode("Field.Invalid").OverridePropertyName("pageSize");
+    }
 }
 
 internal sealed class CreateSportHandler(ISportRepository sports, ICurrentUser currentUser)

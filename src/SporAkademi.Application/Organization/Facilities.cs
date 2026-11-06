@@ -56,11 +56,19 @@ internal abstract class FacilityFieldsValidator<T> : AbstractValidator<T>
 
 internal sealed class CreateFacilityValidator : FacilityFieldsValidator<CreateFacilityCommand>;
 
-internal sealed class UpdateFacilityValidator : FacilityFieldsValidator<UpdateFacilityCommand>;
+internal sealed class UpdateFacilityValidator : FacilityFieldsValidator<UpdateFacilityCommand>
+{
+    public UpdateFacilityValidator() => RuleFor(c => c.Version).GreaterThan(0u).WithErrorCode("Field.Required");
+}
 
 internal sealed class ListFacilitiesValidator : AbstractValidator<ListFacilitiesQuery>
 {
-    public ListFacilitiesValidator() => RuleFor(q => q.Page).SetValidator(new PageRequestValidator());
+    public ListFacilitiesValidator()
+    {
+        // Paging errors use the query-string names (page, pageSize).
+        RuleFor(q => q.Page.Page).InclusiveBetween(1, PageRequest.MaxPage).WithErrorCode("Field.Invalid").OverridePropertyName("page");
+        RuleFor(q => q.Page.PageSize).InclusiveBetween(1, PageRequest.MaxPageSize).WithErrorCode("Field.Invalid").OverridePropertyName("pageSize");
+    }
 }
 
 internal static class FacilityInputMapping
