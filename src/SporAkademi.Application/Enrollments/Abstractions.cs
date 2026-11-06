@@ -47,5 +47,11 @@ public interface IEnrollmentRepository
     /// <summary>The student's whole history, newest start first.</summary>
     Task<IReadOnlyList<Enrollment>> ListOfStudentAsync(StudentId studentId, CancellationToken cancellationToken);
 
+    /// <summary>Every enrollment (any status, any group) of the given students.</summary>
+    Task<IReadOnlyList<Enrollment>> ListOfStudentsAsync(IReadOnlyCollection<StudentId> studentIds, CancellationToken cancellationToken);
+
+    /// <summary>Enrollments of the group (any status) overlapping the dates, both inclusive.</summary>
+    Task<IReadOnlyList<Enrollment>> ListOfGroupBetweenAsync(GroupId groupId, DateOnly firstDay, DateOnly lastDay, CancellationToken cancellationToken);
+
     Task<IReadOnlyList<StudentId>> ActiveStudentsOfGroupsAsync(IReadOnlyCollection<GroupId> groupIds, CancellationToken cancellationToken);
 }

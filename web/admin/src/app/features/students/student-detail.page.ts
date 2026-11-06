@@ -10,13 +10,7 @@ import {
   untracked,
 } from '@angular/core';
 import { RouterLink } from '@angular/router';
-import {
-  LucideArrowLeft,
-  LucideClipboardList,
-  LucideLogOut,
-  LucidePencil,
-  LucideRotateCcw,
-} from '@lucide/angular';
+import { LucideArrowLeft, LucideLogOut, LucidePencil, LucideRotateCcw } from '@lucide/angular';
 import { firstValueFrom } from 'rxjs';
 
 import { Api } from '../../api/api';
@@ -30,6 +24,7 @@ import { SchoolClock } from '../../core/time/school-clock';
 import { ConfirmService } from '../../shared/ui/confirm-dialog.component';
 import { PageHeaderComponent } from '../../shared/ui/page-header.component';
 import { ToastService } from '../../shared/ui/toast.service';
+import { StudentEnrollmentsComponent } from '../enrollments/student-enrollments.component';
 import {
   GUARDIAN_EDIT_TITLE_ID,
   GuardianEditData,
@@ -47,8 +42,8 @@ import {
   imports: [
     RouterLink,
     PageHeaderComponent,
+    StudentEnrollmentsComponent,
     LucideArrowLeft,
-    LucideClipboardList,
     LucideLogOut,
     LucidePencil,
     LucideRotateCcw,
@@ -163,15 +158,11 @@ import {
           </ul>
         </section>
 
-        <section class="card p-4" aria-labelledby="enrollments-title">
-          <h2 id="enrollments-title" class="mb-3 text-base font-semibold">
-            {{ text.enrollments }}
-          </h2>
-          <div class="flex items-center gap-3 text-sm text-muted-foreground">
-            <svg lucideClipboardList class="size-5 shrink-0" aria-hidden="true"></svg>
-            {{ text.enrollmentsSoon }}
-          </div>
-        </section>
+        <app-student-enrollments
+          [studentId]="s.id"
+          [studentName]="s.firstName + ' ' + s.lastName"
+          [studentActive]="s.status === 'Active'"
+        />
       </div>
     }
   `,

@@ -81,9 +81,21 @@ internal sealed class EnrollmentRepository(AppDbContext db) : IEnrollmentReposit
         return new PagedResult<Enrollment>(items, page.Page, page.PageSize, total);
     }
 
+    public async Task<IReadOnlyList<Enrollment>> ListOfStudentsAsync(IReadOnlyCollection<StudentId> studentIds, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(studentIds);
+        var ids = studentIds.ToList();
+        return await db.Set<Enrollment>().AsNoTracking().Where(e => ids.Contains(e.StudentId)).ToListAsync(cancellationToken);
+    }
+
     public async Task<IReadOnlyList<Enrollment>> ListOfStudentAsync(StudentId studentId, CancellationToken cancellationToken) =>
         await db.Set<Enrollment>().AsNoTracking().Where(e => e.StudentId == studentId)
             .OrderByDescending(e => e.StartDate).ThenByDescending(e => e.Id)
+            .ToListAsync(cancellationToken);
+
+    public async Task<IReadOnlyList<Enrollment>> ListOfGroupBetweenAsync(GroupId groupId, DateOnly firstDay, DateOnly lastDay, CancellationToken cancellationToken) =>
+        await db.Set<Enrollment>().AsNoTracking()
+            .Where(e => e.GroupId == groupId && e.StartDate <= lastDay && (e.EndDate == null || e.EndDate >= firstDay))
             .ToListAsync(cancellationToken);
 
     public async Task<IReadOnlyList<StudentId>> ActiveStudentsOfGroupsAsync(IReadOnlyCollection<GroupId> groupIds, CancellationToken cancellationToken)

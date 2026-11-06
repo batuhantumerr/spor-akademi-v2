@@ -255,8 +255,32 @@ internal sealed class GetRosterHandler(
 
 /// <summary>The Enrollments module's contracts for other modules (counts, ending, student filters).</summary>
 internal sealed class EnrollmentModule(IEnrollmentRepository enrollments, IGroupDirectory groups)
-    : IEnrollmentCounts, IEnrollmentEnder, IStudentGroupFilter
+    : IEnrollmentCounts, IEnrollmentEnder, IStudentGroupFilter, IEnrollmentHistory
 {
+    public async Task<IReadOnlyList<EnrollmentPeriod>> ListOfGroupAsync(GroupId groupId, DateOnly firstDay, DateOnly lastDay, CancellationToken cancellationToken)
+    {
+        var ofGroup = await enrollments.ListOfGroupBetweenAsync(groupId, firstDay, lastDay, cancellationToken);
+        var ended = ofGroup.Where(e => e.EndDate is not null).Select(e => e.StudentId).Distinct().ToList();
+        var ofTheirStudents = ended.Count == 0 ? [] : await enrollments.ListOfStudentsAsync(ended, cancellationToken);
+        return [.. ofGroup.Select(e => ToPeriod(e, ofTheirStudents))];
+    }
+
+    public async Task<IReadOnlyList<EnrollmentPeriod>> ListOfStudentAsync(StudentId studentId, CancellationToken cancellationToken)
+    {
+        var all = await enrollments.ListOfStudentAsync(studentId, cancellationToken);
+        return [.. all.Select(e => ToPeriod(e, all))];
+    }
+
+    /// <summary>DEC-170: an enrollment hands its end day over when the same student starts another one that day.</summary>
+    private static EnrollmentPeriod ToPeriod(Enrollment enrollment, IReadOnlyCollection<Enrollment> ofSameStudents) =>
+        new(
+            enrollment.StudentId,
+            enrollment.GroupId,
+            enrollment.StartDate,
+            enrollment.EndDate,
+            enrollment.EndDate is { } end
+                && ofSameStudents.Any(other => other.Id != enrollment.Id && other.StudentId == enrollment.StudentId && other.StartDate == end));
+
     public Task<int> CountActiveAsync(GroupId groupId, CancellationToken cancellationToken) =>
         enrollments.CountActiveAsync(groupId, cancellationToken);
 
