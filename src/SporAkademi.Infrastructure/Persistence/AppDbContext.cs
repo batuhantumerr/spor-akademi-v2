@@ -25,7 +25,7 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
             {
                 configurationBuilder.Properties(type).HaveConversion(typeof(EntityIdConverter<>).MakeGenericType(type));
             }
-            else if (type.IsEnum && type.IsPublic)
+            else if (type.IsEnum && type.IsVisible)
             {
                 configurationBuilder.Properties(type).HaveConversion<string>().HaveMaxLength(32);
             }
