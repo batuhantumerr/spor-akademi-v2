@@ -19,6 +19,7 @@ import { FacilityDto, FacilityType } from '../../api/models';
 import { fieldErrors, problemMessage, toProblem } from '../../core/api/problem';
 import { errorMessages, ui } from '../../core/i18n/tr';
 import { focusFirstInvalid } from '../../shared/forms/focus-first-invalid';
+import { ConflictNoticeComponent } from '../../shared/ui/conflict-notice.component';
 
 const types: FacilityType[] = ['Field', 'Pool', 'Court', 'Other'];
 
@@ -50,7 +51,7 @@ const fieldIds: Record<Field, string> = {
 @Component({
   selector: 'app-facility-form-dialog',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [ReactiveFormsModule],
+  imports: [ReactiveFormsModule, ConflictNoticeComponent],
   template: `
     <form
       class="max-h-[calc(100dvh-2rem)] w-[min(32rem,calc(100vw-2rem))] overflow-y-auto rounded-lg border border-border bg-background p-6 shadow-lg"
@@ -68,6 +69,18 @@ const fieldIds: Record<Field, string> = {
         >
           {{ error() }}
         </p>
+      }
+      @if (conflict()) {
+        <div class="mt-3">
+          <app-conflict-notice
+            [ready]="fresh() !== null"
+            [loadError]="freshError()"
+            [busy]="saving()"
+            (applyMine)="applyMine()"
+            (loadServer)="loadServer()"
+            (retry)="loadFresh()"
+          />
+        </div>
       }
       <div class="mt-4 grid gap-4 sm:grid-cols-2">
         <div class="sm:col-span-2">
@@ -186,6 +199,10 @@ export class FacilityFormDialog {
   protected readonly titleId = FACILITY_FORM_TITLE_ID;
   protected readonly saving = signal(false);
   protected readonly error = signal<string | null>(null);
+  /** After a 409 the form keeps the typed values; the server's version loads aside. */
+  protected readonly conflict = signal(false);
+  protected readonly fresh = signal<FacilityDto | null>(null);
+  protected readonly freshError = signal<string | null>(null);
   private readonly serverErrors = signal<Record<string, string>>({});
 
   protected readonly form = inject(FormBuilder).group({
@@ -234,7 +251,7 @@ export class FacilityFormDialog {
   }
 
   protected async save(): Promise<void> {
-    if (this.saving()) {
+    if (this.saving() || this.conflict()) {
       return;
     }
     if (this.form.invalid) {
@@ -265,27 +282,59 @@ export class FacilityFormDialog {
       this.ref.close(true);
     } catch (err) {
       const problem = toProblem(err);
-      if (problem.code === 'Concurrency.Conflict' && facility) {
-        await this.reload(facility.id);
-      } else {
-        this.serverErrors.set(fieldErrors(problem));
-        this.error.set(problemMessage(problem));
-        this.focusFirstInvalid();
-      }
       this.saving.set(false);
+      if (problem.code === 'Concurrency.Conflict' && facility) {
+        this.conflict.set(true);
+        this.fresh.set(null);
+        await this.loadFresh();
+        return;
+      }
+      this.serverErrors.set(fieldErrors(problem));
+      this.error.set(problemMessage(problem));
+      this.focusFirstInvalid();
     }
   }
 
-  /** Someone else saved first: show their version so the next save carries the fresh version. */
-  private async reload(id: string): Promise<void> {
-    try {
-      const fresh = await this.api.invoke(apiV1FacilitiesIdGet, { id });
-      this.facility.set(fresh);
-      this.fill(fresh);
-      this.error.set(ui.common.conflictReloaded);
-    } catch (err) {
-      this.error.set(problemMessage(toProblem(err)));
+  /** Re-send the typed values on top of the fresh version. */
+  protected async applyMine(): Promise<void> {
+    const fresh = this.fresh();
+    if (!fresh || this.saving()) {
+      return;
     }
+    this.facility.set(fresh);
+    this.clearConflict();
+    await this.save();
+  }
+
+  /** Discard the typed values and show the server's version. */
+  protected loadServer(): void {
+    const fresh = this.fresh();
+    if (!fresh) {
+      return;
+    }
+    this.facility.set(fresh);
+    this.fill(fresh);
+    this.clearConflict();
+  }
+
+  /** Loads the server's version next to the user's values. */
+  async loadFresh(): Promise<void> {
+    const facility = this.facility();
+    if (!facility) {
+      return;
+    }
+    this.freshError.set(null);
+    try {
+      this.fresh.set(await this.api.invoke(apiV1FacilitiesIdGet, { id: facility.id }));
+    } catch (err) {
+      this.freshError.set(problemMessage(toProblem(err)));
+    }
+  }
+
+  private clearConflict(): void {
+    this.conflict.set(false);
+    this.fresh.set(null);
+    this.freshError.set(null);
   }
 
   private fill(facility: FacilityDto | null): void {

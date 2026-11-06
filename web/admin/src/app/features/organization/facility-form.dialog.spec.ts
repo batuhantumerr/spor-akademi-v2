@@ -136,7 +136,11 @@ describe('FacilityFormDialog', () => {
     expect(input('f-city').getAttribute('aria-invalid')).toBe('true');
   });
 
-  it('reloads the facility after a version conflict and retries with the fresh version', async () => {
+  const buttonWith = (text: string) =>
+    [...root.querySelectorAll('button')].find((b) => b.textContent?.includes(text)) as
+      HTMLButtonElement | undefined;
+
+  async function facilityConflict(): Promise<void> {
     await open(facility);
     await type('f-name', 'Benim adım');
     await submit();
@@ -146,19 +150,54 @@ describe('FacilityFormDialog', () => {
     await settle(fixture);
     const get = backend.expectOne('/api/v1/facilities/f1');
     expect(get.request.method).toBe('GET');
-    get.flush({ ...facility, name: 'Başkasının adı', version: 7 });
+    get.flush({ ...facility, name: 'Başkasının adı', capacity: 55, version: 7 });
     await settle(fixture);
+  }
 
-    expect(root.querySelector('[role="alert"]')?.textContent).toContain(ui.common.conflictReloaded);
-    expect(input('f-name').value).toBe('Başkasının adı');
+  it('keeps the typed values after a conflict and applies them on the fresh version', async () => {
+    await facilityConflict();
+    expect(root.textContent).toContain(ui.conflict.title);
+    expect(input('f-name').value).toBe('Benim adım');
     expect(close).not.toHaveBeenCalled();
 
-    await submit();
+    buttonWith(ui.conflict.applyMine)!.click();
+    await settle(fixture);
     const retry = backend.expectOne('/api/v1/facilities/f1');
-    expect(retry.request.body).toEqual(expect.objectContaining({ version: 7 }));
+    expect(retry.request.body).toEqual(
+      expect.objectContaining({ name: 'Benim adım', capacity: 40, version: 7 }),
+    );
     retry.flush(facility);
     await settle(fixture);
     expect(close).toHaveBeenCalledWith(true);
+  });
+
+  it('can take the server version instead after a conflict', async () => {
+    await facilityConflict();
+    buttonWith(ui.conflict.loadServer)!.click();
+    await settle(fixture);
+    expect(input('f-name').value).toBe('Başkasının adı');
+    expect(input('f-capacity').value).toBe('55');
+    expect(root.textContent).not.toContain(ui.conflict.title);
+  });
+
+  it('keeps the edits and offers a retry when the fresh version cannot be loaded', async () => {
+    await open(facility);
+    await type('f-name', 'Benim adım');
+    await submit();
+    backend
+      .expectOne('/api/v1/facilities/f1')
+      .flush({ code: 'Concurrency.Conflict' }, { status: 409, statusText: 'Conflict' });
+    await settle(fixture);
+    backend.expectOne('/api/v1/facilities/f1').flush(null, { status: 0, statusText: '' });
+    await settle(fixture);
+
+    expect(input('f-name').value).toBe('Benim adım');
+    expect(buttonWith(ui.conflict.applyMine)).toBeUndefined();
+    buttonWith(ui.common.retry)!.click();
+    await settle(fixture);
+    backend.expectOne('/api/v1/facilities/f1').flush({ ...facility, version: 7 });
+    await settle(fixture);
+    expect(buttonWith(ui.conflict.applyMine)).toBeDefined();
   });
 
   it('ignores a second submit while saving', async () => {
