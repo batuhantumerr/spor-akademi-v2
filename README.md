@@ -34,6 +34,17 @@ npm start                          # http://localhost:4200 (/api proxy'si API'ye
 - Sağlık kontrolleri: `/health/live`, `/health/ready`
 - Loglar (Seq): http://127.0.0.1:5341
 
+### İlk Platform Admin
+
+`setup-env.sh`, `.env`'e `PLATFORM_ADMIN_EMAIL` ve rastgele bir `PLATFORM_ADMIN_PASSWORD` yazar ve şifreyi **bir kez** ekrana basar. `run-api.sh` bunları API'ye `PlatformAdmin__Email` / `PlatformAdmin__InitialPassword` olarak verir. API açılırken:
+
+- Hiç Platform Admin yoksa ve ikisi de verilmişse, şifre değiştirme zorunlu bir Platform Admin oluşturur. Aynı anda açılan birden fazla örnek bir advisory lock ile sıraya girer; en fazla bir Platform Admin oluşur.
+- Platform Admin zaten varsa hiçbir şey yapmaz (yapılandırmadaki e-posta farklı olsa bile).
+- İkisi de verilmemişse hiçbir şey yapmaz. Sadece biri verilmişse, şifre hâlâ `change-me…` ise veya e-posta başka bir hesaba aitse, eksik/sorunlu ayarın **adını** uyarı olarak loglar ve atlar (değerler asla loglanmaz).
+- E-posta geçersizse veya şifre politikaya uymuyorsa (en az 10 karakter, yaygın şifre değil) API açılmaz (fail-closed).
+
+İlk girişte şifreyi değiştirdikten sonra `PLATFORM_ADMIN_PASSWORD` satırını `.env`'den silin.
+
 ## Testler
 
 ```bash
