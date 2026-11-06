@@ -20,14 +20,14 @@ export const routes: Routes = [
     path: 'login',
     canActivate: [guestGuard],
     loadComponent: () => import('./features/auth/login.page').then((m) => m.LoginPage),
-    title: `${ui.login.title} · ${ui.appName}`,
+    title: ui.login.title,
   },
   {
     path: 'change-password',
     canActivate: [sessionGuard],
     loadComponent: () =>
       import('./features/auth/change-password.page').then((m) => m.ChangePasswordPage),
-    title: `${ui.changePassword.title} · ${ui.appName}`,
+    title: ui.changePassword.title,
   },
   {
     path: '',
