@@ -11,7 +11,6 @@ require_env SPOR_AKADEMI_APP_PASSWORD
 ConnectionStrings__App="$(connection_string spor_akademi_app SPOR_AKADEMI_APP_PASSWORD)"
 export ConnectionStrings__App
 export DOTNET_ENVIRONMENT="${DOTNET_ENVIRONMENT:-Development}"
-if [[ -n "${DEMO_PASSWORD:-}" ]]; then export DEMO_PASSWORD; fi
 
 cd "$REPO_ROOT"
 exec dotnet run --project src/SporAkademi.DemoSeed "$@"

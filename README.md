@@ -44,8 +44,13 @@ bash scripts/seed-demo.sh   # migration'lardan sonra, API çalışmıyorken de o
 
 - Hesaplar: `admin@<slug>.test` (Okul Admini), `antrenor1@<slug>.test` … (antrenörler); hepsi aynı şifreyi kullanır. Şifre `.env`'deki `DEMO_PASSWORD`'dan gelir; yoksa üretilir ve **bir kez** ekrana yazılır (repoya asla girmez).
 - Her değişiklik uygulama katmanından (command handler'lar, doğrulama, domain kuralları, unit of work) geçer; geçmiş, saat o güne ayarlanarak gün gün yeniden oynatılır, böylece "geçmiş döneme aidat yok" gibi kurallar da korunur. Rastgelelik sabit bir tohumla üretilir (aynı gün aynı veri).
-- Demo okullar zaten varsa hiçbir şey yapmaz (çıkış kodu 3). `Production` ortamında (ortam değişkeni verilmemişse de) çalışmaz (çıkış kodu 2); betik `DOTNET_ENVIRONMENT=Development` verir.
-- Telefonlar `+90 5xx 000 nnnn` biçiminde, e-postalar ayrılmış `.test` alan adında; isimler yaygın Türkçe ad ve soyadların rastgele birleşimidir.
+- Demo okullar zaten varsa hiçbir şey yapmaz (çıkış kodu 3). `Production` ortamında (ortam değişkeni verilmemişse de) çalışmaz (çıkış kodu 2); betik `DOTNET_ENVIRONMENT=Development` verir. Bağlantı dizesi `localhost`, `127.0.0.1` veya `::1` dışında bir sunucuyu gösteriyorsa da çalışmaz (çıkış kodu 4).
+- Yarıda kalırsa (çıkış kodu 5) her command ayrı commit edildiği için kısmi demo verisi kalabilir. Yerel veritabanını sıfırlayıp baştan başlamak için (yerel **tüm** veriyi siler):
+  ```bash
+  docker compose down -v && docker compose up -d --wait && bash scripts/ef.sh database update
+  bash scripts/seed-demo.sh
+  ```
+- Telefonlar `+90 5xx 000 nnnn` biçiminde, e-postalar ayrılmış `.test` alan adında; isimler yaygın Türkçe ad ve soyadların rastgele birleşimidir. Telefonların gerçek bir hatta denk gelmemesi sadece bu biçim kuralına dayanır (yönlendirilemez olduğu garanti değildir); uygulama demo kişilere SMS, WhatsApp veya e-posta göndermez, böyle bir entegrasyon eklenirse demo verisi hariç tutulmalıdır.
 
 ### İlk Platform Admin
 
