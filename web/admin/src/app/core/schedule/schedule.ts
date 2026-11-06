@@ -1,5 +1,6 @@
 import { DayOfWeek, ScheduleSlotDto } from '../../api/models';
 import { errorMessages, interpolate, ui } from '../i18n/tr';
+import { LOCALE } from '../i18n/locale';
 
 /** Turkish week order (Monday first). */
 export const WEEK: readonly DayOfWeek[] = [
@@ -27,6 +28,8 @@ export interface SlotDraft {
 export interface SlotIssues {
   start?: string;
   end?: string;
+  /** Indexes of the rows this one overlaps (same day), so both rows can show the problem. */
+  overlapsWith?: number[];
 }
 
 export function isTime(value: string): boolean {
@@ -63,17 +66,23 @@ export function validateSlots(slots: readonly SlotDraft[]): SlotIssues[] {
       issues[i].end = errorMessages['TimeRange.Invalid'];
     }
   });
+  // Only rows with a usable time range take part in the overlap check.
+  const usable = issues.map((issue) => !issue.start && !issue.end);
   for (let i = 0; i < slots.length; i++) {
     for (let j = i + 1; j < slots.length; j++) {
       const a = slots[i];
       const b = slots[j];
-      const valid = (k: number) => !issues[k].start && !issues[k].end;
-      if (a.day !== b.day || !valid(i) || !valid(j)) {
+      if (a.day !== b.day || !usable[i] || !usable[j]) {
         continue;
       }
       if (minutes(a.start) < minutes(b.end) && minutes(b.start) < minutes(a.end)) {
-        issues[i].end ??= errorMessages['Schedule.SlotOverlap'];
-        issues[j].end ??= errorMessages['Schedule.SlotOverlap'];
+        for (const [k, other] of [
+          [i, j],
+          [j, i],
+        ]) {
+          issues[k].end ??= errorMessages['Schedule.SlotOverlap'];
+          issues[k].overlapsWith = [...(issues[k].overlapsWith ?? []), other];
+        }
       }
     }
   }
@@ -111,7 +120,7 @@ export function addDays(iso: string, days: number): string {
   return isoDate(new Date(y, m - 1, d + days));
 }
 
-const weekdayFormatter = new Intl.DateTimeFormat('tr-TR', { weekday: 'long' });
+const weekdayFormatter = new Intl.DateTimeFormat(LOCALE, { weekday: 'long' });
 
 /** "Salı" for an ISO date. */
 export function weekdayName(iso: string): string {

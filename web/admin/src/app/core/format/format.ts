@@ -1,18 +1,20 @@
+import { LOCALE } from '../i18n/locale';
+
 /** Display formats from NFR-CMP-03: dates gg.AA.yyyy, 24-hour times, money ₺1.250,00. */
 
-const dateFormatter = new Intl.DateTimeFormat('tr-TR', {
+const dateFormatter = new Intl.DateTimeFormat(LOCALE, {
   day: '2-digit',
   month: '2-digit',
   year: 'numeric',
 });
-const moneyFormatter = new Intl.NumberFormat('tr-TR', {
+const moneyFormatter = new Intl.NumberFormat(LOCALE, {
   style: 'currency',
   currency: 'TRY',
   minimumFractionDigits: 2,
   maximumFractionDigits: 2,
 });
-const numberFormatter = new Intl.NumberFormat('tr-TR');
-const percentFormatter = new Intl.NumberFormat('tr-TR', {
+const numberFormatter = new Intl.NumberFormat(LOCALE);
+const percentFormatter = new Intl.NumberFormat(LOCALE, {
   style: 'percent',
   maximumFractionDigits: 0,
 });

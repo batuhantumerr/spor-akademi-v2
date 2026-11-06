@@ -15,6 +15,7 @@ import { problemMessage, toProblem } from '../../core/api/problem';
 import { errorMessages, ui } from '../../core/i18n/tr';
 import { focusFirstInvalid } from '../../shared/forms/focus-first-invalid';
 import { ServerFieldErrors } from '../../shared/forms/server-field-errors';
+import { LOCALE } from '../../core/i18n/locale';
 
 export const SCHOOL_FORM_TITLE_ID = 'school-form-title';
 
@@ -34,7 +35,7 @@ const trMap: Record<string, string> = { ç: 'c', ğ: 'g', ı: 'i', ö: 'o', ş: 
 /** Suggests a slug from a school name: "Kartal Spor Kulübü" → "kartal-spor-kulubu". */
 export function slugify(name: string): string {
   return name
-    .toLocaleLowerCase('tr-TR')
+    .toLocaleLowerCase(LOCALE)
     .replace(/[çğıöşü]/g, (c) => trMap[c])
     .normalize('NFD')
     .replace(/[̀-ͯ]/g, '')

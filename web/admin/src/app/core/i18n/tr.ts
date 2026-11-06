@@ -351,7 +351,6 @@ export const ui = {
     archiveTitle: 'Grup arşivlensin mi?',
     archiveText:
       'Arşivlenen gruba yeni kayıt yapılamaz ve programı takvimden kalkar; geçmiş kayıtlar korunur.',
-    open: 'Grubu aç',
   },
   groupDetail: {
     back: 'Gruplara dön',
@@ -378,7 +377,6 @@ export const ui = {
   },
   coachToday: {
     title: 'Bugün',
-    description: 'Günün antrenmanları.',
     previousDay: 'Önceki gün',
     nextDay: 'Sonraki gün',
     today: 'Bugüne dön',
@@ -386,6 +384,13 @@ export const ui = {
     takeAttendance: 'Yoklama al',
     comingSoon: 'Yakında',
     sessionsCount: '{count} antrenman',
+  },
+  conflict: {
+    title: 'Bu kayıt siz düzenlerken başka biri tarafından değiştirildi.',
+    loading: 'Güncel hâli yükleniyor…',
+    help: 'Değişiklikleriniz duruyor. Güncel hâlin üzerine uygulayabilir ya da sunucudaki hâli yükleyip değişikliklerinizi bırakabilirsiniz.',
+    applyMine: 'Benim değişikliklerimi uygula',
+    loadServer: 'Sunucudaki hâli yükle',
   },
   coachGroups: {
     title: 'Gruplarım',

@@ -1,4 +1,12 @@
-import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  computed,
+  effect,
+  inject,
+  signal,
+  untracked,
+} from '@angular/core';
 import {
   LucideCalendarCheck,
   LucideChevronLeft,
@@ -13,7 +21,8 @@ import { SessionDto } from '../../api/models';
 import { problemMessage, toProblem } from '../../core/api/problem';
 import { formatDate, formatTime } from '../../core/format/format';
 import { interpolate, ui } from '../../core/i18n/tr';
-import { addDays, isoDate, weekdayName } from '../../core/schedule/schedule';
+import { addDays, weekdayName } from '../../core/schedule/schedule';
+import { SchoolClock } from '../../core/time/school-clock';
 
 /**
  * US-12: the coach's sessions for one day, phone first (NFR-USA-01): large cards, 44px+ targets,
@@ -118,12 +127,14 @@ export class CoachTodayPage {
   protected readonly text = ui.coachToday;
   protected readonly common = ui.common;
 
-  private readonly today = isoDate(new Date());
-  protected readonly date = signal(this.today);
+  private readonly clock = inject(SchoolClock);
+  /** Today in the school's time zone, not the browser's. */
+  private readonly today = this.clock.today;
+  protected readonly date = signal(this.today());
   protected readonly sessions = signal<SessionDto[] | null>(null);
   protected readonly loading = signal(false);
   protected readonly error = signal<string | null>(null);
-  protected readonly isToday = computed(() => this.date() === this.today);
+  protected readonly isToday = computed(() => this.date() === this.today());
   protected readonly heading = computed(() =>
     this.isToday() ? this.text.title : weekdayName(this.date()),
   );
@@ -139,6 +150,19 @@ export class CoachTodayPage {
 
   constructor() {
     void this.load();
+    // When the school's day turns over (midnight, or the window regains focus the next morning),
+    // a coach who was looking at "today" moves on to the new today.
+    let previous = this.today();
+    effect(() => {
+      const today = this.today();
+      untracked(() => {
+        if (today !== previous && this.date() === previous) {
+          this.date.set(today);
+          void this.load();
+        }
+        previous = today;
+      });
+    });
   }
 
   protected time(value: string): string {
@@ -151,7 +175,7 @@ export class CoachTodayPage {
   }
 
   protected goToday(): void {
-    this.date.set(this.today);
+    this.date.set(this.today());
     void this.load();
   }
 

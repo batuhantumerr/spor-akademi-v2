@@ -1,6 +1,7 @@
 import { Api } from '../../api/api';
 import { apiV1CoachesGet, apiV1FacilitiesGet, apiV1SportsGet } from '../../api/functions';
 import { NamedReferenceDto } from '../../api/models';
+import { LOCALE } from '../../core/i18n/locale';
 
 /** Active sports, facilities and coaches for the group filters and the group form. */
 export interface GroupLookups {
@@ -23,7 +24,7 @@ async function all<T>(
   return items;
 }
 
-const byName = (a: NamedReferenceDto, b: NamedReferenceDto) => a.name.localeCompare(b.name, 'tr');
+const byName = (a: NamedReferenceDto, b: NamedReferenceDto) => a.name.localeCompare(b.name, LOCALE);
 
 export async function loadGroupLookups(api: Api): Promise<GroupLookups> {
   const [sports, facilities, coaches] = await Promise.all([
