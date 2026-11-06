@@ -625,6 +625,8 @@ export const ui = {
     all: 'Tüm duyurular',
     back: 'Bugüne dön',
     groupLabel: 'Grup: {name}',
+    listUpdated: 'Duyuru listesi güncellendi ({count} duyuru).',
+    postedAt: 'Yayımlanma: {date}',
   },
 };
 

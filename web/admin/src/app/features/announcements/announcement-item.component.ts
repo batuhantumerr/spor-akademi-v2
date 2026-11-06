@@ -29,7 +29,8 @@ import { SchoolClock } from '../../core/time/school-clock';
           class="shrink-0 text-xs text-muted-foreground"
           [attr.datetime]="a.createdAt"
           [attr.title]="absolute()"
-          >{{ relative() }}</time
+          ><span aria-hidden="true">{{ relative() }}</span
+          ><span class="sr-only">{{ relative() }}, {{ postedAt() }}</span></time
         >
       </div>
       @if (showGroup()) {
@@ -66,6 +67,10 @@ export class AnnouncementItemComponent {
   });
   protected readonly absolute = computed(() =>
     absoluteTime(this.announcement().createdAt, this.clock.timeZone()),
+  );
+  /** The exact time, readable without hovering (screen readers, touch). */
+  protected readonly postedAt = computed(() =>
+    interpolate(ui.announcements.postedAt, { date: this.absolute() }),
   );
   protected readonly groupLabel = computed(() =>
     interpolate(ui.announcements.groupLabel, { name: this.announcement().groupName }),
