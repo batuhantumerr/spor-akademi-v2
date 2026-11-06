@@ -1,0 +1,159 @@
+using System.Text.Json;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
+using SporAkademi.Application.Abstractions.Outbox;
+using SporAkademi.Infrastructure.Persistence;
+
+namespace SporAkademi.Infrastructure.Outbox;
+
+/// <summary>
+/// Delivers due outbox messages (DEC-302). One call claims a batch with <c>FOR UPDATE SKIP LOCKED</c> in a
+/// transaction, so concurrent processors (API instances, the polling worker, a P2-F2 job) never take the same
+/// message; each message is handled in its own DI scope under its school, then marked processed, rescheduled with
+/// backoff or dead-lettered, and the transaction commits. A crash before commit releases the claim and the batch is
+/// delivered again: delivery is at least once.
+/// </summary>
+internal sealed partial class OutboxProcessor(
+    IServiceScopeFactory scopeFactory,
+    OutboxMessageTypes types,
+    IOptions<OutboxOptions> options,
+    TimeProvider clock,
+    ILogger<OutboxProcessor> logger)
+{
+    public const string UnknownTypeError = "UnknownMessageType";
+    public const string InvalidPayloadError = "InvalidPayload";
+    public const string TimeoutError = "HandlerTimeout";
+
+    private OutboxOptions Options => options.Value;
+
+    /// <summary>Delivers at most one batch of due messages.</summary>
+    /// <returns>How many messages were claimed (delivered, rescheduled or dead-lettered).</returns>
+    public async Task<int> ProcessBatchAsync(CancellationToken cancellationToken)
+    {
+        await using var scope = scopeFactory.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        await using var transaction = await db.Database.BeginTransactionAsync(cancellationToken);
+
+        var now = clock.GetUtcNow();
+        var batch = await db.Set<OutboxMessage>()
+            .FromSql($"""
+                SELECT * FROM outbox.messages
+                WHERE processed_at IS NULL AND dead_lettered_at IS NULL AND next_attempt_at <= {now}
+                ORDER BY next_attempt_at, id
+                LIMIT {Options.BatchSize}
+                FOR UPDATE SKIP LOCKED
+                """)
+            .ToListAsync(cancellationToken);
+
+        foreach (var message in batch)
+        {
+            if (cancellationToken.IsCancellationRequested)
+            {
+                // Shutting down: keep what is done; the rest stays pending and its claim ends with the transaction.
+                break;
+            }
+
+            await DeliverAsync(message, cancellationToken);
+        }
+
+        await db.SaveChangesAsync(CancellationToken.None);
+        await transaction.CommitAsync(CancellationToken.None);
+        return batch.Count;
+    }
+
+    /// <summary>Deletes processed messages older than the retention period; dead-lettered ones are kept.</summary>
+    /// <returns>The number of deleted messages.</returns>
+    public async Task<int> CleanupAsync(CancellationToken cancellationToken)
+    {
+        await using var scope = scopeFactory.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var cutoff = clock.GetUtcNow() - Options.Retention;
+        var deleted = await db.Set<OutboxMessage>()
+            .Where(m => m.ProcessedAt != null && m.ProcessedAt < cutoff)
+            .ExecuteDeleteAsync(cancellationToken);
+        if (deleted > 0)
+        {
+            LogCleanedUp(logger, deleted);
+        }
+
+        return deleted;
+    }
+
+    private async Task DeliverAsync(OutboxMessage message, CancellationToken cancellationToken)
+    {
+        if (!types.TryGet(message.Type, out var type))
+        {
+            // E.g. written by a newer version during a rolling deploy: retried, then dead-lettered.
+            Fail(message, UnknownTypeError);
+            return;
+        }
+
+        object payload;
+        try
+        {
+            payload = type.Deserialize(message.Payload);
+        }
+        catch (JsonException)
+        {
+            Fail(message, InvalidPayloadError);
+            return;
+        }
+
+        var context = new OutboxMessageContext(message.Id, message.TenantId, message.OccurredAt, message.Attempts + 1);
+        using var timeout = new CancellationTokenSource(Options.HandlerTimeout, clock);
+        using var linked = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeout.Token);
+        try
+        {
+            await using var handlerScope = scopeFactory.CreateAsyncScope();
+            handlerScope.ServiceProvider.GetRequiredService<BackgroundTenantContext>().Enter(message.TenantId);
+            await type.InvokeAsync(handlerScope.ServiceProvider, payload, context, linked.Token);
+
+            message.MarkProcessed(clock.GetUtcNow());
+            LogDelivered(logger, message.Id, message.Type, context.Attempt);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            // Shutdown, not the handler's fault: the attempt does not count.
+        }
+        catch (OperationCanceledException) when (timeout.IsCancellationRequested)
+        {
+            Fail(message, TimeoutError);
+        }
+#pragma warning disable CA1031 // Any handler failure is retried; the processor must survive it.
+        catch (Exception exception)
+#pragma warning restore CA1031
+        {
+            Fail(message, exception.GetType().FullName ?? exception.GetType().Name);
+        }
+    }
+
+    private void Fail(OutboxMessage message, string error)
+    {
+        var now = clock.GetUtcNow();
+        var delay = OutboxRetryPolicy.Delay(message.Attempts + 1, Options.BaseRetryDelay, Options.MaxRetryDelay, Random.Shared.NextDouble());
+        message.RecordFailure(error, now, Options.MaxAttempts, delay);
+
+        if (message.DeadLetteredAt is not null)
+        {
+            LogDeadLettered(logger, message.Id, message.Type, message.Attempts, error);
+        }
+        else
+        {
+            LogRetryScheduled(logger, message.Id, message.Type, message.Attempts, error, message.NextAttemptAt);
+        }
+    }
+
+    [LoggerMessage(Level = LogLevel.Debug, Message = "Outbox message {MessageId} ({MessageType}) delivered on attempt {Attempt}")]
+    private static partial void LogDelivered(ILogger logger, Guid messageId, string messageType, int attempt);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Outbox message {MessageId} ({MessageType}) failed attempt {Attempt} with {Error}; next attempt at {NextAttemptAt}")]
+    private static partial void LogRetryScheduled(ILogger logger, Guid messageId, string messageType, int attempt, string error, DateTimeOffset nextAttemptAt);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Outbox message {MessageId} ({MessageType}) dead-lettered after {Attempt} attempts; last error {Error}")]
+    private static partial void LogDeadLettered(ILogger logger, Guid messageId, string messageType, int attempt, string error);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Deleted {Count} processed outbox messages past retention")]
+    private static partial void LogCleanedUp(ILogger logger, int count);
+}

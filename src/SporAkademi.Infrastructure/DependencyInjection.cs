@@ -2,8 +2,10 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Diagnostics.HealthChecks;
 using SporAkademi.Application.Abstractions.Authentication;
 using SporAkademi.Application.Abstractions.Data;
+using SporAkademi.Application.Abstractions.Outbox;
 using SporAkademi.Application.Announcements;
 using SporAkademi.Application.Attendance;
 using SporAkademi.Application.Billing;
@@ -26,6 +28,7 @@ using SporAkademi.Infrastructure.Enrollments;
 using SporAkademi.Infrastructure.Groups;
 using SporAkademi.Infrastructure.Identity;
 using SporAkademi.Infrastructure.Organization;
+using SporAkademi.Infrastructure.Outbox;
 using SporAkademi.Infrastructure.Persistence;
 using SporAkademi.Infrastructure.Students;
 using SporAkademi.Infrastructure.Tenancy;
@@ -46,6 +49,9 @@ public static class DependencyInjection
             .ValidateOnStart();
 
         services.TryAddScoped<ICurrentUser, AnonymousCurrentUser>();
+        // Background work (outbox handlers, P2-F2 jobs) acts for a school without an HTTP request.
+        services.AddScoped<BackgroundTenantContext>();
+        services.Decorate<ICurrentUser, BackgroundAwareCurrentUser>();
         services.TryAddSingleton(TimeProvider.System);
         services.AddScoped<AuditingInterceptor>();
         services.AddScoped<TenantWriteGuardInterceptor>();
@@ -93,11 +99,48 @@ public static class DependencyInjection
         services.AddScoped<IStudentRepository, StudentRepository>();
         services.AddScoped<IGuardianRepository, GuardianRepository>();
 
+        services.AddOutbox(configuration);
+
         services.AddHealthChecks()
-            .AddDbContextCheck<AppDbContext>("database", tags: ["ready"]);
+            .AddDbContextCheck<AppDbContext>("database", tags: ["ready"])
+            // A broken outbox degrades readiness but never fails it; the database check covers outages.
+            .AddCheck<OutboxHealthCheck>("outbox", failureStatus: HealthStatus.Degraded, tags: ["ready"]);
 
         return services;
     }
 }
 
 internal sealed class DatabaseConfigurationCheck;
+
+internal static class OutboxRegistration
+{
+    /// <summary>P2-F3: the outbox, its message types from the application layer and the polling worker (DEC-300 – DEC-303).</summary>
+    public static IServiceCollection AddOutbox(this IServiceCollection services, IConfiguration configuration)
+    {
+        services.AddOptions<OutboxOptions>()
+            .Bind(configuration.GetSection(OutboxOptions.Section))
+            .Validate(o => o.IsValid(), "The Outbox configuration section has an invalid value.")
+            .ValidateOnStart();
+
+        foreach (var type in typeof(IOutboxMessage).Assembly.GetTypes()
+                     .Where(t => t is { IsClass: true, IsAbstract: false } && typeof(IOutboxMessage).IsAssignableFrom(t)))
+        {
+            services.AddOutboxMessageType(type);
+        }
+
+        services.AddSingleton<OutboxMessageTypes>();
+        services.AddScoped<IOutbox, EfOutbox>();
+        services.AddSingleton<OutboxProcessor>();
+
+        // Always registered; it returns at once when Outbox:Enabled is false (read at start, so test hosts can set it).
+        services.AddHostedService<OutboxWorker>();
+
+        return services;
+    }
+
+    public static IServiceCollection AddOutboxMessageType(this IServiceCollection services, Type messageType)
+    {
+        services.AddSingleton(new OutboxMessageRegistration(messageType));
+        return services;
+    }
+}
