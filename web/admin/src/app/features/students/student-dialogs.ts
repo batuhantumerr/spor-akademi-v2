@@ -22,6 +22,7 @@ import { problemMessage, toProblem } from '../../core/api/problem';
 import { formatPhone } from '../../core/format/format';
 import { ui } from '../../core/i18n/tr';
 import { SchoolClock } from '../../core/time/school-clock';
+import { ConflictState } from '../../shared/data/conflict-state';
 import { ConflictNoticeComponent } from '../../shared/ui/conflict-notice.component';
 import { optionalTurkishPhone } from '../../shared/forms/validators';
 import { PathErrors, clientMessage } from './path-errors';
@@ -67,11 +68,11 @@ function focusFirstInvalid(host: HTMLElement): void {
           {{ error() }}
         </p>
       }
-      @if (conflict()) {
+      @if (conflictState.open()) {
         <div class="mb-3">
           <app-conflict-notice
-            [ready]="fresh() !== null"
-            [loadError]="freshError()"
+            [ready]="conflictState.fresh() !== null"
+            [loadError]="conflictState.error()"
             [busy]="saving()"
             (applyMine)="applyMine()"
             (loadServer)="loadServer()"
@@ -118,9 +119,9 @@ export class StudentEditDialog {
   protected readonly saving = signal(false);
   protected readonly submitted = signal(false);
   protected readonly error = signal<string | null>(null);
-  protected readonly conflict = signal(false);
-  protected readonly fresh = signal<StudentDto | null>(null);
-  protected readonly freshError = signal<string | null>(null);
+  protected readonly conflictState = new ConflictState<StudentDto>(() =>
+    this.api.invoke(apiV1StudentsIdGet, { id: this.student.id }),
+  );
   private readonly errors = new PathErrors(studentCodePaths);
   protected readonly serverError = (path: string) => this.errors.get(path);
 
@@ -157,10 +158,8 @@ export class StudentEditDialog {
       const problem = toProblem(err);
       if (problem.code === 'Concurrency.Conflict') {
         // Keep the typed values; load the server's version aside and let the user choose.
-        this.conflict.set(true);
-        this.fresh.set(null);
         this.saving.set(false);
-        await this.loadFresh();
+        await this.conflictState.start();
         return;
       }
       this.errors.apply(problem);
@@ -172,41 +171,33 @@ export class StudentEditDialog {
 
   /** Re-send the typed values on top of the fresh version. */
   protected async applyMine(): Promise<void> {
-    const fresh = this.fresh();
+    const fresh = this.conflictState.fresh();
     if (!fresh || this.saving()) {
       return;
     }
     this.student = fresh;
-    this.clearConflict();
+    this.conflictState.close();
     await this.save();
   }
 
   /** Discard the typed values and show the server's version. */
   protected loadServer(): void {
-    const fresh = this.fresh();
+    const fresh = this.conflictState.fresh();
     if (!fresh) {
       return;
     }
     this.student = fresh;
     this.form.reset(studentFieldsForm(fresh).getRawValue());
-    this.clearConflict();
+    this.conflictState.close();
   }
 
-  async loadFresh(): Promise<void> {
-    this.freshError.set(null);
-    try {
-      this.fresh.set(await this.api.invoke(apiV1StudentsIdGet, { id: this.student.id }));
-    } catch (err) {
-      this.freshError.set(problemMessage(toProblem(err)));
-    }
-  }
-
-  private clearConflict(): void {
-    this.conflict.set(false);
-    this.fresh.set(null);
-    this.freshError.set(null);
+  /** Retry after a failed load of the server version. */
+  protected loadFresh(): Promise<void> {
+    return this.conflictState.load();
   }
 }
+
+class GuardianGoneError extends Error {}
 
 export interface GuardianEditData {
   /** The guardian's current phone; the dialog loads the full record (with version) by it. */
@@ -238,11 +229,11 @@ export interface GuardianEditData {
           {{ error() }}
         </p>
       }
-      @if (conflict()) {
+      @if (conflictState.open()) {
         <div class="mt-3">
           <app-conflict-notice
-            [ready]="fresh() !== null"
-            [loadError]="freshError()"
+            [ready]="conflictState.fresh() !== null"
+            [loadError]="conflictState.error()"
             [busy]="saving()"
             (applyMine)="applyMine()"
             (loadServer)="loadServer()"
@@ -305,9 +296,11 @@ export class GuardianEditDialog {
   protected readonly saving = signal(false);
   protected readonly submitted = signal(false);
   protected readonly error = signal<string | null>(null);
-  protected readonly conflict = signal(false);
-  protected readonly fresh = signal<GuardianDto | null>(null);
-  protected readonly freshError = signal<string | null>(null);
+  protected readonly conflictState = new ConflictState<GuardianDto>(
+    () => this.fetchFresh(),
+    (err) =>
+      err instanceof GuardianGoneError ? this.text.guardianGone : problemMessage(toProblem(err)),
+  );
   private readonly errors = new PathErrors({ 'Guardian.PhoneTaken': 'phone' });
 
   protected readonly fields = [
@@ -417,10 +410,8 @@ export class GuardianEditDialog {
       const problem = toProblem(err);
       if (problem.code === 'Concurrency.Conflict') {
         // Keep the typed values; load the server's version aside and let the user choose.
-        this.conflict.set(true);
-        this.fresh.set(null);
         this.saving.set(false);
-        await this.loadFresh();
+        await this.conflictState.start();
         return;
       }
       this.errors.apply(problem);
@@ -432,51 +423,41 @@ export class GuardianEditDialog {
 
   /** Re-send the typed values on top of the fresh version. */
   protected async applyMine(): Promise<void> {
-    const fresh = this.fresh();
+    const fresh = this.conflictState.fresh();
     if (!fresh || this.saving()) {
       return;
     }
     this.guardian.set(fresh);
-    this.clearConflict();
+    this.conflictState.close();
     await this.save();
   }
 
   /** Discard the typed values and show the server's version. */
   protected loadServer(): void {
-    const fresh = this.fresh();
+    const fresh = this.conflictState.fresh();
     if (!fresh) {
       return;
     }
     this.guardian.set(fresh);
     this.fill(fresh);
-    this.clearConflict();
+    this.conflictState.close();
   }
 
-  /** The fresh copy, found by the phone it was loaded with. */
-  async loadFresh(): Promise<void> {
-    const current = this.guardian();
-    if (!current) {
-      return;
-    }
-    this.freshError.set(null);
-    try {
-      const result = await this.api.invoke(apiV1GuardiansGet, { phone: current.phone });
-      const fresh = result.items.find((g) => g.id === current.id) ?? null;
-      if (fresh) {
-        this.fresh.set(fresh);
-      } else {
-        // The phone was changed by someone else; it cannot be found that way any more.
-        this.freshError.set(this.text.guardianGone);
-      }
-    } catch (err) {
-      this.freshError.set(problemMessage(toProblem(err)));
-    }
+  /** Retry after a failed load of the server version. */
+  protected loadFresh(): Promise<void> {
+    return this.conflictState.load();
   }
 
-  private clearConflict(): void {
-    this.conflict.set(false);
-    this.fresh.set(null);
-    this.freshError.set(null);
+  /** The fresh copy, found again by the phone it was loaded with. */
+  private async fetchFresh(): Promise<GuardianDto> {
+    const current = this.guardian()!;
+    const result = await this.api.invoke(apiV1GuardiansGet, { phone: current.phone });
+    const fresh = result.items.find((g) => g.id === current.id);
+    if (!fresh) {
+      // Someone changed the phone; the guardian cannot be found that way any more.
+      throw new GuardianGoneError();
+    }
+    return fresh;
   }
 
   private async load(phone: string): Promise<void> {
