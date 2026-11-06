@@ -24,6 +24,7 @@ import { SchoolClock } from '../../core/time/school-clock';
 import { ConfirmService } from '../../shared/ui/confirm-dialog.component';
 import { PageHeaderComponent } from '../../shared/ui/page-header.component';
 import { ToastService } from '../../shared/ui/toast.service';
+import { StudentAttendanceComponent } from '../attendance/student-attendance.component';
 import { StudentEnrollmentsComponent } from '../enrollments/student-enrollments.component';
 import {
   GUARDIAN_EDIT_TITLE_ID,
@@ -43,6 +44,7 @@ import {
     RouterLink,
     PageHeaderComponent,
     StudentEnrollmentsComponent,
+    StudentAttendanceComponent,
     LucideArrowLeft,
     LucideLogOut,
     LucidePencil,
@@ -163,6 +165,7 @@ import {
           [studentName]="s.firstName + ' ' + s.lastName"
           [studentActive]="s.status === 'Active'"
         />
+        <app-student-attendance [studentId]="s.id" />
       </div>
     }
   `,

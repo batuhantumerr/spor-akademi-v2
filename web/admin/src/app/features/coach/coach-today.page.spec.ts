@@ -1,6 +1,7 @@
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { provideRouter } from '@angular/router';
 
 import { SessionDto } from '../../api/models';
 import { ui } from '../../core/i18n/tr';
@@ -30,35 +31,36 @@ describe('CoachTodayPage', () => {
   beforeEach(() => {
     TestBed.configureTestingModule({
       imports: [CoachTodayPage],
-      providers: [provideHttpClient(), provideHttpClientTesting()],
+      providers: [provideRouter([]), provideHttpClient(), provideHttpClientTesting()],
     });
     fixture = TestBed.createComponent(CoachTodayPage);
     backend = TestBed.inject(HttpTestingController);
     root = fixture.nativeElement as HTMLElement;
   });
 
-  afterEach(() => backend.verify());
+  afterEach(() => {
+    // The announcements section loads on its own; it has its own tests.
+    backend.match((r) => r.url.includes('/announcements'));
+    backend.verify();
+  });
 
   const sessionsFor = (date: string) =>
     backend.expectOne((r) => r.url === '/api/v1/me/sessions' && r.params.get('date') === date);
   const byLabel = (label: string) =>
     root.querySelector(`button[aria-label="${label}"]`) as HTMLButtonElement;
 
-  it("shows today's sessions as cards with a disabled attendance placeholder", async () => {
+  it("shows today's sessions as cards linking to attendance", async () => {
     sessionsFor(today).flush([session(today, 'U12 Mavi')]);
     await settle(fixture);
 
     expect(root.textContent).toContain('U12 Mavi');
     expect(root.textContent).toContain('17:00–18:30');
     expect(root.textContent).toContain('Ana saha');
-    const attendance = [...root.querySelectorAll('button')].find((b) =>
-      b.textContent?.includes(ui.coachToday.takeAttendance),
-    ) as HTMLButtonElement;
-    expect(attendance.getAttribute('aria-disabled')).toBe('true');
-    expect(attendance.title).toBe(ui.coachToday.comingSoon);
-    expect(
-      root.querySelector(`#${attendance.getAttribute('aria-describedby')}`)?.textContent,
-    ).toContain(ui.coachToday.comingSoon);
+    const attendance = [...root.querySelectorAll('a')].find((a) =>
+      a.textContent?.includes(ui.coachToday.takeAttendance),
+    ) as HTMLAnchorElement;
+    expect(attendance.getAttribute('href')).toBe(`/coach/sessions/id-U12%20Mavi/${today}T17:00`);
+    expect(attendance.classList.contains('h-12')).toBe(true);
   });
 
   it('switches days with the previous/next buttons and back to today', async () => {

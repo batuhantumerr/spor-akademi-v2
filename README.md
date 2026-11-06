@@ -34,6 +34,24 @@ npm start                          # http://localhost:4200 (/api proxy'si API'ye
 - Sağlık kontrolleri: `/health/live`, `/health/ready`
 - Loglar (Seq): http://127.0.0.1:5341
 
+### Demo verisi (P1-38)
+
+```bash
+bash scripts/seed-demo.sh   # migration'lardan sonra, API çalışmıyorken de olur
+```
+
+İki sentetik okul oluşturur: **Kadıköy Spor Kulübü** (`kadikoy-spor`) ve **Bornova Gençlik Spor** (`bornova-genclik`). Her okulda branşlar, 3 tesis, 5–6 antrenör, 10–12 grup (haftalık program ve aidatla), dolulukları %65–100 olan ~120–200 öğrenci (kardeşler aynı veliyi paylaşır, birkaç yetişkin, iki ayrılan öğrenci), son üç ayın yoklamaları, ödemeleri (bir kısmı eksik ve bir iptal edilmiş kayıt), ödenmemiş borçlar ve duyurular vardır.
+
+- Hesaplar: `admin@<slug>.test` (Okul Admini), `antrenor1@<slug>.test` … (antrenörler); hepsi aynı şifreyi kullanır. Şifre `.env`'deki `DEMO_PASSWORD`'dan gelir; yoksa üretilir ve **bir kez** ekrana yazılır (repoya asla girmez).
+- Her değişiklik uygulama katmanından (command handler'lar, doğrulama, domain kuralları, unit of work) geçer; geçmiş, saat o güne ayarlanarak gün gün yeniden oynatılır, böylece "geçmiş döneme aidat yok" gibi kurallar da korunur. Rastgelelik sabit bir tohumla üretilir (aynı gün aynı veri).
+- Demo okullar zaten varsa hiçbir şey yapmaz (çıkış kodu 3). `Production` ortamında (ortam değişkeni verilmemişse de) çalışmaz (çıkış kodu 2); betik `DOTNET_ENVIRONMENT=Development` verir. Bağlantı dizesi `localhost`, `127.0.0.1` veya `::1` dışında bir sunucuyu gösteriyorsa da çalışmaz (çıkış kodu 4).
+- Yarıda kalırsa (çıkış kodu 5) her command ayrı commit edildiği için kısmi demo verisi kalabilir. Yerel veritabanını sıfırlayıp baştan başlamak için (yerel **tüm** veriyi siler):
+  ```bash
+  docker compose down -v && docker compose up -d --wait && bash scripts/ef.sh database update
+  bash scripts/seed-demo.sh
+  ```
+- Telefonlar `+90 5xx 000 nnnn` biçiminde, e-postalar ayrılmış `.test` alan adında; isimler yaygın Türkçe ad ve soyadların rastgele birleşimidir. Telefonların gerçek bir hatta denk gelmemesi sadece bu biçim kuralına dayanır (yönlendirilemez olduğu garanti değildir); uygulama demo kişilere SMS, WhatsApp veya e-posta göndermez, böyle bir entegrasyon eklenirse demo verisi hariç tutulmalıdır.
+
 ### İlk Platform Admin
 
 `setup-env.sh`, `.env`'e `PLATFORM_ADMIN_EMAIL` ve rastgele bir `PLATFORM_ADMIN_PASSWORD` yazar ve şifreyi **bir kez** ekrana basar. `run-api.sh` bunları API'ye `PlatformAdmin__Email` / `PlatformAdmin__InitialPassword` olarak verir. API açılırken:

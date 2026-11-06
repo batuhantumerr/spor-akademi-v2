@@ -27,6 +27,8 @@ import { ConflictState } from '../../shared/data/conflict-state';
 import { ConflictNoticeComponent } from '../../shared/ui/conflict-notice.component';
 import { PageHeaderComponent } from '../../shared/ui/page-header.component';
 import { ToastService } from '../../shared/ui/toast.service';
+import { GroupAttendanceComponent } from '../attendance/group-attendance.component';
+import { GroupAnnouncementsComponent } from '../announcements/group-announcements.component';
 import { GroupFeesComponent } from '../billing/group-fees.component';
 import { GroupStudentsComponent } from '../enrollments/group-students.component';
 import { ScheduleEditorComponent } from './schedule-editor.component';
@@ -42,7 +44,9 @@ const UPCOMING_DAYS = 14;
     PageHeaderComponent,
     ScheduleEditorComponent,
     ConflictNoticeComponent,
+    GroupAnnouncementsComponent,
     GroupStudentsComponent,
+    GroupAttendanceComponent,
     GroupFeesComponent,
     LucideArrowLeft,
     LucideCalendarClock,
@@ -126,6 +130,10 @@ const UPCOMING_DAYS = 14;
         </dl>
       </section>
 
+      <div class="mb-4">
+        <app-group-announcements [group]="g" />
+      </div>
+
       <div class="grid gap-4 lg:grid-cols-[2fr_1fr]">
         <section class="card p-4" aria-labelledby="schedule-title">
           <h2 id="schedule-title" class="mb-2 text-base font-semibold">{{ groups.schedule }}</h2>
@@ -193,6 +201,10 @@ const UPCOMING_DAYS = 14;
 
       <div class="mt-4">
         <app-group-students [group]="g" />
+      </div>
+
+      <div class="mt-4">
+        <app-group-attendance [groupId]="g.id" />
       </div>
     }
   `,
