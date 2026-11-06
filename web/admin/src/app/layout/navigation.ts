@@ -7,6 +7,7 @@ import {
   LucideIconInput,
   LucideLayoutDashboard,
   LucideMapPin,
+  LucideMegaphone,
   LucideReceipt,
   LucideUsers,
   LucideWallet,
@@ -67,6 +68,7 @@ export function navigationFor(role: Role | null): NavSection[] {
           items: [
             { label: ui.nav.today, path: '/coach/today', icon: LucideCalendarCheck },
             { label: ui.nav.myGroups, path: '/coach/groups', icon: LucideUsers },
+            { label: ui.nav.announcements, path: '/coach/announcements', icon: LucideMegaphone },
           ],
         },
       ];
