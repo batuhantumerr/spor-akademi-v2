@@ -15,6 +15,7 @@ public static class DependencyInjection
     public static IServiceCollection AddApplication(this IServiceCollection services)
     {
         services.AddScoped<AccountOpening>();
+        services.AddScoped<Billing.PaymentViews>();
         services.AddScoped<IIdentityModule, IdentityModule>();
         services.AddScoped<EnrollmentModule>();
         services.AddScoped<IEnrollmentCounts>(sp => sp.GetRequiredService<EnrollmentModule>());

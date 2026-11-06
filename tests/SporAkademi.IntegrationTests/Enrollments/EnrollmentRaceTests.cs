@@ -7,7 +7,9 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Npgsql;
+using SporAkademi.Application.Abstractions;
 using SporAkademi.Application.Abstractions.Data;
+using SporAkademi.Application.Enrollments;
 using SporAkademi.Application.Enrollments.Contracts;
 using SporAkademi.Domain.Enrollments;
 using SporAkademi.Domain.Groups;
@@ -20,13 +22,19 @@ using SporAkademi.IntegrationTests.Infrastructure;
 namespace SporAkademi.IntegrationTests.Enrollments;
 
 /// <summary>
-/// ADR-0005 races made deterministic: every contender is held at a gate right before its locks and again
-/// right after them, so all of them have read nothing before the first one locks. With the real locks
-/// they then run one after another; without locks (the control tests) they all read the same counts.
+/// ADR-0005 races made deterministic: every contender is held right before its locks and again right after
+/// its last read. With the real locks only one can get past the read at a time, so they run one after
+/// another; without them (the controls, or a broken lock) all read the same count and overbook.
 /// </summary>
 [Trait("Story", "US-17")]
 public sealed class EnrollmentRaceTests(DatabaseFixture database) : EnrollmentsTest(database)
 {
+    private static readonly TimeSpan HardPatience = TimeSpan.FromSeconds(10);
+    private static readonly TimeSpan LockedReadHold = TimeSpan.FromSeconds(1);
+
+    private Gate? _lockGate;
+    private Gate? _readGate;
+
     [Fact]
     public async Task Two_admins_racing_for_the_last_seat_only_one_wins()
     {
@@ -37,6 +45,7 @@ public sealed class EnrollmentRaceTests(DatabaseFixture database) : EnrollmentsT
         using var adminB = AdminOf(api);
 
         var responses = await Task.WhenAll(students.Select((s, i) => EnrollAsync(s, IdOf(group), client: i % 2 == 0 ? adminA : adminB)));
+        ShouldHaveRaced();
 
         responses.Count(r => r.StatusCode == HttpStatusCode.Created).ShouldBe(1);
         foreach (var rejected in responses.Where(r => r.StatusCode != HttpStatusCode.Created))
@@ -55,8 +64,10 @@ public sealed class EnrollmentRaceTests(DatabaseFixture database) : EnrollmentsT
         using var admin = AdminOf(api);
 
         var responses = await Task.WhenAll(students.Select(s => EnrollAsync(s, IdOf(group), client: admin)));
+        ShouldHaveRaced();
 
-        responses.Count(r => r.StatusCode == HttpStatusCode.Created).ShouldBe(4);
+        responses.ShouldAllBe(r => r.StatusCode != HttpStatusCode.InternalServerError);
+        responses.Count(r => r.StatusCode == HttpStatusCode.Created).ShouldBeGreaterThan(1);
     }
 
     [Fact]
@@ -70,6 +81,7 @@ public sealed class EnrollmentRaceTests(DatabaseFixture database) : EnrollmentsT
             using var admin = AdminOf(api);
 
             var responses = await Task.WhenAll(Enumerable.Range(0, 4).Select(_ => EnrollAsync(student, IdOf(group), client: admin)));
+            ShouldHaveRaced();
 
             // With locks the policy refuses; without them the partial unique index still does (DEC-050).
             responses.Count(r => r.StatusCode == HttpStatusCode.Created).ShouldBe(1);
@@ -102,6 +114,7 @@ public sealed class EnrollmentRaceTests(DatabaseFixture database) : EnrollmentsT
         }, Ct);
         var enroll = EnrollAsync(newcomer, IdOf(group), client: admin);
         var (lowered, enrolled) = (await lower, await enroll);
+        ShouldHaveRaced();
 
         // Exactly one wins; whichever loses says why.
         (lowered.IsSuccessStatusCode ^ enrolled.IsSuccessStatusCode).ShouldBeTrue();
@@ -216,13 +229,35 @@ public sealed class EnrollmentRaceTests(DatabaseFixture database) : EnrollmentsT
         return students;
     }
 
+    /// <summary>
+    /// An API whose contenders are lined up twice: all must reach the lock call before any locks (hard
+    /// gate), and each is held right after its last read, the active count, until all have read (read gate).
+    /// With real locks only the lock holder can get past its read, so the read gate gives up quietly after
+    /// <see cref="LockedReadHold"/>; if the locks were missing, everyone would read the same count and the
+    /// locked tests would fail. Without locks (the controls) the read gate is hard as well.
+    /// </summary>
     private WebApplicationFactory<Program> Gated(int contenders, bool realLocks)
     {
-        var gate = new LockGate(contenders);
+        _lockGate = new Gate(contenders, "lock call", HardPatience, mustFill: true);
+        _readGate = realLocks
+            ? new Gate(contenders, "active count read", LockedReadHold, mustFill: false)
+            : new Gate(contenders, "active count read", HardPatience, mustFill: true);
+        var (lockGate, readGate) = (_lockGate, _readGate);
         return Api.WithWebHostBuilder(builder => builder.ConfigureTestServices(services =>
+        {
             services.Replace(ServiceDescriptor.Scoped<IEnrollmentLocks>(sp => new GatedEnrollmentLocks(
                 realLocks ? ActivatorUtilities.CreateInstance<EnrollmentLocks>(sp) : new NoLocks(),
-                gate)))));
+                lockGate)));
+            services.Replace(ServiceDescriptor.Scoped<IEnrollmentRepository>(sp => new ReadGatedEnrollments(
+                ActivatorUtilities.CreateInstance<EnrollmentRepository>(sp), readGate)));
+        }));
+    }
+
+    /// <summary>Fails with a readable message if a hard gate gave up waiting (the race did not happen as designed).</summary>
+    private void ShouldHaveRaced()
+    {
+        _lockGate!.TimeoutMessage.ShouldBeNull();
+        _readGate!.TimeoutMessage.ShouldBeNull();
     }
 
     private HttpClient AdminOf(WebApplicationFactory<Program> api)
@@ -233,53 +268,46 @@ public sealed class EnrollmentRaceTests(DatabaseFixture database) : EnrollmentsT
     }
 
     /// <summary>
-    /// Lines contenders up: all must reach the lock call before any takes a lock, and after locking each
-    /// waits until all have locked or a short while has passed (with real locks only one can).
+    /// Releases everyone once all contenders have arrived. A hard gate (<c>mustFill</c>) never lets anyone
+    /// through early: after its patience the request fails and <see cref="TimeoutMessage"/> says why. A soft
+    /// gate lets each waiter go after its patience, for contenders that are legitimately blocked elsewhere.
     /// </summary>
-    private sealed class LockGate(int contenders)
+    private sealed class Gate(int contenders, string point, TimeSpan patience, bool mustFill)
     {
-        private static readonly TimeSpan HoldAfterLock = TimeSpan.FromMilliseconds(500);
-        private readonly TaskCompletionSource _beforeLock = new(TaskCreationOptions.RunContinuationsAsynchronously);
-        private readonly TaskCompletionSource _afterLock = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private readonly TaskCompletionSource _open = new(TaskCreationOptions.RunContinuationsAsynchronously);
         private int _arrived;
-        private int _locked;
 
-        public async Task BeforeLockAsync()
+        public string? TimeoutMessage { get; private set; }
+
+        public async Task ArriveAndWaitAsync()
         {
             if (Interlocked.Increment(ref _arrived) >= contenders)
             {
-                _beforeLock.TrySetResult();
+                _open.TrySetResult();
             }
 
-            await _beforeLock.Task.WaitAsync(TimeSpan.FromSeconds(30));
-        }
-
-        public async Task AfterLockAsync()
-        {
-            if (Interlocked.Increment(ref _locked) >= contenders)
+            if (await Task.WhenAny(_open.Task, Task.Delay(patience)) == _open.Task || !mustFill)
             {
-                _afterLock.TrySetResult();
+                return;
             }
 
-            await Task.WhenAny(_afterLock.Task, Task.Delay(HoldAfterLock));
-            _afterLock.TrySetResult();
+            TimeoutMessage = $"Only {Volatile.Read(ref _arrived)} of {contenders} contenders reached the {point} within {patience}; the race did not run as designed.";
+            throw new TimeoutException(TimeoutMessage);
         }
     }
 
-    private sealed class GatedEnrollmentLocks(IEnrollmentLocks inner, LockGate gate) : IEnrollmentLocks
+    private sealed class GatedEnrollmentLocks(IEnrollmentLocks inner, Gate gate) : IEnrollmentLocks
     {
         public async Task LockStudentAndGroupAsync(StudentId studentId, GroupId groupId, CancellationToken cancellationToken)
         {
-            await gate.BeforeLockAsync();
+            await gate.ArriveAndWaitAsync();
             await inner.LockStudentAndGroupAsync(studentId, groupId, cancellationToken);
-            await gate.AfterLockAsync();
         }
 
         public async Task LockGroupAsync(GroupId groupId, CancellationToken cancellationToken)
         {
-            await gate.BeforeLockAsync();
+            await gate.ArriveAndWaitAsync();
             await inner.LockGroupAsync(groupId, cancellationToken);
-            await gate.AfterLockAsync();
         }
     }
 
@@ -288,5 +316,47 @@ public sealed class EnrollmentRaceTests(DatabaseFixture database) : EnrollmentsT
         public Task LockStudentAndGroupAsync(StudentId studentId, GroupId groupId, CancellationToken cancellationToken) => Task.CompletedTask;
 
         public Task LockGroupAsync(GroupId groupId, CancellationToken cancellationToken) => Task.CompletedTask;
+    }
+
+    /// <summary>Holds each contender right after it counted the group's active enrollments, its last read before saving.</summary>
+    private sealed class ReadGatedEnrollments(IEnrollmentRepository inner, Gate gate) : IEnrollmentRepository
+    {
+        public async Task<int> CountActiveAsync(GroupId groupId, CancellationToken cancellationToken)
+        {
+            var count = await inner.CountActiveAsync(groupId, cancellationToken);
+            await gate.ArriveAndWaitAsync();
+            return count;
+        }
+
+        public Task<Enrollment?> GetAsync(EnrollmentId id, CancellationToken cancellationToken) => inner.GetAsync(id, cancellationToken);
+
+        public void Add(Enrollment enrollment) => inner.Add(enrollment);
+
+        public Task<IReadOnlyList<Enrollment>> ListActiveOfGroupAsync(GroupId groupId, CancellationToken cancellationToken) =>
+            inner.ListActiveOfGroupAsync(groupId, cancellationToken);
+
+        public Task<IReadOnlyList<Enrollment>> ListActiveOfStudentAsync(StudentId studentId, CancellationToken cancellationToken) =>
+            inner.ListActiveOfStudentAsync(studentId, cancellationToken);
+
+        public Task<Enrollment?> FindAsync(EnrollmentId id, CancellationToken cancellationToken) => inner.FindAsync(id, cancellationToken);
+
+        public Task<PagedResult<Enrollment>> ListOfGroupAsync(GroupId groupId, EnrollmentStatus? status, PageRequest page, CancellationToken cancellationToken) =>
+            inner.ListOfGroupAsync(groupId, status, page, cancellationToken);
+
+        public Task<IReadOnlyList<Enrollment>> ListOfStudentAsync(StudentId studentId, CancellationToken cancellationToken) =>
+            inner.ListOfStudentAsync(studentId, cancellationToken);
+
+        public Task<IReadOnlyList<StudentId>> ActiveStudentsOfGroupsAsync(IReadOnlyCollection<GroupId> groupIds, CancellationToken cancellationToken) =>
+            inner.ActiveStudentsOfGroupsAsync(groupIds, cancellationToken);
+
+        public Task<IReadOnlyList<Enrollment>> ListOfStudentsAsync(IReadOnlyCollection<StudentId> studentIds, CancellationToken cancellationToken)
+        {
+            throw new NotImplementedException();
+        }
+
+        public Task<IReadOnlyList<Enrollment>> ListOfGroupBetweenAsync(GroupId groupId, DateOnly firstDay, DateOnly lastDay, CancellationToken cancellationToken)
+        {
+            throw new NotImplementedException();
+        }
     }
 }
