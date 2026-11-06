@@ -284,6 +284,15 @@
     @apply bg-warning;
   }
 
+  /* A month-matrix cell for a date the student was not enrolled: hatched, no status. */
+  .cell-not-enrolled {
+    background-image: repeating-linear-gradient(
+      135deg,
+      transparent 0 4px,
+      color-mix(in oklab, var(--muted-foreground) 25%, transparent) 4px 5px
+    );
+  }
+
   .data-table td {
     @apply px-4 py-3 font-medium;
   }
