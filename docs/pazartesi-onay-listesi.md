@@ -19,6 +19,7 @@ Sahip yokken (2026-11-06 – 2026-11-09) agent'ın aldığı ve sahibin onayın�
 - `v0.0.1` ve `v0.1.0` etiketleri, faz geçişleri (P0-35, P1-40).
 - Deploy bloğu.
 - Öğrenme günlüğü notları (taslaklar `docs/ogrenme-gunlugu.md`'de).
+- Repository ruleset: `.github/CODEOWNERS` eklendi (CI, `.gitleaks.toml`, `docker/`, `scripts/`, `src/`, `tests/`, `docs/adr/`, paket dosyaları), ama ruleset değiştirilmedi. Code-owner incelemesini zorunlu yapmak sahibin kararı; zorunlu olursa hafta sonu otonom merge'leri (DEC-098) sahip onayı olmadan ilerleyemez.
 
 ## Sahibe sorular
 - DEC-151: Reşit değilken telefonsuz kaydedilen bir öğrenci 18'ine bastıktan sonra, herhangi bir bilgisi (ör. sadece adı) düzenlenmeden önce kendi telefonunun girilmesi gerekir. Bu kabul edilebilir mi, yoksa yetişkin telefon kuralı sadece telefon/veli değiştiğinde mi kontrol edilsin?
