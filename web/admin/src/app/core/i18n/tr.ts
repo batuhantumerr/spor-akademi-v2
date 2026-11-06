@@ -32,6 +32,7 @@ export const errorMessages: Readonly<Record<string, string>> = {
   'Auth.PasswordChangeRequired': 'Devam etmek için şifrenizi değiştirmeniz gerekiyor.',
   'Auth.CurrentPasswordIncorrect': 'Mevcut şifreniz hatalı.',
   'Auth.PasswordTooWeak': 'Şifre en az 10 karakter olmalı ve çok yaygın bir şifre olmamalı.',
+  'Auth.PasswordUnchanged': 'Yeni şifre mevcut şifrenizle aynı olamaz.',
   'User.EmailTaken': 'Bu e-posta adresi zaten kullanılıyor.',
   'User.NotFound': 'Kullanıcı bulunamadı.',
   'User.AlreadyInactive': 'Bu kullanıcı zaten pasif.',

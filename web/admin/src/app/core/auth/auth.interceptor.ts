@@ -9,6 +9,15 @@ function withToken(request: HttpRequest<unknown>, token: string | null): HttpReq
 }
 
 /**
+ * A 401 means "refresh and retry" only when the token itself was rejected. Coded business 401s
+ * (e.g. Auth.AccountLocked on change-password) go straight to the caller.
+ */
+function isExpiredToken(error: HttpErrorResponse): boolean {
+  const code = (error.error as { code?: string } | null)?.code;
+  return code === undefined || code === 'Auth.Unauthenticated' || code === 'Auth.SessionExpired';
+}
+
+/**
  * Adds the in-memory access token to same-origin API calls. On a 401 it refreshes once and
  * retries; if the refresh fails, the session is over and the user goes back to the login page.
  */
@@ -20,7 +29,7 @@ export const authInterceptor: HttpInterceptorFn = (request, next) => {
 
   return next(withToken(request, auth.token())).pipe(
     catchError((error: unknown) => {
-      if (!(error instanceof HttpErrorResponse) || error.status !== 401) {
+      if (!(error instanceof HttpErrorResponse) || error.status !== 401 || !isExpiredToken(error)) {
         return throwError(() => error);
       }
       return auth.refresh().pipe(

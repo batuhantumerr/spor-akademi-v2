@@ -50,6 +50,20 @@ describe('authInterceptor', () => {
     expect(failed).toBe(true);
   });
 
+  it('does not refresh on coded business 401s', () => {
+    let code: string | undefined;
+    http.post('/api/v1/auth/change-password', {}).subscribe({
+      error: (err: { error: { code: string } }) => (code = err.error.code),
+    });
+
+    backend
+      .expectOne('/api/v1/auth/change-password')
+      .flush({ code: 'Auth.AccountLocked' }, { status: 401, statusText: 'Unauthorized' });
+
+    backend.expectNone('/api/v1/auth/refresh');
+    expect(code).toBe('Auth.AccountLocked');
+  });
+
   it('leaves non-API requests alone', () => {
     http.get('/assets/x.json').subscribe();
     expect(backend.expectOne('/assets/x.json').request.headers.has('Authorization')).toBe(false);
