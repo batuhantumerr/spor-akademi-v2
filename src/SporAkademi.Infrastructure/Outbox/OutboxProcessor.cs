@@ -25,6 +25,7 @@ internal sealed partial class OutboxProcessor(
     public const string UnknownTypeError = "UnknownMessageType";
     public const string InvalidPayloadError = "InvalidPayload";
     public const string TimeoutError = "HandlerTimeout";
+    public const string NoHandlerError = "NoHandler";
 
     private OutboxOptions Options => options.Value;
 
@@ -104,11 +105,23 @@ internal sealed partial class OutboxProcessor(
         var context = new OutboxMessageContext(message.Id, message.TenantId, message.OccurredAt, message.Attempts + 1);
         using var timeout = new CancellationTokenSource(Options.HandlerTimeout, clock);
         using var linked = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeout.Token);
+        Task<int>? handling = null;
         try
         {
             await using var handlerScope = scopeFactory.CreateAsyncScope();
             handlerScope.ServiceProvider.GetRequiredService<BackgroundTenantContext>().Enter(message.TenantId);
-            await type.InvokeAsync(handlerScope.ServiceProvider, payload, context, linked.Token);
+
+            // Cooperative handlers stop through the token; the wait itself is bounded too, so a handler that ignores
+            // the token is abandoned at the timeout (or shutdown) instead of stalling the batch. An abandoned task
+            // may still finish its side effect later; the message is retried anyway (at least once, DEC-302).
+            handling = type.InvokeAsync(handlerScope.ServiceProvider, payload, context, linked.Token);
+            var handlers = await handling.WaitAsync(Options.HandlerTimeout, clock, cancellationToken);
+            if (handlers == 0)
+            {
+                // Nothing would ever deliver it: a registration is missing (e.g. a handler removed while messages were pending).
+                Fail(message, NoHandlerError);
+                return;
+            }
 
             message.MarkProcessed(clock.GetUtcNow());
             LogDelivered(logger, message.Id, message.Type, context.Attempt);
@@ -116,9 +129,12 @@ internal sealed partial class OutboxProcessor(
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
             // Shutdown, not the handler's fault: the attempt does not count.
+            ObserveAbandoned(handling);
         }
-        catch (OperationCanceledException) when (timeout.IsCancellationRequested)
+        catch (Exception exception) when ((exception is OperationCanceledException && timeout.IsCancellationRequested)
+            || (exception is TimeoutException && handling?.IsCompleted == false))
         {
+            ObserveAbandoned(handling);
             Fail(message, TimeoutError);
         }
 #pragma warning disable CA1031 // Any handler failure is retried; the processor must survive it.
@@ -126,6 +142,15 @@ internal sealed partial class OutboxProcessor(
 #pragma warning restore CA1031
         {
             Fail(message, exception.GetType().FullName ?? exception.GetType().Name);
+        }
+    }
+
+    /// <summary>A later failure of an abandoned handler is observed here, so it is not reported as unobserved.</summary>
+    private static void ObserveAbandoned(Task? handling)
+    {
+        if (handling is { IsCompleted: false })
+        {
+            _ = handling.ContinueWith(static t => _ = t.Exception, CancellationToken.None, TaskContinuationOptions.OnlyOnFaulted, TaskScheduler.Default);
         }
     }
 

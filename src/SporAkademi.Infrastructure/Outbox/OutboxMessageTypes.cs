@@ -66,14 +66,14 @@ internal sealed class OutboxMessageType
     private static readonly MethodInfo InvokeMethod =
         typeof(OutboxMessageType).GetMethod(nameof(InvokeHandlersAsync), BindingFlags.NonPublic | BindingFlags.Static)!;
 
-    private readonly Func<IServiceProvider, object, OutboxMessageContext, CancellationToken, Task> _invoke;
+    private readonly Func<IServiceProvider, object, OutboxMessageContext, CancellationToken, Task<int>> _invoke;
 
     private OutboxMessageType(string name, Type clrType)
     {
         Name = name;
         ClrType = clrType;
         _invoke = InvokeMethod.MakeGenericMethod(clrType)
-            .CreateDelegate<Func<IServiceProvider, object, OutboxMessageContext, CancellationToken, Task>>();
+            .CreateDelegate<Func<IServiceProvider, object, OutboxMessageContext, CancellationToken, Task<int>>>();
     }
 
     public string Name { get; }
@@ -104,19 +104,23 @@ internal sealed class OutboxMessageType
         JsonSerializer.Deserialize(payload, ClrType, JsonOptions) ?? throw new JsonException("The payload is null.");
 
     /// <summary>Runs every handler of the message in order; the first exception fails the delivery.</summary>
-    public Task InvokeAsync(IServiceProvider services, object message, OutboxMessageContext context, CancellationToken cancellationToken) =>
+    /// <returns>How many handlers ran; 0 means none is registered.</returns>
+    public Task<int> InvokeAsync(IServiceProvider services, object message, OutboxMessageContext context, CancellationToken cancellationToken) =>
         _invoke(services, message, context, cancellationToken);
 
-    private static async Task InvokeHandlersAsync<TMessage>(
+    private static async Task<int> InvokeHandlersAsync<TMessage>(
         IServiceProvider services,
         object message,
         OutboxMessageContext context,
         CancellationToken cancellationToken)
         where TMessage : IOutboxMessage
     {
-        foreach (var handler in services.GetServices<IOutboxMessageHandler<TMessage>>())
+        var handlers = services.GetServices<IOutboxMessageHandler<TMessage>>().ToList();
+        foreach (var handler in handlers)
         {
             await handler.Handle((TMessage)message, context, cancellationToken);
         }
+
+        return handlers.Count;
     }
 }

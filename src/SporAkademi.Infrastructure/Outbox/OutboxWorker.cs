@@ -1,6 +1,7 @@
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using Npgsql;
 
 namespace SporAkademi.Infrastructure.Outbox;
 
@@ -45,7 +46,7 @@ internal sealed partial class OutboxWorker(
             catch (Exception exception)
 #pragma warning restore CA1031
             {
-                LogPollFailed(logger, exception.GetType().FullName ?? exception.GetType().Name);
+                LogPollFailed(logger, exception.GetType().FullName ?? exception.GetType().Name, SqlStateOf(exception));
             }
 
             if (batchWasFull)
@@ -64,6 +65,20 @@ internal sealed partial class OutboxWorker(
         }
     }
 
-    [LoggerMessage(Level = LogLevel.Warning, Message = "Outbox poll failed with {Error}; retrying at the next poll")]
-    private static partial void LogPollFailed(ILogger logger, string error);
+    /// <summary>The PostgreSQL error code (e.g. 57P01, 40001) of the first Npgsql error in the chain; codes carry no personal data.</summary>
+    internal static string? SqlStateOf(Exception exception)
+    {
+        for (Exception? current = exception; current is not null; current = current.InnerException)
+        {
+            if (current is NpgsqlException npgsql)
+            {
+                return npgsql.SqlState;
+            }
+        }
+
+        return null;
+    }
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Outbox poll failed with {Error} (SqlState {SqlState}); retrying at the next poll")]
+    private static partial void LogPollFailed(ILogger logger, string error, string? sqlState);
 }

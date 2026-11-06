@@ -29,7 +29,7 @@ internal sealed class OutboxOptions
 
     public TimeSpan CleanupInterval { get; set; } = TimeSpan.FromHours(1);
 
-    /// <summary>The health check reports Degraded when a pending message is older than this.</summary>
+    /// <summary>The health check reports Degraded when a pending message has been due for longer than this.</summary>
     public TimeSpan PendingAgeWarning { get; set; } = TimeSpan.FromMinutes(15);
 
     internal bool IsValid() =>
