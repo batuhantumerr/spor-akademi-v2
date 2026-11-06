@@ -87,9 +87,19 @@ public static class DueCalculator
         YearMonth currentPeriod,
         YearMonth? fromPeriod = null)
     {
+        // Validated eagerly; the iterator below only runs when enumerated.
         ArgumentNullException.ThrowIfNull(enrollments);
         ArgumentNullException.ThrowIfNull(fees);
+        ArgumentNullException.ThrowIfNull(currentPeriod);
+        return EnumerateCharges(enrollments, fees, currentPeriod, fromPeriod);
+    }
 
+    private static IEnumerable<(DueEnrollment Enrollment, YearMonth Period, Money Fee)> EnumerateCharges(
+        IEnumerable<DueEnrollment> enrollments,
+        IReadOnlyDictionary<GroupId, IReadOnlyList<FeeRate>> fees,
+        YearMonth currentPeriod,
+        YearMonth? fromPeriod)
+    {
         foreach (var enrollment in enrollments)
         {
             if (!fees.TryGetValue(enrollment.GroupId, out var rates))

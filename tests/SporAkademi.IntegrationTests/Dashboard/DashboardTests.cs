@@ -175,6 +175,60 @@ public sealed class DashboardTests(DatabaseFixture database) : BillingTest(datab
     }
 
     [Fact]
+    [Trait("Story", "US-24")]
+    public async Task Dates_follow_the_school_time_zone_across_a_utc_month_end()
+    {
+        // Sunday and Monday 09:00 sessions; s1 enrolled since 2027-01-04 with a 1000.00 fee from 2027-01.
+        var group = IdOf(await GroupAsync("U10 Futbol", 10, Ayse, Slot("Sunday", "09:00", "10:00"), Slot("Monday", "09:00", "10:00")));
+        await DefineFeeOkAsync(group, "2027-01", "1000.00");
+        var student = await RegisterStudentAsync("Ali");
+        var enrollment = IdOf(await EnrollOkAsync(student, group, "2027-01-04"));
+        await RecordOkAsync(enrollment, "2027-01", "400.00", paidOn: "2027-01-10");
+
+        // 22:30 UTC on Sunday 31 January is already 01:30 on Monday 1 February in Istanbul.
+        var admin = AdvanceTo(new DateTimeOffset(2027, 1, 31, 22, 30, 0, TimeSpan.Zero));
+        await RecordOkAsync(enrollment, "2027-02", "1000.00", admin, "2027-02-01");
+        await SaveAttendanceAsync(admin, group, "2027-01-31T09:00", (student, "Present"));
+
+        var dashboard = await DashboardOf(admin);
+
+        dashboard.GetProperty("today").GetString().ShouldBe("2027-02-01");
+        dashboard.GetProperty("currentPeriod").GetString().ShouldBe("2027-02");
+        AmountOf(dashboard.GetProperty("kpis").GetProperty("collectedThisMonth")).ShouldBe("1000.00");
+        var months = dashboard.GetProperty("monthlyBilling").EnumerateArray().ToList();
+        months[^1].GetProperty("period").GetString().ShouldBe("2027-02");
+        AmountOf(months[^2].GetProperty("collected")).ShouldBe("400.00");
+        // The local week starts on Monday 1 February; Sunday's session belongs to the week before.
+        var weeks = dashboard.GetProperty("weeklyAttendance").EnumerateArray().ToList();
+        weeks[^1].GetProperty("weekStart").GetString().ShouldBe("2027-02-01");
+        weeks[^1].GetProperty("counted").GetInt32().ShouldBe(0);
+        weeks[^2].GetProperty("weekStart").GetString().ShouldBe("2027-01-25");
+        weeks[^2].GetProperty("counted").GetInt32().ShouldBe(1);
+        // Today is Monday locally: one planned session (Monday 09:00), nothing recorded yet.
+        var today = dashboard.GetProperty("todaySessions");
+        today.GetProperty("planned").GetInt32().ShouldBe(1);
+        today.GetProperty("recorded").GetInt32().ShouldBe(0);
+    }
+
+    [Fact]
+    [Trait("Story", "US-19")]
+    public async Task A_session_recorded_today_still_counts_after_its_slot_moved()
+    {
+        // The clock says Thursday 2027-01-14 15:00 in Istanbul; the 10:00 session is over and recorded.
+        var group = await GroupAsync("U10 Futbol", 10, Ayse, Slot("Thursday", "10:00", "11:00"));
+        var student = await RegisterStudentAsync("Ali");
+        await EnrollOkAsync(student, IdOf(group), "2027-01-04");
+        await SaveAttendanceAsync(Admin, IdOf(group), "2027-01-14T10:00", (student, "Present"));
+
+        await ScheduleAsync(await GetGroupAsync(IdOf(group)), Slot("Thursday", "17:00", "18:00"));
+        var today = (await DashboardOf(Admin)).GetProperty("todaySessions");
+
+        // The moved slot (17:00) plus the recorded 10:00 session: recorded can never exceed planned.
+        today.GetProperty("planned").GetInt32().ShouldBe(2);
+        today.GetProperty("recorded").GetInt32().ShouldBe(1);
+    }
+
+    [Fact]
     public async Task Group_utilisation_lists_the_ten_fullest_groups()
     {
         for (var i = 0; i < 12; i++)

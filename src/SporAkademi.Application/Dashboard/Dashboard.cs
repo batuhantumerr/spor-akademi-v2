@@ -136,11 +136,16 @@ internal sealed class GetDashboardHandler(
             .Take(GetDashboardQuery.TopGroups)
             .ToList();
 
-        // Today's sessions come from today's schedule (like /me/sessions); one counts as recorded when a stored
-        // session of that group and start time has attendance.
-        var recordedKeys = recorded.Select(r => (r.GroupId, r.StartTime)).ToHashSet();
-        var planned = groups.SelectMany(g => g.Slots.Where(s => s.Day == today.DayOfWeek).Select(s => (g.Id, s.Time.Start))).ToList();
-        var todaySessions = new TodaySessionsDto(planned.Count, planned.Count(recordedKeys.Contains));
+        // Today's sessions (DEC-212): today's planned slots of active groups (like /me/sessions) plus any stored
+        // session of an active group recorded today at another time (e.g. its slot was moved after recording),
+        // so "recorded" can never exceed "planned".
+        var activeGroupIds = groups.Select(g => g.Id).ToHashSet();
+        var recordedKeys = recorded.Where(r => activeGroupIds.Contains(r.GroupId)).Select(r => (r.GroupId, r.StartTime)).ToHashSet();
+        var sessionKeys = groups
+            .SelectMany(g => g.Slots.Where(s => s.Day == today.DayOfWeek).Select(s => (g.Id, s.Time.Start)))
+            .ToHashSet();
+        sessionKeys.UnionWith(recordedKeys);
+        var todaySessions = new TodaySessionsDto(sessionKeys.Count, recordedKeys.Count);
 
         return Result.Success(new DashboardDto(
             today,
