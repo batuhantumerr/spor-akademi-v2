@@ -44,10 +44,11 @@ export const errorMessages: Readonly<Record<string, string>> = {
   'Sport.Archived': 'Arşivlenmiş bir branş için yeni grup oluşturulamaz.',
   'Sport.NotFound': 'Branş bulunamadı.',
   'Facility.NameTaken': 'Bu adda bir tesis zaten var.',
-  'Facility.InUse': 'Bu tesisi aktif gruplar kullandığı için silinemez. Arşivleyebilirsiniz.',
+  'Facility.InUse': 'Bu tesisi kullanan gruplar olduğu için silinemez. Arşivleyebilirsiniz.',
   'Facility.Archived': 'Arşivlenmiş bir tesis gruplara atanamaz.',
   'Facility.NotFound': 'Tesis bulunamadı.',
   'Group.NotFound': 'Grup bulunamadı.',
+  'Group.NameTaken': 'Bu adda bir grup zaten var.',
   'Group.InvalidCapacity': 'Kontenjan en az 1 olmalı.',
   'Group.CapacityBelowActiveEnrollments':
     'Kontenjan, gruptaki aktif öğrenci sayısının ({count}) altına düşürülemez.',
