@@ -29,6 +29,7 @@ Bu dosya [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) biçimini ve [
 
 #### Faz 2 — İş mantığı derinliği
 - **Transactional outbox (P2-F3):** dış yan etkiler iş değişikliğiyle aynı transaction'da `outbox.messages`'a yazılır ve commit'ten sonra işlenir (`FOR UPDATE SKIP LOCKED`, jitter'lı üstel geri çekilme, dead-letter, saklama süresi, `/health/ready`'de `outbox` kontrolü). İlk kullanım: öğrenci ayrıldığında `students.student-left.v1` mesajı (DEC-300 – DEC-304).
+- **Arka plan işleri ve iş paneli (P2-F2):** Hangfire (PostgreSQL deposu, `hangfire` şeması migrator rolüyle kurulur, API'nin DDL yetkisi yok) API sürecinde çalışır; outbox teslimi ve temizliği artık tekrarlayan Hangfire işleri (`Outbox:Scheduler=Worker` eski polling worker'ı seçer), bitmiş oturumların refresh token'ları her gece okul okul silinir. Okul verisine dokunan işler her okul için ayrı scope'ta o okulun bağlamında çalışır. Platform Admin için `/jobs` iş paneli: admin uygulamasındaki "İş paneli" sayfası 15 dakikalık, `HttpOnly`/`SameSite=Strict` bir panel çerezi alır; panel varsayılan olarak salt okunur, işlemler açıksa antiforgery ister. `/health/ready`'de `jobs` kontrolü (heartbeat yoksa Degraded) (DEC-330 – DEC-335).
 
 ### Security
 - Admin imajında zlib ve musl güvenlik yükseltmeleri (DEC-104, DEC-202; öneri aşamasında).
