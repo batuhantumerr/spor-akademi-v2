@@ -41,10 +41,14 @@ public sealed class JobServerTests(DatabaseFixture database) : OutboxTest(databa
         using var client = Host.CreateClient(); // starts the host, its job server and the registration
         await EnqueueAsync(count: 2);
 
+        // The handler records a delivery before the processor commits the batch and before Hangfire moves the run to
+        // Succeeded, so both are awaited rather than asserted right after the delivery.
+        var monitoring = Host.Services.GetRequiredService<JobStorage>().GetMonitoringApi();
         await WaitUntilAsync(() => Probe.Deliveries.Count >= 2);
+        await WaitUntilAsync(async () => (await MessagesAsync()).All(m => m.ProcessedAt != null));
+        await WaitUntilAsync(() => monitoring.SucceededListCount() > 0);
 
-        (await MessagesAsync()).ShouldAllBe(m => m.ProcessedAt != null);
-        Host.Services.GetRequiredService<JobStorage>().GetMonitoringApi().SucceededListCount().ShouldBeGreaterThan(0);
+        Probe.Deliveries.Select(d => d.MessageId).Distinct().Count().ShouldBe(2);
         new NpgsqlConnectionStringBuilder(Database.AppConnectionString).Username.ShouldBe("spor_akademi_app");
     }
 
