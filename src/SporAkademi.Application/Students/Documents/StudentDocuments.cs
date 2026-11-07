@@ -5,9 +5,11 @@ using SporAkademi.Application.Abstractions;
 using SporAkademi.Application.Abstractions.Authentication;
 using SporAkademi.Application.Abstractions.Data;
 using SporAkademi.Application.Abstractions.Messaging;
+using SporAkademi.Application.Abstractions.Outbox;
 using SporAkademi.Application.Abstractions.Storage;
 using SporAkademi.Application.Enrollments.Contracts;
 using SporAkademi.Application.Groups.Contracts;
+using SporAkademi.Application.Students.Contracts;
 using SporAkademi.Domain.Identity;
 using SporAkademi.Domain.SharedKernel;
 using SporAkademi.Domain.Students;
@@ -51,7 +53,7 @@ public interface IStudentDocumentRepository
 public sealed record UploadStudentDocumentCommand(StudentId StudentId, string? Type, string? FileName, byte[]? Content)
     : ICommand<StudentDocumentDto>, IManagesOwnTransaction;
 
-public sealed record DeleteStudentDocumentCommand(StudentDocumentId Id) : ICommand<Unit>, IManagesOwnTransaction;
+public sealed record DeleteStudentDocumentCommand(StudentDocumentId Id) : ICommand<Unit>;
 
 public sealed record ListStudentDocumentsQuery(StudentId StudentId) : IQuery<IReadOnlyList<StudentDocumentDto>>;
 
@@ -109,14 +111,16 @@ internal static class DocumentViews
 
 /// <summary>
 /// Upload (DEC-321): the bytes come through the API, are inspected and cleaned, written to storage under a new key,
-/// then the metadata is committed. If the database part fails the new object is deleted again; a replaced photo's
-/// object is deleted after the commit.
+/// then the metadata is committed. If the database part fails the new object is deleted again right away (it was never
+/// referenced; if that delete fails too, the orphan is logged by key). A replaced photo's object is deleted through the
+/// outbox, written in the same transaction (DEC-325).
 /// </summary>
 internal sealed partial class UploadStudentDocumentHandler(
     IStudentRepository students,
     IStudentDocumentRepository documents,
     IDocumentStorage storage,
     IUnitOfWork unitOfWork,
+    IOutbox outbox,
     ICurrentUser currentUser,
     TimeProvider timeProvider,
     ILogger<UploadStudentDocumentHandler> logger) : ICommandHandler<UploadStudentDocumentCommand, StudentDocumentDto>
@@ -147,14 +151,12 @@ internal sealed partial class UploadStudentDocumentHandler(
         var key = DocumentKeys.New(tenant, command.StudentId);
         await storage.PutAsync(key, file.Content, DocumentRules.ContentType(file.Format), cancellationToken);
 
-        string? replacedKey = null;
         Result<StudentDocumentDto> saved;
         try
         {
             saved = await unitOfWork.ExecuteInTransactionAsync(
                 async ct =>
                 {
-                    replacedKey = null;
                     var created = StudentDocument.Create(
                         tenant, command.StudentId, type, file.Format, file.FileName, file.Content.LongLength, key, UserId.From(uploader), timeProvider.GetUtcNow());
                     if (created.IsFailure)
@@ -165,7 +167,7 @@ internal sealed partial class UploadStudentDocumentHandler(
                     if (type == DocumentType.Photo && await documents.FindPhotoAsync(command.StudentId, ct) is { } previous)
                     {
                         documents.Remove(previous);
-                        replacedKey = previous.StorageKey;
+                        outbox.Enqueue(new DocumentObjectDeletedMessage(previous.StorageKey), tenant.Value);
                     }
 
                     documents.Add(created.Value);
@@ -182,12 +184,6 @@ internal sealed partial class UploadStudentDocumentHandler(
         if (saved.IsFailure)
         {
             await TryDeleteAsync(key);
-            return saved;
-        }
-
-        if (replacedKey is not null)
-        {
-            await TryDeleteAsync(replacedKey);
         }
 
         return saved;
@@ -211,50 +207,37 @@ internal sealed partial class UploadStudentDocumentHandler(
     private static partial void LogOrphan(ILogger logger, string storageKey, Exception exception);
 }
 
-/// <summary>Hard delete (DEC-325): the metadata row is deleted and committed, then the object.</summary>
-internal sealed partial class DeleteStudentDocumentHandler(
-    IStudentDocumentRepository documents,
-    IDocumentStorage storage,
-    IUnitOfWork unitOfWork,
-    ILogger<DeleteStudentDocumentHandler> logger) : ICommandHandler<DeleteStudentDocumentCommand, Unit>
+/// <summary>
+/// Hard delete (DEC-325): the metadata row is deleted and, in the same transaction, an outbox message asks for the
+/// object to be deleted after commit; a failed object delete is retried by the outbox instead of being orphaned.
+/// </summary>
+internal sealed class DeleteStudentDocumentHandler(IStudentDocumentRepository documents, IOutbox outbox)
+    : ICommandHandler<DeleteStudentDocumentCommand, Unit>
 {
     public async Task<Result<Unit>> Handle(DeleteStudentDocumentCommand command, CancellationToken cancellationToken)
     {
-        string? key = null;
-        var deleted = await unitOfWork.ExecuteInTransactionAsync(
-            async ct =>
-            {
-                if (await documents.FindAsync(command.Id, ct) is not { } document)
-                {
-                    return Result.Failure<Unit>(DocumentErrors.NotFound);
-                }
-
-                key = document.StorageKey;
-                documents.Remove(document);
-                return Result.Success(Unit.Value);
-            },
-            cancellationToken);
-        if (deleted.IsFailure || key is null)
+        if (await documents.FindAsync(command.Id, cancellationToken) is not { } document)
         {
-            return deleted;
+            return Result.Failure<Unit>(DocumentErrors.NotFound);
         }
 
-        try
-        {
-            await storage.DeleteAsync(key, CancellationToken.None);
-        }
-#pragma warning disable CA1031 // The row is gone; the caller's delete succeeded. The orphaned object is logged by key only.
-        catch (Exception exception)
-#pragma warning restore CA1031
-        {
-            LogOrphan(logger, key, exception);
-        }
-
-        return deleted;
+        documents.Remove(document);
+        outbox.Enqueue(new DocumentObjectDeletedMessage(document.StorageKey), document.TenantId.Value);
+        return Result.Success(Unit.Value);
     }
+}
 
-    [LoggerMessage(Level = LogLevel.Warning, Message = "Could not delete stored object {StorageKey} of a deleted document; it is orphaned")]
-    private static partial void LogOrphan(ILogger logger, string storageKey, Exception exception);
+/// <summary>
+/// After commit: deletes the object of a deleted (or replaced) document. Deleting is idempotent, so a repeated
+/// delivery is harmless; a storage failure throws and the outbox retries with backoff (DEC-325).
+/// </summary>
+internal sealed class DeleteDocumentObject(IDocumentStorage storage) : IOutboxMessageHandler<DocumentObjectDeletedMessage>
+{
+    public Task Handle(DocumentObjectDeletedMessage message, OutboxMessageContext context, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(message);
+        return storage.DeleteAsync(message.StorageKey, cancellationToken);
+    }
 }
 
 internal sealed class ListStudentDocumentsHandler(IStudentRepository students, IStudentDocumentRepository documents)

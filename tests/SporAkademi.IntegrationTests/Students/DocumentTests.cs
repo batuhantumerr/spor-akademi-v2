@@ -4,8 +4,13 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
 using Npgsql;
+using SporAkademi.Application.Abstractions.Storage;
+using SporAkademi.Infrastructure.Outbox;
+using SporAkademi.Infrastructure.Storage;
 using SporAkademi.IntegrationTests.Enrollments;
 using SporAkademi.IntegrationTests.Infrastructure;
 using SporAkademi.Testing;
@@ -64,6 +69,9 @@ public sealed class DocumentTests(DatabaseFixture database) : EnrollmentsTest(da
         (await Admin.DeleteAsync(new Uri($"/api/v1/documents/{IdOf(document)}", UriKind.Relative), Ct)).StatusCode.ShouldBe(HttpStatusCode.NoContent);
 
         (await Admin.GetFromJsonAsync<JsonElement>($"/api/v1/students/{student}/documents", Ct)).GetArrayLength().ShouldBe(0);
+        // DEC-325: the object goes after commit, through the outbox (tests drive the processor themselves).
+        (await Database.Storage.KeysAsync(SchoolPrefix)).ShouldBe([key]);
+        (await ProcessOutboxAsync()).ShouldBe(1);
         (await Database.Storage.KeysAsync(SchoolPrefix)).ShouldBeEmpty();
         (await Browser.GetAsync(link.Url, Ct)).StatusCode.ShouldBe(HttpStatusCode.NotFound);
         var again = await Admin.GetAsync(new Uri($"/api/v1/documents/{IdOf(document)}/link", UriKind.Relative), Ct);
@@ -139,9 +147,35 @@ public sealed class DocumentTests(DatabaseFixture database) : EnrollmentsTest(da
 
         var list = await Admin.GetFromJsonAsync<JsonElement>($"/api/v1/students/{student}/documents", Ct);
         list.EnumerateArray().Select(IdOf).ShouldBe([IdOf(second)]);
+        (await ProcessOutboxAsync()).ShouldBe(1);
         var key = (await Database.Storage.KeysAsync(SchoolPrefix)).ShouldHaveSingleItem();
         key.ShouldNotBe(firstKey);
         (await Admin.GetFromJsonAsync<LinkDto>($"/api/v1/students/{student}/photo", Ct))!.Url.AbsolutePath.ShouldEndWith(key);
+    }
+
+    [Fact]
+    public async Task A_failed_object_delete_is_retried_by_the_outbox_instead_of_being_orphaned()
+    {
+        var failing = new FlakyStorage();
+        await using var api = Api.WithWebHostBuilder(builder => builder.ConfigureTestServices(services =>
+            services.AddSingleton<IDocumentStorage>(provider => failing.Wrap(ActivatorUtilities.CreateInstance<S3DocumentStorage>(provider)))));
+        using var admin = api.CreateClient();
+        admin.DefaultRequestHeaders.Authorization = Admin.DefaultRequestHeaders.Authorization;
+        var student = await RegisterStudentAsync();
+        var document = IdOf(await BodyOf(await UploadAsync(student, "HealthReport", TestFiles.Pdf(), "rapor.pdf", client: admin)));
+        var key = (await Database.Storage.KeysAsync(SchoolPrefix)).ShouldHaveSingleItem();
+
+        (await admin.DeleteAsync(new Uri($"/api/v1/documents/{document}", UriKind.Relative), Ct)).StatusCode.ShouldBe(HttpStatusCode.NoContent);
+        var processor = api.Services.GetRequiredService<OutboxProcessor>();
+        failing.FailuresLeft = 1;
+        await processor.ProcessBatchAsync(Ct);
+
+        // The storage call failed: the object is still there and the message waits for its next attempt.
+        (await Database.Storage.KeysAsync(SchoolPrefix)).ShouldBe([key]);
+        Api.Clock.Advance(TimeSpan.FromHours(1));
+        (await processor.ProcessBatchAsync(Ct)).ShouldBe(1);
+        (await Database.Storage.KeysAsync(SchoolPrefix)).ShouldBeEmpty();
+        failing.Deletes.ShouldBe(2);
     }
 
     [Fact]
@@ -360,5 +394,37 @@ public sealed class DocumentTests(DatabaseFixture database) : EnrollmentsTest(da
         return (long)(await command.ExecuteScalarAsync(Ct))!;
     }
 
+    private Task<int> ProcessOutboxAsync() => Api.Services.GetRequiredService<OutboxProcessor>().ProcessBatchAsync(Ct);
+
     private sealed record LinkDto(Uri Url, DateTimeOffset ExpiresAt);
+
+    /// <summary>The real store, with object deletes that fail a given number of times.</summary>
+    private sealed class FlakyStorage
+    {
+        public int FailuresLeft { get; set; }
+
+        public int Deletes { get; private set; }
+
+        public IDocumentStorage Wrap(IDocumentStorage inner) => new Wrapper(this, inner);
+
+        private sealed class Wrapper(FlakyStorage owner, IDocumentStorage inner) : IDocumentStorage
+        {
+            public Task PutAsync(string key, byte[] content, string contentType, CancellationToken cancellationToken) =>
+                inner.PutAsync(key, content, contentType, cancellationToken);
+
+            public Task DeleteAsync(string key, CancellationToken cancellationToken)
+            {
+                owner.Deletes++;
+                if (owner.FailuresLeft > 0)
+                {
+                    owner.FailuresLeft--;
+                    throw new HttpRequestException("Storage unavailable.");
+                }
+
+                return inner.DeleteAsync(key, cancellationToken);
+            }
+
+            public DownloadLink CreateDownloadLink(string key, DownloadDisposition disposition) => inner.CreateDownloadLink(key, disposition);
+        }
+    }
 }
