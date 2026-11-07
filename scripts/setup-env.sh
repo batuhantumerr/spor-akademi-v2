@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Creates .env with fresh random secrets. Never overwrites an existing .env: it only appends keys added
-# since it was created (today the optional document storage, DEC-326); existing values are neither changed nor printed.
+# since it was created (today the optional Valkey cache, DEC-316, and document storage, DEC-326); existing values are
+# neither changed nor printed.
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 umask 077
@@ -14,6 +15,8 @@ if [[ -e "$ROOT/.env" ]]; then
       added=$((added + 1))
     fi
   }
+  append_missing VALKEY_PASSWORD "$(openssl rand -hex 24)"
+  append_missing VALKEY_HOST_PORT 56379
   append_missing STORAGE_ACCESS_KEY "$(openssl rand -hex 10)"
   append_missing STORAGE_SECRET_KEY "$(openssl rand -hex 20)"
   append_missing STORAGE_HOST_PORT 58333
@@ -21,7 +24,7 @@ if [[ -e "$ROOT/.env" ]]; then
   if [[ $added -eq 0 ]]; then
     echo ".env already exists and has every key; nothing changed (remove it first if you want new secrets)."
   else
-    echo ".env already exists; appended $added missing key(s) (document storage). Existing values are unchanged."
+    echo ".env already exists; appended $added missing key(s) (Valkey cache, document storage). Existing values are unchanged."
   fi
   exit 0
 fi
@@ -31,6 +34,8 @@ platform_admin_password="$(openssl rand -hex 16)"
   echo "SPOR_AKADEMI_MIGRATOR_PASSWORD=$(openssl rand -hex 24)"
   echo "SPOR_AKADEMI_APP_PASSWORD=$(openssl rand -hex 24)"
   echo "JWT_SIGNING_KEY=$(openssl rand -hex 32)"
+  echo "VALKEY_PASSWORD=$(openssl rand -hex 24)"
+  echo "VALKEY_HOST_PORT=56379"
   echo "POSTGRES_HOST_PORT=55432"
   echo "SEQ_HOST_PORT=5341"
   echo "STORAGE_ACCESS_KEY=$(openssl rand -hex 10)"

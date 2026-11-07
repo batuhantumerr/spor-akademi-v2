@@ -1,5 +1,6 @@
 using SporAkademi.Application.Abstractions;
 using SporAkademi.Application.Abstractions.Authentication;
+using SporAkademi.Application.Abstractions.Caching;
 using SporAkademi.Application.Abstractions.Messaging;
 using SporAkademi.Application.Attendance.Contracts;
 using SporAkademi.Application.Billing.Contracts;
@@ -71,17 +72,31 @@ public sealed record GetDashboardQuery : IQuery<DashboardDto>
     public const int TopGroups = 10;
 }
 
+/// <summary>
+/// Cached per school and school-local date with a short lifetime (DEC-311); any saved change of the school
+/// invalidates it, so a School Admin never sees the dashboard from before their own write.
+/// </summary>
 internal sealed class GetDashboardHandler(
     IDashboardReadModel readModel,
     IBillingSummary billing,
     IAttendanceSummary attendance,
     IOrganizationDirectory organization,
     ITenancyModule tenancy,
+    ITenantCache cache,
     ICurrentUser currentUser) : IQueryHandler<GetDashboardQuery, DashboardDto>
 {
     public async Task<Result<DashboardDto>> Handle(GetDashboardQuery query, CancellationToken cancellationToken)
     {
-        var today = await tenancy.TodayAsync(currentUser.RequireTenant(), cancellationToken);
+        var tenant = currentUser.RequireTenant();
+        var today = await tenancy.TodayAsync(tenant, cancellationToken);
+        return Result.Success(await cache.GetOrCreateAsync(
+            TenantCacheKey.For(tenant, CacheArea.Dashboard, "summary", today),
+            async ct => await BuildAsync(today, ct),
+            cancellationToken));
+    }
+
+    private async Task<DashboardDto> BuildAsync(DateOnly today, CancellationToken cancellationToken)
+    {
         var currentPeriod = YearMonth.From(today);
 
         // A fixed number of queries, independent of the school's size: no per-group or per-student round trips.
@@ -147,7 +162,7 @@ internal sealed class GetDashboardHandler(
         sessionKeys.UnionWith(recordedKeys);
         var todaySessions = new TodaySessionsDto(sessionKeys.Count, recordedKeys.Count);
 
-        return Result.Success(new DashboardDto(
+        return new DashboardDto(
             today,
             currentPeriod.ToString(),
             kpis,
@@ -155,7 +170,7 @@ internal sealed class GetDashboardHandler(
             weekly,
             bySport,
             utilisation,
-            todaySessions));
+            todaySessions);
     }
 
     private static readonly StringComparer Turkish = StringComparer.Create(System.Globalization.CultureInfo.GetCultureInfo("tr-TR"), ignoreCase: true);

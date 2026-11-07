@@ -74,5 +74,5 @@ Kapsamın tamamı ve maddelerin açıklamaları: [proje dokümanı, Ek G](proje-
 - [ ] **P2-F4** E-posta bildirimleri: aidat hatırlatmaları, hoş geldin e-postaları, kendi kendine şifre sıfırlama
 - [ ] **P2-F5** Her okulun saklama politikasına göre otomatik anonimleştirme işi
 - [x] **P2-F6** Tür ve boyut doğrulaması ve süreli bağlantılarla S3 uyumlu depolamaya (MinIO) belge yükleme (sağlık raporu, fotoğraf)
-- [ ] **P2-F7** Okuma ağırlıklı sorgular için Redis ve `HybridCache` ile cache
+- [x] **P2-F7** Okuma ağırlıklı sorgular için Redis ve `HybridCache` ile cache
 - [ ] **P2-F8** Aidat kuralları: kardeş indirimi ve dönem ortasında aidat değişikliği (geçişte detaylandırılacak)

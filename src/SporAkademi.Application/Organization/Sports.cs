@@ -1,6 +1,7 @@
 using FluentValidation;
 using SporAkademi.Application.Abstractions;
 using SporAkademi.Application.Abstractions.Authentication;
+using SporAkademi.Application.Abstractions.Caching;
 using SporAkademi.Application.Abstractions.Messaging;
 using SporAkademi.Application.Groups.Contracts;
 using SporAkademi.Domain.Organization;
@@ -133,8 +134,13 @@ internal sealed class GetSportHandler(ISportRepository sports) : IQueryHandler<G
             : Result.Failure<SportDto>(SportErrors.NotFound);
 }
 
-internal sealed class ListSportsHandler(ISportRepository sports) : IQueryHandler<ListSportsQuery, PagedResult<SportDto>>
+/// <summary>Cached per school and page (DEC-311); any saved change to a sport of the school invalidates it.</summary>
+internal sealed class ListSportsHandler(ISportRepository sports, ITenantCache cache, ICurrentUser currentUser)
+    : IQueryHandler<ListSportsQuery, PagedResult<SportDto>>
 {
     public async Task<Result<PagedResult<SportDto>>> Handle(ListSportsQuery query, CancellationToken cancellationToken) =>
-        Result.Success(await sports.ListAsync(query.IncludeArchived, query.Page, cancellationToken));
+        Result.Success(await cache.GetOrCreateAsync(
+            TenantCacheKey.For(currentUser.RequireTenant(), CacheArea.Sports, "list", query.IncludeArchived, query.Page.Page, query.Page.PageSize),
+            async ct => await sports.ListAsync(query.IncludeArchived, query.Page, ct),
+            cancellationToken));
 }
