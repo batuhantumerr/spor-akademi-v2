@@ -26,6 +26,8 @@ public sealed class ApiFactory(string appConnectionString, IReadOnlyDictionary<s
                 ["Jwt:SigningKey"] = JwtSigningKey,
                 ["Seq:ServerUrl"] = null,
                 ["Serilog:MinimumLevel:Default"] = "Fatal",
+                // Tests drive OutboxProcessor themselves so delivery happens exactly when they decide (OutboxWorkerTests turn it on).
+                ["Outbox:Enabled"] = "false",
             })
             .AddInMemoryCollection(storage ?? new Dictionary<string, string?>()));
         builder.ConfigureServices(services => services.Replace(ServiceDescriptor.Singleton<TimeProvider>(Clock)));

@@ -70,7 +70,7 @@ Kapsamın tamamı ve maddelerin açıklamaları: [proje dokümanı, Ek G](proje-
 
 - [ ] **P2-F1** Webhook'lar ve idempotency dahil, sandbox modunda bir ödeme sağlayıcısıyla (iyzico) online aidat ödemesi
 - [ ] **P2-F2** Hangfire ile arka plan işleri ve adminler için iş paneli
-- [ ] **P2-F3** Domain event'lerinin güvenilir işlenmesi için transactional outbox
+- [x] **P2-F3** Domain event'lerinin güvenilir işlenmesi için transactional outbox
 - [ ] **P2-F4** E-posta bildirimleri: aidat hatırlatmaları, hoş geldin e-postaları, kendi kendine şifre sıfırlama
 - [ ] **P2-F5** Her okulun saklama politikasına göre otomatik anonimleştirme işi
 - [x] **P2-F6** Tür ve boyut doğrulaması ve süreli bağlantılarla S3 uyumlu depolamaya (MinIO) belge yükleme (sağlık raporu, fotoğraf)

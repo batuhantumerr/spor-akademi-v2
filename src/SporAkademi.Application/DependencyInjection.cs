@@ -3,6 +3,7 @@ using FluentValidation;
 using Microsoft.Extensions.DependencyInjection;
 using SporAkademi.Application.Abstractions.Behaviors;
 using SporAkademi.Application.Abstractions.Messaging;
+using SporAkademi.Application.Abstractions.Outbox;
 using SporAkademi.Application.Enrollments;
 using SporAkademi.Application.Enrollments.Contracts;
 using SporAkademi.Application.Identity;
@@ -38,6 +39,8 @@ public static class DependencyInjection
             .AddClasses(c => c.AssignableTo(typeof(IQueryHandler<,>)), publicOnly: false)
                 .AsImplementedInterfaces().WithScopedLifetime()
             .AddClasses(c => c.AssignableTo(typeof(IDomainEventConsumer<>)), publicOnly: false)
+                .AsImplementedInterfaces().WithScopedLifetime()
+            .AddClasses(c => c.AssignableTo(typeof(IOutboxMessageHandler<>)), publicOnly: false)
                 .AsImplementedInterfaces().WithScopedLifetime());
 
         services.AddValidatorsFromAssembly(assembly, ServiceLifetime.Singleton, includeInternalTypes: true);
