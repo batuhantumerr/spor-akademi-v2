@@ -184,7 +184,9 @@ type Sort = 'lastName' | '-createdAt';
                   >
                 </th>
                 <td class="whitespace-nowrap">
-                  <span class="font-mono text-xs">{{ date(student.birthDate) }}</span>
+                  <span class="font-mono text-xs">{{
+                    student.birthDate ? date(student.birthDate) : text.anonymizedDash
+                  }}</span>
                   <span class="ml-1 text-xs text-muted-foreground">{{
                     age(student.birthDate)
                   }}</span>
@@ -270,8 +272,9 @@ export class StudentsPage {
     return formatDate(iso);
   }
 
-  protected age(birthIso: string): string {
-    const age = ageOn(birthIso, this.clock.today());
+  protected age(birthIso: string | null | undefined): string {
+    // An anonymized student has no birth date (DEC-363).
+    const age = birthIso ? ageOn(birthIso, this.clock.today()) : null;
     return age === null ? '' : `(${interpolate(this.text.age, { age })})`;
   }
 

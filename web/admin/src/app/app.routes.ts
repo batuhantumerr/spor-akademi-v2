@@ -171,6 +171,12 @@ export const routes: Routes = [
             title: ui.nav.dues,
             loadComponent: () => import('./features/billing/dues.page').then((m) => m.DuesPage),
           },
+          {
+            path: 'settings/data-retention',
+            title: ui.nav.dataRetention,
+            loadComponent: () =>
+              import('./features/settings/data-retention.page').then((m) => m.DataRetentionPage),
+          },
         ],
       },
     ],

@@ -17,6 +17,7 @@ const student: StudentDto = {
   gender: 'Female',
   status: 'Active',
   leftAt: null,
+  anonymizedAt: null,
   phone: null,
   email: null,
   emergencyContact: { name: 'Ali Kaya', phone: '+905331112233', relationship: 'Komşu' },

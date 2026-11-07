@@ -307,7 +307,8 @@ export class EnrollDialog {
     });
   }
 
-  protected date(iso: string): string {
+  /** Null only for an anonymized student, which the active-student search never returns (DEC-363). */
+  protected date(iso: string | null): string {
     return formatDate(iso);
   }
 

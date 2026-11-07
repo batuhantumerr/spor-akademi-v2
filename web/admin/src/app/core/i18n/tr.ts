@@ -66,6 +66,9 @@ export const errorMessages: Readonly<Record<string, string>> = {
   'Student.EmergencyContactRequired': 'Acil durum kişisi bilgileri zorunludur.',
   'Student.AlreadyLeft': 'Bu öğrenci zaten ayrılmış olarak işaretli.',
   'Student.NotLeft': 'Sadece ayrılmış öğrenciler yeniden aktifleştirilebilir.',
+  'Student.Anonymized':
+    'Bu öğrencinin kişisel verileri anonimleştirildi; kayıt artık değiştirilemez.',
+  'RetentionPolicy.Invalid': 'Saklama süresi izin verilen aralıkta değil.',
   'Student.InvalidLeaveDate': 'Ayrılma tarihi, aktif kayıtların başlangıç tarihinden önce olamaz.',
   'Guardian.NotFound': 'Veli bulunamadı.',
   'Guardian.PhoneTaken': 'Bu telefon numarasıyla kayıtlı başka bir veli var.',
@@ -127,6 +130,8 @@ export const ui = {
     myGroups: 'Gruplarım',
     announcements: 'Duyurular',
     today: 'Bugün',
+    settings: 'Ayarlar',
+    dataRetention: 'Veri saklama',
   },
   roles: {
     PlatformAdmin: 'Platform yöneticisi',
@@ -178,6 +183,7 @@ export const ui = {
   },
   students: {
     title: 'Öğrenciler',
+    anonymizedDash: '—',
     description: 'Okulunuzun öğrencileri, velileri ve acil durum kişileri.',
     add: 'Öğrenci kaydet',
     caption: 'Öğrenci listesi',
@@ -292,6 +298,9 @@ export const ui = {
     reactivated: 'Öğrenci yeniden aktifleştirildi.',
     saved: 'Öğrenci bilgileri kaydedildi.',
     guardianSaved: 'Veli bilgileri kaydedildi.',
+    anonymizedBadge: 'Anonimleştirildi',
+    anonymizedNote:
+      'Bu öğrencinin kişisel verileri saklama süresi dolduğu için {date} tarihinde anonimleştirildi. Kayıt, yoklama ve ödeme geçmişi isimsiz olarak saklanır; kayıt artık değiştirilemez.',
   },
   documents: {
     title: 'Belgeler',
@@ -372,6 +381,30 @@ export const ui = {
       string,
       string
     >,
+  },
+  dataRetention: {
+    title: 'Veri saklama',
+    description:
+      'Ayrılan öğrencilerin kişisel verileri bu süre dolunca otomatik olarak anonimleştirilir (KVKK). Ödeme kayıtları yasal süre boyunca isimsiz olarak saklanır.',
+    months: 'Kişisel verilerin saklanma süresi (ay)',
+    monthsHint: '{min}–{max} ay. Süre, öğrencinin ayrılma tarihinden itibaren sayılır.',
+    paymentYears: 'Ödeme kayıtlarının saklanma süresi',
+    paymentYearsValue: '{years} yıl (yasal süre, değiştirilemez)',
+    save: 'Kaydet',
+    saving: 'Kaydediliyor…',
+    saved: 'Saklama süresi kaydedildi.',
+    conflict: 'Ayar başka biri tarafından değiştirildi; güncel değer yüklendi.',
+    runsTitle: 'Son anonimleştirme çalışmaları',
+    runsCaption: 'Anonimleştirme işi her gün çalışır; her çalışma burada kayıtlıdır.',
+    noRuns: 'Henüz çalışma yok. İş her gün 05:00 civarında çalışır.',
+    startedAt: 'Zaman',
+    cutoff: 'Bu tarihte veya önce ayrılanlar',
+    anonymized: 'Anonimleştirilen',
+    skipped: 'Ertelenen',
+    duration: 'Süre',
+    durationValue: '{ms} ms',
+    status: 'Durum',
+    statuses: { Succeeded: 'Başarılı', Failed: 'Başarısız' } as Record<string, string>,
   },
   jobs: {
     title: 'İş paneli',
