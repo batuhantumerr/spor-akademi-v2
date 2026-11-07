@@ -17,7 +17,7 @@ Spor okulları için çok kiracılı (multi-tenant) yönetim platformu: okullar,
 
 ```bash
 bash scripts/setup-env.sh          # .env'i rastgele şifrelerle oluşturur (bir kez)
-docker compose up -d --wait        # PostgreSQL ve Seq
+docker compose up -d --wait        # PostgreSQL, Seq ve belge deposu (SeaweedFS)
 dotnet tool restore
 bash scripts/ef.sh database update # migration'ları migrator rolüyle uygular
 bash scripts/run-api.sh            # API: http://127.0.0.1:5080
@@ -31,8 +31,22 @@ npm ci
 npm start                          # http://localhost:4200 (/api proxy'si API'ye gider)
 ```
 
-- Sağlık kontrolleri: `/health/live`, `/health/ready`
+- Sağlık kontrolleri: `/health/live`, `/health/ready` (belge deposuna ulaşılamazsa `ready` 200 ama `Degraded` döner, DEC-326)
 - Loglar (Seq): http://127.0.0.1:5341
+
+### Belge deposu (P2-F6)
+
+Öğrenci belgeleri (sağlık raporu, fotoğraf) S3 uyumlu bir depoda tutulur. Yerelde ve testlerde compose'daki `storage` servisi (SeaweedFS, Apache-2.0; DEC-320) kullanılır: `127.0.0.1:58333`, bucket açılışta yoksa oluşturulur, herkese açık erişim yoktur. Production deposu Deploy bloğunda seçilecek.
+
+- `.env`'de `STORAGE_ACCESS_KEY` ve `STORAGE_SECRET_KEY` gerekir (`setup-env.sh` üretir). Bu değişiklikten önce oluşturulmuş bir `.env`'e iki satırı kendiniz ekleyin; compose bu değerler olmadan hiçbir servisi başlatmaz:
+
+  ```bash
+  echo "STORAGE_ACCESS_KEY=$(openssl rand -hex 10)" >> .env
+  echo "STORAGE_SECRET_KEY=$(openssl rand -hex 20)" >> .env
+  ```
+
+- API ayarları `Storage__ServiceUrl`, `Storage__AccessKey`, `Storage__SecretKey`, `Storage__Bucket` (isteğe bağlı `Storage__PublicUrl`: tarayıcı depoya başka bir adresten ulaşıyorsa imzalı bağlantıların adresi); `run-api.sh` bunları `.env`'den verir.
+- Yüklemeler API üzerinden geçer ve içerik (magic bytes ve yapı) kontrol edilir; açma bağlantıları 5 dakikalık imzalı URL'lerdir (DEC-321 – DEC-323).
 
 ### Demo verisi (P1-38)
 

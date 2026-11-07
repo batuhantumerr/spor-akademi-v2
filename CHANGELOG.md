@@ -27,5 +27,8 @@ Bu dosya [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) biçimini ve [
 - **Demo verisi:** `bash scripts/seed-demo.sh` iki sentetik okul ve ~92 günlük geçmiş üretir; yalnızca yerel veritabanında ve Production dışı ortamda çalışır.
 - **Güvenlik:** MVP güvenlik kontrol listesi ve otomatik kontroller (gitleaks taraması, `Cache-Control: no-store`, giriş/refresh/şifre değiştirme için IP + yol başına dakikada 10 istek sınırı, log gizliliği, CORS'un kapalı olduğunu doğrulayan test), Trivy imaj taraması. CSP/güvenlik başlıkları (NFR-SEC-13) ve HTTPS/HSTS (NFR-SEC-02) MVP'de yoktur; Faz 4 / Deploy bloğunda yapılacak.
 
+#### Faz 2 — İş mantığı derinliği
+- **Belgeler (P2-F6):** öğrenci başına sağlık raporları (PDF/JPEG/PNG, en fazla 5 MB, en fazla 20 adet) ve tek fotoğraf (JPEG/PNG/WebP, en fazla 2 MB) S3 uyumlu depoda. Dosya API üzerinden yüklenir; tür içerikten (magic bytes ve yapı) belirlenir, beyan edilen tür ve uzantıya güvenilmez; görsellerin EXIF/GPS gibi meta verileri ve sonlarına eklenmiş baytlar silinir, etkin içerikli PDF'ler reddedilir. Nesne anahtarları üretilir (kullanıcı dosya adı içermez). Açma bağlantıları 5 dakikalık imzalı URL'lerdir; sağlık raporlarını yalnızca Okul Admini, fotoğrafı ayrıca öğrencinin aktif grubunun antrenörü görebilir. Öğrenci ayrıntı sayfasında yükleme (ilerleme çubuğu, istemci tarafı tür/boyut kontrolü), liste, açma ve onaylı silme. Yerel geliştirme ve testler için compose'a SeaweedFS servisi eklendi (DEC-320 – DEC-326).
+
 ### Security
 - Admin imajında zlib ve musl güvenlik yükseltmeleri (DEC-104, DEC-202; öneri aşamasında).

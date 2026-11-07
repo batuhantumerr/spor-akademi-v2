@@ -108,7 +108,12 @@ Sadece bu uygulamaya uygulanabilen maddeler listelenir (dosya yükleme, SOAP, Gr
 ### V12 Dosyalar ve kaynaklar
 | Madde | Durum | Kanıt / not |
 | --- | --- | --- |
-| Dosya yükleme | — | MVP'de yok. |
+| 12.1.1 Dosya boyutu sınırı | ✅ | P2-F6: türe göre 5 MB (rapor) / 2 MB (fotoğraf), istek sınırı yalnız yükleme uç noktasında 5 MB + 64 KB, diğer her yerde 1 MB (`RequestSizeLimitMiddleware`, `IRequestSizeLimitMetadata`); `IntegrationTests/Students/DocumentTests` (`Bodies_over_the_upload_limit...`, `jpeg-over-2mb`), `Application.UnitTests/Students/DocumentContentTests`. Öğrenci başına en fazla 20 rapor (DEC-322). |
+| 12.2.1 İçerik türü doğrulaması (uzantıya/beyana güvenmeden) | ✅ | Magic bytes + yapısal ayrıştırma (`DocumentContent`); `Content-Type` yok sayılır; çift uzantı (`foto.jpg.html`) reddedilir; SVG/HTML/EXE/GIF reddedilir; görsellerde EXIF/GPS/XMP/metin chunk'ları ve dosya sonu sonrası baytlar silinir; etkin içerikli PDF (`/JavaScript`, `/Launch`, gömülü dosya; `#xx` kaçışlı adlar dahil) reddedilir (DEC-322). Testler: `DocumentContentTests`, `DocumentTests.Hostile_files_are_refused_and_nothing_is_stored`. Sınır: sıkıştırılmış PDF nesne akışları taranmaz, antivirüs yok (Fikirler 12). |
+| 12.3.1 Kullanıcı dosya adı yol/anahtar olarak kullanılmaz | ✅ | Nesne anahtarı `{okul}/{öğrenci}/{128 bit rastgele}`; dosya adı yalnız veritabanında, temizlenmiş; indirme adı ve imzalı URL kullanıcı adını içermez (DEC-322, DEC-323; `DocumentTests`). |
+| 12.4.1 Dosyalar herkese açık değil, yetkiyle ve süreli sunulur | ✅ | Bucket private; imzasız veya imzalı parametresi değiştirilmiş istek `403`; 5 dakikalık imzalı GET, süresi dolunca `403` (`DocumentTests.Download_links_...`). PDF her zaman `attachment`, `Content-Type` imzayla sabit (DEC-323). |
+| 12.5 / 4.2 Dosya erişim yetkisi ve tenant izolasyonu | ✅ | Sağlık raporu yalnız Okul Admini; antrenör yalnız kendi aktif grubundaki öğrencinin fotoğrafı (DEC-324; `DocumentTests.A_coach_sees_only...`); başka okul `404` (`CrossTenantEndpointTests`, multipart probe ve depo anahtarlarıyla parmak izi). |
+| Yüklenen dosya meta verisi loglanmaz | ✅ | `LogPrivacyTests` kişi adı içeren dosya adıyla yükleme ve reddedilen yüklemeyi kapsar; yetim nesne logu sadece üretilmiş anahtarı içerir (DEC-325). |
 
 ### V13 API
 | Madde | Durum | Kanıt / not |
@@ -140,4 +145,5 @@ Sadece bu uygulamaya uygulanabilen maddeler listelenir (dosya yükleme, SOAP, Gr
 8. **Kişisel veri envanteri (NFR-PRV-01):** her kişisel veri alanını, amacını ve saklama süresini listeleyen doküman; faz geçişinde gözden geçirilir.
 9. **Log gizliliği testinin kapsamı:** ödeme, aidat, kayıt, iptal gerekçesi ve 500 yolu artık `LogPrivacyTests`'te; yoklama (not alanı) ve duyurular (serbest metin) henüz yok, teste eklenmeli.
 11. **Peşin ödemeli kaydın erken bitirilmesi:** ileri bir ay için ödemesi olan kayıt o aydan önce bitirilebiliyor (DEC-184); iade akışı veya uyarı değerlendirilmeli.
+12. **Yüklenen dosyalarda antivirüs ve derin PDF denetimi (P2-F6):** ClamAV (GPL-2.0, ayrı servis olarak) veya yönetilen tarama; sıkıştırılmış nesne akışlarının açılarak taranması; gerekirse PDF'lerin rasterize edilip yeniden üretilmesi. CSP gelince `img-src`'ye depo origin'i eklenmeli (fotoğraf küçük resmi doğrudan imzalı URL'den yüklenir).
 10. **Refresh token yarışı:** aynı token'la eşzamanlı iki sekme birini `409` ile düşürür (DEC-119); kısa bir tolerans penceresi değerlendirilebilir.
