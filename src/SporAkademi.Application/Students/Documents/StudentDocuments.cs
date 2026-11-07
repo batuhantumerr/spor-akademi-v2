@@ -34,6 +34,12 @@ public sealed record DocumentLinkDto(Uri Url, DateTimeOffset ExpiresAt);
 /// <summary>Documents of the current school (tenant filter applies, so another school's id is not found).</summary>
 public interface IStudentDocumentRepository
 {
+    /// <summary>
+    /// Serializes uploads for one student until the transaction ends (transaction-scoped advisory lock, DEC-322), so
+    /// the health report limit and "one photo" hold under concurrent uploads. Only inside the unit of work's transaction.
+    /// </summary>
+    Task LockStudentAsync(StudentId studentId, CancellationToken cancellationToken);
+
     void Add(StudentDocument document);
 
     void Remove(StudentDocument document);
@@ -41,6 +47,12 @@ public interface IStudentDocumentRepository
     Task<StudentDocument?> FindAsync(StudentDocumentId id, CancellationToken cancellationToken);
 
     Task<StudentDocument?> FindPhotoAsync(StudentId studentId, CancellationToken cancellationToken);
+
+    /// <summary>Like <see cref="FindAsync"/>, untracked, for reads that never save.</summary>
+    Task<StudentDocument?> FindForReadingAsync(StudentDocumentId id, CancellationToken cancellationToken);
+
+    /// <summary>Like <see cref="FindPhotoAsync"/>, untracked, for reads that never save.</summary>
+    Task<StudentDocument?> FindPhotoForReadingAsync(StudentId studentId, CancellationToken cancellationToken);
 
     Task<int> CountAsync(StudentId studentId, DocumentType type, CancellationToken cancellationToken);
 
@@ -67,7 +79,7 @@ internal sealed class UploadStudentDocumentValidator : AbstractValidator<UploadS
 {
     public UploadStudentDocumentValidator()
     {
-        RuleFor(c => c.Type).NotEmpty().WithErrorCode("Field.Required")
+        RuleFor(c => c.Type).Cascade(CascadeMode.Stop).NotEmpty().WithErrorCode("Field.Required")
             .Must(t => Enum.TryParse<DocumentType>(t, ignoreCase: false, out var parsed) && Enum.IsDefined(parsed) && !int.TryParse(t, out _))
             .WithErrorCode("Field.Invalid");
         RuleFor(c => c.Content).NotNull().WithErrorCode("Field.Required").OverridePropertyName("file");
@@ -162,6 +174,14 @@ internal sealed partial class UploadStudentDocumentHandler(
                     if (created.IsFailure)
                     {
                         return Result.Failure<StudentDocumentDto>(created.Error);
+                    }
+
+                    // The count before the upload is a fast path; this one, under the per-student lock, is the rule.
+                    await documents.LockStudentAsync(command.StudentId, ct);
+                    if (type == DocumentType.HealthReport
+                        && await documents.CountAsync(command.StudentId, type, ct) >= DocumentRules.MaxHealthReportsPerStudent)
+                    {
+                        return Result.Failure<StudentDocumentDto>(DocumentErrors.LimitReached.WithArgument("max", DocumentRules.MaxHealthReportsPerStudent));
                     }
 
                     if (type == DocumentType.Photo && await documents.FindPhotoAsync(command.StudentId, ct) is { } previous)
@@ -259,7 +279,7 @@ internal sealed class GetDocumentLinkHandler(IStudentDocumentRepository document
     : IQueryHandler<GetDocumentLinkQuery, DocumentLinkDto>
 {
     public async Task<Result<DocumentLinkDto>> Handle(GetDocumentLinkQuery query, CancellationToken cancellationToken) =>
-        await documents.FindAsync(query.Id, cancellationToken) is { } document
+        await documents.FindForReadingAsync(query.Id, cancellationToken) is { } document
             ? Result.Success(DocumentViews.Link(storage, document))
             : Result.Failure<DocumentLinkDto>(DocumentErrors.NotFound);
 }
@@ -283,7 +303,7 @@ internal sealed class GetStudentPhotoLinkHandler(
             return Result.Failure<DocumentLinkDto>(StudentErrors.NotFound);
         }
 
-        return await documents.FindPhotoAsync(query.StudentId, cancellationToken) is { } photo
+        return await documents.FindPhotoForReadingAsync(query.StudentId, cancellationToken) is { } photo
             ? Result.Success(DocumentViews.Link(storage, photo))
             : Result.Failure<DocumentLinkDto>(DocumentErrors.NotFound);
     }

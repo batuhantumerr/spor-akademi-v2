@@ -38,6 +38,20 @@ internal sealed class StudentDocumentConfiguration : IEntityTypeConfiguration<St
 
 internal sealed class StudentDocumentRepository(AppDbContext db) : IStudentDocumentRepository
 {
+    /// <summary>Namespace of the student document locks ("SDOC" as bytes).</summary>
+    private const int DocumentSpace = 0x53444F43;
+
+    public async Task LockStudentAsync(StudentId studentId, CancellationToken cancellationToken)
+    {
+        if (db.Database.CurrentTransaction is null)
+        {
+            throw new InvalidOperationException("Document locks are only taken inside the unit of work's transaction.");
+        }
+
+        var key = Groups.GroupLocks.KeyOf(studentId.Value);
+        await db.Database.ExecuteSqlAsync($"SELECT pg_advisory_xact_lock({DocumentSpace}, {key})", cancellationToken);
+    }
+
     public void Add(StudentDocument document) => db.Add(document);
 
     public void Remove(StudentDocument document) => db.Remove(document);
@@ -47,6 +61,12 @@ internal sealed class StudentDocumentRepository(AppDbContext db) : IStudentDocum
 
     public Task<StudentDocument?> FindPhotoAsync(StudentId studentId, CancellationToken cancellationToken) =>
         db.Set<StudentDocument>().SingleOrDefaultAsync(d => d.StudentId == studentId && d.Type == DocumentType.Photo, cancellationToken);
+
+    public Task<StudentDocument?> FindForReadingAsync(StudentDocumentId id, CancellationToken cancellationToken) =>
+        db.Set<StudentDocument>().AsNoTracking().SingleOrDefaultAsync(d => d.Id == id, cancellationToken);
+
+    public Task<StudentDocument?> FindPhotoForReadingAsync(StudentId studentId, CancellationToken cancellationToken) =>
+        db.Set<StudentDocument>().AsNoTracking().SingleOrDefaultAsync(d => d.StudentId == studentId && d.Type == DocumentType.Photo, cancellationToken);
 
     public Task<int> CountAsync(StudentId studentId, DocumentType type, CancellationToken cancellationToken) =>
         db.Set<StudentDocument>().CountAsync(d => d.StudentId == studentId && d.Type == type, cancellationToken);

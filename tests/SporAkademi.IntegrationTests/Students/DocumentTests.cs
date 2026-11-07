@@ -394,7 +394,139 @@ public sealed class DocumentTests(DatabaseFixture database) : EnrollmentsTest(da
         return (long)(await command.ExecuteScalarAsync(Ct))!;
     }
 
+    [Fact]
+    public async Task When_the_database_part_fails_after_the_upload_the_new_object_is_deleted()
+    {
+        var student = await RegisterStudentAsync();
+        var existing = (await Database.Storage.KeysAsync(SchoolPrefix)).Count;
+
+        // An unexpected failure (exception) in the database part: 500, and the stored object is removed again.
+        await using (var throwing = WithDocuments(inner => new FaultyDocuments(inner) { ThrowOnAdd = true }))
+        {
+            using var admin = AuthorizedClient(throwing);
+            var response = await UploadAsync(student, "HealthReport", TestFiles.Pdf(), "rapor.pdf", client: admin);
+            response.StatusCode.ShouldBe(HttpStatusCode.InternalServerError);
+        }
+
+        (await Database.Storage.KeysAsync(SchoolPrefix)).Count.ShouldBe(existing);
+        (await CountRowsAsync()).ShouldBe(0);
+    }
+
+    [Fact]
+    public async Task The_report_limit_is_checked_again_under_the_lock_and_a_late_refusal_removes_the_object()
+    {
+        var student = await RegisterStudentAsync();
+        for (var i = 0; i < 20; i++)
+        {
+            (await UploadAsync(student, "HealthReport", TestFiles.Pdf(), $"r{i}.pdf")).StatusCode.ShouldBe(HttpStatusCode.Created);
+        }
+
+        // The fast pre-check is fooled (as by a concurrent upload); the re-count inside the transaction still refuses.
+        await using var racing = WithDocuments(inner => new FaultyDocuments(inner) { FirstCountsAsZero = true });
+        using var admin = AuthorizedClient(racing);
+        var response = await UploadAsync(student, "HealthReport", TestFiles.Pdf(), "r21.pdf", client: admin);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.UnprocessableEntity);
+        (await CodeOf(response)).ShouldBe("Document.LimitReached");
+        (await Database.Storage.KeysAsync(SchoolPrefix)).Count.ShouldBe(20);
+        (await CountRowsAsync()).ShouldBe(20);
+    }
+
+    [Fact]
+    public async Task Concurrent_photo_uploads_never_fail_with_500_and_leave_one_photo()
+    {
+        var student = await RegisterStudentAsync();
+
+        var responses = await Task.WhenAll(Enumerable.Range(0, 6).Select(i => UploadAsync(student, "Photo", TestFiles.Png(), $"foto{i}.png")));
+
+        responses.Select(r => (int)r.StatusCode).ShouldAllBe(status => status == 201 || status == 409);
+        responses.ShouldContain(r => r.StatusCode == HttpStatusCode.Created);
+        while (await ProcessOutboxAsync() > 0)
+        {
+        }
+
+        (await CountRowsAsync()).ShouldBe(1);
+        var key = (await Database.Storage.KeysAsync(SchoolPrefix)).ShouldHaveSingleItem();
+        (await Admin.GetFromJsonAsync<LinkDto>($"/api/v1/students/{student}/photo", Ct))!.Url.AbsolutePath.ShouldEndWith(key);
+    }
+
+    [Fact]
+    public async Task Deleting_an_object_is_idempotent_so_a_repeated_delivery_is_harmless()
+    {
+        var student = await RegisterStudentAsync();
+        await UploadAsync(student, "Photo", TestFiles.Png(), "foto.png");
+        var key = (await Database.Storage.KeysAsync(SchoolPrefix)).ShouldHaveSingleItem();
+        var message = new Application.Students.Contracts.DocumentObjectDeletedMessage(key);
+        var context = new Application.Abstractions.Outbox.OutboxMessageContext(Guid.CreateVersion7(), School.Value, Api.Clock.GetUtcNow(), 1);
+
+        await InScopeAsync(async services =>
+        {
+            var handler = services.GetServices<Application.Abstractions.Outbox.IOutboxMessageHandler<Application.Students.Contracts.DocumentObjectDeletedMessage>>().ShouldHaveSingleItem();
+            await handler.Handle(message, context, Ct);
+            await handler.Handle(message, context with { Attempt = 2 }, Ct);
+        });
+
+        (await Database.Storage.KeysAsync(SchoolPrefix)).ShouldBeEmpty();
+    }
+
+    private WebApplicationFactory<Program> WithDocuments(Func<Application.Students.Documents.IStudentDocumentRepository, Application.Students.Documents.IStudentDocumentRepository> wrap) =>
+        Api.WithWebHostBuilder(builder => builder.ConfigureTestServices(services =>
+            services.AddScoped(provider => wrap(ActivatorUtilities.CreateInstance<SporAkademi.Infrastructure.Students.StudentDocumentRepository>(provider)))));
+
+    private HttpClient AuthorizedClient(WebApplicationFactory<Program> api)
+    {
+        var client = api.CreateClient();
+        client.DefaultRequestHeaders.Authorization = Admin.DefaultRequestHeaders.Authorization;
+        return client;
+    }
+
     private Task<int> ProcessOutboxAsync() => Api.Services.GetRequiredService<OutboxProcessor>().ProcessBatchAsync(Ct);
+
+    /// <summary>The real repository with injectable faults.</summary>
+    private sealed class FaultyDocuments(Application.Students.Documents.IStudentDocumentRepository inner) : Application.Students.Documents.IStudentDocumentRepository
+    {
+        private bool _counted;
+
+        public bool ThrowOnAdd { get; init; }
+
+        public bool FirstCountsAsZero { get; init; }
+
+        public Task LockStudentAsync(Domain.Students.StudentId studentId, CancellationToken cancellationToken) => inner.LockStudentAsync(studentId, cancellationToken);
+
+        public void Add(Domain.Students.StudentDocument document)
+        {
+            if (ThrowOnAdd)
+            {
+                throw new InvalidOperationException("Simulated database failure.");
+            }
+
+            inner.Add(document);
+        }
+
+        public void Remove(Domain.Students.StudentDocument document) => inner.Remove(document);
+
+        public Task<Domain.Students.StudentDocument?> FindAsync(Domain.Students.StudentDocumentId id, CancellationToken cancellationToken) => inner.FindAsync(id, cancellationToken);
+
+        public Task<Domain.Students.StudentDocument?> FindPhotoAsync(Domain.Students.StudentId studentId, CancellationToken cancellationToken) => inner.FindPhotoAsync(studentId, cancellationToken);
+
+        public Task<Domain.Students.StudentDocument?> FindForReadingAsync(Domain.Students.StudentDocumentId id, CancellationToken cancellationToken) => inner.FindForReadingAsync(id, cancellationToken);
+
+        public Task<Domain.Students.StudentDocument?> FindPhotoForReadingAsync(Domain.Students.StudentId studentId, CancellationToken cancellationToken) => inner.FindPhotoForReadingAsync(studentId, cancellationToken);
+
+        public Task<int> CountAsync(Domain.Students.StudentId studentId, Domain.Students.DocumentType type, CancellationToken cancellationToken)
+        {
+            if (FirstCountsAsZero && !_counted)
+            {
+                _counted = true;
+                return Task.FromResult(0);
+            }
+
+            return inner.CountAsync(studentId, type, cancellationToken);
+        }
+
+        public Task<IReadOnlyList<Domain.Students.StudentDocument>> ListOfStudentAsync(Domain.Students.StudentId studentId, CancellationToken cancellationToken) =>
+            inner.ListOfStudentAsync(studentId, cancellationToken);
+    }
 
     private sealed record LinkDto(Uri Url, DateTimeOffset ExpiresAt);
 
