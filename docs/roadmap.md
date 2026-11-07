@@ -68,11 +68,11 @@ Kapsamın tamamı ve maddelerin açıklamaları: [proje dokümanı, Ek G](proje-
 
 ## Faz 2 — İş mantığı derinliği (`v0.2.0`)
 
-- [ ] **P2-F1** Webhook'lar ve idempotency dahil, sandbox modunda bir ödeme sağlayıcısıyla (iyzico) online aidat ödemesi
-- [ ] **P2-F2** Hangfire ile arka plan işleri ve adminler için iş paneli
-- [x] **P2-F3** Domain event'lerinin güvenilir işlenmesi için transactional outbox
-- [ ] **P2-F4** E-posta bildirimleri: aidat hatırlatmaları, hoş geldin e-postaları, kendi kendine şifre sıfırlama
-- [ ] **P2-F5** Her okulun saklama politikasına göre otomatik anonimleştirme işi
-- [x] **P2-F6** Tür ve boyut doğrulaması ve süreli bağlantılarla S3 uyumlu depolamaya (MinIO) belge yükleme (sağlık raporu, fotoğraf)
-- [x] **P2-F7** Okuma ağırlıklı sorgular için Redis ve `HybridCache` ile cache
-- [ ] **P2-F8** Aidat kuralları: kardeş indirimi ve dönem ortasında aidat değişikliği (geçişte detaylandırılacak)
+- [ ] P2-F1 Online aidat ödemesi (iyzico sandbox, webhook'lar, idempotency)
+- [ ] P2-F2 Hangfire ile arka plan işleri ve iş paneli
+- [x] P2-F3 Transactional outbox (DEC-300 – DEC-304)
+- [ ] P2-F4 E-posta bildirimleri
+- [ ] P2-F5 Otomatik anonimleştirme işi
+- [x] P2-F6 Belge yükleme (S3 uyumlu; yerelde SeaweedFS, DEC-320 – DEC-326)
+- [x] P2-F7 Redis ve `HybridCache` ile cache (Valkey; DEC-310 – DEC-316)
+- [ ] P2-F8 Aidat kuralları (kardeş indirimi, dönem ortası değişiklik)

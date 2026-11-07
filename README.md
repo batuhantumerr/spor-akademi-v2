@@ -60,7 +60,7 @@ bash scripts/run-api.sh                         # depo çalışıyorsa Storage__
 
 `setup-env.sh` var olan `.env`'in değerlerini değiştirmez ve yazdırmaz. Anahtarlar olmadan SeaweedFS başlamayı reddeder (kimliksiz SeaweedFS anonim isteklere açık olurdu; mesaj `docker compose --profile storage logs storage`'da); diğer servisler, `scripts/e2e.sh` ve CI'daki `e2e` işi etkilenmez. Depo yapılandırılmamışsa API açılır, belgeler kullanılamaz ve `/health/ready` `Degraded` döner.
 
-- API ayarları `Storage__ServiceUrl`, `Storage__AccessKey`, `Storage__SecretKey`, `Storage__Bucket` (isteğe bağlı `Storage__PublicUrl`: tarayıcı depoya başka bir adresten ulaşıyorsa imzalı bağlantıların adresi); `run-api.sh` bunları, depo çalışıyorsa `.env`'den verir.
+- API ayarları `Storage__ServiceUrl`, `Storage__AccessKey`, `Storage__SecretKey`, `Storage__Bucket` (isteğe bağlı `Storage__PublicUrl`: tarayıcı depoya başka bir adresten ulaşıyorsa imzalı bağlantıların adresi); `Storage__ServerSideEncryption` (varsayılan `true`, SSE-S3) sağlayıcıya bağlıdır: SeaweedFS ve AWS S3 destekler, desteklemeyen bir serviste `false` yapılıp şifreleme servisin kendi ayarıyla sağlanır (DEC-320); `run-api.sh` bunları, depo çalışıyorsa `.env`'den verir.
 - Yüklemeler API üzerinden geçer ve içerik (magic bytes ve yapı) kontrol edilir; açma bağlantıları 5 dakikalık imzalı URL'lerdir (DEC-321 – DEC-323). Silinen belgenin dosyası commit'ten sonra outbox mesajıyla silinir; başarısız silme yeniden denenir (DEC-325).
 
 ### Demo verisi (P1-38)
