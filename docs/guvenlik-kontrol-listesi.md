@@ -62,7 +62,7 @@ Sadece bu uygulamaya uygulanabilen maddeler listelenir (dosya yükleme, SOAP, Gr
 | 3.4.1 – 3.4.3 Cookie `Secure`, `HttpOnly`, `SameSite` | ✅ | `LoginTests.Valid_credentials_*`. |
 | 3.5.2 – 3.5.3 Token imza/süre doğrulaması | ✅ | HS256, issuer/audience/lifetime, tutarsız rol/tenant reddi (`JwtSetup.cs`, `ErrorHandlingTests.Invalid_tokens_are_rejected`). |
 | 3.7.1 Hassas işlemde yeniden doğrulama | ✅ | Şifre değişimi mevcut şifreyi ister. |
-| İş paneli oturumu (`/jobs`, DEC-332) | ✅ | Platform Admin'in bearer çağrısıyla (`POST /api/v1/platform/jobs/dashboard-session`) üretilen 256 bit anahtar, sunucuda SHA-256; çerez `HttpOnly; Secure; SameSite=Strict; Path=/jobs`, sabit 15 dk, yeni oturum eskisini bitirir, süresi dolan/sahte çerez `401` (`IntegrationTests/Jobs/JobsDashboardTests`). Oturumlar süreç belleğinde (çok örnekli kurulum Deploy bloğunda). |
+| İş paneli oturumu (`/jobs`, DEC-332) | ✅ | Platform Admin'in bearer çağrısıyla (`POST /api/v1/platform/jobs/dashboard-session`) üretilen 256 bit anahtar, sunucuda SHA-256; çerez `HttpOnly; Secure; SameSite=Strict; Path=/jobs`, sabit 15 dk, yeni oturum eskisini bitirir; çıkış, şifre değişikliği/sıfırlama ve token yeniden kullanımı panel oturumunu da bitirir; süresi dolan/sahte çerez `401` (`IntegrationTests/Jobs/JobsDashboardTests`). Oturumlar süreç belleğinde (çok örnekli kurulum Deploy bloğunda); üretim nginx'i `/jobs`'u yönlendirmez, panel Deploy bloğuna kadar sadece dev proxy'siyle çalışır. |
 | Pasif kullanıcının açık access token'ı | 🟡 | En fazla 15 dk geçerli (DEC-056, kabul edilen sınır). |
 
 ### V4 Erişim kontrolü
