@@ -24,14 +24,20 @@ services:
   # Distributed cache (L2 of HybridCache, DEC-310): Valkey, BSD-3 licensed and Redis-protocol compatible.
   # Cache only: nothing is written to disk, and the oldest keys are evicted when memory is full.
   # Testcontainers reads this image reference too.
+  # Optional (DEC-316): only started with `docker compose --profile cache up -d --wait`. The password is not a
+  # required compose variable (compose interpolates every service, even ones outside the active profiles), so a
+  # .env without VALKEY_PASSWORD still works for everything else; Valkey itself refuses to start without it.
   valkey:
     image: valkey/valkey:9.1.3-alpine@sha256:bf09d58e96d6b4524a15396b65b242bbe18beebbcc15a04d8ee75ddac62fae0b
+    profiles: ["cache"]
     environment:
-      VALKEY_PASSWORD: ${VALKEY_PASSWORD:?set VALKEY_PASSWORD in .env}
+      VALKEY_PASSWORD: ${VALKEY_PASSWORD:-}
     command:
       - sh
       - -c
-      - exec valkey-server --requirepass "$$VALKEY_PASSWORD" --save "" --appendonly no --maxmemory 128mb --maxmemory-policy allkeys-lru
+      - >-
+        if [ -z "$$VALKEY_PASSWORD" ]; then echo "VALKEY_PASSWORD is not set in .env (bash scripts/setup-env.sh adds it)" >&2; exit 1; fi;
+        exec valkey-server --requirepass "$$VALKEY_PASSWORD" --save "" --appendonly no --maxmemory 128mb --maxmemory-policy allkeys-lru
     ports:
       - "127.0.0.1:${VALKEY_HOST_PORT:-56379}:6379"
     healthcheck:

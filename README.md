@@ -17,7 +17,7 @@ Spor okulları için çok kiracılı (multi-tenant) yönetim platformu: okullar,
 
 ```bash
 bash scripts/setup-env.sh          # .env'i rastgele şifrelerle oluşturur (bir kez)
-docker compose up -d --wait        # PostgreSQL, Valkey (cache) ve Seq
+docker compose up -d --wait        # PostgreSQL ve Seq (Valkey isteğe bağlı, aşağıya bakın)
 dotnet tool restore
 bash scripts/ef.sh database update # migration'ları migrator rolüyle uygular
 bash scripts/run-api.sh            # API: http://127.0.0.1:5080
@@ -36,14 +36,15 @@ npm start                          # http://localhost:4200 (/api proxy'si API'ye
 
 ### Cache (P2-F7)
 
-Branş ve tesis listeleri, okulun saat dilimi ve dashboard `HybridCache` ile cache'lenir (DEC-310 – DEC-316). L2 olarak Valkey kullanılır: `run-api.sh`, `.env`'de `VALKEY_PASSWORD` varsa `ConnectionStrings__Cache`'i `127.0.0.1:${VALKEY_HOST_PORT:-56379}` için ayarlar. `ConnectionStrings:Cache` yoksa (ör. testlerde) sadece bellek içi cache kullanılır; Valkey kapalıysa API veritabanından çalışmaya devam eder.
+Branş ve tesis listeleri, okulun saat dilimi ve dashboard `HybridCache` ile cache'lenir (DEC-310 – DEC-316). Bellek içi cache her zaman vardır; Valkey (L2) isteğe bağlıdır ve compose'un `cache` profilindedir, yani düz `docker compose up` onu başlatmaz ve `VALKEY_PASSWORD` istemez:
 
-`.env` dosyanız bu özellikten önce oluşturulduysa `docker compose up` eksik `VALKEY_PASSWORD` yüzünden durur. `.env`'e iki satır ekleyin (değeri kendiniz üretin, ör. `openssl rand -hex 24`):
-
-```text
-VALKEY_PASSWORD=<rastgele harf ve rakamlar>
-VALKEY_HOST_PORT=56379
+```bash
+bash scripts/setup-env.sh                       # eski bir .env'e sadece eksik VALKEY_* anahtarlarını ekler
+docker compose --profile cache up -d --wait     # PostgreSQL, Seq ve Valkey
+bash scripts/run-api.sh                         # Valkey çalışıyorsa ConnectionStrings__Cache'i ayarlar
 ```
+
+`setup-env.sh` var olan `.env`'in değerlerini değiştirmez ve yazdırmaz. `VALKEY_PASSWORD` olmadan Valkey başlamayı reddeder (hata mesajı `docker compose --profile cache logs valkey`'de); diğer servisler, `scripts/e2e.sh` ve CI'daki `e2e` işi etkilenmez. `ConnectionStrings:Cache` yoksa (ör. testlerde) sadece bellek içi cache kullanılır; Valkey kapanırsa API veritabanından çalışmaya devam eder.
 
 ### Demo verisi (P1-38)
 

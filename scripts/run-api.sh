@@ -13,9 +13,14 @@ export ConnectionStrings__App Jwt__SigningKey
 # warns about a missing setting or a placeholder password instead of silently skipping the seed.
 if [[ -n "${PLATFORM_ADMIN_EMAIL:-}" ]]; then export PlatformAdmin__Email="$PLATFORM_ADMIN_EMAIL"; fi
 if [[ -n "${PLATFORM_ADMIN_PASSWORD:-}" ]]; then export PlatformAdmin__InitialPassword="$PLATFORM_ADMIN_PASSWORD"; fi
-# Optional (DEC-315): the Valkey L2 cache from docker compose; without VALKEY_PASSWORD the cache is in memory only.
-if [[ -n "${VALKEY_PASSWORD:-}" && "$VALKEY_PASSWORD" != change-me* ]]; then
+# Optional (DEC-315, DEC-316): the Valkey L2 cache, used only when VALKEY_PASSWORD is set and the compose "cache"
+# profile's valkey service is running; otherwise the cache is in memory only.
+if [[ -n "${VALKEY_PASSWORD:-}" && "$VALKEY_PASSWORD" != change-me* ]] \
+  && (cd "$REPO_ROOT" && docker compose --profile cache ps --status running --services 2>/dev/null | grep -qx valkey); then
   export ConnectionStrings__Cache="127.0.0.1:${VALKEY_HOST_PORT:-56379},password=$VALKEY_PASSWORD"
+  echo "run-api: using the Valkey cache on 127.0.0.1:${VALKEY_HOST_PORT:-56379}"
+else
+  echo "run-api: Valkey not running (docker compose --profile cache up -d --wait); in-memory cache only"
 fi
 export ASPNETCORE_ENVIRONMENT="${ASPNETCORE_ENVIRONMENT:-Development}"
 export ASPNETCORE_URLS="${ASPNETCORE_URLS:-http://127.0.0.1:5080}"
