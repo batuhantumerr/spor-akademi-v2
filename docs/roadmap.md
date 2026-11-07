@@ -72,7 +72,7 @@ Kapsamın tamamı ve maddelerin açıklamaları: [proje dokümanı, Ek G](proje-
 - [x] P2-F2 Hangfire ile arka plan işleri ve iş paneli (DEC-330 – DEC-335)
 - [x] P2-F3 Transactional outbox (DEC-300 – DEC-304)
 - [x] P2-F4 E-posta bildirimleri (DEC-350 – DEC-358)
-- [ ] P2-F5 Otomatik anonimleştirme işi
+- [x] P2-F5 Otomatik anonimleştirme işi
 - [x] P2-F6 Belge yükleme (S3 uyumlu; yerelde SeaweedFS, DEC-320 – DEC-326)
 - [x] P2-F7 Redis ve `HybridCache` ile cache (Valkey; DEC-310 – DEC-316)
 - [ ] P2-F8 Aidat kuralları (kardeş indirimi, dönem ortası değişiklik)

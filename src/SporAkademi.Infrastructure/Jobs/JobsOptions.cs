@@ -23,6 +23,11 @@ public sealed class JobsOptions
 
     public string RefreshTokenCleanupCron { get; set; } = "30 3 * * *";
 
+    /// <summary>P2-F5 (DEC-362): once a day, 02:00 UTC (05:00 in Istanbul), outside training hours.</summary>
+    public string StudentAnonymizationCron { get; set; } = "0 2 * * *";
+
+    /// <summary>Students anonymized per transaction (DEC-362).</summary>
+    public int AnonymizationBatchSize { get; set; } = 100;
     /// <summary>Fee reminders (P2-F4, DEC-355): 06:00 UTC, 09:00 in Istanbul.</summary>
     public string DuesReminderCron { get; set; } = "0 6 * * *";
 
@@ -41,6 +46,8 @@ public sealed class JobsOptions
         && IsCron(OutboxCron)
         && IsCron(OutboxCleanupCron)
         && IsCron(RefreshTokenCleanupCron)
+        && IsCron(StudentAnonymizationCron)
+        && AnonymizationBatchSize is > 0 and <= 1_000
         && IsCron(DuesReminderCron)
         && MaxOutboxBatchesPerRun is > 0 and <= 10_000
         && HeartbeatWarning > TimeSpan.Zero

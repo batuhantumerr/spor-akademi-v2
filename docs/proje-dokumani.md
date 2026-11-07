@@ -1148,7 +1148,7 @@ Aynı transaction içinde, commit'ten önce işlenir; herhangi bir adım başar�
 | `Address` | Adres satırı, ilçe, il |
 | `EmergencyContact` | Ad (zorunlu), `PhoneNumber` (zorunlu), yakınlık (zorunlu, serbest metin, en fazla 50 karakter) |
 | `Slug` | `^[a-z0-9]+(-[a-z0-9]+)*\z`, 3–50 karakter |
-| `RetentionPolicy` | Pozitif süreler |
+| `RetentionPolicy` | Kişisel veri 6–120 ay, ödeme kayıtları 1–50 yıl (DEC-361) |
 
 #### 8. Genel kurallar
 

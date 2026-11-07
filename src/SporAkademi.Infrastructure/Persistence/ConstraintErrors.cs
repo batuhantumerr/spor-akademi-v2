@@ -54,6 +54,9 @@ internal static class ConstraintErrors
         // A facility used only by archived groups passes the handler's check (US-07) but not the key.
         ["fk_groups_facility_tenant_id_facility_id"] = (typeof(Facility), FacilityErrors.InUse),
         ["fk_groups_sport_tenant_id_sport_id"] = (typeof(Sport), SportErrors.InUse),
+        // DEC-368: an orphan guardian deleted while a student was being linked to it; the deleting unit retries
+        // (the anonymization job retries the student alone, then skips it until the next run).
+        ["fk_student_guardians_guardians_tenant_id_guardian_id"] = (typeof(Guardian), PersistenceErrors.ConcurrencyConflict),
     };
 
     public static bool TryMap(DbUpdateException exception, out Error error)

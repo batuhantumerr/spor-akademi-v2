@@ -57,6 +57,18 @@ internal sealed partial class TenantJobRunner(IServiceScopeFactory scopeFactory,
         return schools.Count;
     }
 
+    /// <summary>
+    /// Runs one more unit of work for <paramref name="school"/> in a fresh scope, from inside that school's
+    /// <see cref="ForEachSchoolAsync"/> work: for batches that must not share a DbContext (and its tracked rows).
+    /// </summary>
+    public async Task<T> ForSchoolAsync<T>(SchoolId school, Func<IServiceProvider, CancellationToken, Task<T>> work, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(work);
+        await using var scope = scopeFactory.CreateAsyncScope();
+        scope.ServiceProvider.GetRequiredService<BackgroundTenantContext>().Enter(school.Value);
+        return await work(scope.ServiceProvider, cancellationToken);
+    }
+
     /// <summary>Runs platform-level work (no school): tenant filters match no rows, so it must name what it touches.</summary>
     public async Task<T> ForPlatformAsync<T>(Func<IServiceProvider, CancellationToken, Task<T>> work, CancellationToken cancellationToken)
     {

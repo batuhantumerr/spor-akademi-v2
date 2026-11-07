@@ -107,6 +107,7 @@ public static class DependencyInjection
         services.AddScoped<IStudentDirectory, StudentDirectory>();
         services.AddScoped<IStudentRepository, StudentRepository>();
         services.AddScoped<IGuardianRepository, GuardianRepository>();
+        services.AddScoped<IAnonymizationRunRepository, AnonymizationRunRepository>();
         services.AddScoped<IStudentDocumentRepository, StudentDocumentRepository>();
         services.AddDocumentStorage(configuration);
         services.AddScoped<IStudentReminderContacts, StudentReminderContacts>();

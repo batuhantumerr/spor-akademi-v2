@@ -10,6 +10,7 @@ import {
   LucideMapPin,
   LucideMegaphone,
   LucideReceipt,
+  LucideShieldCheck,
   LucideUsers,
   LucideWallet,
   LucideWhistle,
@@ -65,6 +66,16 @@ export function navigationFor(role: Role | null): NavSection[] {
           items: [
             { label: ui.nav.payments, path: '/payments', icon: LucideWallet },
             { label: ui.nav.dues, path: '/dues', icon: LucideReceipt },
+          ],
+        },
+        {
+          title: ui.nav.settings,
+          items: [
+            {
+              label: ui.nav.dataRetention,
+              path: '/settings/data-retention',
+              icon: LucideShieldCheck,
+            },
           ],
         },
       ];

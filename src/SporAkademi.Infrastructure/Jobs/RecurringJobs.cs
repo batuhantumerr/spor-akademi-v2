@@ -35,6 +35,7 @@ internal static class RecurringJobs
         }
 
         manager.AddOrUpdate<RefreshTokenCleanupJob>(RefreshTokenCleanupJob.JobId, job => job.RunAsync(CancellationToken.None), jobs.RefreshTokenCleanupCron, utc);
+        manager.AddOrUpdate<StudentAnonymizationJob>(StudentAnonymizationJob.JobId, job => job.RunAsync(CancellationToken.None), jobs.StudentAnonymizationCron, utc);
         manager.AddOrUpdate<DuesReminderJob>(DuesReminderJob.JobId, job => job.RunAsync(CancellationToken.None), jobs.DuesReminderCron, utc);
     }
 }

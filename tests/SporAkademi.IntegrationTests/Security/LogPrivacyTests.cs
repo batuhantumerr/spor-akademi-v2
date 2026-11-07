@@ -174,7 +174,22 @@ public sealed class LogPrivacyTests(DatabaseFixture database) : IdentityTest(dat
         (await anonymous.PostAsJsonAsync("/api/v1/auth/password-reset/confirm", new { token = resetToken, newPassword = ResetPassword }, ct))
             .StatusCode.ShouldBe(HttpStatusCode.UnprocessableEntity);
 
+        // P2-F5: the student leaves and, past the retention period, the job anonymizes it (counts and ids only).
+        using (var after = api.CreateClient(new WebApplicationFactoryClientOptions { HandleCookies = false }))
+        {
+            // A minted token: the admin's own sessions were ended by the password reset above.
+            after.Authorize(TestTokens.Create(Guid.CreateVersion7(), "SchoolAdmin", school.Value, Api.Clock.GetUtcNow()));
+            (await after.PostAsJsonAsync($"/api/v1/students/{studentId}/leave", new { date = "2027-01-14" }, ct)).StatusCode.ShouldBe(HttpStatusCode.OK);
+        }
+
+        Api.Clock.SetUtcNow(new DateTimeOffset(2029, 2, 1, 12, 0, 0, TimeSpan.Zero));
+        await using (var scope = api.Services.CreateAsyncScope())
+        {
+            (await scope.ServiceProvider.GetRequiredService<StudentAnonymizationJob>().RunAsync(ct)).ShouldBe(1);
+        }
+
         var events = sink.Rendered();
+        events.ShouldContain(e => e.Contains("Anonymization for school", StringComparison.Ordinal) && e.Contains(school.Value.ToString(), StringComparison.Ordinal));
         events.ShouldContain(e => e.Contains("identity.password-reset", StringComparison.Ordinal) && e.Contains("sent", StringComparison.Ordinal));
         events.ShouldContain(e => e.Contains("Dues reminder", StringComparison.Ordinal) && e.Contains("sent", StringComparison.Ordinal));
         // The test must see real request logs, otherwise it proves nothing.

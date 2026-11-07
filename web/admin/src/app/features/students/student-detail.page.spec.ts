@@ -19,6 +19,7 @@ const student: StudentDto = {
   gender: 'Female',
   status: 'Active',
   leftAt: null,
+  anonymizedAt: null,
   phone: null,
   email: null,
   emergencyContact: { name: 'Ali Kaya', phone: '+905331112233', relationship: 'Komşu' },
@@ -189,6 +190,31 @@ describe('StudentDetailPage', () => {
     await settle(fixture);
     expect(toast.success).toHaveBeenCalledWith(ui.studentDetail.reactivated);
     expect(buttonWith(root, ui.studentDetail.leave)).toBeDefined();
+  });
+
+  it('shows an anonymized student without personal data and without edit actions', async () => {
+    fixture.componentRef.setInput('id', 'st3');
+    await settle(fixture);
+    backend.expectOne('/api/v1/students/st3').flush({
+      ...student,
+      id: 'st3',
+      firstName: 'Anonim',
+      lastName: 'Öğrenci #1a2b3c4d',
+      birthDate: null,
+      status: 'Left',
+      leftAt: '2024-09-01',
+      anonymizedAt: '2026-09-02T02:00:00+00:00',
+      emergencyContact: null,
+      guardians: [],
+    });
+    await settle(fixture);
+
+    expect(root.querySelector('h1')?.textContent).toContain('Anonim Öğrenci #1a2b3c4d');
+    expect(root.textContent).toContain(ui.studentDetail.anonymizedBadge);
+    expect(root.textContent).toContain('02.09.2026');
+    expect(buttonWith(root, ui.studentDetail.edit)).toBeUndefined();
+    expect(buttonWith(root, ui.studentDetail.reactivate)).toBeUndefined();
+    expect(root.textContent).not.toContain('Ali Kaya');
   });
 
   it('edits a guardian through a dialog that loads the guardian with its version', async () => {

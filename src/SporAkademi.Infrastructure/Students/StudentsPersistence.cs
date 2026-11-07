@@ -14,7 +14,14 @@ internal sealed class StudentConfiguration : IEntityTypeConfiguration<Student>
     public void Configure(EntityTypeBuilder<Student> builder)
     {
         builder.ToTable("students", Schemas.Students, table =>
-            table.HasCheckConstraint("ck_students_left_at", "(status = 'Left') = (left_at IS NOT NULL)"));
+        {
+            table.HasCheckConstraint("ck_students_left_at", "(status = 'Left') = (left_at IS NOT NULL)");
+            // DEC-363: birth date and emergency contact are cleared only by anonymization, which needs Left.
+            table.HasCheckConstraint(
+                "ck_students_personal_data",
+                "anonymized_at IS NOT NULL OR (birth_date IS NOT NULL AND emergency_contact_name IS NOT NULL)");
+            table.HasCheckConstraint("ck_students_anonymized_left", "anonymized_at IS NULL OR status = 'Left'");
+        });
         builder.HasKey(s => s.Id);
         // ADR-0003 layer 3: (tenant_id, id) is the target of composite foreign keys (guardian links, enrollments).
         builder.HasAlternateKey(s => new { s.TenantId, s.Id }).HasName("ak_students_tenant_id_id");
@@ -25,6 +32,10 @@ internal sealed class StudentConfiguration : IEntityTypeConfiguration<Student>
         builder.Property(s => s.SearchKey).HasMaxLength(Student.SearchKeyMaxLength);
         // DEC-150: substring search scans one school's rows; the tenant prefix keeps that small.
         builder.HasIndex(s => new { s.TenantId, s.SearchKey });
+        // P2-F5: the daily job looks for departed students not yet anonymized; the partial index stays small.
+        builder.HasIndex(s => new { s.TenantId, s.LeftAt })
+            .HasDatabaseName("ix_students_tenant_id_left_at_not_anonymized")
+            .HasFilter("status = 'Left' AND anonymized_at IS NULL");
         builder.ComplexProperty(s => s.EmergencyContact, contact =>
         {
             contact.Property(c => c.Name).HasColumnName("emergency_contact_name").HasMaxLength(EmergencyContact.NameMaxLength);
@@ -88,6 +99,9 @@ internal sealed class StudentRepository(AppDbContext db) : IStudentRepository
     public Task<bool> ExistsAsync(StudentId id, CancellationToken cancellationToken) =>
         db.Set<Student>().AnyAsync(s => s.Id == id, cancellationToken);
 
+    public Task<bool> IsAnonymizedAsync(StudentId id, CancellationToken cancellationToken) =>
+        db.Set<Student>().AnyAsync(s => s.Id == id && s.AnonymizedAt != null, cancellationToken);
+
     public void ExpectVersion(Student student, uint version)
     {
         var entry = db.Entry(student);
@@ -111,9 +125,11 @@ internal sealed class StudentRepository(AppDbContext db) : IStudentRepository
                 s.LeftAt,
                 s.Phone,
                 s.Email,
-                ContactName = s.EmergencyContact.Name,
-                ContactPhone = s.EmergencyContact.Phone,
-                ContactRelationship = s.EmergencyContact.Relationship,
+                // The columns are null once the student is anonymized (DEC-363).
+                ContactName = (string?)s.EmergencyContact!.Name,
+                ContactPhone = (PhoneNumber?)s.EmergencyContact!.Phone,
+                ContactRelationship = (string?)s.EmergencyContact!.Relationship,
+                s.AnonymizedAt,
                 Version = EF.Property<uint>(s, ConcurrencyToken.PropertyName),
             })
             .SingleOrDefaultAsync(cancellationToken);
@@ -140,8 +156,11 @@ internal sealed class StudentRepository(AppDbContext db) : IStudentRepository
             student.LeftAt,
             student.Phone?.Value,
             student.Email?.Value,
-            new EmergencyContactDto(student.ContactName, student.ContactPhone.Value, student.ContactRelationship),
+            student is { ContactName: { } name, ContactPhone: { } phone, ContactRelationship: { } relationship }
+                ? new EmergencyContactDto(name, phone.Value, relationship)
+                : null,
             [.. guardians.Select(g => new StudentGuardianDto(g.Id.Value, g.Relationship, g.FirstName, g.LastName, g.Phone.Value, g.Email?.Value))],
+            student.AnonymizedAt,
             student.Version);
     }
 
@@ -168,9 +187,40 @@ internal sealed class StudentRepository(AppDbContext db) : IStudentRepository
         var items = await Sort(query, search.Sort)
             .Skip(page.Skip)
             .Take(page.PageSize)
-            .Select(s => new StudentListItemDto(s.Id.Value, s.FirstName, s.LastName, s.BirthDate, s.Gender, s.Status, s.LeftAt))
+            .Select(s => new StudentListItemDto(s.Id.Value, s.FirstName, s.LastName, s.BirthDate, s.Gender, s.Status, s.LeftAt, s.AnonymizedAt))
             .ToListAsync(cancellationToken);
         return new PagedResult<StudentListItemDto>(items, page.Page, page.PageSize, total);
+    }
+
+    public async Task<IReadOnlyList<StudentId>> ListDueForAnonymizationAsync(
+        DateOnly cutoff,
+        IReadOnlyCollection<StudentId> exclude,
+        int limit,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(exclude);
+        var query = DueForAnonymization(cutoff);
+        if (exclude.Count > 0)
+        {
+            var excluded = exclude.ToList();
+            query = query.Where(s => !excluded.Contains(s.Id));
+        }
+
+        return await query.OrderBy(s => s.Id).Take(limit).Select(s => s.Id).ToListAsync(cancellationToken);
+    }
+
+    public Task<int> CountDueForAnonymizationAsync(DateOnly cutoff, CancellationToken cancellationToken) =>
+        DueForAnonymization(cutoff).CountAsync(cancellationToken);
+
+    private IQueryable<Student> DueForAnonymization(DateOnly cutoff) =>
+        db.Set<Student>().AsNoTracking()
+            .Where(s => s.Status == StudentStatus.Left && s.LeftAt <= cutoff && s.AnonymizedAt == null);
+
+    public async Task<IReadOnlyList<Student>> GetManyAsync(IReadOnlyCollection<StudentId> ids, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(ids);
+        var list = ids.ToList();
+        return await db.Set<Student>().Include(s => s.Guardians).Where(s => list.Contains(s.Id)).ToListAsync(cancellationToken);
     }
 
     private static IQueryable<Student> Sort(IQueryable<Student> query, StudentSort sort) => sort switch
@@ -201,6 +251,30 @@ internal sealed class GuardianRepository(AppDbContext db) : IGuardianRepository
         db.Set<Guardian>().AnyAsync(g => g.Phone == phone && (except == null || g.Id != except), cancellationToken);
 
     public void Add(Guardian guardian) => db.Add(guardian);
+
+    public void Remove(Guardian guardian) => db.Remove(guardian);
+
+    public Task<bool> IsLinkedToAnyStudentAsync(GuardianId id, CancellationToken cancellationToken) =>
+        db.Set<StudentGuardian>().AnyAsync(l => l.GuardianId == id, cancellationToken);
+
+    // Raw SQL bypasses the tenant filter, so the school is part of the condition (section 5.4).
+    public async Task LockForLinkAsync(GuardianId id, CancellationToken cancellationToken) =>
+        await db.Database.ExecuteSqlAsync(
+            $"SELECT id FROM students.guardians WHERE tenant_id = {db.CurrentTenantId.Value} AND id = {id.Value} FOR SHARE",
+            cancellationToken);
+
+    public async Task LockForDeletionAsync(GuardianId id, CancellationToken cancellationToken) =>
+        await db.Database.ExecuteSqlAsync(
+            $"SELECT id FROM students.guardians WHERE tenant_id = {db.CurrentTenantId.Value} AND id = {id.Value} FOR UPDATE",
+            cancellationToken);
+
+    public async Task<IReadOnlyList<GuardianId>> ListUnlinkedAsync(int limit, CancellationToken cancellationToken) =>
+        await db.Set<Guardian>().AsNoTracking()
+            .Where(g => !db.Set<StudentGuardian>().Any(l => l.GuardianId == g.Id))
+            .OrderBy(g => g.Id)
+            .Take(limit)
+            .Select(g => g.Id)
+            .ToListAsync(cancellationToken);
 
     public void ExpectVersion(Guardian guardian, uint version)
     {

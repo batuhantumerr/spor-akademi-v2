@@ -20,7 +20,7 @@ import { problemMessage, toProblem } from '../../core/api/problem';
 import { formatDate, formatPhone } from '../../core/format/format';
 import { interpolate, ui } from '../../core/i18n/tr';
 import { ageOn } from '../../core/students/age';
-import { SchoolClock } from '../../core/time/school-clock';
+import { SchoolClock, dateIn } from '../../core/time/school-clock';
 import { ConfirmService } from '../../shared/ui/confirm-dialog.component';
 import { PageHeaderComponent } from '../../shared/ui/page-header.component';
 import { ToastService } from '../../shared/ui/toast.service';
@@ -79,10 +79,16 @@ import { StudentDocumentsComponent } from './student-documents.component';
         >
           {{ list.statuses[s.status] }}
         </span>
-        <button type="button" class="btn btn-secondary" [disabled]="busy()" (click)="edit()">
-          <svg lucidePencil></svg>{{ text.edit }}
-        </button>
-        @if (s.status === 'Active') {
+        @if (s.anonymizedAt) {
+          <span class="badge badge-muted">{{ text.anonymizedBadge }}</span>
+        } @else {
+          <button type="button" class="btn btn-secondary" [disabled]="busy()" (click)="edit()">
+            <svg lucidePencil></svg>{{ text.edit }}
+          </button>
+        }
+        @if (s.anonymizedAt) {
+          <!-- DEC-363: an anonymized student never changes again. -->
+        } @else if (s.status === 'Active') {
           <button type="button" class="btn btn-outline" [disabled]="busy()" (click)="leave()">
             <svg lucideLogOut></svg>{{ text.leave }}
           </button>
@@ -93,6 +99,11 @@ import { StudentDocumentsComponent } from './student-documents.component';
         }
       </app-page-header>
 
+      @if (s.anonymizedAt) {
+        <p role="note" class="card mb-4 p-4 text-sm text-muted-foreground">
+          {{ anonymizedNote(s.anonymizedAt) }}
+        </p>
+      }
       <div class="grid gap-4 lg:grid-cols-2">
         <section class="card p-4" aria-labelledby="profile-title">
           <h2 id="profile-title" class="mb-3 text-base font-semibold">{{ text.profile }}</h2>
@@ -100,7 +111,7 @@ import { StudentDocumentsComponent } from './student-documents.component';
             <div>
               <dt class="text-xs text-muted-foreground">{{ list.birthDate }}</dt>
               <dd class="font-mono">
-                {{ date(s.birthDate) }}
+                {{ s.birthDate ? date(s.birthDate) : list.anonymizedDash }}
                 <span class="font-sans text-muted-foreground">{{ age() }}</span>
               </dd>
             </div>
@@ -122,9 +133,13 @@ import { StudentDocumentsComponent } from './student-documents.component';
 
         <section class="card p-4" aria-labelledby="emergency-title">
           <h2 id="emergency-title" class="mb-3 text-base font-semibold">{{ text.emergency }}</h2>
-          <p class="text-sm font-medium">{{ s.emergencyContact.name }}</p>
-          <p class="text-sm text-muted-foreground">{{ s.emergencyContact.relationship }}</p>
-          <p class="font-mono text-sm">{{ phone(s.emergencyContact.phone) }}</p>
+          @if (s.emergencyContact; as contact) {
+            <p class="text-sm font-medium">{{ contact.name }}</p>
+            <p class="text-sm text-muted-foreground">{{ contact.relationship }}</p>
+            <p class="font-mono text-sm">{{ phone(contact.phone) }}</p>
+          } @else {
+            <p class="text-sm text-muted-foreground">{{ list.anonymizedDash }}</p>
+          }
         </section>
 
         <section class="card p-4" aria-labelledby="guardians-title">
@@ -168,7 +183,7 @@ import { StudentDocumentsComponent } from './student-documents.component';
           [studentActive]="s.status === 'Active'"
         />
         <app-student-attendance [studentId]="s.id" />
-        <app-student-documents [studentId]="s.id" />
+        <app-student-documents [studentId]="s.id" [anonymized]="!!s.anonymizedAt" />
       </div>
     }
   `,
@@ -192,7 +207,7 @@ export class StudentDetailPage {
   protected readonly busy = signal(false);
   protected readonly age = computed(() => {
     const s = this.student();
-    const age = s ? ageOn(s.birthDate, this.clock.today()) : null;
+    const age = s?.birthDate ? ageOn(s.birthDate, this.clock.today()) : null;
     return age === null ? '' : `(${interpolate(this.list.age, { age })})`;
   });
 
@@ -212,6 +227,13 @@ export class StudentDetailPage {
 
   protected date(iso: string): string {
     return formatDate(iso);
+  }
+
+  protected anonymizedNote(at: string): string {
+    // The school's calendar day, not the UTC one (the job runs at 05:00 in Istanbul, 02:00 UTC).
+    return interpolate(this.text.anonymizedNote, {
+      date: formatDate(dateIn(new Date(at), this.clock.timeZone())),
+    });
   }
 
   protected phone(value: string): string {

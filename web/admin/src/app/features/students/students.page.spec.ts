@@ -15,6 +15,7 @@ const ayse: StudentListItemDto = {
   gender: 'Female',
   status: 'Active',
   leftAt: null,
+  anonymizedAt: null,
 };
 
 const pageOf = (items: StudentListItemDto[]) => ({

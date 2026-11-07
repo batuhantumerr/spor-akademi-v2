@@ -576,7 +576,9 @@ export class StudentLeaveDialog {
     if (!value) {
       return clientMessage(this.date);
     }
-    return value > this.today() || value < this.student.birthDate ? this.text.leaveDateHint : null;
+    return value > this.today() || (!!this.student.birthDate && value < this.student.birthDate)
+      ? this.text.leaveDateHint
+      : null;
   }
 
   protected async save(): Promise<void> {

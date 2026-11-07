@@ -71,68 +71,74 @@ import { acceptFor, checkFile, formatSize } from './document-files';
           }
         </figure>
 
-        <form
-          class="min-w-0 flex-1 space-y-3"
-          (submit)="$event.preventDefault(); upload()"
-          novalidate
-        >
-          <fieldset>
-            <legend class="field-label">{{ text.typeLabel }}</legend>
-            <div class="flex flex-wrap gap-4 text-sm">
-              @for (t of types; track t) {
-                <label class="flex items-center gap-2">
-                  <input
-                    type="radio"
-                    name="document-type"
-                    [value]="t"
-                    [checked]="type() === t"
-                    [disabled]="uploading()"
-                    (change)="selectType(t)"
-                  />
-                  {{ text.types[t] }}
-                </label>
+        @if (anonymized()) {
+          <p class="min-w-0 flex-1 text-sm text-muted-foreground" data-testid="upload-closed">
+            {{ text.anonymizedNoUpload }}
+          </p>
+        } @else {
+          <form
+            class="min-w-0 flex-1 space-y-3"
+            (submit)="$event.preventDefault(); upload()"
+            novalidate
+          >
+            <fieldset>
+              <legend class="field-label">{{ text.typeLabel }}</legend>
+              <div class="flex flex-wrap gap-4 text-sm">
+                @for (t of types; track t) {
+                  <label class="flex items-center gap-2">
+                    <input
+                      type="radio"
+                      name="document-type"
+                      [value]="t"
+                      [checked]="type() === t"
+                      [disabled]="uploading()"
+                      (change)="selectType(t)"
+                    />
+                    {{ text.types[t] }}
+                  </label>
+                }
+              </div>
+            </fieldset>
+            <div>
+              <label class="field-label" for="document-file">{{ text.fileLabel }}</label>
+              <input
+                id="document-file"
+                type="file"
+                class="input py-1.5"
+                [attr.accept]="accept()"
+                [disabled]="uploading()"
+                [attr.aria-invalid]="!!error()"
+                [attr.aria-describedby]="'document-hint' + (error() ? ' document-error' : '')"
+                (change)="pick($event)"
+              />
+              <p id="document-hint" class="mt-1 text-xs text-muted-foreground">
+                {{ text.hints[type()] }}
+              </p>
+              @if (error(); as message) {
+                <p id="document-error" role="alert" class="field-error">{{ message }}</p>
               }
             </div>
-          </fieldset>
-          <div>
-            <label class="field-label" for="document-file">{{ text.fileLabel }}</label>
-            <input
-              id="document-file"
-              type="file"
-              class="input py-1.5"
-              [attr.accept]="accept()"
-              [disabled]="uploading()"
-              [attr.aria-invalid]="!!error()"
-              [attr.aria-describedby]="'document-hint' + (error() ? ' document-error' : '')"
-              (change)="pick($event)"
-            />
-            <p id="document-hint" class="mt-1 text-xs text-muted-foreground">
-              {{ text.hints[type()] }}
-            </p>
-            @if (error(); as message) {
-              <p id="document-error" role="alert" class="field-error">{{ message }}</p>
+            @if (uploading()) {
+              <div class="space-y-1">
+                <progress
+                  class="h-2 w-full"
+                  max="100"
+                  [value]="progress()"
+                  [attr.aria-label]="text.progress"
+                ></progress>
+                <p class="text-xs text-muted-foreground" aria-hidden="true">{{ progressText() }}</p>
+                <p class="sr-only" aria-live="polite" data-testid="upload-live">
+                  {{ progressAnnouncement() }}
+                </p>
+              </div>
             }
-          </div>
-          @if (uploading()) {
-            <div class="space-y-1">
-              <progress
-                class="h-2 w-full"
-                max="100"
-                [value]="progress()"
-                [attr.aria-label]="text.progress"
-              ></progress>
-              <p class="text-xs text-muted-foreground" aria-hidden="true">{{ progressText() }}</p>
-              <p class="sr-only" aria-live="polite" data-testid="upload-live">
-                {{ progressAnnouncement() }}
-              </p>
+            <div class="flex justify-end">
+              <button type="submit" class="btn btn-primary" [disabled]="uploading()">
+                <svg lucideUpload></svg>{{ uploading() ? progressText() : text.upload }}
+              </button>
             </div>
-          }
-          <div class="flex justify-end">
-            <button type="submit" class="btn btn-primary" [disabled]="uploading()">
-              <svg lucideUpload></svg>{{ uploading() ? progressText() : text.upload }}
-            </button>
-          </div>
-        </form>
+          </form>
+        }
       </div>
 
       <div class="mt-4 border-t border-border/60 pt-3">
@@ -200,6 +206,9 @@ export class StudentDocumentsComponent {
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
 
   readonly studentId = input.required<string>();
+
+  /** An anonymized student gets no new documents (DEC-366); the server refuses them too. */
+  readonly anonymized = input(false);
 
   protected readonly text = ui.documents;
   protected readonly common = ui.common;
