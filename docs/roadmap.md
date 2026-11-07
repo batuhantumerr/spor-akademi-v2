@@ -69,7 +69,7 @@ Kapsamın tamamı ve maddelerin açıklamaları: [proje dokümanı, Ek G](proje-
 ## Faz 2 — İş mantığı derinliği (`v0.2.0`)
 
 - [ ] P2-F1 Online aidat ödemesi (iyzico sandbox, webhook'lar, idempotency)
-- [ ] P2-F2 Hangfire ile arka plan işleri ve iş paneli
+- [x] P2-F2 Hangfire ile arka plan işleri ve iş paneli (DEC-330 – DEC-335)
 - [x] P2-F3 Transactional outbox (DEC-300 – DEC-304)
 - [ ] P2-F4 E-posta bildirimleri
 - [ ] P2-F5 Otomatik anonimleştirme işi

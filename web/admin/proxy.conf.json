@@ -1,4 +1,5 @@
 {
   "/api": { "target": "http://127.0.0.1:5080", "secure": false },
-  "/health": { "target": "http://127.0.0.1:5080", "secure": false }
+  "/health": { "target": "http://127.0.0.1:5080", "secure": false },
+  "/jobs": { "target": "http://127.0.0.1:5080", "secure": false }
 }

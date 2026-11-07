@@ -57,10 +57,12 @@ public sealed partial class DatabaseFixture : IAsyncLifetime
         {
             DbAdapter = DbAdapter.Postgres,
             SchemasToExclude = ["public"],
+            // Hangfire's schema version row is part of the schema, like the migrations history (DEC-331).
+            TablesToIgnore = [new Respawn.Graph.Table("hangfire", "schema")],
         });
     }
 
-    /// <summary>Deletes all module data; schema and migrations history stay.</summary>
+    /// <summary>Deletes all module data and Hangfire's jobs; schema, migrations history and Hangfire's schema version stay.</summary>
     public async Task ResetAsync()
     {
         await using var connection = new NpgsqlConnection(MigratorConnectionString);

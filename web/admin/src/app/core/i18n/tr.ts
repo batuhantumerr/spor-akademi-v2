@@ -113,6 +113,7 @@ export const ui = {
     overview: 'Genel bakış',
     dashboard: 'Panel',
     schools: 'Okullar',
+    jobs: 'İş paneli',
     setup: 'Okul kurulumu',
     sports: 'Branşlar',
     facilities: 'Tesisler',
@@ -371,6 +372,15 @@ export const ui = {
       string,
       string
     >,
+  },
+  jobs: {
+    title: 'İş paneli',
+    description: 'Arka plan işleri: e-posta kuyruğu (outbox), temizlik işleri ve hatalar.',
+    open: 'Paneli yeni sekmede aç',
+    opening: 'Açılıyor…',
+    opened: 'İş paneli yeni sekmede açıldı.',
+    fallback: 'Sekme açılmadıysa buradan açın',
+    note: 'Panel tüm okulların işlerini gösterir. Oturumu 15 dakika geçerlidir; süre dolunca buradan yeniden açın.',
   },
   schools: {
     title: 'Okullar',

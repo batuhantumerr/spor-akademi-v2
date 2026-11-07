@@ -12,6 +12,7 @@ using SporAkademi.Api.Endpoints.Organization;
 using SporAkademi.Api.Endpoints.Students;
 using SporAkademi.Api.Endpoints.Tenancy;
 using SporAkademi.Api.Errors;
+using SporAkademi.Api.Jobs;
 using SporAkademi.Api.Observability;
 using SporAkademi.Api.OpenApi;
 using SporAkademi.Application;
@@ -39,6 +40,7 @@ builder.Services.AddApplication();
 builder.Services.AddInfrastructure(builder.Configuration);
 builder.Services.AddJwtAuthentication();
 builder.Services.AddAuthRateLimiting();
+builder.Services.AddJobsDashboard();
 
 builder.Services.ConfigureHttpJsonOptions(json => json.SerializerOptions.Converters.Add(new JsonStringEnumConverter()));
 builder.Services.AddProblemDetails(options => options.CustomizeProblemDetails = ProblemShape.Complete);
@@ -71,6 +73,7 @@ app.MapEnrollmentEndpoints();
 app.MapAttendanceEndpoints();
 app.MapBillingEndpoints();
 app.MapDashboardEndpoints();
+app.MapJobsDashboard();
 app.MapApiDocument();
 
 await app.RunAsync();
