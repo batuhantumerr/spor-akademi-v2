@@ -1,6 +1,6 @@
 import { ChangeDetectionStrategy, Component, ElementRef, inject, signal } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
-import { ActivatedRoute, Router } from '@angular/router';
+import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import {
   LucideCircleAlert,
   LucideEye,
@@ -22,6 +22,7 @@ import { focusFirstInvalid } from '../../shared/forms/focus-first-invalid';
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
     ReactiveFormsModule,
+    RouterLink,
     LucideCircleAlert,
     LucideEye,
     LucideEyeOff,
@@ -122,7 +123,14 @@ import { focusFirstInvalid } from '../../shared/forms/focus-first-invalid';
               }
             </div>
             <div>
-              <label class="field-label" for="password">{{ text.login.password }}</label>
+              <div class="flex items-baseline justify-between gap-2">
+                <label class="field-label" for="password">{{ text.login.password }}</label>
+                <a
+                  routerLink="/forgot-password"
+                  class="text-sm font-medium text-primary hover:underline"
+                  >{{ text.login.forgotPassword }}</a
+                >
+              </div>
               <div class="relative">
                 <input
                   id="password"

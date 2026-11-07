@@ -47,6 +47,20 @@ bash scripts/run-api.sh                         # Valkey çalışıyorsa Connect
 
 `setup-env.sh` var olan `.env`'in değerlerini değiştirmez ve yazdırmaz. `VALKEY_PASSWORD` olmadan Valkey başlamayı reddeder (hata mesajı `docker compose --profile cache logs valkey`'de); diğer servisler, `scripts/e2e.sh` ve CI'daki `e2e` işi etkilenmez. `ConnectionStrings:Cache` yoksa (ör. testlerde) sadece bellek içi cache kullanılır; Valkey kapanırsa API veritabanından çalışmaya devam eder.
 
+### E-posta (P2-F4)
+
+Hoş geldin, şifre sıfırlama ve aidat hatırlatma e-postaları outbox'tan, commit sonrası gönderilir (DEC-350 – DEC-358). SMTP ayarı yoksa (`Email__Smtp__Host`) API e-posta göndermez, sadece şablon adını loglar. Yerelde e-postaları görmek için isteğe bağlı Mailpit (compose'un `mail` profili, sadece `127.0.0.1`, hiçbir şeyi dışarı iletmez):
+
+```bash
+bash scripts/setup-env.sh                       # eski bir .env'e sadece eksik MAILPIT_* port anahtarlarını ekler
+docker compose --profile mail up -d --wait      # PostgreSQL, Seq ve Mailpit
+bash scripts/run-api.sh                         # Mailpit çalışıyorsa API'nin SMTP'sini ona yönlendirir
+```
+
+Gelen kutusu: http://127.0.0.1:58025. E-postalardaki bağlantılar `Email__AppBaseUrl`'e (varsayılan `http://localhost:4200/`) gider. Aidat hatırlatmaları her gün 06:00 UTC'de (`Jobs__DuesReminderCron`) çalışan `billing-dues-reminders` işiyle gönderilir; iş panelinden elle de tetiklenebilir. Hatırlatmalar varsayılan olarak **kapalıdır**; açmak için `Billing__DuesReminders__Enabled=true` ve `Billing__DuesReminders__StartsOn=YYYY-MM-DD` (son ödeme tarihi bundan önce olan dönemler asla hatırlatılmaz, ilk çalışma eski borçları toplu e-postalamaz).
+
+Deploy bloğunda yapılacaklar (DEC-350, DEC-353): API henüz forwarded header'ları (`X-Forwarded-For`) işlemiyor; reverse proxy arkasında IP başına rate limit'ler (giriş, şifre sıfırlama) tek bir kova olur, `ForwardedHeadersOptions` sadece gerçek proxy adresine güvenecek şekilde ayarlanmalı. SMTP sağlayıcısı, gönderen adresi ve SPF/DKIM seçilmeli; Production'da SMTP ayarlıysa `Email__AppBaseUrl` https ve localhost olmayan bir adres olmalı (yoksa API açılmaz).
+
 ### Belge deposu (P2-F6)
 
 Öğrenci belgeleri (sağlık raporu, fotoğraf) S3 uyumlu bir depoda tutulur. Yerelde ve testlerde compose'daki `storage` servisi (SeaweedFS, Apache-2.0; DEC-320) kullanılır: `127.0.0.1:58333`, bucket açılışta yoksa oluşturulur, herkese açık erişim yoktur. Production deposu Deploy bloğunda seçilecek.

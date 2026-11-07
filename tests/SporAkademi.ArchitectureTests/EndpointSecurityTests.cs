@@ -19,6 +19,8 @@ public sealed class EndpointSecurityTests : IDisposable
         "/api/v1/auth/login",
         "/api/v1/auth/refresh",
         "/api/v1/auth/logout",
+        "/api/v1/auth/password-reset/request", // P2-F4: always 202, rate limited (DEC-353)
+        "/api/v1/auth/password-reset/confirm", // P2-F4: needs a set-password token
     ];
 
     private readonly WebApplicationFactory<Program> _factory = new WebApplicationFactory<Program>()

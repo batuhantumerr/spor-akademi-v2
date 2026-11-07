@@ -15,7 +15,7 @@ export interface ApiProblem {
 /** Normalizes any HTTP failure into a problem with a code the UI can translate. */
 export function toProblem(error: unknown): ApiProblem {
   if (error instanceof HttpErrorResponse) {
-    const body = error.error as Partial<ApiProblem> | null;
+    const body = problemBody(error.error);
     if (body && typeof body === 'object' && typeof body.code === 'string') {
       return { ...body, code: body.code, status: error.status };
     }
@@ -25,6 +25,22 @@ export function toProblem(error: unknown): ApiProblem {
     return { code: 'Unexpected.Error', status: error.status };
   }
   return { code: 'Unexpected.Error' };
+}
+
+/**
+ * The problem body; endpoints without a response body are requested as text by the generated client, so their
+ * problem arrives as a JSON string. Anything that is not a JSON object (e.g. an HTML error page) yields null.
+ */
+function problemBody(body: unknown): Partial<ApiProblem> | null {
+  if (typeof body !== 'string') {
+    return body as Partial<ApiProblem> | null;
+  }
+  try {
+    const parsed: unknown = JSON.parse(body);
+    return parsed && typeof parsed === 'object' ? (parsed as Partial<ApiProblem>) : null;
+  } catch {
+    return null;
+  }
 }
 
 /** Turkish, user-friendly message for a problem; never shows internal details. */

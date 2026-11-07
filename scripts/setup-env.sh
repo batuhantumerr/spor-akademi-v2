@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Creates .env with fresh random secrets. Never overwrites an existing .env: it only appends keys added
-# since it was created (today the optional Valkey cache, DEC-316, and document storage, DEC-326); existing values are
-# neither changed nor printed.
+# since it was created (the optional Valkey cache, DEC-316, document storage, DEC-326, and Mailpit ports, DEC-357);
+# existing values are neither changed nor printed.
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 umask 077
@@ -21,10 +21,12 @@ if [[ -e "$ROOT/.env" ]]; then
   append_missing STORAGE_SECRET_KEY "$(openssl rand -hex 20)"
   append_missing STORAGE_HOST_PORT 58333
   append_missing STORAGE_BUCKET spor-akademi-documents
+  append_missing MAILPIT_SMTP_HOST_PORT 51025
+  append_missing MAILPIT_UI_HOST_PORT 58025
   if [[ $added -eq 0 ]]; then
     echo ".env already exists and has every key; nothing changed (remove it first if you want new secrets)."
   else
-    echo ".env already exists; appended $added missing key(s) (Valkey cache, document storage). Existing values are unchanged."
+    echo ".env already exists; appended $added missing key(s) (Valkey cache, document storage, Mailpit ports). Existing values are unchanged."
   fi
   exit 0
 fi
@@ -36,6 +38,8 @@ platform_admin_password="$(openssl rand -hex 16)"
   echo "JWT_SIGNING_KEY=$(openssl rand -hex 32)"
   echo "VALKEY_PASSWORD=$(openssl rand -hex 24)"
   echo "VALKEY_HOST_PORT=56379"
+  echo "MAILPIT_SMTP_HOST_PORT=51025"
+  echo "MAILPIT_UI_HOST_PORT=58025"
   echo "POSTGRES_HOST_PORT=55432"
   echo "SEQ_HOST_PORT=5341"
   echo "STORAGE_ACCESS_KEY=$(openssl rand -hex 10)"

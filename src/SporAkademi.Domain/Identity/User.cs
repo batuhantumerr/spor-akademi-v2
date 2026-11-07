@@ -25,6 +25,9 @@ public sealed record PasswordChanged(UserId UserId) : IDomainEvent;
 
 public sealed record UserDeactivated(UserId UserId, SchoolId? TenantId) : IDomainEvent;
 
+/// <summary>A new account was opened (US-01, US-08); P2-F4 sends the welcome e-mail after commit.</summary>
+public sealed record UserCreated(UserId UserId, SchoolId? TenantId) : IDomainEvent;
+
 /// <summary>
 /// An account. Not tenant-scoped (DEC-105): the Platform Admin has no school and login looks users up
 /// by e-mail across schools. Every other role belongs to exactly one school.
@@ -43,7 +46,11 @@ public sealed class User : AggregateRoot<UserId>
     public static readonly TimeSpan RefreshTokenLifetime = TimeSpan.FromDays(7);
     public static readonly TimeSpan SessionLifetime = TimeSpan.FromDays(30);
 
+    /// <summary>DEC-353: one self-service reset request per account in this window; later requests are ignored silently.</summary>
+    public static readonly TimeSpan PasswordResetRequestCooldown = TimeSpan.FromMinutes(2);
+
     private readonly List<RefreshToken> _refreshTokens = [];
+    private readonly List<PasswordToken> _passwordTokens = [];
 
     private User(UserId id, SchoolId? tenantId, Email email, string passwordHash, UserRole role, string firstName, string lastName, PhoneNumber? phone)
         : base(id)
@@ -96,7 +103,13 @@ public sealed class User : AggregateRoot<UserId>
 
     public DateTimeOffset? LockoutEndsAt { get; private set; }
 
+    /// <summary>The last accepted self-service reset request (DEC-353 cooldown).</summary>
+    public DateTimeOffset? PasswordResetRequestedAt { get; private set; }
+
     public IReadOnlyCollection<RefreshToken> RefreshTokens => _refreshTokens.AsReadOnly();
+
+    /// <summary>The pending set-password link, if any (at most one, DEC-352).</summary>
+    public IReadOnlyCollection<PasswordToken> PasswordTokens => _passwordTokens.AsReadOnly();
 
     /// <summary>Creates an account with a temporary password that must be changed at first login.</summary>
     public static Result<User> Create(SchoolId? tenantId, Email email, string passwordHash, UserRole role, string firstName, string lastName, PhoneNumber? phone)
@@ -111,9 +124,14 @@ public sealed class User : AggregateRoot<UserId>
         }
 
         var names = CheckNames(firstName, lastName);
-        return names.IsSuccess
-            ? Result.Success(new User(EntityId.New<UserId>(), tenantId, email, passwordHash, role, names.Value.First, names.Value.Last, phone))
-            : Result.Failure<User>(names.Error);
+        if (names.IsFailure)
+        {
+            return Result.Failure<User>(names.Error);
+        }
+
+        var user = new User(EntityId.New<UserId>(), tenantId, email, passwordHash, role, names.Value.First, names.Value.Last, phone);
+        user.Raise(new UserCreated(user.Id, tenantId));
+        return Result.Success(user);
     }
 
     /// <summary>Changes the editable profile (US-08: name and phone) of an active account. The e-mail is the login and does not change here.</summary>
@@ -229,8 +247,66 @@ public sealed class User : AggregateRoot<UserId>
         MustChangePassword = false;
         ClearFailedLogins();
         RevokeAllRefreshTokens(now);
+        _passwordTokens.Clear();
         Raise(new PasswordChanged(Id));
         return Result.Success(StartSession(refreshTokenHash, now));
+    }
+
+    /// <summary>
+    /// Accepts a self-service reset request unless one was accepted within <see cref="PasswordResetRequestCooldown"/>
+    /// (DEC-353). Only active accounts get a link; the caller answers the same either way.
+    /// </summary>
+    public bool TryRequestPasswordReset(DateTimeOffset now)
+    {
+        if (Status != UserStatus.Active
+            || (PasswordResetRequestedAt is { } last && now - last < PasswordResetRequestCooldown))
+        {
+            return false;
+        }
+
+        PasswordResetRequestedAt = now;
+        return true;
+    }
+
+    /// <summary>
+    /// Issues a set-password link (DEC-352): it replaces any earlier one, so only the newest link works. Only its
+    /// hash is kept.
+    /// </summary>
+    public Result<PasswordToken> IssuePasswordToken(string tokenHash, PasswordTokenPurpose purpose, DateTimeOffset now)
+    {
+        if (Status != UserStatus.Active)
+        {
+            return Result.Failure<PasswordToken>(AuthErrors.AccountInactive);
+        }
+
+        _passwordTokens.Clear();
+        var token = PasswordToken.Issue(Id, tokenHash, purpose, now);
+        _passwordTokens.Add(token);
+        return Result.Success(token);
+    }
+
+    /// <summary>
+    /// Sets a new password with a set-password link (P2-F4). The link is used up, the temporary-password flag and
+    /// any lockout clear, and every session ends: the user signs in again with the new password. An unknown, expired
+    /// or already used link, and any link of a deactivated account, is <c>Auth.ResetTokenInvalid</c>.
+    /// </summary>
+    public Result SetPasswordWithToken(string tokenHash, string newPasswordHash, DateTimeOffset now)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(newPasswordHash);
+        var token = _passwordTokens.Find(t => string.Equals(t.TokenHash, tokenHash, StringComparison.Ordinal));
+        if (token is null || !token.IsValid(now) || Status != UserStatus.Active)
+        {
+            return Result.Failure(AuthErrors.ResetTokenInvalid);
+        }
+
+        PasswordHash = newPasswordHash;
+        MustChangePassword = false;
+        ClearFailedLogins();
+        LockoutEndsAt = null;
+        RevokeAllRefreshTokens(now);
+        _passwordTokens.Clear();
+        Raise(new PasswordChanged(Id));
+        return Result.Success();
     }
 
     /// <summary>An admin gave the user a new temporary password: it must be changed, all sessions end, the lock is lifted.</summary>
@@ -242,6 +318,7 @@ public sealed class User : AggregateRoot<UserId>
         ClearFailedLogins();
         LockoutEndsAt = null;
         RevokeAllRefreshTokens(now);
+        _passwordTokens.Clear();
     }
 
     /// <summary>Re-hashes the password with current parameters after a successful verification.</summary>
@@ -260,6 +337,7 @@ public sealed class User : AggregateRoot<UserId>
 
         Status = UserStatus.Deactivated;
         RevokeAllRefreshTokens(now);
+        _passwordTokens.Clear();
         Raise(new UserDeactivated(Id, TenantId));
         return Result.Success();
     }
