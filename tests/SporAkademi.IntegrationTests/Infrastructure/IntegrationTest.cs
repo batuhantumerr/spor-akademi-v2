@@ -15,9 +15,12 @@ public abstract class IntegrationTest(DatabaseFixture database) : IAsyncLifetime
     public virtual async ValueTask InitializeAsync()
     {
         await Database.ResetAsync();
-        Api = new ApiFactory(Database.AppConnectionString);
+        Api = CreateApi();
         Client = Api.CreateClient();
     }
+
+    /// <summary>The API under test; override to configure it differently (e.g. with a distributed cache).</summary>
+    protected virtual ApiFactory CreateApi() => new(Database.AppConnectionString);
 
     public virtual async ValueTask DisposeAsync()
     {

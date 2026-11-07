@@ -2,6 +2,7 @@ using FluentValidation;
 using SporAkademi.Application.Abstractions;
 using SporAkademi.Application.Abstractions.Authentication;
 using SporAkademi.Application.Abstractions.Behaviors;
+using SporAkademi.Application.Abstractions.Caching;
 using SporAkademi.Application.Abstractions.Messaging;
 using SporAkademi.Application.Groups.Contracts;
 using SporAkademi.Domain.Organization;
@@ -182,9 +183,13 @@ internal sealed class GetFacilityHandler(IFacilityRepository facilities) : IQuer
             : Result.Failure<FacilityDto>(FacilityErrors.NotFound);
 }
 
-internal sealed class ListFacilitiesHandler(IFacilityRepository facilities)
+/// <summary>Cached per school and page (DEC-311); any saved change to a facility of the school invalidates it.</summary>
+internal sealed class ListFacilitiesHandler(IFacilityRepository facilities, ITenantCache cache, ICurrentUser currentUser)
     : IQueryHandler<ListFacilitiesQuery, PagedResult<FacilityDto>>
 {
     public async Task<Result<PagedResult<FacilityDto>>> Handle(ListFacilitiesQuery query, CancellationToken cancellationToken) =>
-        Result.Success(await facilities.ListAsync(query.IncludeArchived, query.Page, cancellationToken));
+        Result.Success(await cache.GetOrCreateAsync(
+            TenantCacheKey.For(currentUser.RequireTenant(), CacheArea.Facilities, "list", query.IncludeArchived, query.Page.Page, query.Page.PageSize),
+            async ct => await facilities.ListAsync(query.IncludeArchived, query.Page, ct),
+            cancellationToken));
 }

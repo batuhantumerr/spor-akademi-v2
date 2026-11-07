@@ -80,10 +80,14 @@ public sealed class School : AggregateRoot<SchoolId>
     public DateOnly Today(TimeProvider timeProvider) => DateOnly.FromDateTime(LocalNow(timeProvider));
 
     /// <summary>The wall-clock time now in the school's time zone, comparable with local dates and schedule times.</summary>
-    public DateTime LocalNow(TimeProvider timeProvider)
+    public DateTime LocalNow(TimeProvider timeProvider) => LocalNowIn(TimeZone, timeProvider);
+
+    /// <summary>The wall-clock time now in <paramref name="timeZone"/>, for callers that only hold a school's time zone.</summary>
+    public static DateTime LocalNowIn(string timeZone, TimeProvider timeProvider)
     {
+        ArgumentNullException.ThrowIfNull(timeZone);
         ArgumentNullException.ThrowIfNull(timeProvider);
-        return TimeZoneInfo.ConvertTime(timeProvider.GetUtcNow(), TimeZoneInfo.FindSystemTimeZoneById(TimeZone)).DateTime;
+        return TimeZoneInfo.ConvertTime(timeProvider.GetUtcNow(), TimeZoneInfo.FindSystemTimeZoneById(timeZone)).DateTime;
     }
 
     public static bool IsKnownTimeZone(string timeZone) =>

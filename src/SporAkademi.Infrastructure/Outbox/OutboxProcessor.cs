@@ -131,8 +131,10 @@ internal sealed partial class OutboxProcessor(
             // Shutdown, not the handler's fault: the attempt does not count.
             ObserveAbandoned(handling);
         }
+        // The timeout token and the bounded wait expire at the same instant: a cooperative handler may already have
+        // completed (cancelled) when the wait reports its TimeoutException, which is still the handler timeout.
         catch (Exception exception) when ((exception is OperationCanceledException && timeout.IsCancellationRequested)
-            || (exception is TimeoutException && handling?.IsCompleted == false))
+            || (exception is TimeoutException && (handling?.IsCompleted == false || timeout.IsCancellationRequested)))
         {
             ObserveAbandoned(handling);
             Fail(message, TimeoutError);

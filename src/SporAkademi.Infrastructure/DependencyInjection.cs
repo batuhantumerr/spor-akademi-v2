@@ -24,6 +24,7 @@ using SporAkademi.Application.Tenancy.Contracts;
 using SporAkademi.Infrastructure.Announcements;
 using SporAkademi.Infrastructure.Attendance;
 using SporAkademi.Infrastructure.Billing;
+using SporAkademi.Infrastructure.Caching;
 using SporAkademi.Infrastructure.Enrollments;
 using SporAkademi.Infrastructure.Groups;
 using SporAkademi.Infrastructure.Identity;
@@ -56,6 +57,7 @@ public static class DependencyInjection
         services.TryAddSingleton(TimeProvider.System);
         services.AddScoped<AuditingInterceptor>();
         services.AddScoped<TenantWriteGuardInterceptor>();
+        services.AddTenantCache();
         // The connection string is read when the first context is built, not at registration,
         // so hosts and test factories can supply it through any configuration source.
         services.AddDbContext<AppDbContext>((provider, options) => options
@@ -65,7 +67,8 @@ public static class DependencyInjection
             .UseSnakeCaseNamingConvention()
             .AddInterceptors(
                 provider.GetRequiredService<TenantWriteGuardInterceptor>(),
-                provider.GetRequiredService<AuditingInterceptor>()));
+                provider.GetRequiredService<AuditingInterceptor>(),
+                provider.GetRequiredService<CacheInvalidationInterceptor>()));
 
         services.AddScoped<DomainEventDispatcher>();
         services.AddScoped<IUnitOfWork, UnitOfWork>();

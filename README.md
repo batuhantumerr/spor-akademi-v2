@@ -17,7 +17,7 @@ Spor okulları için çok kiracılı (multi-tenant) yönetim platformu: okullar,
 
 ```bash
 bash scripts/setup-env.sh          # .env'i rastgele şifrelerle oluşturur (bir kez)
-docker compose up -d --wait        # PostgreSQL ve Seq
+docker compose up -d --wait        # PostgreSQL ve Seq (Valkey isteğe bağlı, aşağıya bakın)
 dotnet tool restore
 bash scripts/ef.sh database update # migration'ları migrator rolüyle uygular
 bash scripts/run-api.sh            # API: http://127.0.0.1:5080
@@ -34,6 +34,18 @@ npm start                          # http://localhost:4200 (/api proxy'si API'ye
 - Sağlık kontrolleri: `/health/live`, `/health/ready`
 - Loglar (Seq): http://127.0.0.1:5341
 - İş paneli (Hangfire, sadece Platform Admin): admin uygulamasında Platform Admin olarak giriş yapın, menüden **İş paneli** → **Paneli yeni sekmede aç**. Panel http://localhost:4200/jobs adresinde açılır (`/jobs` proxy'si API'ye gider); doğrudan adrese gitmek `401` verir, çünkü panel sadece bu düğmenin aldığı 15 dakikalık çerezle açılır. Development'ta işlemler (yeniden dene, sil, şimdi çalıştır) açıktır, diğer ortamlarda panel salt okunurdur (`Jobs__Dashboard__ReadOnly`). Hangfire sunucusu API içinde çalışır; kapatmak için `Jobs__ServerEnabled=false` (DEC-330 – DEC-333).
+
+### Cache (P2-F7)
+
+Branş ve tesis listeleri, okulun saat dilimi ve dashboard `HybridCache` ile cache'lenir (DEC-310 – DEC-316). Bellek içi cache her zaman vardır; Valkey (L2) isteğe bağlıdır ve compose'un `cache` profilindedir, yani düz `docker compose up` onu başlatmaz ve `VALKEY_PASSWORD` istemez:
+
+```bash
+bash scripts/setup-env.sh                       # eski bir .env'e sadece eksik VALKEY_* anahtarlarını ekler
+docker compose --profile cache up -d --wait     # PostgreSQL, Seq ve Valkey
+bash scripts/run-api.sh                         # Valkey çalışıyorsa ConnectionStrings__Cache'i ayarlar
+```
+
+`setup-env.sh` var olan `.env`'in değerlerini değiştirmez ve yazdırmaz. `VALKEY_PASSWORD` olmadan Valkey başlamayı reddeder (hata mesajı `docker compose --profile cache logs valkey`'de); diğer servisler, `scripts/e2e.sh` ve CI'daki `e2e` işi etkilenmez. `ConnectionStrings:Cache` yoksa (ör. testlerde) sadece bellek içi cache kullanılır; Valkey kapanırsa API veritabanından çalışmaya devam eder.
 
 ### Demo verisi (P1-38)
 
