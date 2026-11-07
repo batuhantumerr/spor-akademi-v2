@@ -41,6 +41,9 @@ public sealed class ApiFactory(
                 // the job tests turn a scheduler on), and run no Hangfire server unless a test asks for one.
                 ["Outbox:Scheduler"] = "None",
                 ["Jobs:ServerEnabled"] = "false",
+                // Fee reminders are off by default (DEC-355); the tests turn them on from before the test clock's dates.
+                ["Billing:DuesReminders:Enabled"] = "true",
+                ["Billing:DuesReminders:StartsOn"] = "2026-01-01",
             })
             .AddInMemoryCollection(storage ?? new Dictionary<string, string?>()));
         builder.ConfigureServices(services =>

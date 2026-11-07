@@ -5,6 +5,7 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { ActivatedRoute, provideRouter, Router } from '@angular/router';
 import { RouterTestingHarness } from '@angular/router/testing';
 
+import { AuthService } from '../../core/auth/auth.service';
 import { errorMessages, ui } from '../../core/i18n/tr';
 import { ForgotPasswordPage } from './forgot-password.page';
 import { ResetPasswordPage, tokenFromFragment } from './reset-password.page';
@@ -163,6 +164,31 @@ describe('ResetPasswordPage', () => {
 
     expect(root.querySelector('[role="status"]')?.textContent).toContain(ui.resetPassword.success);
     expect(root.querySelector('a[href="/login"]')).not.toBeNull();
+  });
+
+  it('ends a session open in this tab, since the reset revoked it on the server', async () => {
+    const { fixture, root } = create('token=abc');
+    const auth = TestBed.inject(AuthService);
+    const forget = vi.spyOn(auth, 'forgetSession');
+    type(root, 'new', 'Yepyeni-Sifre-2027');
+    type(root, 'confirm', 'Yepyeni-Sifre-2027');
+    submit(root);
+    backend
+      .expectOne('/api/v1/auth/password-reset/confirm')
+      .flush(null, { status: 204, statusText: 'No Content' });
+    await settle(fixture);
+
+    expect(forget).toHaveBeenCalledTimes(1);
+    expect(auth.isAuthenticated()).toBe(false);
+    expect(auth.token()).toBeNull();
+  });
+
+  it('keeps an empty live region in the page so the result is announced', () => {
+    const { root } = create('token=abc');
+
+    const region = root.querySelector('[role="status"]');
+    expect(region?.getAttribute('aria-live')).toBe('polite');
+    expect(region?.textContent?.trim()).toBe('');
   });
 
   it('checks that both passwords match before calling the API', () => {

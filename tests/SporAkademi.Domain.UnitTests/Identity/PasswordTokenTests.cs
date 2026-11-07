@@ -17,12 +17,12 @@ public sealed class PasswordTokenTests
     }
 
     [Fact]
-    public void Reset_links_live_thirty_minutes_and_welcome_links_three_days()
+    public void Reset_links_live_thirty_minutes_and_welcome_links_one_day()
     {
         var user = UserTests.NewCoach();
 
         user.IssuePasswordToken("reset", PasswordTokenPurpose.Reset, Now).Value.ExpiresAt.ShouldBe(Now.AddMinutes(30));
-        user.IssuePasswordToken("welcome", PasswordTokenPurpose.Welcome, Now).Value.ExpiresAt.ShouldBe(Now.AddHours(72));
+        user.IssuePasswordToken("welcome", PasswordTokenPurpose.Welcome, Now).Value.ExpiresAt.ShouldBe(Now.AddHours(24));
     }
 
     [Fact]

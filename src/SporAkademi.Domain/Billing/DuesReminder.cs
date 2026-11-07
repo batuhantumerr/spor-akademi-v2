@@ -139,30 +139,34 @@ public sealed class DuesReminder : AggregateRoot<DuesReminderId>, ITenantScoped
         return new DuesReminder(EntityId.New<DuesReminderId>(), tenantId, enrollmentId, studentId, groupId, period, kind, dueDate, fee);
     }
 
-    /// <summary>Whether the delivery still has to happen; a repeated outbox delivery sees false (at least once, DEC-302).</summary>
+    /// <summary>Nothing went out yet and the reminder was not skipped.</summary>
     public bool IsPending => Status == DuesReminderStatus.Pending;
 
-    public void MarkSent(int recipients, DateTimeOffset now)
+    /// <summary>
+    /// Records the e-mail to one recipient (each recipient has its own outbox message, DEC-356): the first makes the
+    /// reminder <see cref="DuesReminderStatus.Sent"/>, each one counts.
+    /// </summary>
+    public void RecordDelivery(DateTimeOffset now)
     {
-        ArgumentOutOfRangeException.ThrowIfLessThan(recipients, 1);
-        EnsurePending();
+        if (Status == DuesReminderStatus.Skipped)
+        {
+            throw new InvalidOperationException("A skipped reminder is not delivered.");
+        }
+
         Status = DuesReminderStatus.Sent;
-        RecipientCount = recipients;
-        SentAt = now;
+        SentAt ??= now;
+        RecipientCount++;
     }
 
+    /// <summary>Gives up before anything went out (paid meanwhile, or no recipient left).</summary>
     public void Skip(DuesReminderSkipReason reason)
-    {
-        EnsurePending();
-        Status = DuesReminderStatus.Skipped;
-        SkipReason = reason;
-    }
-
-    private void EnsurePending()
     {
         if (!IsPending)
         {
             throw new InvalidOperationException("The reminder was already delivered or skipped.");
         }
+
+        Status = DuesReminderStatus.Skipped;
+        SkipReason = reason;
     }
 }

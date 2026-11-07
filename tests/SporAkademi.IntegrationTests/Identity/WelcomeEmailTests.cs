@@ -50,7 +50,7 @@ public sealed class WelcomeEmailTests(DatabaseFixture database) : IdentityTest(d
     }
 
     [Fact]
-    public async Task A_new_coach_gets_a_welcome_link_valid_for_three_days()
+    public async Task A_new_coach_gets_a_welcome_link_valid_for_one_day()
     {
         var school = await SeedSchoolAsync();
         var admin = TestTokens.Create(Guid.CreateVersion7(), "SchoolAdmin", school.Value, Api.Clock.GetUtcNow());
@@ -59,9 +59,9 @@ public sealed class WelcomeEmailTests(DatabaseFixture database) : IdentityTest(d
         await DeliverAsync();
         var mail = Api.Emails.To("ayse@example.com").ShouldHaveSingleItem();
         mail.TextBody.ShouldContain("antrenör");
-        mail.TextBody.ShouldContain("72 saat");
+        mail.TextBody.ShouldContain("24 saat");
 
-        Api.Clock.Advance(TimeSpan.FromHours(72));
+        Api.Clock.Advance(TimeSpan.FromHours(24));
         (await ErrorCodeAsync(await ConfirmAsync(CapturingEmailSender.TokenIn(mail), NewPassword))).ShouldBe("Auth.ResetTokenInvalid");
     }
 

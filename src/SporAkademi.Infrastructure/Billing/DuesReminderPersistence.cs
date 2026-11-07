@@ -41,16 +41,26 @@ internal sealed class DuesReminderRepository(AppDbContext db) : IDuesReminderRep
     public async Task<IReadOnlySet<(EnrollmentId Enrollment, YearMonth Period, DuesReminderKind Kind)>> ExistingAsync(
         IReadOnlyCollection<EnrollmentId> enrollmentIds,
         YearMonth firstPeriod,
+        YearMonth lastPeriod,
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(enrollmentIds);
+        ArgumentNullException.ThrowIfNull(firstPeriod);
+        ArgumentNullException.ThrowIfNull(lastPeriod);
+
+        // The window is a few months (DEC-355), so the period list stays small; the filter runs in SQL.
+        var periods = new List<YearMonth>();
+        for (var period = firstPeriod; period <= lastPeriod; period = period.Next())
+        {
+            periods.Add(period);
+        }
+
         var ids = enrollmentIds.ToList();
-        // At most two reminders per enrollment and period: few rows, so the period filter runs in memory.
         var rows = await db.Set<DuesReminder>().AsNoTracking()
-            .Where(r => ids.Contains(r.EnrollmentId))
+            .Where(r => ids.Contains(r.EnrollmentId) && periods.Contains(r.Period))
             .Select(r => new { r.EnrollmentId, r.Period, r.Kind })
             .ToListAsync(cancellationToken);
-        return rows.Where(r => r.Period >= firstPeriod).Select(r => (r.EnrollmentId, r.Period, r.Kind)).ToHashSet();
+        return rows.Select(r => (r.EnrollmentId, r.Period, r.Kind)).ToHashSet();
     }
 
     public void Add(DuesReminder reminder) => db.Add(reminder);

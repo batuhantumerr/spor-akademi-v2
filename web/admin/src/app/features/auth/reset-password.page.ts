@@ -13,6 +13,7 @@ import { LucideCircleAlert, LucideCircleCheck, LucideKeyRound } from '@lucide/an
 import { Api } from '../../api/api';
 import { apiV1AuthPasswordResetConfirmPost } from '../../api/functions';
 import { fieldErrors, problemMessage, toProblem } from '../../core/api/problem';
+import { AuthService } from '../../core/auth/auth.service';
 import { errorMessages, ui } from '../../core/i18n/tr';
 import { focusFirstInvalid } from '../../shared/forms/focus-first-invalid';
 
@@ -48,14 +49,18 @@ export function tokenFromFragment(fragment: string | null): string | null {
           <h1 class="text-xl font-bold tracking-tight">{{ text.title }}</h1>
         </div>
 
+        <!-- Always in the DOM, so screen readers announce the success when it appears. -->
+        <div role="status" aria-live="polite">
+          @if (done()) {
+            <div
+              class="flex items-start gap-2 rounded-lg border border-success/30 bg-success/10 p-3 text-sm"
+            >
+              <svg lucideCircleCheck class="mt-0.5 size-4 shrink-0 text-success"></svg>
+              <span>{{ text.success }}</span>
+            </div>
+          }
+        </div>
         @if (done()) {
-          <div
-            role="status"
-            class="flex items-start gap-2 rounded-lg border border-success/30 bg-success/10 p-3 text-sm"
-          >
-            <svg lucideCircleCheck class="mt-0.5 size-4 shrink-0 text-success"></svg>
-            <span>{{ text.success }}</span>
-          </div>
           <a routerLink="/login" class="btn btn-primary mt-6 w-full">{{ text.toLogin }}</a>
         } @else if (!token) {
           <div
@@ -131,6 +136,7 @@ export function tokenFromFragment(fragment: string | null): string | null {
 })
 export class ResetPasswordPage {
   private readonly api = inject(Api);
+  private readonly auth = inject(AuthService);
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
 
   protected readonly text = ui.resetPassword;
@@ -192,6 +198,8 @@ export class ResetPasswordPage {
       await this.api.invoke(apiV1AuthPasswordResetConfirmPost, {
         body: { token: this.token, newPassword: this.form.controls.newPassword.value },
       });
+      // Every session of the account ended on the server; drop this tab's stale one too.
+      this.auth.forgetSession();
       this.done.set(true);
     } catch (err) {
       const problem = toProblem(err);

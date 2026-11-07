@@ -58,11 +58,14 @@ public sealed class PasswordToken : Entity<PasswordTokenId>
         return new PasswordToken(EntityId.New<PasswordTokenId>(), userId, tokenHash, purpose, now, now + LifetimeOf(purpose));
     }
 
-    /// <summary>DEC-352: a reset link lives 30 minutes; a welcome link 72 hours, since a new user may not read mail at once.</summary>
+    /// <summary>
+    /// DEC-352: a reset link lives 30 minutes; a welcome link 24 hours, since a new user may not read mail at once. Not
+    /// longer: a mistyped address hands the account to whoever owns it until the link expires (DEC-351).
+    /// </summary>
     public static TimeSpan LifetimeOf(PasswordTokenPurpose purpose) => purpose switch
     {
         PasswordTokenPurpose.Reset => TimeSpan.FromMinutes(30),
-        PasswordTokenPurpose.Welcome => TimeSpan.FromHours(72),
+        PasswordTokenPurpose.Welcome => TimeSpan.FromHours(24),
         _ => throw new ArgumentOutOfRangeException(nameof(purpose), purpose, null),
     };
 }

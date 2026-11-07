@@ -9,15 +9,18 @@ public sealed partial class CapturingEmailSender : IEmailSender
 {
     private readonly ConcurrentQueue<EmailMessage> _sent = new();
 
-    /// <summary>When set, every send throws it (an SMTP outage).</summary>
+    /// <summary>When set, sends throw it (an SMTP outage), for every message or those <see cref="FailWhen"/> selects.</summary>
     public Exception? FailWith { get; set; }
+
+    /// <summary>Limits <see cref="FailWith"/> to some messages (e.g. one recipient).</summary>
+    public Func<EmailMessage, bool>? FailWhen { get; set; }
 
     public IReadOnlyList<EmailMessage> Sent => [.. _sent];
 
     public Task SendAsync(EmailMessage message, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(message);
-        if (FailWith is { } failure)
+        if (FailWith is { } failure && (FailWhen is null || FailWhen(message)))
         {
             throw failure;
         }

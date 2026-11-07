@@ -73,13 +73,15 @@ internal sealed class ConfirmPasswordResetHandler(
     IUserRepository users,
     IPasswordTokenFactory passwordTokens,
     IPasswordHasher passwordHasher,
+    ITenancyModule tenancy,
     TimeProvider timeProvider) : ICommandHandler<ConfirmPasswordResetCommand, Unit>
 {
     public async Task<Result<Unit>> Handle(ConfirmPasswordResetCommand command, CancellationToken cancellationToken)
     {
         var hash = passwordTokens.Hash(command.Token);
         var user = await users.GetByPasswordTokenHashAsync(hash, cancellationToken);
-        if (user is null)
+        // Like the request: a deactivated school's users get no new password (and the answer does not say why).
+        if (user is null || (user.TenantId is { } school && !await tenancy.IsSchoolActiveAsync(school, cancellationToken)))
         {
             return Result.Failure<Unit>(AuthErrors.ResetTokenInvalid);
         }

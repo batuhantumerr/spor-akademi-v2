@@ -30,7 +30,7 @@ public sealed class EmailTemplateTests
         message.Subject.ShouldBe("Spor Akademi hesabınız açıldı");
         message.TextBody.ShouldContain("Merhaba Ayşe Yılmaz,");
         message.TextBody.ShouldContain(Link.AbsoluteUri);
-        message.TextBody.ShouldContain("72 saat");
+        message.TextBody.ShouldContain("24 saat");
         message.TextBody.ShouldContain("antrenör");
         message.TextBody.ShouldNotContain("şifreniz:", Case.Insensitive);
         message.TextBody.ShouldNotContain("hash-of-temporary");
@@ -66,7 +66,7 @@ public sealed class EmailTemplateTests
             kind,
             new DateOnly(2027, 1, 10),
             Money.Try(1250m));
-        var recipient = new ReminderRecipient("Elif", "Demir", "veli@example.com");
+        var recipient = new ReminderRecipient(Guid.CreateVersion7(), "Elif", "Demir", "veli@example.com");
         var student = new ReminderContacts(Guid.CreateVersion7(), "Can", "Demir", [recipient]);
 
         var message = DuesReminderEmails.Compose(reminder, 1250m, recipient, student, "Minikler", "Kadıköy Spor");

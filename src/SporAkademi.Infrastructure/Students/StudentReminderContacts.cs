@@ -27,7 +27,7 @@ internal sealed class StudentReminderContacts(AppDbContext db) : IStudentReminde
                 join guardian in db.Set<Guardian>().AsNoTracking() on link.GuardianId equals guardian.Id
                 where activeIds.Contains(link.StudentId) && guardian.Email != null
                 orderby guardian.LastName, guardian.FirstName, guardian.Id
-                select new { link.StudentId, guardian.FirstName, guardian.LastName, guardian.Email })
+                select new { link.StudentId, guardian.Id, guardian.FirstName, guardian.LastName, guardian.Email })
             .ToListAsync(cancellationToken);
         var guardiansOf = guardians.ToLookup(g => g.StudentId);
 
@@ -38,11 +38,11 @@ internal sealed class StudentReminderContacts(AppDbContext db) : IStudentReminde
             [
                 .. guardiansOf[student.Id]
                     .DistinctBy(g => g.Email!.Value)
-                    .Select(g => new ReminderRecipient(g.FirstName, g.LastName, g.Email!.Value)),
+                    .Select(g => new ReminderRecipient(g.Id.Value, g.FirstName, g.LastName, g.Email!.Value)),
             ];
             if (recipients.Count == 0 && student.Email is { } own && !Student.IsMinor(student.BirthDate, today))
             {
-                recipients.Add(new ReminderRecipient(student.FirstName, student.LastName, own.Value));
+                recipients.Add(new ReminderRecipient(student.Id.Value, student.FirstName, student.LastName, own.Value));
             }
 
             if (recipients.Count > 0)

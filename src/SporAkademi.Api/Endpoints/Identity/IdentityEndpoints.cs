@@ -2,6 +2,7 @@ using SporAkademi.Api.Authentication;
 using SporAkademi.Api.Errors;
 using SporAkademi.Application.Abstractions.Authentication;
 using SporAkademi.Application.Abstractions.Behaviors;
+using SporAkademi.Application.Abstractions.Data;
 using SporAkademi.Application.Abstractions.Messaging;
 using SporAkademi.Application.Identity;
 using SporAkademi.Application.Identity.Login;
@@ -172,7 +173,9 @@ internal static partial class IdentityEndpoints
 
     /// <summary>
     /// An empty or overlong address answers 400; every well-formed request answers 202, unknown addresses included.
-    /// Other failures (e.g. a lock timeout) are reported as everywhere else and reveal nothing about the address.
+    /// A concurrency conflict or lock timeout can only happen for an existing account (two requests updating its
+    /// cooldown at once, e.g. a double click), so they answer 202 as well: the other request was accepted, and a
+    /// 409 would reveal that the account exists (DEC-353).
     /// </summary>
     private static async Task<IResult> RequestPasswordReset(
         PasswordResetRequest request,
@@ -180,7 +183,9 @@ internal static partial class IdentityEndpoints
         CancellationToken cancellationToken)
     {
         var result = await handler.Handle(new RequestPasswordResetCommand(request.Email), cancellationToken);
-        return result.IsSuccess ? TypedResults.Accepted((string?)null) : ProblemResults.Problem(result.Error);
+        return result.IsSuccess || result.Error == PersistenceErrors.ConcurrencyConflict || result.Error == PersistenceErrors.LockTimeout
+            ? TypedResults.Accepted((string?)null)
+            : ProblemResults.Problem(result.Error);
     }
 
     /// <summary>Sets the new password and ends every session (refresh tokens and the job panel, DEC-332); the user signs in again.</summary>

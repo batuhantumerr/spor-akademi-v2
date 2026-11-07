@@ -1,6 +1,7 @@
 using MailKit.Net.Smtp;
 using MailKit.Security;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using MimeKit;
@@ -95,7 +96,9 @@ internal static class EmailRegistration
     {
         services.AddOptions<EmailOptions>()
             .BindConfiguration(EmailOptions.Section)
-            .Validate(o => o.IsValid(), "The Email configuration section has an invalid value.")
+            .Validate<IHostEnvironment>(
+                (o, environment) => o.IsValidIn(environment.IsDevelopment(), environment.IsProduction()),
+                "The Email configuration section has an invalid value (in Production an https, non-localhost AppBaseUrl when SMTP is set; no SMTP credentials without TLS outside Development).")
             .ValidateOnStart();
 
         services.AddSingleton<IAppLinks, AppLinks>();

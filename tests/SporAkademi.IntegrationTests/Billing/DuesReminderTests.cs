@@ -1,6 +1,8 @@
 using System.Net;
 using System.Net.Http.Json;
+using Microsoft.AspNetCore.Hosting;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using SporAkademi.Domain.Billing;
 using SporAkademi.Infrastructure.Jobs;
@@ -156,9 +158,80 @@ public sealed class DuesReminderTests(DatabaseFixture database) : BillingTest(da
         (await RunJobAsync()).ShouldBe(0);
     }
 
-    private async Task<int> RunJobAsync()
+    [Theory]
+    [InlineData("false", "2026-01-01")]
+    [InlineData("true", "2027-01-11")]
+    public async Task Nothing_is_sent_when_reminders_are_off_or_for_periods_due_before_go_live(string enabled, string startsOn)
     {
-        await using var scope = Api.Services.CreateAsyncScope();
+        await EnrolledAsync(fee: "1000.00");
+        await using var host = Api.WithWebHostBuilder(builder => builder.ConfigureAppConfiguration((_, config) =>
+            config.AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["Billing:DuesReminders:Enabled"] = enabled,
+                ["Billing:DuesReminders:StartsOn"] = startsOn,
+            })));
+
+        (await RunJobAsync(host.Services)).ShouldBe(0);
+
+        // The control: with the default test settings the same January due is reminded.
+        (await RunJobAsync()).ShouldBe(1);
+    }
+
+    [Fact]
+    public async Task An_enrollment_that_started_after_the_due_date_gets_no_reminder_for_that_period()
+    {
+        await EnrolledAsync(fee: "1000.00", startDate: "2027-01-12");
+
+        (await RunJobAsync()).ShouldBe(0);
+
+        // February is due after the start: it is reminded as usual.
+        AdvanceTo(new DateTimeOffset(2027, 2, 8, 6, 0, 0, TimeSpan.Zero));
+        (await RunJobAsync()).ShouldBe(1);
+    }
+
+    [Fact]
+    public async Task A_failure_for_one_guardian_is_retried_without_resending_to_the_other()
+    {
+        var group = IdOf(await GroupAsync("Kardes", capacity: 10));
+        await DefineFeeOkAsync(group, "2027-01", "900.00");
+        var student = await RegisterRawAsync(new
+        {
+            firstName = "Deniz",
+            lastName = "Iki",
+            birthDate = "2015-06-01",
+            gender = "Male",
+            emergencyContact = new { name = "Acil Kişi", phone = "0533 910 00 01", relationship = "Teyze" },
+            guardians = new[]
+            {
+                new { newGuardian = new { firstName = "Anne", lastName = "Iki", phone = "0533 910 00 02", email = (string?)"anne@example.com" }, relationship = "Mother" },
+                new { newGuardian = new { firstName = "Baba", lastName = "Iki", phone = "0533 910 00 03", email = (string?)"baba@example.com" }, relationship = "Father" },
+            },
+        });
+        await EnrollOkAsync(student, group, "2027-01-04");
+        (await RunJobAsync()).ShouldBe(1);
+
+        Api.Emails.FailWith = new IOException("SMTP refused one recipient");
+        Api.Emails.FailWhen = m => m.To == "baba@example.com";
+        await DeliverAsync();
+        Api.Emails.To("anne@example.com").Count.ShouldBe(1);
+        Api.Emails.To("baba@example.com").ShouldBeEmpty();
+
+        Api.Emails.FailWith = null;
+        Api.Clock.Advance(TimeSpan.FromMinutes(5));
+        await DeliverAsync();
+
+        Api.Emails.To("anne@example.com").Count.ShouldBe(1);
+        Api.Emails.To("baba@example.com").Count.ShouldBe(1);
+        var reminder = (await RemindersAsync()).ShouldHaveSingleItem();
+        reminder.Status.ShouldBe(DuesReminderStatus.Sent);
+        reminder.RecipientCount.ShouldBe(2);
+    }
+
+    private Task<int> RunJobAsync() => RunJobAsync(Api.Services);
+
+    private static async Task<int> RunJobAsync(IServiceProvider services)
+    {
+        await using var scope = services.CreateAsyncScope();
         return await scope.ServiceProvider.GetRequiredService<DuesReminderJob>().RunAsync(Ct);
     }
 

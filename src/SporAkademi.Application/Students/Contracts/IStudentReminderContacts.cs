@@ -1,7 +1,10 @@
 namespace SporAkademi.Application.Students.Contracts;
 
-/// <summary>One address a fee reminder goes to: a guardian's, or an adult student's own (DEC-356).</summary>
-public sealed record ReminderRecipient(string FirstName, string LastName, string Email);
+/// <summary>
+/// One address a fee reminder goes to: a guardian's, or an adult student's own (DEC-356). <see cref="Id"/> is the guardian's
+/// or the student's id: it names the recipient in outbox messages without the address.
+/// </summary>
+public sealed record ReminderRecipient(Guid Id, string FirstName, string LastName, string Email);
 
 /// <summary>An active student and who receives their fee reminders.</summary>
 public sealed record ReminderContacts(Guid StudentId, string FirstName, string LastName, IReadOnlyList<ReminderRecipient> Recipients);

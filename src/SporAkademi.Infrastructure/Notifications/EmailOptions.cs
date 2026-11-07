@@ -24,6 +24,22 @@ public sealed class EmailOptions
         && Smtp.Timeout > TimeSpan.Zero
         && Enum.IsDefined(Smtp.Security)
         && (string.IsNullOrEmpty(Smtp.UserName) || !string.IsNullOrEmpty(Smtp.Password));
+
+    /// <summary>
+    /// The environment rules (DEC-350): when Production sends e-mail, its links must point to a public https address
+    /// (not the localhost default); and credentials are never sent over plain SMTP outside Development.
+    /// </summary>
+    internal bool IsValidIn(bool isDevelopment, bool isProduction) =>
+        IsValid()
+        && (!isProduction || string.IsNullOrWhiteSpace(Smtp.Host) || IsPublicHttps(AppBaseUrl))
+        && (isDevelopment || Smtp.Security != SmtpSecurity.None || string.IsNullOrEmpty(Smtp.UserName));
+
+    private static bool IsPublicHttps(string address) =>
+        Uri.TryCreate(address, UriKind.Absolute, out var uri)
+        && uri.Scheme == Uri.UriSchemeHttps
+        && !uri.IsLoopback
+        && !uri.Host.Equals("localhost", StringComparison.OrdinalIgnoreCase)
+        && !uri.Host.EndsWith(".localhost", StringComparison.OrdinalIgnoreCase);
 }
 
 public sealed class SmtpOptions

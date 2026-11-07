@@ -50,16 +50,19 @@ public sealed class DuesReminderTests
     {
         var sent = NewReminder();
         sent.IsPending.ShouldBeTrue();
-        sent.MarkSent(2, new DateTimeOffset(2027, 1, 7, 6, 0, 0, TimeSpan.Zero));
+        var first = new DateTimeOffset(2027, 1, 7, 6, 0, 0, TimeSpan.Zero);
+        sent.RecordDelivery(first);
+        sent.RecordDelivery(first.AddMinutes(1));
         sent.Status.ShouldBe(DuesReminderStatus.Sent);
         sent.RecipientCount.ShouldBe(2);
+        sent.SentAt.ShouldBe(first);
         Should.Throw<InvalidOperationException>(() => sent.Skip(DuesReminderSkipReason.Paid));
 
         var skipped = NewReminder();
         skipped.Skip(DuesReminderSkipReason.NoRecipient);
         skipped.Status.ShouldBe(DuesReminderStatus.Skipped);
         skipped.SkipReason.ShouldBe(DuesReminderSkipReason.NoRecipient);
-        Should.Throw<InvalidOperationException>(() => skipped.MarkSent(1, DateTimeOffset.MinValue));
+        Should.Throw<InvalidOperationException>(() => skipped.RecordDelivery(first));
     }
 
     private static DuesReminder NewReminder() =>

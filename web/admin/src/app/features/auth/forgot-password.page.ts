@@ -29,15 +29,18 @@ import { focusFirstInvalid } from '../../shared/forms/focus-first-invalid';
           <h1 class="text-xl font-bold tracking-tight">{{ text.title }}</h1>
         </div>
 
-        @if (sent()) {
-          <div
-            role="status"
-            class="flex items-start gap-2 rounded-lg border border-success/30 bg-success/10 p-3 text-sm"
-          >
-            <svg lucideMailCheck class="mt-0.5 size-4 shrink-0 text-success"></svg>
-            <span>{{ text.sent }}</span>
-          </div>
-        } @else {
+        <!-- Always in the DOM, so screen readers announce the confirmation when it appears. -->
+        <div role="status" aria-live="polite">
+          @if (sent()) {
+            <div
+              class="flex items-start gap-2 rounded-lg border border-success/30 bg-success/10 p-3 text-sm"
+            >
+              <svg lucideMailCheck class="mt-0.5 size-4 shrink-0 text-success"></svg>
+              <span>{{ text.sent }}</span>
+            </div>
+          }
+        </div>
+        @if (!sent()) {
           <p class="mb-4 text-sm text-muted-foreground">{{ text.subtitle }}</p>
           @if (error()) {
             <div

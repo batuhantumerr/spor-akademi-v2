@@ -190,6 +190,49 @@ public sealed class PasswordResetTests(DatabaseFixture database) : IdentityTest(
     }
 
     [Fact]
+    public async Task Parallel_requests_for_one_account_all_get_202_and_one_link()
+    {
+        var school = await SeedSchoolAsync();
+        await SeedUserAsync("coach@example.com", UserRole.Coach, school);
+
+        // A double click: both update the account's cooldown at once; the loser's conflict must not show as 409.
+        var responses = await Task.WhenAll(Enumerable.Range(0, 4).Select(_ => RequestAsync("coach@example.com")));
+
+        responses.Select(r => r.StatusCode).ShouldAllBe(s => s == HttpStatusCode.Accepted);
+        await DeliverAsync();
+        Api.Emails.Sent.ShouldHaveSingleItem().To.ShouldBe("coach@example.com");
+    }
+
+    [Fact]
+    public async Task Two_parallel_confirmations_with_one_link_set_exactly_one_password()
+    {
+        var school = await SeedSchoolAsync();
+        await SeedUserAsync("coach@example.com", UserRole.Coach, school);
+        var token = await RequestAndReadTokenAsync("coach@example.com");
+
+        var responses = await Task.WhenAll(ConfirmAsync(token, "Birinci-Sifre-2027"), ConfirmAsync(token, "Ikinci-Sifre-2027"));
+
+        var codes = responses.Select(r => r.StatusCode).ToList();
+        codes.Count(c => c == HttpStatusCode.NoContent).ShouldBe(1);
+        codes.ShouldAllBe(c => c == HttpStatusCode.NoContent || c == HttpStatusCode.Conflict || c == HttpStatusCode.UnprocessableEntity);
+        var winner = responses[0].StatusCode == HttpStatusCode.NoContent ? "Birinci-Sifre-2027" : "Ikinci-Sifre-2027";
+        var loser = winner == "Birinci-Sifre-2027" ? "Ikinci-Sifre-2027" : "Birinci-Sifre-2027";
+        (await LoginAsync("coach@example.com", loser)).StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
+        (await LoginOkAsync("coach@example.com", winner)).ShouldNotBeNull();
+    }
+
+    [Fact]
+    public async Task A_link_of_a_deactivated_school_is_refused()
+    {
+        var school = await SeedSchoolAsync();
+        await SeedUserAsync("coach@example.com", UserRole.Coach, school);
+        var token = await RequestAndReadTokenAsync("coach@example.com");
+        await ExecuteSqlAsync("UPDATE tenancy.schools SET status = 'Deactivated'");
+
+        (await ErrorCodeAsync(await ConfirmAsync(token, NewPassword))).ShouldBe("Auth.ResetTokenInvalid");
+    }
+
+    [Fact]
     public async Task Requests_are_rate_limited_per_client()
     {
         for (var i = 0; i < 5; i++)

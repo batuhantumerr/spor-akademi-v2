@@ -22,6 +22,15 @@ public sealed class DuesReminderSettings
 {
     public const string Section = "Billing:DuesReminders";
 
+    /// <summary>Off by default: reminders start only once an operator turns them on with a <see cref="StartsOn"/> date.</summary>
+    public bool Enabled { get; set; }
+
+    /// <summary>
+    /// Go-live date (DEC-355): periods whose due date is before it are never reminded, so the first run does not
+    /// e-mail old debts. Required when <see cref="Enabled"/>.
+    /// </summary>
+    public DateOnly? StartsOn { get; set; }
+
     /// <summary>Day of the month a period's fee is due (1–28).</summary>
     public int DueDay { get; set; } = 10;
 
@@ -33,7 +42,9 @@ public sealed class DuesReminderSettings
 
     public DuesReminderSchedule Schedule => new(DueDay, UpcomingDays);
 
-    public bool IsValid() => DueDay is >= 1 and <= 28 && UpcomingDays is >= 0 and <= 27 && OverdueLookbackMonths is >= 0 and <= 24;
+    public bool IsValid() =>
+        DueDay is >= 1 and <= 28 && UpcomingDays is >= 0 and <= 27 && OverdueLookbackMonths is >= 0 and <= 24
+        && (!Enabled || StartsOn is not null);
 }
 
 /// <summary>
@@ -45,10 +56,11 @@ public sealed record SendDuesRemindersCommand : ICommand<int>;
 
 public interface IDuesReminderRepository
 {
-    /// <summary>Reminders already recorded for these enrollments from <paramref name="firstPeriod"/> on.</summary>
+    /// <summary>Reminders already recorded for these enrollments in the periods <paramref name="firstPeriod"/> – <paramref name="lastPeriod"/>.</summary>
     Task<IReadOnlySet<(EnrollmentId Enrollment, YearMonth Period, DuesReminderKind Kind)>> ExistingAsync(
         IReadOnlyCollection<EnrollmentId> enrollmentIds,
         YearMonth firstPeriod,
+        YearMonth lastPeriod,
         CancellationToken cancellationToken);
 
     void Add(DuesReminder reminder);
@@ -71,7 +83,7 @@ internal sealed class SendDuesRemindersHandler(
     public async Task<Result<int>> Handle(SendDuesRemindersCommand command, CancellationToken cancellationToken)
     {
         var school = currentUser.RequireTenant();
-        if (!await tenancy.IsSchoolActiveAsync(school, cancellationToken))
+        if (!settings.Enabled || settings.StartsOn is not { } startsOn || !await tenancy.IsSchoolActiveAsync(school, cancellationToken))
         {
             return Result.Success(0);
         }
@@ -91,12 +103,15 @@ internal sealed class SendDuesRemindersHandler(
             g => g.Key,
             g => (IReadOnlyList<FeeRate>)[.. g.Value.Select(f => new FeeRate(f.EffectiveFrom, f.Amount))]);
         var paid = await payments.RecordedTotalsAsync(null, first, last, cancellationToken);
+        var enrollmentOf = active.ToDictionary(e => e.Id);
         var due = DueCalculator.Outstanding(
                 active.Select(e => new DueEnrollment(e.Id, e.GroupId, e.StartDate, e.EndDate)),
                 rates,
                 paid,
                 last,
                 first)
+            // Never before go-live, and not for a period whose due date passed before the enrollment even started.
+            .Where(d => schedule.DueDateOf(d.Period) >= startsOn && enrollmentOf[d.EnrollmentId].StartDate <= schedule.DueDateOf(d.Period))
             .Select(d => (Due: d, Kind: schedule.KindOn(d.Period, today)))
             .Where(d => d.Kind is not null)
             .ToList();
@@ -105,23 +120,27 @@ internal sealed class SendDuesRemindersHandler(
             return Result.Success(0);
         }
 
-        var studentOf = active.ToDictionary(e => e.Id, e => e.StudentId);
-        var existing = await reminders.ExistingAsync([.. due.Select(d => d.Due.EnrollmentId).Distinct()], first, cancellationToken);
-        var reachable = await contacts.GetAsync([.. due.Select(d => studentOf[d.Due.EnrollmentId].Value).Distinct()], today, cancellationToken);
+        var existing = await reminders.ExistingAsync([.. due.Select(d => d.Due.EnrollmentId).Distinct()], first, last, cancellationToken);
+        var reachable = await contacts.GetAsync([.. due.Select(d => enrollmentOf[d.Due.EnrollmentId].StudentId.Value).Distinct()], today, cancellationToken);
 
         var recorded = 0;
         foreach (var (item, kind) in due)
         {
-            var student = studentOf[item.EnrollmentId];
+            var student = enrollmentOf[item.EnrollmentId].StudentId;
             // Without a recipient nothing is recorded, so a guardian e-mail added later still gets the reminder.
-            if (existing.Contains((item.EnrollmentId, item.Period, kind!.Value)) || !reachable.ContainsKey(student.Value))
+            if (existing.Contains((item.EnrollmentId, item.Period, kind!.Value)) || !reachable.TryGetValue(student.Value, out var to))
             {
                 continue;
             }
 
             var reminder = DuesReminder.Schedule(school, item.EnrollmentId, student, item.GroupId, item.Period, kind.Value, schedule.DueDateOf(item.Period), item.Fee);
             reminders.Add(reminder);
-            outbox.Enqueue(new DuesReminderMessage(reminder.Id.Value), school.Value);
+            // One message per recipient (DEC-356): a retry after a failure re-sends to that recipient only.
+            foreach (var recipient in to.Recipients)
+            {
+                outbox.Enqueue(new DuesReminderMessage(reminder.Id.Value, recipient.Id), school.Value);
+            }
+
             recorded++;
         }
 
@@ -130,9 +149,10 @@ internal sealed class SendDuesRemindersHandler(
 }
 
 /// <summary>
-/// Delivers one fee reminder (DEC-355, DEC-356): it re-reads the payments and the recipients when it runs, so a due
-/// paid (or an address removed) in the meantime is skipped, and records the outcome. Delivery is at least once: a
-/// retry after a partial failure can send a recipient the same reminder again.
+/// Delivers one fee reminder to one recipient (DEC-355, DEC-356): it re-reads the payments and the recipients when it
+/// runs, so a due paid (or an address removed) in the meantime is not sent, and records the outcome. Each recipient has
+/// its own message, so a failure for one never re-sends to the others; for the same recipient delivery is at least
+/// once (SMTP accepted, recording failed: the retry sends again).
 /// </summary>
 internal sealed partial class SendDuesReminderEmail(
     IUnitOfWork unitOfWork,
@@ -153,7 +173,7 @@ internal sealed partial class SendDuesReminderEmail(
 
         var school = currentUser.RequireTenant();
         var reminder = await reminders.GetAsync(DuesReminderId.From(message.ReminderId), cancellationToken);
-        if (reminder is null || !reminder.IsPending)
+        if (reminder is null || reminder.Status == DuesReminderStatus.Skipped)
         {
             LogNothingToDo(logger, message.ReminderId, context.MessageId);
             return;
@@ -161,37 +181,37 @@ internal sealed partial class SendDuesReminderEmail(
 
         var remaining = reminder.Fee.Amount - await payments.RecordedTotalAsync(reminder.EnrollmentId, reminder.Period, cancellationToken);
         var today = await tenancy.TodayAsync(school, cancellationToken);
-        var recipients = (await contacts.GetAsync([reminder.StudentId.Value], today, cancellationToken)).GetValueOrDefault(reminder.StudentId.Value);
-        DuesReminderSkipReason? skip = remaining <= 0 ? DuesReminderSkipReason.Paid
-            : recipients is null ? DuesReminderSkipReason.NoRecipient
-            : null;
-
-        if (skip is null)
+        var contactsOfStudent = (await contacts.GetAsync([reminder.StudentId.Value], today, cancellationToken)).GetValueOrDefault(reminder.StudentId.Value);
+        var recipient = contactsOfStudent?.Recipients.FirstOrDefault(r => r.Id == message.RecipientId);
+        if (remaining <= 0 || recipient is null)
         {
-            var group = (await groups.GetManyAsync([reminder.GroupId.Value], cancellationToken)).GetValueOrDefault(reminder.GroupId.Value);
-            var schoolName = await tenancy.SchoolNameAsync(school, cancellationToken) ?? "Spor Akademi";
-            foreach (var recipient in recipients!.Recipients)
+            // Nothing went out for this reminder yet: record why. Otherwise only this recipient is left out.
+            var reason = remaining <= 0 ? DuesReminderSkipReason.Paid : DuesReminderSkipReason.NoRecipient;
+            if (reminder.IsPending && (reason == DuesReminderSkipReason.Paid || contactsOfStudent is null))
             {
-                await emailSender.SendAsync(DuesReminderEmails.Compose(reminder, remaining, recipient, recipients, group?.Name, schoolName), cancellationToken);
+                await RecordAsync(reminder.Id, r => { if (r.IsPending) { r.Skip(reason); } }, cancellationToken);
             }
+
+            LogSkipped(logger, reminder.Id.Value, reason, context.MessageId);
+            return;
         }
 
+        var group = (await groups.GetManyAsync([reminder.GroupId.Value], cancellationToken)).GetValueOrDefault(reminder.GroupId.Value);
+        var schoolName = await tenancy.SchoolNameAsync(school, cancellationToken) ?? "Spor Akademi";
+        await emailSender.SendAsync(DuesReminderEmails.Compose(reminder, remaining, recipient, contactsOfStudent!, group?.Name, schoolName), cancellationToken);
+        await RecordAsync(reminder.Id, r => r.RecordDelivery(timeProvider.GetUtcNow()), cancellationToken);
+        LogSent(logger, reminder.Id.Value, context.MessageId);
+    }
+
+    private async Task RecordAsync(DuesReminderId id, Action<DuesReminder> change, CancellationToken cancellationToken)
+    {
         var saved = await unitOfWork.ExecuteInTransactionAsync(
             async ct =>
             {
-                var tracked = await reminders.GetAsync(reminder.Id, ct);
-                if (tracked is not { IsPending: true })
+                var tracked = await reminders.GetAsync(id, ct);
+                if (tracked is not null && tracked.Status != DuesReminderStatus.Skipped)
                 {
-                    return Result.Success(Unit.Value);
-                }
-
-                if (skip is { } reason)
-                {
-                    tracked.Skip(reason);
-                }
-                else
-                {
-                    tracked.MarkSent(recipients!.Recipients.Count, timeProvider.GetUtcNow());
+                    change(tracked);
                 }
 
                 return Result.Success(Unit.Value);
@@ -199,22 +219,13 @@ internal sealed partial class SendDuesReminderEmail(
             cancellationToken);
         if (saved.IsFailure)
         {
-            // Retried by the outbox; the e-mail may then go out again (at least once).
-            throw new InvalidOperationException($"Recording reminder {reminder.Id.Value} failed with {saved.Error.Code}.");
-        }
-
-        if (skip is { } skipped)
-        {
-            LogSkipped(logger, reminder.Id.Value, skipped, context.MessageId);
-        }
-        else
-        {
-            LogSent(logger, reminder.Id.Value, recipients!.Recipients.Count, context.MessageId);
+            // Retried by the outbox; this recipient's e-mail may then go out again (at least once).
+            throw new InvalidOperationException($"Recording reminder {id.Value} failed with {saved.Error.Code}.");
         }
     }
 
-    [LoggerMessage(Level = LogLevel.Information, Message = "Dues reminder {ReminderId} sent to {Recipients} recipient(s) (outbox message {MessageId})")]
-    private static partial void LogSent(ILogger logger, Guid reminderId, int recipients, Guid messageId);
+    [LoggerMessage(Level = LogLevel.Information, Message = "Dues reminder {ReminderId} sent to one recipient (outbox message {MessageId})")]
+    private static partial void LogSent(ILogger logger, Guid reminderId, Guid messageId);
 
     [LoggerMessage(Level = LogLevel.Information, Message = "Dues reminder {ReminderId} skipped: {Reason} (outbox message {MessageId})")]
     private static partial void LogSkipped(ILogger logger, Guid reminderId, DuesReminderSkipReason reason, Guid messageId);
