@@ -12,7 +12,7 @@ namespace SporAkademi.Infrastructure.Caching;
 /// </summary>
 internal sealed class HybridTenantCache(HybridCache cache, ResilientDistributedCache distributed, ICurrentUser currentUser) : ITenantCache
 {
-    public ValueTask<T> GetOrCreateAsync<T>(
+    public async ValueTask<T> GetOrCreateAsync<T>(
         TenantCacheKey key,
         Func<CancellationToken, ValueTask<T>> factory,
         CancellationToken cancellationToken)
@@ -27,6 +27,21 @@ internal sealed class HybridTenantCache(HybridCache cache, ResilientDistributedC
             throw new TenantIsolationException("Cannot use another school's cache entries.");
         }
 
+        try
+        {
+            return await RunAsync(key, factory, cancellationToken);
+        }
+        catch (ObjectDisposedException) when (!cancellationToken.IsCancellationRequested)
+        {
+            // DEC-314: concurrent callers of one key wait for the first caller's factory, which uses that caller's
+            // request services. If that request ended (its DbContext was disposed) while we waited, the shared run
+            // fails; one retry runs again, normally with this caller's own factory and services.
+            return await RunAsync(key, factory, cancellationToken);
+        }
+    }
+
+    private ValueTask<T> RunAsync<T>(TenantCacheKey key, Func<CancellationToken, ValueTask<T>> factory, CancellationToken cancellationToken)
+    {
         // HybridCache may run the factory on a thread-pool work item that does not flow the execution context, which
         // would lose the request's user and with it the tenant query filter. The factory runs in the caller's context.
         var run = new ContextBoundFactory<T>(factory, ExecutionContext.Capture());
@@ -55,7 +70,12 @@ internal sealed class HybridTenantCache(HybridCache cache, ResilientDistributedC
     }
 }
 
-/// <summary>Lifetimes per area (DEC-314). L1 stays short so other API instances see an invalidation within a minute.</summary>
+/// <summary>
+/// Lifetimes per area (DEC-314). The instance that saves a change drops its own L1 entries at once; other API
+/// instances keep a warm L1 entry until its L1 lifetime ends, so they see the change up to that late (lists 1 min,
+/// dashboard 30 s, a school's time zone 10 min). The L2 lifetime bounds an invalidation lost during a Valkey outage
+/// (DEC-315), hence at most 30 min.
+/// </summary>
 internal static class CachePolicies
 {
     private static readonly Dictionary<(CacheArea, bool), HybridCacheEntryOptions> Options = Build();
@@ -64,7 +84,7 @@ internal static class CachePolicies
 
     public static (TimeSpan Distributed, TimeSpan Local) Lifetimes(CacheArea area) => area switch
     {
-        CacheArea.School => (TimeSpan.FromHours(6), TimeSpan.FromMinutes(10)),
+        CacheArea.School => (TimeSpan.FromMinutes(30), TimeSpan.FromMinutes(10)),
         CacheArea.Sports or CacheArea.Facilities => (TimeSpan.FromMinutes(30), TimeSpan.FromMinutes(1)),
         CacheArea.Dashboard => (TimeSpan.FromMinutes(1), TimeSpan.FromSeconds(30)),
         _ => throw new ArgumentOutOfRangeException(nameof(area), area, "Unknown cache area."),

@@ -1,5 +1,6 @@
 using System.Data.Common;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.ChangeTracking;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.Caching.Hybrid;
 using Microsoft.Extensions.Logging;
@@ -70,8 +71,12 @@ internal sealed class CacheInvalidationInterceptor(ICurrentUser currentUser, Cac
     public Task TransactionRolledBackAsync(DbTransaction transaction, TransactionEndEventData eventData, CancellationToken cancellationToken = default) =>
         FlushAsync().AsTask();
 
-    /// <summary>The tags a set of changed entities invalidates; internal for the unit tests.</summary>
-    internal static IEnumerable<string> TagsFor(object entity, Guid? requestTenant)
+    /// <summary>
+    /// The tags a changed entity invalidates; internal for the unit tests. <paramref name="fallbackTenant"/> is used
+    /// only for entities that are neither a school nor tenant-scoped: the entity's own <c>TenantId</c> column when
+    /// it has one, otherwise the request's school.
+    /// </summary>
+    internal static IEnumerable<string> TagsFor(object entity, Guid? fallbackTenant)
     {
         switch (entity)
         {
@@ -88,9 +93,11 @@ internal sealed class CacheInvalidationInterceptor(ICurrentUser currentUser, Cac
 
                 break;
             default:
-                // A child entity without its own tenant (e.g. a group fee) belongs to the request's school,
-                // which the tenant write guard enforces, so that school's dashboard is stale.
-                if (requestTenant is { } tenant && tenant != Guid.Empty)
+                // A child entity (e.g. a group fee) belongs to its own tenant column's school or, without one, to the
+                // request's school (the tenant write guard enforces that), so that school's dashboard is stale.
+                // Known gap (DEC-313): a Platform Admin request has no school, so a tenant-less child row it writes
+                // invalidates nothing; the dashboard's 1-minute lifetime bounds the staleness.
+                if (fallbackTenant is { } tenant && tenant != Guid.Empty)
                 {
                     yield return TenantCacheKey.AreaTag(SchoolId.From(tenant), CacheArea.Dashboard);
                 }
@@ -117,9 +124,25 @@ internal sealed class CacheInvalidationInterceptor(ICurrentUser currentUser, Cac
         {
             if (entry.State is EntityState.Added or EntityState.Modified or EntityState.Deleted)
             {
-                _pending.UnionWith(TagsFor(entry.Entity, currentUser.TenantId));
+                _pending.UnionWith(TagsFor(entry.Entity, TenantColumnOf(entry) ?? currentUser.TenantId));
             }
         }
+    }
+
+    /// <summary>The value of a mapped <c>TenantId</c> property, for entities that carry one without being <see cref="ITenantScoped"/>.</summary>
+    private static Guid? TenantColumnOf(EntityEntry entry)
+    {
+        if (entry.Metadata.FindProperty(nameof(ITenantScoped.TenantId)) is null)
+        {
+            return null;
+        }
+
+        return entry.Property(nameof(ITenantScoped.TenantId)).CurrentValue switch
+        {
+            SchoolId school => school.Value,
+            Guid id => id,
+            _ => null,
+        };
     }
 
     private ValueTask FlushIfOutsideTransactionAsync(DbContextEventData eventData) =>
@@ -138,9 +161,19 @@ internal sealed class CacheInvalidationInterceptor(ICurrentUser currentUser, Cac
     }
 }
 
-/// <summary>Removes tags from both cache levels; a failure is logged (tag count only) and never fails the write that already committed.</summary>
-internal sealed partial class CacheTagInvalidator(HybridCache cache, ILogger<CacheTagInvalidator> logger)
+/// <summary>
+/// Removes tags from both cache levels; a failure is logged (tag count only) and never fails the write that already
+/// committed. An invalidation that cannot reach the L2 (Valkey down, or skipped after a failure) is counted and
+/// logged: this instance's L1 is still invalidated, but other instances may read the old L2 entry until it expires
+/// (at most 30 min, DEC-315).
+/// </summary>
+internal sealed partial class CacheTagInvalidator(HybridCache cache, ResilientDistributedCache distributed, ILogger<CacheTagInvalidator> logger)
 {
+    private long _droppedDistributedInvalidations;
+
+    /// <summary>Invalidations since start that did not reach the L2.</summary>
+    public long DroppedDistributedInvalidations => Interlocked.Read(ref _droppedDistributedInvalidations);
+
     public async ValueTask RemoveAsync(IReadOnlyCollection<string> tags)
     {
         try
@@ -152,8 +185,18 @@ internal sealed partial class CacheTagInvalidator(HybridCache cache, ILogger<Cac
         {
             LogInvalidationFailed(logger, exception.GetType().Name, tags.Count);
         }
+
+        // The L2 swallows its own failures, so check afterwards whether it was (or just became) unavailable.
+        if (distributed.IsConfigured && !distributed.IsAvailable)
+        {
+            var dropped = Interlocked.Increment(ref _droppedDistributedInvalidations);
+            LogDistributedInvalidationDropped(logger, tags.Count, dropped);
+        }
     }
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "Cache invalidation of {TagCount} tags failed ({ErrorType}); entries expire with their lifetime")]
     private static partial void LogInvalidationFailed(ILogger logger, string errorType, int tagCount);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Cache invalidation of {TagCount} tags did not reach the distributed cache ({DroppedTotal} since start); other instances may serve old entries until they expire")]
+    private static partial void LogDistributedInvalidationDropped(ILogger logger, int tagCount, long droppedTotal);
 }

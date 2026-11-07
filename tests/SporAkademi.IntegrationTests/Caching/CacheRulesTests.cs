@@ -86,6 +86,48 @@ public sealed class CacheRulesTests
     }
 
     [Fact]
+    public async Task A_waiting_caller_retries_with_its_own_factory_when_the_first_callers_services_are_gone()
+    {
+        using var host = NewCacheHost(out var distributed);
+        var key = TenantCacheKey.For(SchoolA, CacheArea.Sports, "list");
+        var firstStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var released = false;
+        var secondFactoryRunsBeforeRelease = false;
+        using var firstRequest = new CancellationTokenSource();
+
+        // The first request's factory waits, then finds its DbContext disposed because that request has ended.
+        var first = new HybridTenantCache(host.Cache, distributed, UserOf(SchoolA.Value)).GetOrCreateAsync<int>(
+            key,
+            async _ =>
+            {
+                firstStarted.SetResult();
+                await release.Task;
+                throw new ObjectDisposedException("AppDbContext");
+            },
+            firstRequest.Token).AsTask();
+        await firstStarted.Task;
+
+        // The second request joins the running factory instead of starting its own.
+        var second = new HybridTenantCache(host.Cache, distributed, UserOf(SchoolA.Value)).GetOrCreateAsync(
+            key,
+            _ =>
+            {
+                secondFactoryRunsBeforeRelease |= !Volatile.Read(ref released);
+                return ValueTask.FromResult(42);
+            },
+            CancellationToken.None).AsTask();
+
+        await firstRequest.CancelAsync();
+        Volatile.Write(ref released, true);
+        release.SetResult();
+
+        (await second).ShouldBe(42);
+        secondFactoryRunsBeforeRelease.ShouldBeFalse();
+        await Should.ThrowAsync<Exception>(() => first);
+    }
+
+    [Fact]
     public async Task Without_a_connection_string_there_is_no_distributed_cache()
     {
         using var host = NewCacheHost(out var distributed);

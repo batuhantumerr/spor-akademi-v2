@@ -1,4 +1,6 @@
 using System.Diagnostics;
+using Microsoft.Extensions.DependencyInjection;
+using SporAkademi.Infrastructure.Caching;
 using SporAkademi.IntegrationTests.Infrastructure;
 
 namespace SporAkademi.IntegrationTests.Caching;
@@ -44,6 +46,9 @@ public sealed class CacheOutageTests(DatabaseFixture database) : CachedReadsTest
 
         // After the first failure the L2 is skipped, so 20 requests take far less than 20 connect timeouts.
         Stopwatch.GetElapsedTime(started).ShouldBeLessThan(TimeSpan.FromSeconds(8));
+
+        // Every invalidation missed the L2 and was counted (and logged) as such.
+        Api.Services.GetRequiredService<CacheTagInvalidator>().DroppedDistributedInvalidations.ShouldBeGreaterThanOrEqualTo(11);
     }
 
     [Fact]

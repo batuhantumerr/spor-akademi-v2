@@ -71,11 +71,12 @@ internal sealed partial class ResilientDistributedCache : IDistributedCache, IDi
 
     public void Dispose() => _inner?.Dispose();
 
-    private bool Available => _inner is not null && Environment.TickCount64 >= Interlocked.Read(ref _skipUntil);
+    /// <summary>False when no L2 is configured, or while it is skipped after a failure (writes are then dropped).</summary>
+    public bool IsAvailable => _inner is not null && Environment.TickCount64 >= Interlocked.Read(ref _skipUntil);
 
     private T Run<T>(Func<RedisCache, T> operation, T fallback)
     {
-        if (!Available)
+        if (!IsAvailable)
         {
             return fallback;
         }
@@ -93,7 +94,7 @@ internal sealed partial class ResilientDistributedCache : IDistributedCache, IDi
 
     private async Task<T> RunAsync<T>(Func<RedisCache, Task<T>> operation, T fallback)
     {
-        if (!Available)
+        if (!IsAvailable)
         {
             return fallback;
         }
