@@ -10,7 +10,7 @@ public sealed class OutboxWorkerTests(DatabaseFixture database) : OutboxTest(dat
         get
         {
             var settings = base.Settings;
-            settings["Outbox:Enabled"] = "true";
+            settings["Outbox:Scheduler"] = "Worker";
             settings["Outbox:PollingInterval"] = "00:00:05";
             return settings;
         }

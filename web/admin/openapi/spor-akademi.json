@@ -4985,6 +4985,38 @@
           }
         }
       }
+    },
+    "/api/v1/platform/jobs/dashboard-session": {
+      "post": {
+        "tags": [
+          "Jobs"
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -8252,6 +8284,9 @@
     },
     {
       "name": "Dashboard"
+    },
+    {
+      "name": "Jobs"
     }
   ]
 }

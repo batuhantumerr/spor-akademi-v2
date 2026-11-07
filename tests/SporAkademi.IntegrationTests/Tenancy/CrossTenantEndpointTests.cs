@@ -44,6 +44,7 @@ public sealed partial class CrossTenantEndpointTests(DatabaseFixture database) :
         ["POST /api/v1/facilities"] = "name, type, address, capacity",
         ["POST /api/v1/coaches"] = "names, e-mail, phone",
         ["POST /api/v1/platform/schools"] = "Platform Admin only; creates a school",
+        ["POST /api/v1/platform/jobs/dashboard-session"] = "Platform Admin only; no body, starts the caller's job panel session (DEC-332)",
     };
 
     /// <summary>Endpoints any signed-in user may call, so they carry no role metadata.</summary>

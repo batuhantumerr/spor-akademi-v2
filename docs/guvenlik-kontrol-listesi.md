@@ -62,6 +62,7 @@ Sadece bu uygulamaya uygulanabilen maddeler listelenir (dosya yükleme, SOAP, Gr
 | 3.4.1 – 3.4.3 Cookie `Secure`, `HttpOnly`, `SameSite` | ✅ | `LoginTests.Valid_credentials_*`. |
 | 3.5.2 – 3.5.3 Token imza/süre doğrulaması | ✅ | HS256, issuer/audience/lifetime, tutarsız rol/tenant reddi (`JwtSetup.cs`, `ErrorHandlingTests.Invalid_tokens_are_rejected`). |
 | 3.7.1 Hassas işlemde yeniden doğrulama | ✅ | Şifre değişimi mevcut şifreyi ister. |
+| İş paneli oturumu (`/jobs`, DEC-332) | ✅ | Platform Admin'in bearer çağrısıyla (`POST /api/v1/platform/jobs/dashboard-session`) üretilen 256 bit anahtar, sunucuda SHA-256; çerez `HttpOnly; Secure; SameSite=Strict; Path=/jobs`, sabit 15 dk, yeni oturum eskisini bitirir; çıkış, şifre değişikliği/sıfırlama ve token yeniden kullanımı panel oturumunu da bitirir; süresi dolan/sahte çerez `401` (`IntegrationTests/Jobs/JobsDashboardTests`). Oturumlar süreç belleğinde (çok örnekli kurulum Deploy bloğunda); üretim nginx'i `/jobs`'u yönlendirmez, panel Deploy bloğuna kadar sadece dev proxy'siyle çalışır. |
 | Pasif kullanıcının açık access token'ı | 🟡 | En fazla 15 dk geçerli (DEC-056, kabul edilen sınır). |
 
 ### V4 Erişim kontrolü
@@ -70,6 +71,7 @@ Sadece bu uygulamaya uygulanabilen maddeler listelenir (dosya yükleme, SOAP, Gr
 | 4.1.1 – 4.1.3 Sunucu tarafında, en az yetki, varsayılan red | ✅ | Fallback policy, rol grupları (`EndpointConventions.RequireRole`), `EndpointSecurityTests`. |
 | 4.2.1 IDOR / başka okulun kaydı | ✅ | Tenant filtresi + bileşik FK + yazma koruması; başka okulun kaydı `404` (her modülün `*TenantIsolationTests` sınıfı). |
 | 4.2.2 CSRF | ✅ | Bearer token cookie'de değil; cookie ile çalışan refresh/çıkış `SameSite=Strict` + `X-Requested-With` ister (`SessionTests`), CORS yok (`CorsTests`). |
+| İş paneli (Hangfire Dashboard, tüm okulların işleri) | ✅ | Sadece aktif Platform Admin, sadece panel çereziyle: anonim, bearer token, Okul Admini ve Antrenör `401`/`403`; kullanıcı her istekte yeniden kontrol edilir (devre dışı bırakılan admin anında düşer); Hangfire'ın kendi filtresi de rol ister; varsayılan salt okunur, işlemler açıksa antiforgery (`sa_jobs_af`, `X-Jobs-Antiforgery`); `no-store`, `X-Frame-Options: DENY`; bağlantı dizesi gösterilmez (`JobsDashboardTests`, `EndpointSecurityTests.The_job_panel_requires_its_platform_admin_policy`). İş argümanları sadece ID (`ArchitectureTests/JobsRulesTests`). |
 | 4.3.1 Yönetim arayüzlerinde ek koruma | 🟡 | Platform Admin rolüyle ayrılmış; MFA yok (Fikirler 5). |
 | Antrenör görünümü (NFR-PRV-02) | ✅ | Roster yanıt şekli sabit (`IntegrationTests/Enrollments/RosterTests`). |
 
