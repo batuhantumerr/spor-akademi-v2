@@ -2,6 +2,7 @@ import {
   LucideBuilding,
   LucideCalendarCheck,
   LucideCalendarDays,
+  LucideCreditCard,
   LucideDumbbell,
   LucideGraduationCap,
   LucideIconInput,
@@ -59,6 +60,7 @@ export function navigationFor(role: Role | null): NavSection[] {
           items: [
             { label: ui.nav.payments, path: '/payments', icon: LucideWallet },
             { label: ui.nav.dues, path: '/dues', icon: LucideReceipt },
+            { label: ui.nav.onlinePayments, path: '/online-payments', icon: LucideCreditCard },
           ],
         },
       ];

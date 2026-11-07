@@ -91,6 +91,23 @@ export const errorMessages: Readonly<Record<string, string>> = {
   'Payment.FeeNotDefined': 'Bu grup için bu dönemde tanımlı bir aidat yok.',
   'Payment.AlreadyCancelled': 'Bu ödeme zaten iptal edilmiş.',
   'Payment.CancelReasonRequired': 'İptal gerekçesi zorunludur.',
+  'Payment.OnlineNotCancellable':
+    'Online ödemeler buradan iptal edilemez; iade ödeme sağlayıcısı üzerinden yapılır.',
+  'OnlinePayment.NotFound': 'Online ödeme bulunamadı.',
+  'OnlinePayment.NothingDue': 'Bu dönem için ödenecek borç yok.',
+  'OnlinePayment.PeriodInFuture': 'Gelecek bir dönemin aidatı henüz ödenemez.',
+  'OnlinePayment.CheckoutInProgress':
+    'Bu borç için açık bir ödeme bağlantısı var. Onu paylaşın veya süresinin dolmasını bekleyin.',
+  'OnlinePayment.NotOpen': 'Bu online ödeme artık açık değil.',
+  'OnlinePayment.ProviderUnavailable':
+    'Ödeme sağlayıcısına şu anda ulaşılamıyor. Biraz sonra tekrar deneyin.',
+  'OnlinePayment.ProviderMismatch': 'Ödeme sağlayıcısının bildirimi bu ödemeyle eşleşmiyor.',
+  'OnlinePayment.Disabled': 'Online ödeme bu ortamda yapılandırılmamış.',
+  'OnlinePayment.InvalidSignature': 'Bildirim imzası geçersiz.',
+  'Idempotency.KeyRequired': 'İstek anahtarı eksik. Sayfayı yenileyip tekrar deneyin.',
+  'Idempotency.KeyInvalid': 'İstek anahtarı geçersiz. Sayfayı yenileyip tekrar deneyin.',
+  'Idempotency.KeyReused': 'Bu istek anahtarı başka bir işlem için kullanılmış.',
+  'Idempotency.InProgress': 'Aynı işlem şu anda sürüyor. Birkaç saniye sonra tekrar deneyin.',
   'Network.Unavailable':
     'Sunucuya ulaşılamıyor. İnternet bağlantınızı kontrol edip tekrar deneyin.',
 };
@@ -112,6 +129,7 @@ export const ui = {
     finance: 'Finans',
     payments: 'Ödemeler',
     dues: 'Ödenmemiş borçlar',
+    onlinePayments: 'Online ödemeler',
     myGroups: 'Gruplarım',
     announcements: 'Duyurular',
     today: 'Bugün',
@@ -428,7 +446,10 @@ export const ui = {
     period: 'Dönem',
     periodHint: 'Aidatın ait olduğu ay.',
     method: 'Ödeme şekli',
-    methods: { Cash: 'Nakit', BankTransfer: 'Havale/EFT' } as Record<string, string>,
+    methods: { Cash: 'Nakit', BankTransfer: 'Havale/EFT', Online: 'Online' } as Record<
+      string,
+      string
+    >,
     paidOn: 'Ödeme tarihi',
     paidOnHint: 'Bugün veya daha önceki bir tarih.',
     paidOnInvalid: 'Ödeme tarihi 2000–2100 arasında ve en geç bugün olmalı.',
@@ -458,6 +479,53 @@ export const ui = {
     totalsLoading: 'Toplamlar hesaplanıyor…',
     noDues: 'Bu filtrelerde ödenmemiş borç yok.',
     takePayment: 'Ödeme al',
+    payOnline: 'Online ödeme',
+    payOnlineLabel: 'Online ödeme bağlantısı: {student}, {period}',
+    onlineStarted: 'Ödeme bağlantısı oluşturuldu. Bağlantıyı kopyalayıp ödeyecek kişiyle paylaşın.',
+  },
+  onlinePayments: {
+    title: 'Online ödemeler',
+    description:
+      'Ödeme sağlayıcısı üzerinden alınan aidat ödemeleri. Başarılı ödemeler, ödemeler listesine otomatik olarak işlenir.',
+    caption: 'Online ödeme listesi',
+    filteredByDue: 'Sadece seçilen borcun ödemeleri gösteriliyor.',
+    showAll: 'Tümünü göster',
+    startedAt: 'Başlatıldı',
+    expiresAt: 'Bağlantı geçerliliği: {time}',
+    statuses: {
+      Created: 'Hazırlanıyor',
+      Pending: 'Ödeme bekleniyor',
+      Succeeded: 'Ödendi',
+      Failed: 'Başarısız',
+      Expired: 'Süresi doldu',
+    } as Record<string, string>,
+    failure: 'Neden: {code}',
+    copyLink: 'Bağlantıyı kopyala',
+    copyLinkLabel: 'Ödeme bağlantısını kopyala: {student}, {period}',
+    linkCopied: 'Ödeme bağlantısı kopyalandı.',
+    copyFailed: 'Bağlantı kopyalanamadı: {url}',
+    openLink: 'Ödeme sayfasını aç',
+    viewPayment: 'Ödemeyi gör',
+    empty: 'Bu filtrelere uyan online ödeme yok.',
+    sandbox: {
+      title: 'Sandbox ödeme sayfası',
+      description:
+        'Bu sayfa test ödeme sağlayıcısının ödeme ekranını taklit eder. Gerçek kart bilgisi istenmez ve para çekilmez.',
+      pay: 'Ödemeyi onayla',
+      decline: 'Kartı reddet',
+      missingToken: 'Ödeme bağlantısı eksik veya geçersiz.',
+      working: 'İşleniyor…',
+    },
+    result: {
+      title: 'Ödeme sonucu',
+      Succeeded: 'Ödemeniz alındı. Teşekkür ederiz.',
+      Failed:
+        'Ödeme tamamlanamadı. Kart bilgilerinizi kontrol edip okulunuzdan yeni bir bağlantı isteyin.',
+      Pending:
+        'Ödemeniz henüz sonuçlanmadı. Sonuç ödeme sağlayıcısından geldiğinde okulunuz tarafından görülecektir.',
+      Expired: 'Bu ödeme bağlantısının süresi doldu. Okulunuzdan yeni bir bağlantı isteyin.',
+      Unknown: 'Ödeme bulunamadı. Okulunuzdan yeni bir bağlantı isteyin.',
+    } as Record<string, string>,
   },
   table: { name: 'Ad', status: 'Durum', actions: 'İşlemler', active: 'Aktif', archived: 'Arşivde' },
   actions: {

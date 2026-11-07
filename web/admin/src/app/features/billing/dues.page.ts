@@ -1,11 +1,15 @@
 import { Dialog } from '@angular/cdk/dialog';
 import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/core';
-import { RouterLink } from '@angular/router';
+import { Router, RouterLink } from '@angular/router';
 import { LucideReceipt } from '@lucide/angular';
 import { firstValueFrom } from 'rxjs';
 
 import { Api } from '../../api/api';
-import { apiV1DuesOutstandingGet, apiV1GroupsGet } from '../../api/functions';
+import {
+  apiV1DuesOutstandingGet,
+  apiV1GroupsGet,
+  apiV1OnlinePaymentsPost,
+} from '../../api/functions';
 import { NamedReferenceDto, OutstandingDueDto } from '../../api/models';
 import { problemMessage, toProblem } from '../../core/api/problem';
 import { interpolate, ui } from '../../core/i18n/tr';
@@ -16,6 +20,11 @@ import { PaginationComponent } from '../../shared/ui/pagination.component';
 import { ToastService } from '../../shared/ui/toast.service';
 import { RECORD_PAYMENT_TITLE_ID, RecordPaymentData, RecordPaymentDialog } from './billing-dialogs';
 import { periodLabel } from './billing-format';
+
+/** A unique key per user action (DEC-341); the API refuses a reused key with another body. */
+export function newIdempotencyKey(): string {
+  return crypto.randomUUID();
+}
 
 interface Totals {
   /** Null when the list changed while the pages were being walked (count not reliable). */
@@ -164,7 +173,16 @@ const TOTALS_RETRIES = 2;
                 <td class="text-right font-mono font-semibold whitespace-nowrap text-destructive">
                   {{ show(d.remaining.amount) }}
                 </td>
-                <td class="text-right">
+                <td class="text-right whitespace-nowrap">
+                  <button
+                    type="button"
+                    class="btn btn-ghost btn-sm"
+                    [attr.aria-label]="payOnlineLabel(d)"
+                    [disabled]="busy()"
+                    (click)="payOnline(d)"
+                  >
+                    {{ text.payOnline }}
+                  </button>
                   <button
                     type="button"
                     class="btn btn-secondary btn-sm"
@@ -202,6 +220,7 @@ export class DuesPage {
   private readonly api = inject(Api);
   private readonly dialog = inject(Dialog);
   private readonly toasts = inject(ToastService);
+  private readonly router = inject(Router);
 
   protected readonly text = ui.billing;
   protected readonly table = ui.table;
@@ -277,6 +296,43 @@ export class DuesPage {
     } finally {
       this.busy.set(false);
     }
+  }
+
+  protected payOnlineLabel(due: OutstandingDueDto): string {
+    return interpolate(this.text.payOnlineLabel, {
+      student: `${due.studentFirstName} ${due.studentLastName}`,
+      period: periodLabel(due.period),
+    });
+  }
+
+  /**
+   * P2-F1 (DEC-348): opens a checkout link for the due (with a fresh Idempotency-Key, so a double click or a retry
+   * of this request never starts two attempts) and shows the due's online payments, where the link is copied.
+   * An attempt already open for the due is shown instead.
+   */
+  protected async payOnline(due: OutstandingDueDto): Promise<void> {
+    if (this.busy()) {
+      return;
+    }
+    this.busy.set(true);
+    try {
+      await this.api.invoke(apiV1OnlinePaymentsPost, {
+        'Idempotency-Key': newIdempotencyKey(),
+        body: { enrollmentId: due.enrollmentId, period: due.period },
+      });
+      this.toasts.success(this.text.onlineStarted);
+    } catch (err) {
+      const problem = toProblem(err);
+      this.toasts.error(problemMessage(problem));
+      if (problem.code !== 'OnlinePayment.CheckoutInProgress') {
+        return;
+      }
+    } finally {
+      this.busy.set(false);
+    }
+    await this.router.navigate(['/online-payments'], {
+      queryParams: { enrollmentId: due.enrollmentId, period: due.period },
+    });
   }
 
   /** Sums every outstanding due of the current filter exactly (integer kuruş). */
