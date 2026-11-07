@@ -53,7 +53,7 @@ public sealed class PaymentTests(DatabaseFixture database) : BillingTest(databas
                 """)
             .ToListAsync(Ct));
 
-        columns.ShouldBe(["group_fees.amount:numeric(12,2)", "online_payments.amount:numeric(12,2)", "payments.amount:numeric(12,2)"]);
+        columns.ShouldBe(["dues_reminders.amount:numeric(12,2)", "group_fees.amount:numeric(12,2)", "online_payments.amount:numeric(12,2)", "payments.amount:numeric(12,2)"]);
         // 0.10 + 0.20 is exactly the 0.30 fee: nothing is left owing.
         (await OutstandingAsync()).GetProperty("totalCount").GetInt32().ShouldBe(0);
     }

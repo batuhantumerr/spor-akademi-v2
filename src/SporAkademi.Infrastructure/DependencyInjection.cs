@@ -31,6 +31,7 @@ using SporAkademi.Infrastructure.Enrollments;
 using SporAkademi.Infrastructure.Groups;
 using SporAkademi.Infrastructure.Identity;
 using SporAkademi.Infrastructure.Jobs;
+using SporAkademi.Infrastructure.Notifications;
 using SporAkademi.Infrastructure.Organization;
 using SporAkademi.Infrastructure.Outbox;
 using SporAkademi.Infrastructure.Persistence;
@@ -106,8 +107,18 @@ public static class DependencyInjection
         services.AddScoped<IStudentDirectory, StudentDirectory>();
         services.AddScoped<IStudentRepository, StudentRepository>();
         services.AddScoped<IGuardianRepository, GuardianRepository>();
+        services.AddScoped<IAnonymizationRunRepository, AnonymizationRunRepository>();
         services.AddScoped<IStudentDocumentRepository, StudentDocumentRepository>();
         services.AddDocumentStorage(configuration);
+        services.AddScoped<IStudentReminderContacts, StudentReminderContacts>();
+        services.AddScoped<IDuesReminderRepository, DuesReminderRepository>();
+        services.AddSingleton<IPasswordTokenFactory, PasswordTokenFactory>();
+        services.AddOptions<DuesReminderSettings>()
+            .BindConfiguration(DuesReminderSettings.Section)
+            .Validate(o => o.IsValid(), "The Billing:DuesReminders configuration section has an invalid value.")
+            .ValidateOnStart();
+        services.AddSingleton(provider => provider.GetRequiredService<Microsoft.Extensions.Options.IOptions<DuesReminderSettings>>().Value);
+        services.AddEmail();
 
         services.AddOutbox(configuration);
         services.AddPaymentProviders(configuration);

@@ -127,7 +127,7 @@ public sealed class RegisterStudentTests(DatabaseFixture database) : StudentsTes
 
         updated.StatusCode.ShouldBe(HttpStatusCode.OK);
         var reread = (await GetAsync(student.Id))!;
-        reread.EmergencyContact.Phone.ShouldBe("+905321112233");
+        reread.EmergencyContact!.Phone.ShouldBe("+905321112233");
         reread.Guardians[0].Phone.ShouldBe("+905329998877");
     }
 
@@ -318,11 +318,11 @@ public sealed class RegisterStudentTests(DatabaseFixture database) : StudentsTes
     {
         firstName = firstName ?? student.FirstName,
         lastName = student.LastName,
-        birthDate = birthDate ?? student.BirthDate.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture),
+        birthDate = birthDate ?? student.BirthDate!.Value.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture),
         gender = student.Gender.ToString(),
         phone = phone ?? student.Phone,
         email = student.Email,
-        emergencyContact = new { name = student.EmergencyContact.Name, phone = student.EmergencyContact.Phone, relationship = student.EmergencyContact.Relationship },
+        emergencyContact = new { name = student.EmergencyContact!.Name, phone = student.EmergencyContact.Phone, relationship = student.EmergencyContact.Relationship },
         version = version ?? student.Version,
     };
 }

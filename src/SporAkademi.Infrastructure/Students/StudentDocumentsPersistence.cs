@@ -71,6 +71,9 @@ internal sealed class StudentDocumentRepository(AppDbContext db) : IStudentDocum
     public Task<int> CountAsync(StudentId studentId, DocumentType type, CancellationToken cancellationToken) =>
         db.Set<StudentDocument>().CountAsync(d => d.StudentId == studentId && d.Type == type, cancellationToken);
 
+    public async Task<IReadOnlyList<StudentDocument>> ListOfStudentForDeletionAsync(StudentId studentId, CancellationToken cancellationToken) =>
+        await db.Set<StudentDocument>().Where(d => d.StudentId == studentId).ToListAsync(cancellationToken);
+
     public async Task<IReadOnlyList<StudentDocument>> ListOfStudentAsync(StudentId studentId, CancellationToken cancellationToken) =>
         await db.Set<StudentDocument>().AsNoTracking()
             .Where(d => d.StudentId == studentId)

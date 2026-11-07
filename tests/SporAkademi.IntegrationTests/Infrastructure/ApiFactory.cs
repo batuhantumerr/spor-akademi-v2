@@ -4,6 +4,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Time.Testing;
+using SporAkademi.Application.Abstractions.Notifications;
 
 namespace SporAkademi.IntegrationTests.Infrastructure;
 
@@ -22,6 +23,9 @@ public sealed class ApiFactory(
     /// <summary>Defaults to 2027-01-14 12:00 UTC (a Thursday) so date rules are deterministic.</summary>
     public FakeTimeProvider Clock { get; } = new(new DateTimeOffset(2027, 1, 14, 12, 0, 0, TimeSpan.Zero));
 
+    /// <summary>Every e-mail the API "sends" (DEC-350); nothing leaves the test.</summary>
+    public CapturingEmailSender Emails { get; } = new();
+
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
         builder.UseEnvironment("Testing");
@@ -37,8 +41,15 @@ public sealed class ApiFactory(
                 // the job tests turn a scheduler on), and run no Hangfire server unless a test asks for one.
                 ["Outbox:Scheduler"] = "None",
                 ["Jobs:ServerEnabled"] = "false",
+                // Fee reminders are off by default (DEC-355); the tests turn them on from before the test clock's dates.
+                ["Billing:DuesReminders:Enabled"] = "true",
+                ["Billing:DuesReminders:StartsOn"] = "2026-01-01",
             })
             .AddInMemoryCollection(storage ?? new Dictionary<string, string?>()));
-        builder.ConfigureServices(services => services.Replace(ServiceDescriptor.Singleton<TimeProvider>(Clock)));
+        builder.ConfigureServices(services =>
+        {
+            services.Replace(ServiceDescriptor.Singleton<TimeProvider>(Clock));
+            services.Replace(ServiceDescriptor.Singleton<IEmailSender>(Emails));
+        });
     }
 }

@@ -177,6 +177,12 @@ export const routes: Routes = [
             loadComponent: () =>
               import('./features/billing/online-payments.page').then((m) => m.OnlinePaymentsPage),
           },
+          {
+            path: 'settings/data-retention',
+            title: ui.nav.dataRetention,
+            loadComponent: () =>
+              import('./features/settings/data-retention.page').then((m) => m.DataRetentionPage),
+          },
         ],
       },
     ],
@@ -194,6 +200,21 @@ export const routes: Routes = [
     loadComponent: () =>
       import('./features/billing/payment-result.page').then((m) => m.PaymentResultPage),
     title: ui.onlinePayments.result['title'],
+  },
+  // P2-F4: no shell child matches these paths, so the router reaches them after the shell without running its guard.
+  {
+    path: 'forgot-password',
+    canActivate: [guestGuard],
+    loadComponent: () =>
+      import('./features/auth/forgot-password.page').then((m) => m.ForgotPasswordPage),
+    title: ui.forgotPassword.title,
+  },
+  {
+    // Opened from e-mail links (reset and welcome); works whether or not someone is signed in on this browser.
+    path: 'reset-password',
+    loadComponent: () =>
+      import('./features/auth/reset-password.page').then((m) => m.ResetPasswordPage),
+    title: ui.resetPassword.title,
   },
   {
     path: '**',

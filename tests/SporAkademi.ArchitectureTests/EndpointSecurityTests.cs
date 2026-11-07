@@ -23,6 +23,8 @@ public sealed class EndpointSecurityTests : IDisposable
         "/api/v1/payment-webhooks",
         "/api/v1/payment-callbacks",
         "/api/v1/sandbox-checkout/complete",
+        "/api/v1/auth/password-reset/request", // P2-F4: always 202, rate limited (DEC-353)
+        "/api/v1/auth/password-reset/confirm", // P2-F4: needs a set-password token
     ];
 
     private readonly WebApplicationFactory<Program> _factory = new WebApplicationFactory<Program>()

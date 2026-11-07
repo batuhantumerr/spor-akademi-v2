@@ -216,6 +216,68 @@ public sealed class StudentTests
     }
 
     [Fact]
+    [Trait("Story", "P2-F5")]
+    public void Anonymize_clears_the_personal_data_of_a_student_who_left_by_the_cutoff_and_raises_an_event()
+    {
+        var student = Student.Register(School, Details(new DateOnly(2015, 5, 1), SomePhone), OneGuardian, Today).Value;
+        student.Leave(new DateOnly(2025, 1, 14));
+        student.ClearDomainEvents();
+        var now = new DateTimeOffset(2027, 1, 14, 2, 0, 0, TimeSpan.Zero);
+
+        student.Anonymize(new DateOnly(2025, 1, 13), now).Error.ShouldBe(StudentErrors.NotDueForAnonymization);
+        student.Anonymize(new DateOnly(2025, 1, 14), now).IsSuccess.ShouldBeTrue();
+
+        student.FirstName.ShouldBe("Anonim");
+        student.LastName.ShouldBe($"Öğrenci #{student.Id.Value.ToString("N")[^8..]}");
+        student.SearchKey.ShouldBe(TextNormalization.SearchKey($"Anonim {student.LastName}"));
+        student.BirthDate.ShouldBeNull();
+        student.Phone.ShouldBeNull();
+        student.Email.ShouldBeNull();
+        student.EmergencyContact.ShouldBeNull();
+        student.Guardians.ShouldBeEmpty();
+        student.AnonymizedAt.ShouldBe(now);
+        student.Status.ShouldBe(StudentStatus.Left);
+        student.LeftAt.ShouldBe(new DateOnly(2025, 1, 14));
+        var raised = student.DomainEvents.ShouldHaveSingleItem().ShouldBeOfType<StudentAnonymized>();
+        raised.FormerGuardians.ShouldBe([OneGuardian[0].GuardianId]);
+    }
+
+    [Fact]
+    [Trait("Story", "P2-F5")]
+    public void Removing_a_guardian_raises_an_event_naming_it_and_keeping_one_raises_none()
+    {
+        var other = new GuardianLink(EntityId.New<GuardianId>(), GuardianRelationship.Father);
+        var student = Student.Register(School, Details(new DateOnly(2015, 5, 1)), [OneGuardian[0], other], Today).Value;
+
+        student.ReplaceGuardians([OneGuardian[0] with { Relationship = GuardianRelationship.Other }], Today).IsSuccess.ShouldBeTrue();
+        student.DomainEvents.ShouldHaveSingleItem().ShouldBeOfType<StudentGuardiansUnlinked>().Removed.ShouldBe([other.GuardianId]);
+
+        student.ClearDomainEvents();
+        student.ReplaceGuardians([OneGuardian[0]], Today).IsSuccess.ShouldBeTrue();
+        student.DomainEvents.ShouldBeEmpty();
+    }
+
+    [Fact]
+    [Trait("Story", "P2-F5")]
+    public void An_active_student_is_never_anonymized_and_an_anonymized_one_never_changes_again()
+    {
+        var active = Student.Register(School, Details(new DateOnly(2015, 5, 1)), OneGuardian, Today).Value;
+        active.Anonymize(Today, DateTimeOffset.UnixEpoch).Error.ShouldBe(StudentErrors.NotDueForAnonymization);
+        active.AnonymizedAt.ShouldBeNull();
+
+        var gone = Student.Register(School, Details(new DateOnly(2015, 5, 1)), OneGuardian, Today).Value;
+        gone.Leave(new DateOnly(2024, 1, 1));
+        gone.Anonymize(Today, DateTimeOffset.UnixEpoch).IsSuccess.ShouldBeTrue();
+
+        gone.Anonymize(Today, DateTimeOffset.UnixEpoch.AddDays(1)).Error.ShouldBe(StudentErrors.AlreadyAnonymized);
+        gone.AnonymizedAt.ShouldBe(DateTimeOffset.UnixEpoch);
+        gone.Reactivate().Error.ShouldBe(StudentErrors.Anonymized);
+        gone.Update(Details(new DateOnly(2015, 5, 1)), Today).Error.ShouldBe(StudentErrors.Anonymized);
+        gone.ReplaceGuardians(OneGuardian, Today).Error.ShouldBe(StudentErrors.Anonymized);
+        gone.Leave(Today).Error.ShouldBe(StudentErrors.AlreadyLeft);
+    }
+
+    [Fact]
     [Trait("Story", "US-13")]
     public void Guardian_names_are_tidied_and_required()
     {

@@ -12,7 +12,7 @@ namespace SporAkademi.Infrastructure.Identity;
 /// <summary>Users are not tenant-filtered (DEC-105): every school-bound query states its school explicitly.</summary>
 internal sealed class UserRepository(AppDbContext dbContext) : IUserRepository
 {
-    private IQueryable<User> UsersWithTokens => dbContext.Set<User>().Include(u => u.RefreshTokens);
+    private IQueryable<User> UsersWithTokens => dbContext.Set<User>().Include(u => u.RefreshTokens).Include(u => u.PasswordTokens);
 
     public Task<User?> GetByIdAsync(UserId id, CancellationToken cancellationToken) =>
         UsersWithTokens.SingleOrDefaultAsync(u => u.Id == id, cancellationToken);
@@ -22,6 +22,9 @@ internal sealed class UserRepository(AppDbContext dbContext) : IUserRepository
 
     public Task<User?> GetByRefreshTokenHashAsync(string tokenHash, CancellationToken cancellationToken) =>
         UsersWithTokens.SingleOrDefaultAsync(u => u.RefreshTokens.Any(t => t.TokenHash == tokenHash), cancellationToken);
+
+    public Task<User?> GetByPasswordTokenHashAsync(string tokenHash, CancellationToken cancellationToken) =>
+        UsersWithTokens.SingleOrDefaultAsync(u => u.PasswordTokens.Any(t => t.TokenHash == tokenHash), cancellationToken);
 
     public async Task<UserSummary?> GetSummaryAsync(UserId id, CancellationToken cancellationToken)
     {

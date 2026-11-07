@@ -13,8 +13,8 @@ using SporAkademi.Infrastructure.Persistence;
 namespace SporAkademi.Infrastructure.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    [Migration("20261107033902_AddOnlinePayments")]
-    partial class AddOnlinePayments
+    [Migration("20261107043351_AddStudentAnonymization")]
+    partial class AddStudentAnonymization
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -277,24 +277,11 @@ namespace SporAkademi.Infrastructure.Migrations
                         });
                 });
 
-            modelBuilder.Entity("SporAkademi.Domain.Billing.OnlinePayment", b =>
+            modelBuilder.Entity("SporAkademi.Domain.Billing.DuesReminder", b =>
                 {
                     b.Property<Guid>("Id")
                         .HasColumnType("uuid")
                         .HasColumnName("id");
-
-                    b.Property<DateTimeOffset?>("CheckoutExpiresAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("checkout_expires_at");
-
-                    b.Property<string>("CheckoutUrl")
-                        .HasMaxLength(2048)
-                        .HasColumnType("character varying(2048)")
-                        .HasColumnName("checkout_url");
-
-                    b.Property<DateTimeOffset?>("CompletedAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("completed_at");
 
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("timestamp with time zone")
@@ -304,36 +291,23 @@ namespace SporAkademi.Infrastructure.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("created_by");
 
+                    b.Property<DateOnly>("DueDate")
+                        .HasColumnType("date")
+                        .HasColumnName("due_date");
+
                     b.Property<Guid>("EnrollmentId")
                         .HasColumnType("uuid")
                         .HasColumnName("enrollment_id");
-
-                    b.Property<DateOnly>("EnrollmentStartDate")
-                        .HasColumnType("date")
-                        .HasColumnName("enrollment_start_date");
-
-                    b.Property<string>("FailureCode")
-                        .HasMaxLength(64)
-                        .HasColumnType("character varying(64)")
-                        .HasColumnName("failure_code");
 
                     b.Property<Guid>("GroupId")
                         .HasColumnType("uuid")
                         .HasColumnName("group_id");
 
-                    b.Property<string>("IdempotencyKey")
+                    b.Property<string>("Kind")
                         .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)")
-                        .HasColumnName("idempotency_key");
-
-                    b.Property<bool>("Overpaid")
-                        .HasColumnType("boolean")
-                        .HasColumnName("overpaid");
-
-                    b.Property<Guid?>("PaymentId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("payment_id");
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .HasColumnName("kind");
 
                     b.Property<string>("Period")
                         .IsRequired()
@@ -341,32 +315,18 @@ namespace SporAkademi.Infrastructure.Migrations
                         .HasColumnType("character varying(7)")
                         .HasColumnName("period");
 
-                    b.Property<string>("Provider")
-                        .IsRequired()
+                    b.Property<int>("RecipientCount")
+                        .HasColumnType("integer")
+                        .HasColumnName("recipient_count");
+
+                    b.Property<DateTimeOffset?>("SentAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("sent_at");
+
+                    b.Property<string>("SkipReason")
                         .HasMaxLength(32)
                         .HasColumnType("character varying(32)")
-                        .HasColumnName("provider");
-
-                    b.Property<string>("ProviderPaymentId")
-                        .HasMaxLength(128)
-                        .HasColumnType("character varying(128)")
-                        .HasColumnName("provider_payment_id");
-
-                    b.Property<string>("ProviderToken")
-                        .HasMaxLength(128)
-                        .HasColumnType("character varying(128)")
-                        .HasColumnName("provider_token");
-
-                    b.Property<string>("RequestHash")
-                        .IsRequired()
-                        .HasMaxLength(64)
-                        .HasColumnType("character(64)")
-                        .HasColumnName("request_hash")
-                        .IsFixedLength();
-
-                    b.Property<DateTimeOffset>("StartedAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("started_at");
+                        .HasColumnName("skip_reason");
 
                     b.Property<string>("Status")
                         .IsRequired()
@@ -396,7 +356,7 @@ namespace SporAkademi.Infrastructure.Migrations
                         .HasColumnType("xid")
                         .HasColumnName("xmin");
 
-                    b.ComplexProperty(typeof(Dictionary<string, object>), "Amount", "SporAkademi.Domain.Billing.OnlinePayment.Amount#Money", b1 =>
+                    b.ComplexProperty(typeof(Dictionary<string, object>), "Fee", "SporAkademi.Domain.Billing.DuesReminder.Fee#Money", b1 =>
                         {
                             b1.IsRequired();
 
@@ -413,50 +373,23 @@ namespace SporAkademi.Infrastructure.Migrations
                         });
 
                     b.HasKey("Id")
-                        .HasName("pk_online_payments");
+                        .HasName("pk_dues_reminders");
 
-                    b.HasAlternateKey("TenantId", "Id")
-                        .HasName("ak_online_payments_tenant_id_id");
+                    b.HasIndex("TenantId", "StudentId")
+                        .HasDatabaseName("ix_dues_reminders_tenant_id_student_id");
 
-                    b.HasIndex("PaymentId")
+                    b.HasIndex("TenantId", "EnrollmentId", "Period", "Kind")
                         .IsUnique()
-                        .HasDatabaseName("ix_online_payments_payment_id")
-                        .HasFilter("payment_id IS NOT NULL");
-
-                    b.HasIndex("Provider", "ProviderPaymentId")
-                        .IsUnique()
-                        .HasDatabaseName("ix_online_payments_provider_provider_payment_id")
-                        .HasFilter("provider_payment_id IS NOT NULL");
-
-                    b.HasIndex("Provider", "ProviderToken")
-                        .IsUnique()
-                        .HasDatabaseName("ix_online_payments_provider_provider_token")
-                        .HasFilter("provider_token IS NOT NULL");
-
-                    b.HasIndex("TenantId", "IdempotencyKey")
-                        .IsUnique()
-                        .HasDatabaseName("ix_online_payments_tenant_id_idempotency_key");
-
-                    b.HasIndex("TenantId", "StartedAt")
-                        .HasDatabaseName("ix_online_payments_tenant_id_started_at");
-
-                    b.HasIndex("TenantId", "EnrollmentId", "Period")
-                        .IsUnique()
-                        .HasDatabaseName("ix_online_payments_open_due")
-                        .HasFilter("status IN ('Created', 'Pending')");
+                        .HasDatabaseName("ix_dues_reminders_tenant_id_enrollment_id_period_kind");
 
                     b.HasIndex("TenantId", "EnrollmentId", "StudentId", "GroupId")
-                        .HasDatabaseName("ix_online_payments_tenant_id_enrollment_id_student_id_group_id");
+                        .HasDatabaseName("ix_dues_reminders_tenant_id_enrollment_id_student_id_group_id");
 
-                    b.ToTable("online_payments", "billing", t =>
+                    b.ToTable("dues_reminders", "billing", t =>
                         {
-                            t.HasCheckConstraint("ck_online_payments_amount", "amount > 0");
+                            t.HasCheckConstraint("ck_dues_reminders_sent", "(status = 'Sent') = (sent_at IS NOT NULL) AND (status = 'Sent') = (recipient_count > 0)");
 
-                            t.HasCheckConstraint("ck_online_payments_checkout", "status IN ('Created', 'Failed', 'Expired') OR provider_token IS NOT NULL");
-
-                            t.HasCheckConstraint("ck_online_payments_overpaid", "NOT overpaid OR status = 'Succeeded'");
-
-                            t.HasCheckConstraint("ck_online_payments_success", "(status = 'Succeeded') = (payment_id IS NOT NULL) AND (status <> 'Succeeded' OR provider_payment_id IS NOT NULL)");
+                            t.HasCheckConstraint("ck_dues_reminders_skipped", "(status = 'Skipped') = (skip_reason IS NOT NULL)");
                         });
                 });
 
@@ -500,10 +433,6 @@ namespace SporAkademi.Infrastructure.Migrations
                         .HasMaxLength(32)
                         .HasColumnType("character varying(32)")
                         .HasColumnName("method");
-
-                    b.Property<Guid?>("OnlinePaymentId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("online_payment_id");
 
                     b.Property<DateOnly>("PaidOn")
                         .HasColumnType("date")
@@ -562,14 +491,6 @@ namespace SporAkademi.Infrastructure.Migrations
                     b.HasKey("Id")
                         .HasName("pk_payments");
 
-                    b.HasIndex("OnlinePaymentId")
-                        .IsUnique()
-                        .HasDatabaseName("ix_payments_online_payment_id")
-                        .HasFilter("online_payment_id IS NOT NULL");
-
-                    b.HasIndex("TenantId", "OnlinePaymentId")
-                        .HasDatabaseName("ix_payments_tenant_id_online_payment_id");
-
                     b.HasIndex("TenantId", "PaidOn")
                         .HasDatabaseName("ix_payments_tenant_id_paid_on");
 
@@ -590,74 +511,7 @@ namespace SporAkademi.Infrastructure.Migrations
                             t.HasCheckConstraint("ck_payments_amount", "amount > 0");
 
                             t.HasCheckConstraint("ck_payments_cancellation", "(status = 'Cancelled') = (cancel_reason IS NOT NULL) AND (status = 'Cancelled') = (cancelled_at IS NOT NULL) AND (status = 'Cancelled') = (cancelled_by IS NOT NULL)");
-
-                            t.HasCheckConstraint("ck_payments_online", "(method = 'Online') = (online_payment_id IS NOT NULL)");
                         });
-                });
-
-            modelBuilder.Entity("SporAkademi.Domain.Billing.PaymentNotification", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .HasColumnType("uuid")
-                        .HasColumnName("id");
-
-                    b.Property<DateTimeOffset>("CreatedAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("created_at");
-
-                    b.Property<Guid?>("CreatedBy")
-                        .HasColumnType("uuid")
-                        .HasColumnName("created_by");
-
-                    b.Property<string>("EventKey")
-                        .IsRequired()
-                        .HasMaxLength(200)
-                        .HasColumnType("character varying(200)")
-                        .HasColumnName("event_key");
-
-                    b.Property<Guid>("OnlinePaymentId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("online_payment_id");
-
-                    b.Property<string>("Provider")
-                        .IsRequired()
-                        .HasMaxLength(32)
-                        .HasColumnType("character varying(32)")
-                        .HasColumnName("provider");
-
-                    b.Property<DateTimeOffset>("ReceivedAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("received_at");
-
-                    b.Property<Guid>("TenantId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("tenant_id");
-
-                    b.Property<DateTimeOffset>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("updated_at");
-
-                    b.Property<Guid?>("UpdatedBy")
-                        .HasColumnType("uuid")
-                        .HasColumnName("updated_by");
-
-                    b.Property<uint>("Version")
-                        .IsConcurrencyToken()
-                        .ValueGeneratedOnAddOrUpdate()
-                        .HasColumnType("xid")
-                        .HasColumnName("xmin");
-
-                    b.HasKey("Id")
-                        .HasName("pk_payment_notifications");
-
-                    b.HasIndex("Provider", "EventKey")
-                        .IsUnique()
-                        .HasDatabaseName("ix_payment_notifications_provider_event_key");
-
-                    b.HasIndex("TenantId", "OnlinePaymentId")
-                        .HasDatabaseName("ix_payment_notifications_tenant_id_online_payment_id");
-
-                    b.ToTable("payment_notifications", "billing");
                 });
 
             modelBuilder.Entity("SporAkademi.Domain.Enrollments.Enrollment", b =>
@@ -929,6 +783,75 @@ namespace SporAkademi.Infrastructure.Migrations
                         });
                 });
 
+            modelBuilder.Entity("SporAkademi.Domain.Identity.PasswordToken", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid?>("CreatedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("created_by");
+
+                    b.Property<DateTimeOffset>("ExpiresAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("expires_at");
+
+                    b.Property<DateTimeOffset>("IssuedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("issued_at");
+
+                    b.Property<string>("Purpose")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .HasColumnName("purpose");
+
+                    b.Property<string>("TokenHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character(64)")
+                        .HasColumnName("token_hash")
+                        .IsFixedLength();
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<Guid?>("UpdatedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("updated_by");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("user_id");
+
+                    b.Property<uint>("Version")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
+
+                    b.HasKey("Id")
+                        .HasName("pk_password_tokens");
+
+                    b.HasIndex("ExpiresAt")
+                        .HasDatabaseName("ix_password_tokens_expires_at");
+
+                    b.HasIndex("TokenHash")
+                        .IsUnique()
+                        .HasDatabaseName("ix_password_tokens_token_hash");
+
+                    b.HasIndex("UserId")
+                        .HasDatabaseName("ix_password_tokens_user_id");
+
+                    b.ToTable("password_tokens", "identity");
+                });
+
             modelBuilder.Entity("SporAkademi.Domain.Identity.RefreshToken", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1058,6 +981,10 @@ namespace SporAkademi.Infrastructure.Migrations
                         .HasMaxLength(256)
                         .HasColumnType("character varying(256)")
                         .HasColumnName("password_hash");
+
+                    b.Property<DateTimeOffset?>("PasswordResetRequestedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("password_reset_requested_at");
 
                     b.Property<string>("Phone")
                         .HasMaxLength(13)
@@ -1265,6 +1192,77 @@ namespace SporAkademi.Infrastructure.Migrations
                     b.ToTable("sports", "organization");
                 });
 
+            modelBuilder.Entity("SporAkademi.Domain.Students.AnonymizationRun", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<int>("AnonymizedCount")
+                        .HasColumnType("integer")
+                        .HasColumnName("anonymized_count");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid?>("CreatedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("created_by");
+
+                    b.Property<DateOnly>("Cutoff")
+                        .HasColumnType("date")
+                        .HasColumnName("cutoff");
+
+                    b.Property<long>("DurationMs")
+                        .HasColumnType("bigint")
+                        .HasColumnName("duration_ms");
+
+                    b.Property<int>("PersonalDataMonths")
+                        .HasColumnType("integer")
+                        .HasColumnName("personal_data_months");
+
+                    b.Property<int>("SkippedCount")
+                        .HasColumnType("integer")
+                        .HasColumnName("skipped_count");
+
+                    b.Property<DateTimeOffset>("StartedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("started_at");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .HasColumnName("status");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("tenant_id");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<Guid?>("UpdatedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("updated_by");
+
+                    b.Property<uint>("Version")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
+
+                    b.HasKey("Id")
+                        .HasName("pk_anonymization_runs");
+
+                    b.HasIndex("TenantId", "StartedAt")
+                        .HasDatabaseName("ix_anonymization_runs_tenant_id_started_at");
+
+                    b.ToTable("anonymization_runs", "students");
+                });
+
             modelBuilder.Entity("SporAkademi.Domain.Students.Guardian", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1364,7 +1362,7 @@ namespace SporAkademi.Infrastructure.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("anonymized_at");
 
-                    b.Property<DateOnly>("BirthDate")
+                    b.Property<DateOnly?>("BirthDate")
                         .HasColumnType("date")
                         .HasColumnName("birth_date");
 
@@ -1440,8 +1438,6 @@ namespace SporAkademi.Infrastructure.Migrations
 
                     b.ComplexProperty(typeof(Dictionary<string, object>), "EmergencyContact", "SporAkademi.Domain.Students.Student.EmergencyContact#EmergencyContact", b1 =>
                         {
-                            b1.IsRequired();
-
                             b1.Property<string>("Name")
                                 .IsRequired()
                                 .HasMaxLength(100)
@@ -1467,12 +1463,20 @@ namespace SporAkademi.Infrastructure.Migrations
                     b.HasAlternateKey("TenantId", "Id")
                         .HasName("ak_students_tenant_id_id");
 
+                    b.HasIndex("TenantId", "LeftAt")
+                        .HasDatabaseName("ix_students_tenant_id_left_at_not_anonymized")
+                        .HasFilter("status = 'Left' AND anonymized_at IS NULL");
+
                     b.HasIndex("TenantId", "SearchKey")
                         .HasDatabaseName("ix_students_tenant_id_search_key");
 
                     b.ToTable("students", "students", t =>
                         {
+                            t.HasCheckConstraint("ck_students_anonymized_left", "anonymized_at IS NULL OR status = 'Left'");
+
                             t.HasCheckConstraint("ck_students_left_at", "(status = 'Left') = (left_at IS NOT NULL)");
+
+                            t.HasCheckConstraint("ck_students_personal_data", "anonymized_at IS NOT NULL OR (birth_date IS NOT NULL AND emergency_contact_name IS NOT NULL)");
                         });
                 });
 
@@ -1822,14 +1826,14 @@ namespace SporAkademi.Infrastructure.Migrations
                         .HasConstraintName("fk_sessions_group_tenant_id_group_id");
                 });
 
-            modelBuilder.Entity("SporAkademi.Domain.Billing.OnlinePayment", b =>
+            modelBuilder.Entity("SporAkademi.Domain.Billing.DuesReminder", b =>
                 {
                     b.HasOne("SporAkademi.Domain.Tenancy.School", null)
                         .WithMany()
                         .HasForeignKey("TenantId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired()
-                        .HasConstraintName("fk_online_payments_school_tenant_id");
+                        .HasConstraintName("fk_dues_reminders_school_tenant_id");
 
                     b.HasOne("SporAkademi.Domain.Enrollments.Enrollment", null)
                         .WithMany()
@@ -1837,7 +1841,7 @@ namespace SporAkademi.Infrastructure.Migrations
                         .HasPrincipalKey("TenantId", "Id", "StudentId", "GroupId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired()
-                        .HasConstraintName("fk_online_payments_enrollment_tenant_id_enrollment_id_student_");
+                        .HasConstraintName("fk_dues_reminders_enrollment_tenant_id_enrollment_id_student_i");
                 });
 
             modelBuilder.Entity("SporAkademi.Domain.Billing.Payment", b =>
@@ -1857,13 +1861,6 @@ namespace SporAkademi.Infrastructure.Migrations
                         .IsRequired()
                         .HasConstraintName("fk_payments_group_tenant_id_group_id");
 
-                    b.HasOne("SporAkademi.Domain.Billing.OnlinePayment", null)
-                        .WithMany()
-                        .HasForeignKey("TenantId", "OnlinePaymentId")
-                        .HasPrincipalKey("TenantId", "Id")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .HasConstraintName("fk_payments_online_payments_tenant_id_online_payment_id");
-
                     b.HasOne("SporAkademi.Domain.Students.Student", null)
                         .WithMany()
                         .HasForeignKey("TenantId", "StudentId")
@@ -1879,24 +1876,6 @@ namespace SporAkademi.Infrastructure.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired()
                         .HasConstraintName("fk_payments_enrollment_tenant_id_enrollment_id_student_id_grou");
-                });
-
-            modelBuilder.Entity("SporAkademi.Domain.Billing.PaymentNotification", b =>
-                {
-                    b.HasOne("SporAkademi.Domain.Tenancy.School", null)
-                        .WithMany()
-                        .HasForeignKey("TenantId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired()
-                        .HasConstraintName("fk_payment_notifications_school_tenant_id");
-
-                    b.HasOne("SporAkademi.Domain.Billing.OnlinePayment", null)
-                        .WithMany()
-                        .HasForeignKey("TenantId", "OnlinePaymentId")
-                        .HasPrincipalKey("TenantId", "Id")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired()
-                        .HasConstraintName("fk_payment_notifications_online_payments_tenant_id_online_paym");
                 });
 
             modelBuilder.Entity("SporAkademi.Domain.Enrollments.Enrollment", b =>
@@ -1961,6 +1940,16 @@ namespace SporAkademi.Infrastructure.Migrations
                         .HasConstraintName("fk_group_fees_groups_group_id");
                 });
 
+            modelBuilder.Entity("SporAkademi.Domain.Identity.PasswordToken", b =>
+                {
+                    b.HasOne("SporAkademi.Domain.Identity.User", null)
+                        .WithMany("PasswordTokens")
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_password_tokens_user_user_id");
+                });
+
             modelBuilder.Entity("SporAkademi.Domain.Identity.RefreshToken", b =>
                 {
                     b.HasOne("SporAkademi.Domain.Identity.User", null)
@@ -1998,6 +1987,16 @@ namespace SporAkademi.Infrastructure.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired()
                         .HasConstraintName("fk_sports_school_tenant_id");
+                });
+
+            modelBuilder.Entity("SporAkademi.Domain.Students.AnonymizationRun", b =>
+                {
+                    b.HasOne("SporAkademi.Domain.Tenancy.School", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_anonymization_runs_school_tenant_id");
                 });
 
             modelBuilder.Entity("SporAkademi.Domain.Students.Guardian", b =>
@@ -2071,6 +2070,8 @@ namespace SporAkademi.Infrastructure.Migrations
 
             modelBuilder.Entity("SporAkademi.Domain.Identity.User", b =>
                 {
+                    b.Navigation("PasswordTokens");
+
                     b.Navigation("RefreshTokens");
                 });
 

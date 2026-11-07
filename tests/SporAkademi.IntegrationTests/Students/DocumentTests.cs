@@ -81,6 +81,36 @@ public sealed class DocumentTests(DatabaseFixture database) : EnrollmentsTest(da
     }
 
     [Fact]
+    [Trait("Story", "P2-F5")]
+    public async Task Anonymizing_a_student_deletes_the_documents_and_their_objects_through_the_outbox()
+    {
+        var student = await RegisterStudentAsync();
+        var kept = await RegisterStudentAsync("Kalan");
+        (await UploadAsync(student, "HealthReport", TestFiles.Pdf(), "rapor.pdf")).StatusCode.ShouldBe(HttpStatusCode.Created);
+        (await UploadAsync(student, "Photo", TestFiles.Png(), "foto.png")).StatusCode.ShouldBe(HttpStatusCode.Created);
+        (await UploadAsync(kept, "Photo", TestFiles.Png(), "foto.png")).StatusCode.ShouldBe(HttpStatusCode.Created);
+        (await Admin.PostAsJsonAsync($"/api/v1/students/{student}/leave", new { date = "2024-01-10" }, Ct)).StatusCode.ShouldBe(HttpStatusCode.OK);
+        while (await ProcessOutboxAsync() > 0)
+        {
+        }
+
+        (await InScopeAsync(sp => sp.GetRequiredService<SporAkademi.Infrastructure.Jobs.StudentAnonymizationJob>().RunAsync(Ct))).ShouldBe(1);
+
+        // The rows go with the anonymization; the objects after commit, through DocumentObjectDeletedMessage.
+        (await CountRowsAsync()).ShouldBe(1);
+        (await Database.Storage.KeysAsync($"{School.Value:N}/{student:N}/")).Count.ShouldBe(2);
+        (await ProcessOutboxAsync()).ShouldBe(2);
+        (await Database.Storage.KeysAsync($"{School.Value:N}/{student:N}/")).ShouldBeEmpty();
+        (await Database.Storage.KeysAsync($"{School.Value:N}/{kept:N}/")).ShouldHaveSingleItem();
+
+        // No new document can be attached to an anonymized student, and the refused upload leaves no object behind.
+        var late = await UploadAsync(student, "HealthReport", TestFiles.Pdf(), "geç.pdf");
+        late.StatusCode.ShouldBe(HttpStatusCode.UnprocessableEntity);
+        (await CodeOf(late)).ShouldBe("Student.Anonymized");
+        (await Database.Storage.KeysAsync($"{School.Value:N}/{student:N}/")).ShouldBeEmpty();
+    }
+
+    [Fact]
     public async Task Download_links_are_signed_short_lived_and_cannot_be_altered()
     {
         var student = await RegisterStudentAsync();
@@ -101,7 +131,10 @@ public sealed class DocumentTests(DatabaseFixture database) : EnrollmentsTest(da
         var inline = new Uri(link.Url.AbsoluteUri.Replace("attachment", "inline", StringComparison.Ordinal));
         inline.ShouldNotBe(link.Url);
         (await Browser.GetAsync(inline, Ct)).StatusCode.ShouldBe(HttpStatusCode.Forbidden);
-        var otherKey = new Uri(link.Url.AbsoluteUri.Replace(link.Url.AbsolutePath, link.Url.AbsolutePath[..^1] + "0", StringComparison.Ordinal));
+        // Change the key's last character to a different one (replacing it with a fixed "0" was a no-op 1 time in 16).
+        var path = link.Url.AbsolutePath;
+        var otherKey = new Uri(link.Url.AbsoluteUri.Replace(path, path[..^1] + (path[^1] == '0' ? '1' : '0'), StringComparison.Ordinal));
+        otherKey.ShouldNotBe(link.Url);
         (await Browser.GetAsync(otherKey, Ct)).StatusCode.ShouldBe(HttpStatusCode.Forbidden);
         (await Browser.GetAsync(link.Url, Ct)).StatusCode.ShouldBe(HttpStatusCode.OK);
     }
@@ -526,6 +559,9 @@ public sealed class DocumentTests(DatabaseFixture database) : EnrollmentsTest(da
 
         public Task<IReadOnlyList<Domain.Students.StudentDocument>> ListOfStudentAsync(Domain.Students.StudentId studentId, CancellationToken cancellationToken) =>
             inner.ListOfStudentAsync(studentId, cancellationToken);
+
+        public Task<IReadOnlyList<Domain.Students.StudentDocument>> ListOfStudentForDeletionAsync(Domain.Students.StudentId studentId, CancellationToken cancellationToken) =>
+            inner.ListOfStudentForDeletionAsync(studentId, cancellationToken);
     }
 
     private sealed record LinkDto(Uri Url, DateTimeOffset ExpiresAt);

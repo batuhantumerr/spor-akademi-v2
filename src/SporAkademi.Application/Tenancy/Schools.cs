@@ -32,6 +32,14 @@ public interface ISchoolRepository
 
     Task<SchoolDto?> FindDtoAsync(SchoolId id, CancellationToken cancellationToken);
 
+    /// <summary>The aggregate, tracked, for a change by its own School Admin.</summary>
+    Task<School?> GetAsync(SchoolId id, CancellationToken cancellationToken);
+
+    /// <summary>Optimistic concurrency: the save fails with Concurrency.Conflict if the row changed since <paramref name="version"/>.</summary>
+    void ExpectVersion(School school, uint version);
+
+    Task<RetentionPolicyDto?> FindRetentionPolicyAsync(SchoolId id, CancellationToken cancellationToken);
+
     /// <summary>Schools by name.</summary>
     Task<PagedResult<SchoolDto>> ListAsync(PageRequest page, CancellationToken cancellationToken);
 }

@@ -41,6 +41,8 @@ public sealed partial class CrossTenantEndpointTests(DatabaseFixture database) :
         ["POST /api/v1/auth/refresh"] = "anonymous; refresh cookie only",
         ["POST /api/v1/auth/logout"] = "anonymous; refresh cookie only",
         ["POST /api/v1/auth/change-password"] = "the caller's own password",
+        ["POST /api/v1/auth/password-reset/request"] = "anonymous; e-mail only, always 202, signed-in callers are ignored (DEC-353)",
+        ["POST /api/v1/auth/password-reset/confirm"] = "anonymous; set-password token and new password only (DEC-352)",
         ["POST /api/v1/sports"] = "name only",
         ["POST /api/v1/facilities"] = "name, type, address, capacity",
         ["POST /api/v1/coaches"] = "names, e-mail, phone",
@@ -51,6 +53,7 @@ public sealed partial class CrossTenantEndpointTests(DatabaseFixture database) :
         ["POST /api/v1/payment-callbacks"] = "anonymous; provider token only, result re-queried from the provider",
         ["POST /api/v1/sandbox-checkout/complete"] = "anonymous; Fake provider sandbox page, token only",
         ["POST /api/v1/platform/jobs/dashboard-session"] = "Platform Admin only; no body, starts the caller's job panel session (DEC-332)",
+        ["PUT /api/v1/settings/data-retention"] = "the caller's own school; retention months and version only (DEC-361)",
     };
 
     /// <summary>Endpoints any signed-in user may call, so they carry no role metadata.</summary>
@@ -283,6 +286,9 @@ public sealed partial class CrossTenantEndpointTests(DatabaseFixture database) :
             "/api/v1/online-payments",
             "/api/v1/payments",
             "/api/v1/sports",
+            "/api/v1/settings/data-retention",
+            "/api/v1/settings/data-retention/runs",
+            "/api/v1/settings/data-retention/impact",
             "/api/v1/students",
         ], ignoreOrder: true);
     }

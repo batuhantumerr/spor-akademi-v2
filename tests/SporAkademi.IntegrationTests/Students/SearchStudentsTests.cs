@@ -137,7 +137,7 @@ public sealed class SearchStudentsTests(DatabaseFixture database) : StudentsTest
 
         var item = (await Admin.GetFromJsonAsync<JsonElement>("/api/v1/students", Ct)).GetProperty("items")[0];
 
-        item.EnumerateObject().Select(p => p.Name).ShouldBe(["id", "firstName", "lastName", "birthDate", "gender", "status", "leftAt"]);
+        item.EnumerateObject().Select(p => p.Name).ShouldBe(["id", "firstName", "lastName", "birthDate", "gender", "status", "leftAt", "anonymizedAt"]);
     }
 
     [Fact]

@@ -23,6 +23,23 @@ describe('problem mapping', () => {
     expect(problemMessage(problem)).not.toContain('boom');
   });
 
+  it('reads a problem that arrives as text (endpoints without a response body)', () => {
+    const problem = toProblem(
+      new HttpErrorResponse({
+        status: 422,
+        error: JSON.stringify({
+          code: 'Auth.ResetTokenInvalid',
+          errors: { token: ['Field.Required'] },
+        }),
+      }),
+    );
+    expect(problem.code).toBe('Auth.ResetTokenInvalid');
+    expect(fieldErrors(problem)['token']).toBe('Bu alan zorunludur.');
+    expect(
+      toProblem(new HttpErrorResponse({ status: 502, error: '<html>Bad Gateway</html>' })).code,
+    ).toBe('Unexpected.Error');
+  });
+
   it('reports network failures separately', () => {
     expect(toProblem(new HttpErrorResponse({ status: 0 })).code).toBe('Network.Unavailable');
   });

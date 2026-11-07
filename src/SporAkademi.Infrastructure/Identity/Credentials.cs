@@ -47,3 +47,15 @@ internal sealed class RefreshTokenFactory : IRefreshTokenFactory
         return Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(token)));
     }
 }
+
+/// <summary>Set-password tokens (DEC-352): like refresh tokens, 256 random bits, base64url, stored as a lowercase hex SHA-256.</summary>
+internal sealed class PasswordTokenFactory(IRefreshTokenFactory opaqueTokens) : IPasswordTokenFactory
+{
+    public NewPasswordToken Create()
+    {
+        var token = opaqueTokens.Create();
+        return new NewPasswordToken(token.Token, token.Hash);
+    }
+
+    public string Hash(string token) => opaqueTokens.Hash(token);
+}

@@ -99,6 +99,12 @@ internal sealed class EnrollStudentHandler(
             return Result.Failure<EnrollmentId>(StudentErrors.NotFound);
         }
 
+        // Only an anonymized student has no birth date, and an anonymized student has left for good (DEC-363).
+        if (student.BirthDate is not { } birthDate)
+        {
+            return Result.Failure<EnrollmentId>(EnrollmentErrors.StudentNotActive);
+        }
+
         var group = await groups.FindAsync(groupId, cancellationToken);
         if (group is null)
         {
@@ -111,7 +117,7 @@ internal sealed class EnrollStudentHandler(
 
         var enrolled = EnrollmentPolicy.Enroll(
             tenant,
-            new EnrollmentStudent(studentId, student.Status, student.BirthDate),
+            new EnrollmentStudent(studentId, student.Status, birthDate),
             ToPolicy(group),
             active,
             [.. currentGroups.Values.Select(ToPolicy)],
@@ -243,8 +249,10 @@ internal sealed class GetRosterHandler(
         return Result.Success<IReadOnlyList<RosterEntryDto>>(
         [
             .. infos.Values
+                // Only active students are on a roster; an anonymized student (no birth date, no contact) never is.
+                .Where(s => s.BirthDate is not null && s.EmergencyContactPhone is not null)
                 .OrderBy(s => s.LastName, Turkish).ThenBy(s => s.FirstName, Turkish)
-                .Select(s => new RosterEntryDto(s.FirstName, s.LastName, s.BirthDate.Year, s.EmergencyContactPhone)),
+                .Select(s => new RosterEntryDto(s.FirstName, s.LastName, s.BirthDate!.Value.Year, s.EmergencyContactPhone!)),
         ]);
     }
 

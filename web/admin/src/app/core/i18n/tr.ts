@@ -33,6 +33,8 @@ export const errorMessages: Readonly<Record<string, string>> = {
   'Auth.CurrentPasswordIncorrect': 'Mevcut şifreniz hatalı.',
   'Auth.PasswordTooWeak': 'Şifre en az 10 karakter olmalı ve çok yaygın bir şifre olmamalı.',
   'Auth.PasswordUnchanged': 'Yeni şifre mevcut şifrenizle aynı olamaz.',
+  'Auth.ResetTokenInvalid':
+    'Bu bağlantı geçersiz, kullanılmış veya süresi dolmuş. Yeni bir şifre belirleme bağlantısı isteyin.',
   'User.EmailTaken': 'Bu e-posta adresi zaten kullanılıyor.',
   'User.NotFound': 'Kullanıcı bulunamadı.',
   'User.AlreadyInactive': 'Bu kullanıcı zaten pasif.',
@@ -66,6 +68,9 @@ export const errorMessages: Readonly<Record<string, string>> = {
   'Student.EmergencyContactRequired': 'Acil durum kişisi bilgileri zorunludur.',
   'Student.AlreadyLeft': 'Bu öğrenci zaten ayrılmış olarak işaretli.',
   'Student.NotLeft': 'Sadece ayrılmış öğrenciler yeniden aktifleştirilebilir.',
+  'Student.Anonymized':
+    'Bu öğrencinin kişisel verileri anonimleştirildi; kayıt artık değiştirilemez.',
+  'RetentionPolicy.Invalid': 'Saklama süresi izin verilen aralıkta değil.',
   'Student.InvalidLeaveDate': 'Ayrılma tarihi, aktif kayıtların başlangıç tarihinden önce olamaz.',
   'Guardian.NotFound': 'Veli bulunamadı.',
   'Guardian.PhoneTaken': 'Bu telefon numarasıyla kayıtlı başka bir veli var.',
@@ -147,6 +152,8 @@ export const ui = {
     myGroups: 'Gruplarım',
     announcements: 'Duyurular',
     today: 'Bugün',
+    settings: 'Ayarlar',
+    dataRetention: 'Veri saklama',
   },
   roles: {
     PlatformAdmin: 'Platform yöneticisi',
@@ -178,6 +185,7 @@ export const ui = {
     submitting: 'Giriş yapılıyor…',
     showPassword: 'Şifreyi göster',
     hidePassword: 'Şifreyi gizle',
+    forgotPassword: 'Şifremi unuttum',
     highlights: [
       'Gruplar, programlar ve kontenjanlar tek yerde',
       'Antrenörler için telefondan hızlı yoklama',
@@ -196,8 +204,35 @@ export const ui = {
     submit: 'Şifreyi değiştir',
     success: 'Şifreniz değiştirildi.',
   },
+  forgotPassword: {
+    title: 'Şifremi unuttum',
+    subtitle:
+      'Hesabınızın e-posta adresini girin; yeni şifrenizi belirlemeniz için size bir bağlantı gönderelim.',
+    email: 'E-posta',
+    submit: 'Bağlantı gönder',
+    submitting: 'Gönderiliyor…',
+    sent: 'Bu adrese kayıtlı bir hesap varsa birkaç dakika içinde bir e-posta alacaksınız. Bağlantı 30 dakika geçerlidir ve yalnızca bir kez kullanılabilir.',
+    backToLogin: 'Giriş sayfasına dön',
+  },
+  resetPassword: {
+    title: 'Yeni şifre belirle',
+    subtitle:
+      'Hesabınız için yeni bir şifre belirleyin. Şifreniz değiştiğinde bütün oturumlarınız kapanır.',
+    next: 'Yeni şifre',
+    confirm: 'Yeni şifre (tekrar)',
+    hint: 'En az 10 karakter. Yaygın şifreler kabul edilmez.',
+    mismatch: 'Şifreler eşleşmiyor.',
+    submit: 'Şifreyi kaydet',
+    submitting: 'Kaydediliyor…',
+    missingToken:
+      'Bağlantı eksik veya hatalı. E-postadaki bağlantıyı açın ya da yeni bir bağlantı isteyin.',
+    requestNew: 'Yeni bağlantı iste',
+    success: 'Şifreniz kaydedildi. Yeni şifrenizle giriş yapabilirsiniz.',
+    toLogin: 'Giriş yap',
+  },
   students: {
     title: 'Öğrenciler',
+    anonymizedDash: '—',
     description: 'Okulunuzun öğrencileri, velileri ve acil durum kişileri.',
     add: 'Öğrenci kaydet',
     caption: 'Öğrenci listesi',
@@ -312,9 +347,13 @@ export const ui = {
     reactivated: 'Öğrenci yeniden aktifleştirildi.',
     saved: 'Öğrenci bilgileri kaydedildi.',
     guardianSaved: 'Veli bilgileri kaydedildi.',
+    anonymizedBadge: 'Anonimleştirildi',
+    anonymizedNote:
+      'Bu öğrencinin kişisel verileri saklama süresi dolduğu için {date} tarihinde anonimleştirildi. Kayıt, yoklama ve ödeme geçmişi isimsiz olarak saklanır; kayıt artık değiştirilemez.',
   },
   documents: {
     title: 'Belgeler',
+    anonymizedNoUpload: 'Öğrenci anonimleştirildiği için yeni belge eklenemez.',
     photo: 'Fotoğraf',
     noPhoto: 'Fotoğraf yok',
     photoAlt: 'Öğrencinin fotoğrafı',
@@ -392,6 +431,34 @@ export const ui = {
       string,
       string
     >,
+  },
+  dataRetention: {
+    title: 'Veri saklama',
+    description:
+      'Ayrılan öğrencilerin kişisel verileri bu süre dolunca otomatik olarak anonimleştirilir (KVKK). Ödeme kayıtları yasal süre boyunca isimsiz olarak saklanır.',
+    months: 'Kişisel verilerin saklanma süresi (ay)',
+    monthsHint: '{min}–{max} ay. Süre, öğrencinin ayrılma tarihinden itibaren sayılır.',
+    paymentYears: 'Ödeme kayıtlarının saklanma süresi',
+    paymentYearsValue: '{years} yıl (yasal süre, değiştirilemez)',
+    save: 'Kaydet',
+    saving: 'Kaydediliyor…',
+    saved: 'Saklama süresi kaydedildi.',
+    conflict: 'Ayar başka biri tarafından değiştirildi; güncel değer yüklendi.',
+    shortenTitle: 'Saklama süresi kısaltılsın mı?',
+    shortenText:
+      'Süre {months} aya inerse {cutoff} tarihinde veya daha önce ayrılan {count} öğrencinin kişisel verileri bu gece geri dönüşsüz olarak anonimleştirilir.',
+    shortenConfirm: 'Kısalt ve kaydet',
+    runsTitle: 'Son anonimleştirme çalışmaları',
+    runsCaption: 'Anonimleştirme işi her gün çalışır; her çalışma burada kayıtlıdır.',
+    noRuns: 'Henüz çalışma yok. İş her gün 05:00 civarında çalışır.',
+    startedAt: 'Zaman',
+    cutoff: 'Bu tarihte veya önce ayrılanlar',
+    anonymized: 'Anonimleştirilen',
+    skipped: 'Ertelenen',
+    duration: 'Süre',
+    durationValue: '{ms} ms',
+    status: 'Durum',
+    statuses: { Succeeded: 'Başarılı', Failed: 'Başarısız' } as Record<string, string>,
   },
   jobs: {
     title: 'İş paneli',

@@ -169,6 +169,14 @@ export class AuthService {
     );
   }
 
+  /**
+   * Ends the session in this tab without calling the API, as logout does locally: after a password reset the server
+   * has already revoked every refresh token (P2-F4), so only the in-memory state is stale.
+   */
+  forgetSession(): void {
+    this.endSession();
+  }
+
   /** Clears local state after an unrecoverable 401; the user comes back to where they were. */
   expireSession(): void {
     this.endSession();

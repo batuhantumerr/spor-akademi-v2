@@ -17,6 +17,8 @@ using SporAkademi.Application.Identity;
 using SporAkademi.Domain.Identity;
 using SporAkademi.Domain.SharedKernel;
 using SporAkademi.Domain.Tenancy;
+using SporAkademi.Infrastructure.Jobs;
+using SporAkademi.Infrastructure.Outbox;
 using SporAkademi.Infrastructure.Persistence;
 using SporAkademi.IntegrationTests.Identity;
 using SporAkademi.IntegrationTests.Infrastructure;
@@ -25,7 +27,8 @@ namespace SporAkademi.IntegrationTests.Security;
 
 /// <summary>
 /// NFR-PRV-03: log events carry ids and codes only. Representative requests run with every log level on and a
-/// collecting sink; no e-mail, phone, name, birth date, password or token value may appear in any event.
+/// collecting sink; no e-mail, phone, name, birth date, password or token value may appear in any event, including the
+/// P2-F4 e-mail deliveries (welcome, password reset, fee reminder) and their set-password links.
 /// </summary>
 public sealed class LogPrivacyTests(DatabaseFixture database) : IdentityTest(database)
 {
@@ -39,6 +42,9 @@ public sealed class LogPrivacyTests(DatabaseFixture database) : IdentityTest(dat
     private const string StudentPhone = "0532 987 65 43";
     private const string EmergencyPhone = "0533 876 54 32";
     private const string GuardianPhone = "0534 765 43 21";
+    private const string CoachEmail = "antrenor.gizli@example.com";
+    private const string CoachFirstName = "Gizliantrenor";
+    private const string ResetPassword = "Sifirlanan-Gizli-77";
 
     /// <summary>Free text an admin might write; it can name people, so it must not reach the logs either.</summary>
     private const string CancelReason = "Saklisoyadli ailesi yanlış aya ödedi";
@@ -123,20 +129,6 @@ public sealed class LogPrivacyTests(DatabaseFixture database) : IdentityTest(dat
         (await client.PostAsJsonAsync($"/api/v1/payments/{payment}/cancel", new { reason = CancelReason }, ct)).StatusCode.ShouldBe(HttpStatusCode.OK);
         (await client.GetAsync(new Uri($"/api/v1/dues/outstanding?groupId={group}", UriKind.Relative), ct)).StatusCode.ShouldBe(HttpStatusCode.OK);
 
-        // P2-F1: the due is paid online through the sandbox provider (webhook and browser return), ids only in the logs.
-        using (var start = new HttpRequestMessage(HttpMethod.Post, new Uri("/api/v1/online-payments", UriKind.Relative)))
-        {
-            start.Content = JsonContent.Create(new { enrollmentId = enrollment, period = "2027-01" });
-            start.Headers.Add("Idempotency-Key", "gizlilik-anahtari-1");
-            var started = await client.SendAsync(start, ct);
-            started.StatusCode.ShouldBe(HttpStatusCode.Created);
-            var checkoutUrl = (await started.Content.ReadFromJsonAsync<JsonElement>(ct)).GetProperty("checkoutUrl").GetString()!;
-            var token = checkoutUrl[(checkoutUrl.IndexOf('=', StringComparison.Ordinal) + 1)..];
-            (await client.PostAsJsonAsync("/api/v1/sandbox-checkout/complete", new { token, succeed = true }, ct)).StatusCode.ShouldBe(HttpStatusCode.OK);
-            using var form = new FormUrlEncodedContent(new Dictionary<string, string> { ["token"] = token });
-            (await client.PostAsync(new Uri("/api/v1/payment-callbacks", UriKind.Relative), form, ct)).StatusCode.ShouldNotBe(HttpStatusCode.InternalServerError);
-        }
-
         // A health report whose file name names the student, a refused upload, and a download link (P2-F6).
         using (var report = new MultipartFormDataContent { { new StringContent("HealthReport"), "type" }, { new ByteArrayContent(Testing.TestFiles.Pdf()), "file", $"{StudentLastName} saglik.pdf" } })
         {
@@ -157,7 +149,69 @@ public sealed class LogPrivacyTests(DatabaseFixture database) : IdentityTest(dat
         changed.StatusCode.ShouldBe(HttpStatusCode.OK);
         var newSession = await SessionFromAsync(changed);
 
+        // P2-F4: e-mails with personal data and set-password links go through the outbox (welcome, reset, fee reminder).
+        (await client.PostAsJsonAsync("/api/v1/coaches", new { firstName = CoachFirstName, lastName = StudentLastName, email = CoachEmail, phone = (string?)null }, ct))
+            .StatusCode.ShouldBe(HttpStatusCode.Created);
+        using var anonymous = api.CreateClient(new WebApplicationFactoryClientOptions { HandleCookies = false });
+        (await anonymous.PostAsJsonAsync("/api/v1/auth/password-reset/request", new { email = Email }, ct)).StatusCode.ShouldBe(HttpStatusCode.Accepted);
+        (await anonymous.PostAsJsonAsync("/api/v1/auth/password-reset/request", new { email = "olmayan.gizli@example.com" }, ct)).StatusCode.ShouldBe(HttpStatusCode.Accepted);
+        await using (var scope = api.Services.CreateAsyncScope())
+        {
+            (await scope.ServiceProvider.GetRequiredService<DuesReminderJob>().RunAsync(ct)).ShouldBe(1);
+        }
+
+        var processor = api.Services.GetRequiredService<OutboxProcessor>();
+        while (await processor.ProcessBatchAsync(ct) > 0)
+        {
+        }
+
+        Api.Emails.To(CoachEmail).ShouldHaveSingleItem();
+        Api.Emails.To(GuardianEmail).ShouldHaveSingleItem().TextBody.ShouldContain(StudentFirstName);
+        var resetToken = CapturingEmailSender.TokenIn(Api.Emails.To(Email).ShouldHaveSingleItem());
+        var welcomeToken = CapturingEmailSender.TokenIn(Api.Emails.To(CoachEmail).Single());
+
+        // P2-F1: after the fee reminder was sent (it needs the unpaid due), the due is paid online through the sandbox
+        // provider (webhook and browser return); the admin session is still valid until the password reset is confirmed.
+        using (var start = new HttpRequestMessage(HttpMethod.Post, new Uri("/api/v1/online-payments", UriKind.Relative)))
+        {
+            start.Content = JsonContent.Create(new { enrollmentId = enrollment, period = "2027-01" });
+            start.Headers.Add("Idempotency-Key", "gizlilik-anahtari-1");
+            var started = await client.SendAsync(start, ct);
+            started.StatusCode.ShouldBe(HttpStatusCode.Created);
+            var checkoutUrl = (await started.Content.ReadFromJsonAsync<JsonElement>(ct)).GetProperty("checkoutUrl").GetString()!;
+            var token = checkoutUrl[(checkoutUrl.IndexOf('=', StringComparison.Ordinal) + 1)..];
+            (await client.PostAsJsonAsync("/api/v1/sandbox-checkout/complete", new { token, succeed = true }, ct)).StatusCode.ShouldBe(HttpStatusCode.OK);
+            using var form = new FormUrlEncodedContent(new Dictionary<string, string> { ["token"] = token });
+            (await client.PostAsync(new Uri("/api/v1/payment-callbacks", UriKind.Relative), form, ct)).StatusCode.ShouldNotBe(HttpStatusCode.InternalServerError);
+        }
+
+        while (await processor.ProcessBatchAsync(ct) > 0)
+        {
+        }
+
+        (await anonymous.PostAsJsonAsync("/api/v1/auth/password-reset/confirm", new { token = resetToken, newPassword = ResetPassword }, ct))
+            .StatusCode.ShouldBe(HttpStatusCode.NoContent);
+        (await anonymous.PostAsJsonAsync("/api/v1/auth/password-reset/confirm", new { token = resetToken, newPassword = ResetPassword }, ct))
+            .StatusCode.ShouldBe(HttpStatusCode.UnprocessableEntity);
+
+        // P2-F5: the student leaves and, past the retention period, the job anonymizes it (counts and ids only).
+        using (var after = api.CreateClient(new WebApplicationFactoryClientOptions { HandleCookies = false }))
+        {
+            // A minted token: the admin's own sessions were ended by the password reset above.
+            after.Authorize(TestTokens.Create(Guid.CreateVersion7(), "SchoolAdmin", school.Value, Api.Clock.GetUtcNow()));
+            (await after.PostAsJsonAsync($"/api/v1/students/{studentId}/leave", new { date = "2027-01-14" }, ct)).StatusCode.ShouldBe(HttpStatusCode.OK);
+        }
+
+        Api.Clock.SetUtcNow(new DateTimeOffset(2029, 2, 1, 12, 0, 0, TimeSpan.Zero));
+        await using (var scope = api.Services.CreateAsyncScope())
+        {
+            (await scope.ServiceProvider.GetRequiredService<StudentAnonymizationJob>().RunAsync(ct)).ShouldBe(1);
+        }
+
         var events = sink.Rendered();
+        events.ShouldContain(e => e.Contains("Anonymization for school", StringComparison.Ordinal) && e.Contains(school.Value.ToString(), StringComparison.Ordinal));
+        events.ShouldContain(e => e.Contains("identity.password-reset", StringComparison.Ordinal) && e.Contains("sent", StringComparison.Ordinal));
+        events.ShouldContain(e => e.Contains("Dues reminder", StringComparison.Ordinal) && e.Contains("sent", StringComparison.Ordinal));
         // The test must see real request logs, otherwise it proves nothing.
         events.ShouldContain(e => e.Contains("LoginCommand", StringComparison.Ordinal) && e.Contains("Auth.InvalidCredentials", StringComparison.Ordinal));
         events.ShouldContain(e => e.Contains("RegisterStudentCommand", StringComparison.Ordinal));
@@ -176,6 +230,8 @@ public sealed class LogPrivacyTests(DatabaseFixture database) : IdentityTest(dat
             OwnPassword, "Yanlis-Sifre-987", "Gizli-Yeni-Sifre-55",
             CancelReason, "Saklisoyadli ailesi",
             session.AccessToken, session.RefreshToken, newSession.AccessToken, newSession.RefreshToken,
+            CoachEmail, CoachFirstName, "olmayan.gizli",
+            resetToken, welcomeToken, ResetPassword,
         ];
         ShouldNotContainAny(events, forbidden);
         // ASP.NET Core request logs ("Request starting ... ?search=...") stay off even though the config asks for them.

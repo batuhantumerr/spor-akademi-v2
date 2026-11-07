@@ -2,6 +2,7 @@ using SporAkademi.Api.Authentication;
 using SporAkademi.Api.Errors;
 using SporAkademi.Application.Abstractions.Authentication;
 using SporAkademi.Application.Abstractions.Behaviors;
+using SporAkademi.Application.Abstractions.Data;
 using SporAkademi.Application.Abstractions.Messaging;
 using SporAkademi.Application.Identity;
 using SporAkademi.Application.Identity.Login;
@@ -15,6 +16,10 @@ namespace SporAkademi.Api.Endpoints.Identity;
 internal sealed record LoginRequest(string Email, string Password);
 
 internal sealed record ChangePasswordRequest(string CurrentPassword, string NewPassword);
+
+internal sealed record PasswordResetRequest(string Email);
+
+internal sealed record PasswordResetConfirmation(string Token, string NewPassword);
 
 /// <summary>Access token for the body (kept in memory by the client); the refresh token only travels in the cookie.</summary>
 internal sealed record SessionResponse(string AccessToken, int ExpiresIn, UserSummary User);
@@ -53,6 +58,23 @@ internal static partial class IdentityEndpoints
             .Produces<SessionResponse>()
             .ProducesProblem(StatusCodes.Status400BadRequest)
             .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .ProducesProblem(StatusCodes.Status422UnprocessableEntity)
+            .ProducesProblem(StatusCodes.Status429TooManyRequests);
+
+        // P2-F4 (DEC-353): self-service reset. Anonymous; a well-formed request always answers 202 Accepted, whether
+        // or not the address belongs to an account.
+        auth.MapPost("/password-reset/request", RequestPasswordReset)
+            .AllowAnonymous()
+            .RequireRateLimiting(AuthRateLimiting.PasswordResetRequestPolicy)
+            .Produces(StatusCodes.Status202Accepted)
+            .ProducesProblem(StatusCodes.Status400BadRequest)
+            .ProducesProblem(StatusCodes.Status429TooManyRequests);
+        auth.MapPost("/password-reset/confirm", ConfirmPasswordReset)
+            .AllowAnonymous()
+            .RequireRateLimiting(AuthRateLimiting.Policy)
+            .Produces(StatusCodes.Status204NoContent)
+            .ProducesProblem(StatusCodes.Status400BadRequest)
+            .ProducesProblem(StatusCodes.Status409Conflict)
             .ProducesProblem(StatusCodes.Status422UnprocessableEntity)
             .ProducesProblem(StatusCodes.Status429TooManyRequests);
 
@@ -147,6 +169,33 @@ internal static partial class IdentityEndpoints
         return result.IsSuccess
             ? StartSession(httpContext, result.Value, timeProvider.GetUtcNow())
             : ProblemResults.Problem(result.Error);
+    }
+
+    /// <summary>
+    /// An empty or overlong address answers 400; every well-formed request answers 202, unknown addresses included.
+    /// A concurrency conflict or lock timeout can only happen for an existing account (two requests updating its
+    /// cooldown at once, e.g. a double click), so they answer 202 as well: the other request was accepted, and a
+    /// 409 would reveal that the account exists (DEC-353).
+    /// </summary>
+    private static async Task<IResult> RequestPasswordReset(
+        PasswordResetRequest request,
+        ICommandHandler<RequestPasswordResetCommand, Unit> handler,
+        CancellationToken cancellationToken)
+    {
+        var result = await handler.Handle(new RequestPasswordResetCommand(request.Email), cancellationToken);
+        return result.IsSuccess || result.Error == PersistenceErrors.ConcurrencyConflict || result.Error == PersistenceErrors.LockTimeout
+            ? TypedResults.Accepted((string?)null)
+            : ProblemResults.Problem(result.Error);
+    }
+
+    /// <summary>Sets the new password and ends every session (refresh tokens and the job panel, DEC-332); the user signs in again.</summary>
+    private static async Task<IResult> ConfirmPasswordReset(
+        PasswordResetConfirmation request,
+        ICommandHandler<ConfirmPasswordResetCommand, Unit> handler,
+        CancellationToken cancellationToken)
+    {
+        var result = await handler.Handle(new ConfirmPasswordResetCommand(request.Token, request.NewPassword), cancellationToken);
+        return result.IsSuccess ? TypedResults.NoContent() : ProblemResults.Problem(result.Error);
     }
 
     private static async Task<IResult> Me(

@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using SporAkademi.Application.Abstractions.Messaging;
 using SporAkademi.Application.Billing;
 using SporAkademi.Domain.Identity;
 using SporAkademi.Domain.Tenancy;
@@ -36,6 +37,8 @@ internal static class RecurringJobs
 
         manager.AddOrUpdate<RefreshTokenCleanupJob>(RefreshTokenCleanupJob.JobId, job => job.RunAsync(CancellationToken.None), jobs.RefreshTokenCleanupCron, utc);
         manager.AddOrUpdate<OnlinePaymentReconcileJob>(OnlinePaymentReconcileJob.JobId, job => job.RunAsync(CancellationToken.None), jobs.OnlinePaymentReconcileCron, utc);
+        manager.AddOrUpdate<StudentAnonymizationJob>(StudentAnonymizationJob.JobId, job => job.RunAsync(CancellationToken.None), jobs.StudentAnonymizationCron, utc);
+        manager.AddOrUpdate<DuesReminderJob>(DuesReminderJob.JobId, job => job.RunAsync(CancellationToken.None), jobs.DuesReminderCron, utc);
     }
 }
 
@@ -121,8 +124,8 @@ internal sealed partial class OutboxJobs(
 
 /// <summary>
 /// Deletes refresh tokens whose session (token family) has ended: they can never be used or reused again (the same
-/// rule <c>User</c> applies to its own tokens at login, which only helps users who log in again). School users are
-/// handled per school (DEC-334), Platform Admins on their own.
+/// rule <c>User</c> applies to its own tokens at login, which only helps users who log in again), and expired
+/// set-password links (P2-F4, DEC-352). School users are handled per school (DEC-334), Platform Admins on their own.
 /// </summary>
 internal sealed partial class RefreshTokenCleanupJob(
     TenantJobRunner runner,
@@ -155,12 +158,15 @@ internal sealed partial class RefreshTokenCleanupJob(
     }
 
     /// <summary>Users are not tenant-filtered (DEC-105), so the school is stated explicitly.</summary>
-    private static Task<int> DeleteAsync(AppDbContext db, SchoolId? school, DateTimeOffset now, CancellationToken cancellationToken) =>
-        db.Set<RefreshToken>()
+    private static async Task<int> DeleteAsync(AppDbContext db, SchoolId? school, DateTimeOffset now, CancellationToken cancellationToken) =>
+        await db.Set<RefreshToken>()
             .Where(t => t.FamilyExpiresAt <= now && db.Set<User>().Any(u => u.Id == t.UserId && u.TenantId == school))
+            .ExecuteDeleteAsync(cancellationToken)
+        + await db.Set<PasswordToken>()
+            .Where(t => t.ExpiresAt <= now && db.Set<User>().Any(u => u.Id == t.UserId && u.TenantId == school))
             .ExecuteDeleteAsync(cancellationToken);
 
-    [LoggerMessage(Level = LogLevel.Information, Message = "Deleted {Count} refresh tokens of ended sessions")]
+    [LoggerMessage(Level = LogLevel.Information, Message = "Deleted {Count} refresh tokens of ended sessions and expired set-password links")]
     private static partial void LogDeleted(ILogger logger, int count);
 }
 
@@ -202,4 +208,42 @@ internal sealed partial class OnlinePaymentReconcileJob(
 
     [LoggerMessage(Level = LogLevel.Information, Message = "Reconciled {Count} online payments")]
     private static partial void LogReconciled(ILogger logger, int count);
+}
+
+/// <summary>
+/// P2-F4 (DEC-355): once a day, per school (DEC-334), records the fee reminders that are due and queues their e-mails
+/// through the outbox. Re-running is harmless: a reminder exists at most once per enrollment, period and kind.
+/// </summary>
+internal sealed partial class DuesReminderJob(TenantJobRunner runner, ILogger<DuesReminderJob> logger)
+{
+    public const string JobId = "billing-dues-reminders";
+
+    /// <returns>The number of reminders recorded.</returns>
+    [AutomaticRetry(Attempts = 0)]
+    [JobDisplayName("Billing: record and queue fee reminders")]
+    public async Task<int> RunAsync(CancellationToken cancellationToken)
+    {
+        var recorded = 0;
+        await runner.ForEachSchoolAsync(
+            JobId,
+            async (services, _, ct) =>
+            {
+                var result = await services.GetRequiredService<ICommandHandler<SendDuesRemindersCommand, int>>()
+                    .Handle(new SendDuesRemindersCommand(), ct);
+                recorded += result.IsSuccess
+                    ? result.Value
+                    : throw new InvalidOperationException($"Recording fee reminders failed with {result.Error.Code}.");
+            },
+            cancellationToken);
+
+        if (recorded > 0)
+        {
+            LogRecorded(logger, recorded);
+        }
+
+        return recorded;
+    }
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Recorded {Count} fee reminders")]
+    private static partial void LogRecorded(ILogger logger, int count);
 }

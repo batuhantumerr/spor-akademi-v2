@@ -16,19 +16,23 @@ public sealed record StudentGuardianDto(
     string Phone,
     string? Email);
 
-/// <summary>Full admin view of a student, including guardians (appendix D §2.7). Never sent to coaches (DEC-007).</summary>
+/// <summary>
+/// Full admin view of a student, including guardians (appendix D §2.7). Never sent to coaches (DEC-007). Birth date
+/// and emergency contact are null only once <see cref="AnonymizedAt"/> is set (DEC-363).
+/// </summary>
 public sealed record StudentDto(
     Guid Id,
     string FirstName,
     string LastName,
-    DateOnly BirthDate,
+    DateOnly? BirthDate,
     Gender Gender,
     StudentStatus Status,
     DateOnly? LeftAt,
     string? Phone,
     string? Email,
-    EmergencyContactDto EmergencyContact,
+    EmergencyContactDto? EmergencyContact,
     IReadOnlyList<StudentGuardianDto> Guardians,
+    DateTimeOffset? AnonymizedAt,
     uint Version);
 
 /// <summary>A search result row: only what the list needs (NFR-PRV-01).</summary>
@@ -36,10 +40,11 @@ public sealed record StudentListItemDto(
     Guid Id,
     string FirstName,
     string LastName,
-    DateOnly BirthDate,
+    DateOnly? BirthDate,
     Gender Gender,
     StudentStatus Status,
-    DateOnly? LeftAt);
+    DateOnly? LeftAt,
+    DateTimeOffset? AnonymizedAt);
 
 public sealed record GuardianDto(
     Guid Id,
@@ -72,12 +77,30 @@ public interface IStudentRepository
 
     Task<bool> ExistsAsync(StudentId id, CancellationToken cancellationToken);
 
+    Task<bool> IsAnonymizedAsync(StudentId id, CancellationToken cancellationToken);
+
     /// <summary>Optimistic concurrency: the save fails with Concurrency.Conflict if the row changed since <paramref name="version"/>.</summary>
     void ExpectVersion(Student student, uint version);
 
     Task<StudentDto?> FindDtoAsync(StudentId id, CancellationToken cancellationToken);
 
     Task<PagedResult<StudentListItemDto>> SearchAsync(StudentSearch search, PageRequest page, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Students due for anonymization (DEC-362): left on or before <paramref name="cutoff"/> and not anonymized yet,
+    /// in id order, except <paramref name="exclude"/>, at most <paramref name="limit"/>.
+    /// </summary>
+    Task<IReadOnlyList<StudentId>> ListDueForAnonymizationAsync(
+        DateOnly cutoff,
+        IReadOnlyCollection<StudentId> exclude,
+        int limit,
+        CancellationToken cancellationToken);
+
+    /// <summary>How many students <see cref="ListDueForAnonymizationAsync"/> would find for <paramref name="cutoff"/>.</summary>
+    Task<int> CountDueForAnonymizationAsync(DateOnly cutoff, CancellationToken cancellationToken);
+
+    /// <summary>The aggregates with their guardian links, tracked; unknown ids are omitted.</summary>
+    Task<IReadOnlyList<Student>> GetManyAsync(IReadOnlyCollection<StudentId> ids, CancellationToken cancellationToken);
 }
 
 /// <summary>Guardians of the current school (tenant filter applies, so another school's id is not found).</summary>
@@ -92,6 +115,25 @@ public interface IGuardianRepository
     Task<bool> PhoneExistsAsync(PhoneNumber phone, GuardianId? except, CancellationToken cancellationToken);
 
     void Add(Guardian guardian);
+
+    /// <summary>Hard delete (DEC-365): only for a guardian no student is linked to any more.</summary>
+    void Remove(Guardian guardian);
+
+    /// <summary>Whether any student of the school is linked to the guardian (saved links only).</summary>
+    Task<bool> IsLinkedToAnyStudentAsync(GuardianId id, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// DEC-368: <c>FOR SHARE</c> on the guardian row until the transaction ends, before a student is linked to it.
+    /// A concurrent deletion either waits for the link (and then keeps the guardian) or wins first (and the guardian
+    /// is then no longer found).
+    /// </summary>
+    Task LockForLinkAsync(GuardianId id, CancellationToken cancellationToken);
+
+    /// <summary>DEC-368: <c>FOR UPDATE</c> on the guardian row before checking it has no students and deleting it.</summary>
+    Task LockForDeletionAsync(GuardianId id, CancellationToken cancellationToken);
+
+    /// <summary>Guardians no student of the school is linked to, at most <paramref name="limit"/>.</summary>
+    Task<IReadOnlyList<GuardianId>> ListUnlinkedAsync(int limit, CancellationToken cancellationToken);
 
     void ExpectVersion(Guardian guardian, uint version);
 

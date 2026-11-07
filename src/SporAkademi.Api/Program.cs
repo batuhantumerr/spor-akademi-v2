@@ -65,6 +65,7 @@ app.MapHealthEndpoints();
 app.MapIdentityEndpoints();
 app.MapCoachEndpoints();
 app.MapSchoolEndpoints();
+app.MapDataRetentionEndpoints();
 app.MapOrganizationEndpoints();
 app.MapStudentEndpoints();
 app.MapDocumentEndpoints();

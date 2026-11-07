@@ -97,8 +97,26 @@ public sealed class EditStudentTests(DatabaseFixture database) : StudentsTest(da
         }, Ct);
         (await dropped.Content.ReadFromJsonAsync<StudentDto>(Json, Ct))!.Guardians.ShouldHaveSingleItem().GuardianId.ShouldBe(mother);
 
-        // The unlinked guardian still exists, so it can be found by phone for a sibling.
-        (await Admin.GetFromJsonAsync<JsonElement>("/api/v1/guardians?phone=05550001122", Ct)).GetProperty("totalCount").GetInt32().ShouldBe(1);
+        // DEC-368: the unlinked guardian had no other student, so its personal data is deleted with the link.
+        (await Admin.GetFromJsonAsync<JsonElement>("/api/v1/guardians?phone=05550001122", Ct)).GetProperty("totalCount").GetInt32().ShouldBe(0);
+    }
+
+    [Fact]
+    [Trait("Story", "P2-F5")]
+    public async Task An_unlinked_guardian_a_sibling_still_has_is_kept()
+    {
+        var first = await RegisterAsync(Minor("Bir"));
+        var shared = first.Guardians[0].GuardianId;
+        await RegisterAsync(Minor("İki", guardians: [ExistingGuardian(shared, "Mother")]));
+
+        var dropped = await Admin.PutAsJsonAsync($"/api/v1/students/{first.Id}/guardians", new
+        {
+            guardians = new[] { NewGuardian("0555 000 33 44", "Father", "Yeni") },
+            version = first.Version,
+        }, Ct);
+
+        dropped.StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await Admin.GetFromJsonAsync<JsonElement>("/api/v1/guardians?phone=05321112233", Ct)).GetProperty("totalCount").GetInt32().ShouldBe(1);
     }
 
     [Fact]
