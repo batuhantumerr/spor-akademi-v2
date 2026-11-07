@@ -1,12 +1,30 @@
 #!/usr/bin/env bash
-# Creates .env with fresh random secrets. Refuses to overwrite an existing .env.
+# Creates .env with fresh random secrets. Never overwrites an existing .env: it only appends keys added
+# since it was created (today the optional document storage, DEC-326); existing values are neither changed nor printed.
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-if [[ -e "$ROOT/.env" ]]; then
-  echo "error: .env already exists; remove it first if you want new secrets." >&2
-  exit 1
-fi
 umask 077
+if [[ -e "$ROOT/.env" ]]; then
+  added=0
+  # A last line without a newline would otherwise be joined with the first appended key.
+  if [[ -s "$ROOT/.env" && -n "$(tail -c 1 "$ROOT/.env")" ]]; then echo >> "$ROOT/.env"; fi
+  append_missing() {
+    if ! grep -q "^$1=" "$ROOT/.env"; then
+      echo "$1=$2" >> "$ROOT/.env"
+      added=$((added + 1))
+    fi
+  }
+  append_missing STORAGE_ACCESS_KEY "$(openssl rand -hex 10)"
+  append_missing STORAGE_SECRET_KEY "$(openssl rand -hex 20)"
+  append_missing STORAGE_HOST_PORT 58333
+  append_missing STORAGE_BUCKET spor-akademi-documents
+  if [[ $added -eq 0 ]]; then
+    echo ".env already exists and has every key; nothing changed (remove it first if you want new secrets)."
+  else
+    echo ".env already exists; appended $added missing key(s) (document storage). Existing values are unchanged."
+  fi
+  exit 0
+fi
 platform_admin_password="$(openssl rand -hex 16)"
 {
   echo "POSTGRES_PASSWORD=$(openssl rand -hex 24)"

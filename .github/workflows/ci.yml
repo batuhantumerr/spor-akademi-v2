@@ -100,9 +100,6 @@ jobs:
             echo "SPOR_AKADEMI_MIGRATOR_PASSWORD=$(openssl rand -hex 24)"
             echo "SPOR_AKADEMI_APP_PASSWORD=$(openssl rand -hex 24)"
             echo "JWT_SIGNING_KEY=$(openssl rand -hex 32)"
-            # compose.yaml requires these for its storage service even when only postgres is started (DEC-320).
-            echo "STORAGE_ACCESS_KEY=$(openssl rand -hex 10)"
-            echo "STORAGE_SECRET_KEY=$(openssl rand -hex 20)"
           } > .env
       - name: Start PostgreSQL (the compose.yaml image and init script)
         run: docker compose up -d --wait postgres
