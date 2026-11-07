@@ -74,5 +74,5 @@ Kapsamın tamamı ve maddelerin açıklamaları: [proje dokümanı, Ek G](proje-
 - [ ] P2-F4 E-posta bildirimleri
 - [ ] P2-F5 Otomatik anonimleştirme işi
 - [ ] P2-F6 Belge yükleme (MinIO)
-- [ ] P2-F7 Redis ve `HybridCache` ile cache
+- [x] P2-F7 Redis ve `HybridCache` ile cache (Valkey; DEC-310 – DEC-316)
 - [ ] P2-F8 Aidat kuralları (kardeş indirimi, dönem ortası değişiklik)

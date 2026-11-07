@@ -1,18 +1,36 @@
 #!/usr/bin/env bash
-# Creates .env with fresh random secrets. Refuses to overwrite an existing .env.
+# Creates .env with fresh random secrets. Never overwrites an existing .env: it only appends keys added
+# since it was created (today the optional Valkey cache, DEC-316); existing values are neither changed nor printed.
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-if [[ -e "$ROOT/.env" ]]; then
-  echo "error: .env already exists; remove it first if you want new secrets." >&2
-  exit 1
-fi
 umask 077
+if [[ -e "$ROOT/.env" ]]; then
+  added=0
+  # A last line without a newline would otherwise be joined with the first appended key.
+  if [[ -s "$ROOT/.env" && -n "$(tail -c 1 "$ROOT/.env")" ]]; then echo >> "$ROOT/.env"; fi
+  if ! grep -q '^VALKEY_PASSWORD=' "$ROOT/.env"; then
+    echo "VALKEY_PASSWORD=$(openssl rand -hex 24)" >> "$ROOT/.env"
+    added=$((added + 1))
+  fi
+  if ! grep -q '^VALKEY_HOST_PORT=' "$ROOT/.env"; then
+    echo "VALKEY_HOST_PORT=56379" >> "$ROOT/.env"
+    added=$((added + 1))
+  fi
+  if [[ $added -eq 0 ]]; then
+    echo ".env already exists and has every key; nothing changed (remove it first if you want new secrets)."
+  else
+    echo ".env already exists; appended $added missing key(s) (Valkey cache). Existing values are unchanged."
+  fi
+  exit 0
+fi
 platform_admin_password="$(openssl rand -hex 16)"
 {
   echo "POSTGRES_PASSWORD=$(openssl rand -hex 24)"
   echo "SPOR_AKADEMI_MIGRATOR_PASSWORD=$(openssl rand -hex 24)"
   echo "SPOR_AKADEMI_APP_PASSWORD=$(openssl rand -hex 24)"
   echo "JWT_SIGNING_KEY=$(openssl rand -hex 32)"
+  echo "VALKEY_PASSWORD=$(openssl rand -hex 24)"
+  echo "VALKEY_HOST_PORT=56379"
   echo "POSTGRES_HOST_PORT=55432"
   echo "SEQ_HOST_PORT=5341"
   echo "PLATFORM_ADMIN_EMAIL=platform@spor-akademi.local"

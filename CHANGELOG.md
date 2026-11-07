@@ -29,6 +29,7 @@ Bu dosya [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) biçimini ve [
 
 #### Faz 2 — İş mantığı derinliği
 - **Transactional outbox (P2-F3):** dış yan etkiler iş değişikliğiyle aynı transaction'da `outbox.messages`'a yazılır ve commit'ten sonra işlenir (`FOR UPDATE SKIP LOCKED`, jitter'lı üstel geri çekilme, dead-letter, saklama süresi, `/health/ready`'de `outbox` kontrolü). İlk kullanım: öğrenci ayrıldığında `students.student-left.v1` mesajı (DEC-300 – DEC-304).
+- **Cache (P2-F7):** okuma ağırlıklı ve seyrek değişen okumalar (branş ve tesis listeleri, okulun saat dilimi, School Admin dashboard'u) `HybridCache` ile cache'lenir: L1 bellekte, L2 isteğe bağlı olarak Valkey'de (`ConnectionStrings:Cache`; yoksa sadece bellek). Her anahtar ve etiket okul ID'sini taşır, yazmalar commit'ten sonra otomatik invalidation yapar, Valkey çökerse istekler veritabanından devam eder. Docker Compose'a isteğe bağlı `valkey` servisi eklendi (`--profile cache`); `VALKEY_PASSWORD` olmayan eski `.env` dosyaları değişmeden çalışır, `setup-env.sh` eksik anahtarları ekler (DEC-310 – DEC-316).
 
 ### Security
 - Admin imajında zlib ve musl güvenlik yükseltmeleri (DEC-104, DEC-202; öneri aşamasında).
