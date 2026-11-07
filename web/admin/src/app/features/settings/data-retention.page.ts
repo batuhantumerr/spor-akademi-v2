@@ -4,13 +4,17 @@ import { FormControl, FormGroup, ReactiveFormsModule, Validators } from '@angula
 import { Api } from '../../api/api';
 import {
   apiV1SettingsDataRetentionGet,
+  apiV1SettingsDataRetentionImpactGet,
   apiV1SettingsDataRetentionPut,
   apiV1SettingsDataRetentionRunsGet,
 } from '../../api/functions';
 import { AnonymizationRunDto, RetentionPolicyDto } from '../../api/models';
 import { problemMessage, toProblem } from '../../core/api/problem';
 import { formatDate } from '../../core/format/format';
+import { absoluteTime } from '../../core/format/relative-time';
 import { interpolate, ui } from '../../core/i18n/tr';
+import { SchoolClock } from '../../core/time/school-clock';
+import { ConfirmService } from '../../shared/ui/confirm-dialog.component';
 import { PageHeaderComponent } from '../../shared/ui/page-header.component';
 import { ToastService } from '../../shared/ui/toast.service';
 
@@ -60,6 +64,7 @@ import { ToastService } from '../../shared/ui/toast.service';
           />
           <p
             id="retention-months-hint"
+            aria-live="polite"
             class="text-xs"
             [class.text-muted-foreground]="!invalid()"
             [class.text-destructive]="invalid()"
@@ -115,7 +120,7 @@ import { ToastService } from '../../shared/ui/toast.service';
                       <span
                         class="badge"
                         [class.badge-success]="run.status === 'Succeeded'"
-                        [class.badge-muted]="run.status !== 'Succeeded'"
+                        [class.badge-danger]="run.status !== 'Succeeded'"
                         >{{ text.statuses[run.status] }}</span
                       >
                     </td>
@@ -132,6 +137,8 @@ import { ToastService } from '../../shared/ui/toast.service';
 export class DataRetentionPage {
   private readonly api = inject(Api);
   private readonly toasts = inject(ToastService);
+  private readonly confirmer = inject(ConfirmService);
+  private readonly clock = inject(SchoolClock);
 
   protected readonly text = ui.dataRetention;
   protected readonly common = ui.common;
@@ -176,11 +183,9 @@ export class DataRetentionPage {
     return formatDate(iso);
   }
 
-  /** The run's start in the viewer's local time, e.g. 14.01.2027 05:00. */
+  /** The run's start in the school's time zone, e.g. 14.01.2027 05:00. */
   protected dateTime(iso: string): string {
-    const at = new Date(iso);
-    const pad = (n: number) => String(n).padStart(2, '0');
-    return `${pad(at.getDate())}.${pad(at.getMonth() + 1)}.${at.getFullYear()} ${pad(at.getHours())}:${pad(at.getMinutes())}`;
+    return absoluteTime(iso, this.clock.timeZone());
   }
 
   protected duration(run: AnonymizationRunDto): string {
@@ -202,6 +207,9 @@ export class DataRetentionPage {
     this.invalid.set(false);
     this.saving.set(true);
     try {
+      if (months < Number(current.personalDataMonths) && !(await this.confirmShorter(months))) {
+        return;
+      }
       const saved = await this.api.invoke(apiV1SettingsDataRetentionPut, {
         body: { personalDataMonths: months, version: current.version },
       });
@@ -219,6 +227,26 @@ export class DataRetentionPage {
     } finally {
       this.saving.set(false);
     }
+  }
+
+  /**
+   * DEC-361: a shorter period anonymizes past leavers irreversibly in the next nightly run, so the admin confirms
+   * after seeing how many students that is today.
+   */
+  private async confirmShorter(months: number): Promise<boolean> {
+    const impact = await this.api.invoke(apiV1SettingsDataRetentionImpactGet, {
+      personalDataMonths: months,
+    });
+    return this.confirmer.confirm({
+      title: this.text.shortenTitle,
+      message: interpolate(this.text.shortenText, {
+        months,
+        cutoff: formatDate(impact.cutoff),
+        count: impact.dueCount,
+      }),
+      confirmLabel: this.text.shortenConfirm,
+      destructive: true,
+    });
   }
 
   private show(policy: RetentionPolicyDto): void {

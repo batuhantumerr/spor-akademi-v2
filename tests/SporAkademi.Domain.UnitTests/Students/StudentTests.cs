@@ -244,6 +244,21 @@ public sealed class StudentTests
 
     [Fact]
     [Trait("Story", "P2-F5")]
+    public void Removing_a_guardian_raises_an_event_naming_it_and_keeping_one_raises_none()
+    {
+        var other = new GuardianLink(EntityId.New<GuardianId>(), GuardianRelationship.Father);
+        var student = Student.Register(School, Details(new DateOnly(2015, 5, 1)), [OneGuardian[0], other], Today).Value;
+
+        student.ReplaceGuardians([OneGuardian[0] with { Relationship = GuardianRelationship.Other }], Today).IsSuccess.ShouldBeTrue();
+        student.DomainEvents.ShouldHaveSingleItem().ShouldBeOfType<StudentGuardiansUnlinked>().Removed.ShouldBe([other.GuardianId]);
+
+        student.ClearDomainEvents();
+        student.ReplaceGuardians([OneGuardian[0]], Today).IsSuccess.ShouldBeTrue();
+        student.DomainEvents.ShouldBeEmpty();
+    }
+
+    [Fact]
+    [Trait("Story", "P2-F5")]
     public void An_active_student_is_never_anonymized_and_an_anonymized_one_never_changes_again()
     {
         var active = Student.Register(School, Details(new DateOnly(2015, 5, 1)), OneGuardian, Today).Value;

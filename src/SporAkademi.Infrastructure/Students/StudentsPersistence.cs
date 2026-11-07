@@ -199,8 +199,7 @@ internal sealed class StudentRepository(AppDbContext db) : IStudentRepository
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(exclude);
-        var query = db.Set<Student>().AsNoTracking()
-            .Where(s => s.Status == StudentStatus.Left && s.LeftAt <= cutoff && s.AnonymizedAt == null);
+        var query = DueForAnonymization(cutoff);
         if (exclude.Count > 0)
         {
             var excluded = exclude.ToList();
@@ -209,6 +208,13 @@ internal sealed class StudentRepository(AppDbContext db) : IStudentRepository
 
         return await query.OrderBy(s => s.Id).Take(limit).Select(s => s.Id).ToListAsync(cancellationToken);
     }
+
+    public Task<int> CountDueForAnonymizationAsync(DateOnly cutoff, CancellationToken cancellationToken) =>
+        DueForAnonymization(cutoff).CountAsync(cancellationToken);
+
+    private IQueryable<Student> DueForAnonymization(DateOnly cutoff) =>
+        db.Set<Student>().AsNoTracking()
+            .Where(s => s.Status == StudentStatus.Left && s.LeftAt <= cutoff && s.AnonymizedAt == null);
 
     public async Task<IReadOnlyList<Student>> GetManyAsync(IReadOnlyCollection<StudentId> ids, CancellationToken cancellationToken)
     {
@@ -250,6 +256,25 @@ internal sealed class GuardianRepository(AppDbContext db) : IGuardianRepository
 
     public Task<bool> IsLinkedToAnyStudentAsync(GuardianId id, CancellationToken cancellationToken) =>
         db.Set<StudentGuardian>().AnyAsync(l => l.GuardianId == id, cancellationToken);
+
+    // Raw SQL bypasses the tenant filter, so the school is part of the condition (section 5.4).
+    public async Task LockForLinkAsync(GuardianId id, CancellationToken cancellationToken) =>
+        await db.Database.ExecuteSqlAsync(
+            $"SELECT id FROM students.guardians WHERE tenant_id = {db.CurrentTenantId.Value} AND id = {id.Value} FOR SHARE",
+            cancellationToken);
+
+    public async Task LockForDeletionAsync(GuardianId id, CancellationToken cancellationToken) =>
+        await db.Database.ExecuteSqlAsync(
+            $"SELECT id FROM students.guardians WHERE tenant_id = {db.CurrentTenantId.Value} AND id = {id.Value} FOR UPDATE",
+            cancellationToken);
+
+    public async Task<IReadOnlyList<GuardianId>> ListUnlinkedAsync(int limit, CancellationToken cancellationToken) =>
+        await db.Set<Guardian>().AsNoTracking()
+            .Where(g => !db.Set<StudentGuardian>().Any(l => l.GuardianId == g.Id))
+            .OrderBy(g => g.Id)
+            .Take(limit)
+            .Select(g => g.Id)
+            .ToListAsync(cancellationToken);
 
     public void ExpectVersion(Guardian guardian, uint version)
     {

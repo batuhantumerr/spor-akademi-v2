@@ -261,6 +261,8 @@ internal static class GuardianLinkResolver
             if (input.GuardianId is { } rawId)
             {
                 var id = GuardianId.From(rawId);
+                // DEC-368: locked first, so a guardian being deleted as an orphan is either kept or not found.
+                await guardians.LockForLinkAsync(id, cancellationToken);
                 if (!await guardians.ExistsAsync(id, cancellationToken))
                 {
                     return Result.Failure<IReadOnlyCollection<GuardianLink>>(GuardianErrors.NotFound);
@@ -277,9 +279,18 @@ internal static class GuardianLinkResolver
             }
 
             var phone = values.Value.Phone;
-            var existing = createdInThisRequest.TryGetValue(phone, out var pending)
-                ? pending
-                : await guardians.FindIdByPhoneAsync(phone, cancellationToken);
+            GuardianId? existing = null;
+            if (createdInThisRequest.TryGetValue(phone, out var pending))
+            {
+                existing = pending;
+            }
+            else if (await guardians.FindIdByPhoneAsync(phone, cancellationToken) is { } found)
+            {
+                // DEC-368: deleted meanwhile as an orphan? Then a new guardian is created below.
+                await guardians.LockForLinkAsync(found, cancellationToken);
+                existing = await guardians.ExistsAsync(found, cancellationToken) ? found : null;
+            }
+
             if (existing is { } existingId)
             {
                 links.Add(new GuardianLink(existingId, input.Relationship));

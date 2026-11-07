@@ -20,8 +20,15 @@ internal static class DataRetentionEndpoints
         retention.MapGet("/", GetPolicy).Produces<RetentionPolicyDto>().ProducesProblems(404);
         retention.MapPut("/", UpdatePolicy).Produces<RetentionPolicyDto>().ProducesProblems(400, 404, 409);
         retention.MapGet("/runs", ListRuns).Produces<IReadOnlyList<AnonymizationRunDto>>();
+        retention.MapGet("/impact", GetImpact).Produces<RetentionImpactDto>().ProducesProblems(400);
         return app;
     }
+
+    private static async Task<IResult> GetImpact(
+        int? personalDataMonths,
+        IQueryHandler<GetRetentionImpactQuery, RetentionImpactDto> handler,
+        CancellationToken cancellationToken) =>
+        (await handler.Handle(new GetRetentionImpactQuery(personalDataMonths), cancellationToken)).OkOrProblem();
 
     private static async Task<IResult> GetPolicy(IQueryHandler<GetRetentionPolicyQuery, RetentionPolicyDto> handler, CancellationToken cancellationToken) =>
         (await handler.Handle(new GetRetentionPolicyQuery(), cancellationToken)).OkOrProblem();

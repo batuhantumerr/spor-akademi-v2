@@ -114,6 +114,9 @@ namespace SporAkademi.Infrastructure.Migrations
         /// <inheritdoc />
         protected override void Down(MigrationBuilder migrationBuilder)
         {
+            // Lossy and one-way in practice: the run history is dropped, and once a student was anonymized the
+            // NOT NULL columns below can only be restored with the empty default (''), or the ALTER fails on a NULL
+            // birth date. Anonymized personal data never comes back (DEC-363).
             migrationBuilder.DropTable(
                 name: "anonymization_runs",
                 schema: "students");

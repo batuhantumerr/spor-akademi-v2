@@ -1,9 +1,12 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
+using Microsoft.AspNetCore.TestHost;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Npgsql;
+using SporAkademi.Application.Students;
 using SporAkademi.Domain.Billing;
 using SporAkademi.Domain.Students;
 using SporAkademi.Domain.Tenancy;
@@ -275,6 +278,206 @@ public sealed class AnonymizationTests(DatabaseFixture database) : BillingTest(d
         var student = await LeftStudentAsync("Kısa", "2026-07-14");
         (await RunJobAsync()).ShouldBe(1);
         (await LoadAsync(student)).AnonymizedAt.ShouldNotBeNull();
+    }
+
+    [Fact]
+    public async Task A_guardian_linked_by_a_concurrent_registration_is_kept_and_the_run_does_not_fail()
+    {
+        var gone = await LeftStudentAsync("Gidiyor", "2024-01-10");
+        var guardian = (await LoadAsync(gone)).Guardians.ShouldHaveSingleItem().GuardianId.Value;
+        var stays = await RegisterStudentAsync("Kalıyor");
+
+        // Another transaction links the guardian (as registration does: lock, then insert the link) and has not committed.
+        await using var connection = new NpgsqlConnection(Database.MigratorConnectionString);
+        await connection.OpenAsync(Ct);
+        await using var linking = await connection.BeginTransactionAsync(Ct);
+        await ExecuteAsync(connection, "SELECT id FROM students.guardians WHERE id = @g FOR SHARE", ("g", guardian));
+        await ExecuteAsync(
+            connection,
+            "INSERT INTO students.student_guardians (tenant_id, student_id, guardian_id, relationship, created_at, updated_at) VALUES (@t, @s, @g, 'Father', now(), now())",
+            ("t", School.Value),
+            ("s", stays),
+            ("g", guardian));
+
+        var run = RunJobAsync();
+        await WaitForALockWaitAsync();
+        await linking.CommitAsync(Ct);
+
+        (await run).ShouldBe(1);
+        var guardians = await InScopeAsync(sp => sp.GetRequiredService<AppDbContext>().Set<Guardian>().IgnoreQueryFilters().Select(g => g.Id.Value).ToListAsync(Ct));
+        guardians.ShouldContain(guardian);
+        (await LoadAsync(stays)).Guardians.Select(g => g.GuardianId.Value).ShouldContain(guardian);
+        (await LoadAsync(gone)).AnonymizedAt.ShouldNotBeNull();
+    }
+
+    [Fact]
+    public async Task Guardians_left_without_students_are_deleted_by_the_nightly_run()
+    {
+        var student = await RegisterStudentAsync("Eski");
+        var guardian = (await LoadAsync(student)).Guardians.ShouldHaveSingleItem().GuardianId.Value;
+        // An orphan from before DEC-368 (unlinking did not delete guardians then).
+        await using (var connection = new NpgsqlConnection(Database.MigratorConnectionString))
+        {
+            await connection.OpenAsync(Ct);
+            await ExecuteAsync(connection, "DELETE FROM students.student_guardians WHERE guardian_id = @g", ("g", guardian));
+        }
+
+        (await RunJobAsync()).ShouldBe(0);
+
+        (await InScopeAsync(sp => sp.GetRequiredService<AppDbContext>().Set<Guardian>().IgnoreQueryFilters().AnyAsync(g => g.Id == GuardianId.From(guardian), Ct)))
+            .ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task A_failing_run_is_recorded_as_failed_and_the_job_fails()
+    {
+        await LeftStudentAsync("Hatalı", "2024-01-10");
+        await using var failing = Api.WithWebHostBuilder(builder => builder.ConfigureTestServices(services =>
+            services.AddScoped<IStudentAnonymizer>(sp => new FailingAnonymizer(ActivatorUtilities.CreateInstance<StudentAnonymizer>(sp)))));
+
+        await using (var scope = failing.Services.CreateAsyncScope())
+        {
+            await Should.ThrowAsync<TenantJobException>(scope.ServiceProvider.GetRequiredService<StudentAnonymizationJob>().RunAsync(Ct));
+        }
+
+        var run = (await RunsAsync(Admin)).EnumerateArray().ShouldHaveSingleItem();
+        run.GetProperty("status").GetString().ShouldBe("Failed");
+        run.GetProperty("anonymizedCount").GetInt32().ShouldBe(0);
+    }
+
+    [Fact]
+    public async Task The_cutoff_uses_today_in_the_school_time_zone_not_the_utc_date()
+    {
+        var student = await LeftStudentAsync("Gece", "2025-01-15");
+        // 21:30 UTC on 14 January is already 00:30 on 15 January in Istanbul: the cutoff is 2025-01-15.
+        Api.Clock.SetUtcNow(new DateTimeOffset(2027, 1, 14, 21, 30, 0, TimeSpan.Zero));
+
+        (await RunJobAsync()).ShouldBe(1);
+
+        (await LoadAsync(student)).AnonymizedAt.ShouldNotBeNull();
+        var run = await InScopeAsync(sp => sp.GetRequiredService<AppDbContext>().Set<AnonymizationRun>().IgnoreQueryFilters().SingleAsync(Ct));
+        run.Cutoff.ShouldBe(new DateOnly(2025, 1, 15));
+    }
+
+    [Fact]
+    public async Task The_database_rejects_cleared_personal_data_without_anonymization()
+    {
+        var student = await RegisterStudentAsync("Kural");
+        await using var connection = new NpgsqlConnection(Database.MigratorConnectionString);
+        await connection.OpenAsync(Ct);
+
+        var noBirthDate = await Should.ThrowAsync<PostgresException>(
+            ExecuteAsync(connection, "UPDATE students.students SET birth_date = NULL WHERE id = @s", ("s", student)));
+        var noContact = await Should.ThrowAsync<PostgresException>(
+            ExecuteAsync(connection, "UPDATE students.students SET emergency_contact_name = NULL WHERE id = @s", ("s", student)));
+        var activeAnonymized = await Should.ThrowAsync<PostgresException>(
+            ExecuteAsync(connection, "UPDATE students.students SET anonymized_at = now() WHERE id = @s", ("s", student)));
+
+        noBirthDate.ConstraintName.ShouldBe("ck_students_personal_data");
+        noContact.ConstraintName.ShouldBe("ck_students_personal_data");
+        activeAnonymized.ConstraintName.ShouldBe("ck_students_anonymized_left");
+    }
+
+    [Fact]
+    public async Task A_run_works_through_several_batches()
+    {
+        var students = new List<Guid>();
+        for (var i = 0; i < 5; i++)
+        {
+            students.Add(await LeftStudentAsync($"Parti{(char)('a' + i)}", "2024-01-10"));
+        }
+
+        await using var small = Api.WithWebHostBuilder(builder => builder.ConfigureAppConfiguration((_, config) =>
+            config.AddInMemoryCollection(new Dictionary<string, string?> { ["Jobs:AnonymizationBatchSize"] = "2" })));
+        await using (var scope = small.Services.CreateAsyncScope())
+        {
+            (await scope.ServiceProvider.GetRequiredService<StudentAnonymizationJob>().RunAsync(Ct)).ShouldBe(5);
+        }
+
+        foreach (var student in students)
+        {
+            (await LoadAsync(student)).AnonymizedAt.ShouldNotBeNull();
+        }
+
+        (await RunsAsync(Admin)).EnumerateArray().ShouldHaveSingleItem().GetProperty("anonymizedCount").GetInt32().ShouldBe(5);
+    }
+
+    [Fact]
+    public async Task Overlapping_runs_do_not_both_work()
+    {
+        await LeftStudentAsync("Çakışma", "2024-01-10");
+        await using var connection = new NpgsqlConnection(Database.MigratorConnectionString);
+        await connection.OpenAsync(Ct);
+        await ExecuteAsync(connection, $"SELECT pg_advisory_lock({StudentAnonymizationJob.RunLockKey})");
+
+        (await RunJobAsync()).ShouldBe(0);
+        (await RunsAsync(Admin)).GetArrayLength().ShouldBe(0);
+
+        await ExecuteAsync(connection, $"SELECT pg_advisory_unlock({StudentAnonymizationJob.RunLockKey})");
+        (await RunJobAsync()).ShouldBe(1);
+    }
+
+    [Fact]
+    public async Task The_impact_of_a_shorter_period_counts_the_students_it_would_make_due()
+    {
+        await LeftStudentAsync("Yakın", "2026-03-01");
+        await LeftStudentAsync("Uzak", "2024-03-01");
+
+        var current = await Admin.GetFromJsonAsync<JsonElement>("/api/v1/settings/data-retention/impact", Ct);
+        var shorter = await Admin.GetFromJsonAsync<JsonElement>("/api/v1/settings/data-retention/impact?personalDataMonths=6", Ct);
+        var invalid = await Admin.GetAsync(new Uri("/api/v1/settings/data-retention/impact?personalDataMonths=3", UriKind.Relative), Ct);
+
+        current.GetProperty("personalDataMonths").GetInt32().ShouldBe(24);
+        current.GetProperty("dueCount").GetInt32().ShouldBe(1);
+        shorter.GetProperty("cutoff").GetString().ShouldBe("2026-07-14");
+        shorter.GetProperty("dueCount").GetInt32().ShouldBe(2);
+        invalid.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+    }
+
+    private static async Task ExecuteAsync(NpgsqlConnection connection, string sql, params (string Name, object Value)[] parameters)
+    {
+        await using var command = new NpgsqlCommand(sql, connection);
+        foreach (var (name, value) in parameters)
+        {
+            command.Parameters.AddWithValue(name, value);
+        }
+
+        await command.ExecuteNonQueryAsync(Ct);
+    }
+
+    /// <summary>Waits until some session waits for a lock (the job blocked on the guardian row).</summary>
+    private async Task WaitForALockWaitAsync()
+    {
+        await using var connection = new NpgsqlConnection(Database.MigratorConnectionString);
+        await connection.OpenAsync(Ct);
+        for (var i = 0; i < 200; i++)
+        {
+            await using var command = new NpgsqlCommand("SELECT count(*) FROM pg_locks WHERE NOT granted", connection);
+            if ((long)(await command.ExecuteScalarAsync(Ct))! > 0)
+            {
+                return;
+            }
+
+            await Task.Delay(25, Ct);
+        }
+
+        throw new TimeoutException("The job never waited for the guardian lock.");
+    }
+
+    /// <summary>Fails every batch, like a database outage in the middle of a run.</summary>
+    private sealed class FailingAnonymizer(IStudentAnonymizer inner) : IStudentAnonymizer
+    {
+        public Task<AnonymizationPlan> PlanAsync(CancellationToken cancellationToken) => inner.PlanAsync(cancellationToken);
+
+        public Task<IReadOnlyList<StudentId>> NextDueAsync(AnonymizationPlan plan, IReadOnlyCollection<StudentId> seen, int batchSize, CancellationToken cancellationToken) =>
+            inner.NextDueAsync(plan, seen, batchSize, cancellationToken);
+
+        public Task<AnonymizationBatchResult> AnonymizeAsync(AnonymizationPlan plan, IReadOnlyList<StudentId> students, CancellationToken cancellationToken) =>
+            throw new InvalidOperationException("Simulated failure.");
+
+        public Task RecordRunAsync(AnonymizationRun run, CancellationToken cancellationToken) => inner.RecordRunAsync(run, cancellationToken);
+
+        public Task<int> DeleteUnlinkedGuardiansAsync(int limit, CancellationToken cancellationToken) => inner.DeleteUnlinkedGuardiansAsync(limit, cancellationToken);
     }
 
     private async Task<Guid> LeftStudentAsync(string firstName, string leftOn, HttpClient? client = null)

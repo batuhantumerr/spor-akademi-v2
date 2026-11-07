@@ -1,3 +1,4 @@
+using FluentValidation;
 using SporAkademi.Application.Abstractions;
 using SporAkademi.Application.Abstractions.Authentication;
 using SporAkademi.Application.Abstractions.Data;
@@ -8,6 +9,7 @@ using SporAkademi.Application.Students.Documents;
 using SporAkademi.Application.Tenancy.Contracts;
 using SporAkademi.Domain.SharedKernel;
 using SporAkademi.Domain.Students;
+using SporAkademi.Domain.Tenancy;
 
 namespace SporAkademi.Application.Students;
 
@@ -71,10 +73,18 @@ public interface IStudentAnonymizer
 
     /// <summary>Stores the run record (DEC-364) in its own transaction.</summary>
     Task RecordRunAsync(AnonymizationRun run, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// DEC-368: deletes guardians no student is linked to (e.g. left over from before guardians were deleted on
+    /// unlinking), at most <paramref name="limit"/>, in one transaction.
+    /// </summary>
+    /// <returns>The number of deleted guardians.</returns>
+    Task<int> DeleteUnlinkedGuardiansAsync(int limit, CancellationToken cancellationToken);
 }
 
 internal sealed class StudentAnonymizer(
     IStudentRepository students,
+    IGuardianRepository guardians,
     IAnonymizationRunRepository runs,
     ITenancyModule tenancy,
     IUnitOfWork unitOfWork,
@@ -141,6 +151,15 @@ internal sealed class StudentAnonymizer(
         }
     }
 
+    public async Task<int> DeleteUnlinkedGuardiansAsync(int limit, CancellationToken cancellationToken)
+    {
+        var deleted = await unitOfWork.ExecuteInTransactionAsync(
+            async ct => Result.Success(await OrphanGuardians.DeleteAsync(guardians, await guardians.ListUnlinkedAsync(limit, ct), ct)),
+            cancellationToken);
+        // A conflict (a guardian linked at the same moment) leaves the rest for the next run.
+        return deleted.IsSuccess ? deleted.Value : 0;
+    }
+
     private Task<Result<IReadOnlyList<StudentId>>> AnonymizeInTransactionAsync(AnonymizationPlan plan, IReadOnlyList<StudentId> ids, CancellationToken cancellationToken) =>
         unitOfWork.ExecuteInTransactionAsync(
             async ct =>
@@ -162,9 +181,36 @@ internal sealed class DeleteGuardiansOfAnonymizedStudent(IGuardianRepository gua
     public async Task<Result> Handle(StudentAnonymized domainEvent, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(domainEvent);
-        foreach (var id in domainEvent.FormerGuardians)
+        await OrphanGuardians.DeleteAsync(guardians, domainEvent.FormerGuardians, cancellationToken);
+        return Result.Success();
+    }
+}
+
+/// <summary>DEC-368: a guardian removed from a student and linked to no other student is deleted with it.</summary>
+internal sealed class DeleteGuardiansUnlinkedFromStudent(IGuardianRepository guardians) : IDomainEventConsumer<StudentGuardiansUnlinked>
+{
+    public async Task<Result> Handle(StudentGuardiansUnlinked domainEvent, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(domainEvent);
+        await OrphanGuardians.DeleteAsync(guardians, domainEvent.Removed, cancellationToken);
+        return Result.Success();
+    }
+}
+
+internal static class OrphanGuardians
+{
+    /// <summary>
+    /// Deletes those of <paramref name="candidates"/> that no student is linked to. Each guardian row is locked
+    /// (<c>FOR UPDATE</c>) before the check, and linking takes <c>FOR SHARE</c> first (DEC-368), so a concurrent
+    /// registration either is seen here or no longer finds the guardian. Runs after the caller's links were saved.
+    /// </summary>
+    /// <returns>The number of deleted guardians.</returns>
+    public static async Task<int> DeleteAsync(IGuardianRepository guardians, IEnumerable<GuardianId> candidates, CancellationToken cancellationToken)
+    {
+        var deleted = 0;
+        foreach (var id in candidates)
         {
-            // The student's links were saved (deleted) before consumers run, so only other students' links count.
+            await guardians.LockForDeletionAsync(id, cancellationToken);
             if (await guardians.IsLinkedToAnyStudentAsync(id, cancellationToken))
             {
                 continue;
@@ -173,10 +219,11 @@ internal sealed class DeleteGuardiansOfAnonymizedStudent(IGuardianRepository gua
             if (await guardians.GetAsync(id, cancellationToken) is { } guardian)
             {
                 guardians.Remove(guardian);
+                deleted++;
             }
         }
 
-        return Result.Success();
+        return deleted;
     }
 }
 
@@ -200,6 +247,49 @@ internal sealed class DeleteDocumentsOfAnonymizedStudent(IStudentDocumentReposit
         }
 
         return Result.Success();
+    }
+}
+
+/// <summary>What a retention period would mean today: the cutoff and how many departed students it makes due.</summary>
+public sealed record RetentionImpactDto(int PersonalDataMonths, DateOnly Cutoff, int DueCount);
+
+/// <param name="PersonalDataMonths">The period to try; the school's current period when null.</param>
+public sealed record GetRetentionImpactQuery(int? PersonalDataMonths) : IQuery<RetentionImpactDto>;
+
+internal sealed class GetRetentionImpactValidator : AbstractValidator<GetRetentionImpactQuery>
+{
+    public GetRetentionImpactValidator() =>
+        RuleFor(q => q.PersonalDataMonths)
+            .InclusiveBetween(RetentionPolicy.MinPersonalDataMonths, RetentionPolicy.MaxPersonalDataMonths)
+            .When(q => q.PersonalDataMonths is not null)
+            .WithErrorCode(CommonErrors.FieldInvalid.Code);
+}
+
+/// <summary>
+/// P2-F5: lets the settings page warn before a shorter period is saved (DEC-361): the students it would make due are
+/// anonymized irreversibly in the next nightly run.
+/// </summary>
+internal sealed class GetRetentionImpactHandler(IStudentRepository students, ITenancyModule tenancy, ICurrentUser currentUser)
+    : IQueryHandler<GetRetentionImpactQuery, RetentionImpactDto>
+{
+    public async Task<Result<RetentionImpactDto>> Handle(GetRetentionImpactQuery query, CancellationToken cancellationToken)
+    {
+        var tenant = currentUser.RequireTenant();
+        var current = await tenancy.RetentionPolicyAsync(tenant, cancellationToken);
+        if (current is null)
+        {
+            return Result.Failure<RetentionImpactDto>(SchoolErrors.NotFound);
+        }
+
+        var policy = query.PersonalDataMonths is { } months ? RetentionPolicy.Create(months, current.PaymentYears) : Result.Success(current);
+        if (policy.IsFailure)
+        {
+            return Result.Failure<RetentionImpactDto>(policy.Error);
+        }
+
+        var cutoff = policy.Value.AnonymizationCutoff(await tenancy.TodayAsync(tenant, cancellationToken));
+        var due = await students.CountDueForAnonymizationAsync(cutoff, cancellationToken);
+        return Result.Success(new RetentionImpactDto(policy.Value.PersonalDataMonths, cutoff, due));
     }
 }
 

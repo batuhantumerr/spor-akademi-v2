@@ -96,6 +96,9 @@ public interface IStudentRepository
         int limit,
         CancellationToken cancellationToken);
 
+    /// <summary>How many students <see cref="ListDueForAnonymizationAsync"/> would find for <paramref name="cutoff"/>.</summary>
+    Task<int> CountDueForAnonymizationAsync(DateOnly cutoff, CancellationToken cancellationToken);
+
     /// <summary>The aggregates with their guardian links, tracked; unknown ids are omitted.</summary>
     Task<IReadOnlyList<Student>> GetManyAsync(IReadOnlyCollection<StudentId> ids, CancellationToken cancellationToken);
 }
@@ -118,6 +121,19 @@ public interface IGuardianRepository
 
     /// <summary>Whether any student of the school is linked to the guardian (saved links only).</summary>
     Task<bool> IsLinkedToAnyStudentAsync(GuardianId id, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// DEC-368: <c>FOR SHARE</c> on the guardian row until the transaction ends, before a student is linked to it.
+    /// A concurrent deletion either waits for the link (and then keeps the guardian) or wins first (and the guardian
+    /// is then no longer found).
+    /// </summary>
+    Task LockForLinkAsync(GuardianId id, CancellationToken cancellationToken);
+
+    /// <summary>DEC-368: <c>FOR UPDATE</c> on the guardian row before checking it has no students and deleting it.</summary>
+    Task LockForDeletionAsync(GuardianId id, CancellationToken cancellationToken);
+
+    /// <summary>Guardians no student of the school is linked to, at most <paramref name="limit"/>.</summary>
+    Task<IReadOnlyList<GuardianId>> ListUnlinkedAsync(int limit, CancellationToken cancellationToken);
 
     void ExpectVersion(Guardian guardian, uint version);
 

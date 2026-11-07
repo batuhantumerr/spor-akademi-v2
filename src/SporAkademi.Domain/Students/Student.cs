@@ -51,6 +51,9 @@ public sealed record StudentLeft(SchoolId TenantId, StudentId StudentId, DateOnl
 /// </summary>
 public sealed record StudentAnonymized(SchoolId TenantId, StudentId StudentId, IReadOnlyList<GuardianId> FormerGuardians) : IDomainEvent;
 
+/// <summary>Raised when guardians are removed from a student (DEC-368); a guardian left without students is deleted.</summary>
+public sealed record StudentGuardiansUnlinked(SchoolId TenantId, StudentId StudentId, IReadOnlyList<GuardianId> Removed) : IDomainEvent;
+
 /// <summary>
 /// A child or adult who trains at the school; a profile, never a user (ADR-0002, appendix B §4.6).
 /// A minor needs at least one guardian, an adult needs an own phone, everyone has one emergency contact.
@@ -291,7 +294,14 @@ public sealed class Student : AggregateRoot<StudentId>, ITenantScoped
         }
 
         // Update links in place so an unchanged guardian is not deleted and re-inserted.
-        _guardians.RemoveAll(existing => guardians.All(g => g.GuardianId != existing.GuardianId));
+        var removed = _guardians.Where(existing => guardians.All(g => g.GuardianId != existing.GuardianId)).Select(g => g.GuardianId).ToList();
+        _guardians.RemoveAll(existing => removed.Contains(existing.GuardianId));
+        if (removed.Count > 0)
+        {
+            // DEC-368: a guardian no student needs any more is deleted, not kept with its personal data.
+            Raise(new StudentGuardiansUnlinked(TenantId, Id, removed));
+        }
+
         foreach (var link in guardians)
         {
             var existing = _guardians.Find(g => g.GuardianId == link.GuardianId);

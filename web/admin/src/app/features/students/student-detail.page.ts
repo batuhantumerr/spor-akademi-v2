@@ -20,7 +20,7 @@ import { problemMessage, toProblem } from '../../core/api/problem';
 import { formatDate, formatPhone } from '../../core/format/format';
 import { interpolate, ui } from '../../core/i18n/tr';
 import { ageOn } from '../../core/students/age';
-import { SchoolClock } from '../../core/time/school-clock';
+import { SchoolClock, dateIn } from '../../core/time/school-clock';
 import { ConfirmService } from '../../shared/ui/confirm-dialog.component';
 import { PageHeaderComponent } from '../../shared/ui/page-header.component';
 import { ToastService } from '../../shared/ui/toast.service';
@@ -183,7 +183,7 @@ import { StudentDocumentsComponent } from './student-documents.component';
           [studentActive]="s.status === 'Active'"
         />
         <app-student-attendance [studentId]="s.id" />
-        <app-student-documents [studentId]="s.id" />
+        <app-student-documents [studentId]="s.id" [anonymized]="!!s.anonymizedAt" />
       </div>
     }
   `,
@@ -230,7 +230,10 @@ export class StudentDetailPage {
   }
 
   protected anonymizedNote(at: string): string {
-    return interpolate(this.text.anonymizedNote, { date: formatDate(at.slice(0, 10)) });
+    // The school's calendar day, not the UTC one (the job runs at 05:00 in Istanbul, 02:00 UTC).
+    return interpolate(this.text.anonymizedNote, {
+      date: formatDate(dateIn(new Date(at), this.clock.timeZone())),
+    });
   }
 
   protected phone(value: string): string {

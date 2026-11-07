@@ -279,6 +279,7 @@ public sealed partial class CrossTenantEndpointTests(DatabaseFixture database) :
             "/api/v1/sports",
             "/api/v1/settings/data-retention",
             "/api/v1/settings/data-retention/runs",
+            "/api/v1/settings/data-retention/impact",
             "/api/v1/students",
         ], ignoreOrder: true);
     }

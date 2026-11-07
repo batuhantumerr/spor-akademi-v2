@@ -304,6 +304,7 @@ export const ui = {
   },
   documents: {
     title: 'Belgeler',
+    anonymizedNoUpload: 'Öğrenci anonimleştirildiği için yeni belge eklenemez.',
     photo: 'Fotoğraf',
     noPhoto: 'Fotoğraf yok',
     photoAlt: 'Öğrencinin fotoğrafı',
@@ -394,6 +395,10 @@ export const ui = {
     saving: 'Kaydediliyor…',
     saved: 'Saklama süresi kaydedildi.',
     conflict: 'Ayar başka biri tarafından değiştirildi; güncel değer yüklendi.',
+    shortenTitle: 'Saklama süresi kısaltılsın mı?',
+    shortenText:
+      'Süre {months} aya inerse {cutoff} tarihinde veya daha önce ayrılan {count} öğrencinin kişisel verileri bu gece geri dönüşsüz olarak anonimleştirilir.',
+    shortenConfirm: 'Kısalt ve kaydet',
     runsTitle: 'Son anonimleştirme çalışmaları',
     runsCaption: 'Anonimleştirme işi her gün çalışır; her çalışma burada kayıtlıdır.',
     noRuns: 'Henüz çalışma yok. İş her gün 05:00 civarında çalışır.',

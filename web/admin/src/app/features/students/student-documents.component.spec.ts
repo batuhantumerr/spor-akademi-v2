@@ -123,6 +123,22 @@ describe('StudentDocumentsComponent', () => {
 
   afterEach(() => backend.verify());
 
+  it('offers no upload for an anonymized student', async () => {
+    fixture = TestBed.createComponent(StudentDocumentsComponent);
+    fixture.componentRef.setInput('studentId', 'st1');
+    fixture.componentRef.setInput('anonymized', true);
+    root = fixture.nativeElement as HTMLElement;
+    await settle(fixture);
+    backend.expectOne(LIST).flush([]);
+    await settle(fixture);
+
+    expect(root.querySelector('form')).toBeNull();
+    expect(root.querySelector('#document-file')).toBeNull();
+    expect(root.querySelector('[data-testid=upload-closed]')?.textContent).toContain(
+      ui.documents.anonymizedNoUpload,
+    );
+  });
+
   it('lists the documents and shows the photo through a fresh signed link', async () => {
     await create([doc('p1', { type: 'Photo', fileName: 'foto.jpg' }), doc('d1')]);
     backend
