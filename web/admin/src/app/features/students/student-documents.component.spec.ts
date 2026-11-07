@@ -140,6 +140,57 @@ describe('StudentDocumentsComponent', () => {
     expect(img.alt).toBe(ui.documents.photoAlt);
   });
 
+  it('keeps the list when only the photo link fails', async () => {
+    await create([doc('p1', { type: 'Photo', fileName: 'foto.jpg' }), doc('d1')]);
+    backend
+      .expectOne(PHOTO)
+      .flush({ code: 'Unexpected.Error' }, { status: 500, statusText: 'Server Error' });
+    await settle(fixture);
+
+    expect(root.querySelectorAll('[data-testid=document-list] li').length).toBe(2);
+    expect(root.querySelector('[role=alert]')).toBeNull();
+    expect(root.querySelector('[data-testid=no-photo]')).not.toBeNull();
+    expect(root.querySelector('[data-testid=photo-error]')?.textContent).toContain(
+      ui.documents.photoUnavailable,
+    );
+  });
+
+  it('announces upload progress only in 25% steps', async () => {
+    await create([]);
+    await choose('HealthReport', file(pdfBytes, 'rapor.pdf'));
+    await submit();
+    const request = backend.expectOne((r) => r.method === 'POST');
+    const live = () => root.querySelector('[data-testid=upload-live]')?.textContent?.trim();
+
+    request.event({ type: HttpEventType.UploadProgress, loaded: 10, total: 100 });
+    await settle(fixture);
+    expect(live()).toContain('%0');
+    request.event({ type: HttpEventType.UploadProgress, loaded: 37, total: 100 });
+    await settle(fixture);
+    expect(live()).toContain('%25');
+    expect(root.textContent).toContain('%37');
+    request.flush(doc('d1'), { status: 201, statusText: 'Created' });
+    await settle(fixture);
+    backend.expectOne(LIST).flush([doc('d1')]);
+    await settle(fixture);
+  });
+
+  it('cancels an upload in flight when the student changes', async () => {
+    await create([]);
+    await choose('HealthReport', file(pdfBytes, 'rapor.pdf'));
+    await submit();
+    const request = backend.expectOne((r) => r.method === 'POST');
+
+    fixture.componentRef.setInput('studentId', 'st2');
+    await settle(fixture);
+
+    expect(request.cancelled).toBe(true);
+    backend.expectOne('/api/v1/students/st2/documents').flush([]);
+    await settle(fixture);
+    expect(root.querySelector('progress')).toBeNull();
+    expect(toast.success).not.toHaveBeenCalled();
+  });
+
   it('shows a placeholder and an empty list without asking for a photo link', async () => {
     await create([]);
 

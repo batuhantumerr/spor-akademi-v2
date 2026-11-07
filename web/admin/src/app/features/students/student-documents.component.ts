@@ -64,6 +64,11 @@ import { acceptFor, checkFile, formatSize } from './document-files';
             </div>
           }
           <figcaption class="text-xs text-muted-foreground">{{ text.photo }}</figcaption>
+          @if (photoError()) {
+            <p class="text-xs text-destructive" data-testid="photo-error">
+              {{ text.photoUnavailable }}
+            </p>
+          }
         </figure>
 
         <form
@@ -116,7 +121,10 @@ import { acceptFor, checkFile, formatSize } from './document-files';
                 [value]="progress()"
                 [attr.aria-label]="text.progress"
               ></progress>
-              <p class="text-xs text-muted-foreground" aria-live="polite">{{ progressText() }}</p>
+              <p class="text-xs text-muted-foreground" aria-hidden="true">{{ progressText() }}</p>
+              <p class="sr-only" aria-live="polite" data-testid="upload-live">
+                {{ progressAnnouncement() }}
+              </p>
             </div>
           }
           <div class="flex justify-end">
@@ -205,9 +213,14 @@ export class StudentDocumentsComponent {
   protected readonly documents = signal<StudentDocumentDto[] | null>(null);
   protected readonly listError = signal<string | null>(null);
   protected readonly photoUrl = signal<string | null>(null);
+  protected readonly photoError = signal(false);
   protected readonly accept = computed(() => acceptFor(this.type()));
   protected readonly progressText = computed(() =>
     interpolate(this.text.uploading, { percent: this.progress() }),
+  );
+  /** What the live region announces: only in 25% steps, so screen readers are not flooded. */
+  protected readonly progressAnnouncement = computed(() =>
+    interpolate(this.text.uploading, { percent: Math.floor(this.progress() / 25) * 25 }),
   );
 
   private loadSequence = 0;
@@ -218,8 +231,14 @@ export class StudentDocumentsComponent {
     effect(() => {
       this.studentId();
       untracked(() => {
+        // An upload for the previous student must not finish into this one's view.
+        if (this.upload$) {
+          this.upload$.unsubscribe();
+          this.finishUpload();
+        }
         this.documents.set(null);
         this.photoUrl.set(null);
+        this.photoError.set(false);
         void this.load();
       });
     });
@@ -252,23 +271,34 @@ export class StudentDocumentsComponent {
     const request = ++this.loadSequence;
     const id = this.studentId();
     this.listError.set(null);
+    let documents: StudentDocumentDto[];
     try {
-      const documents = await this.api.invoke(apiV1StudentsIdDocumentsGet, { id });
-      if (request !== this.loadSequence) {
-        return;
+      documents = await this.api.invoke(apiV1StudentsIdDocumentsGet, { id });
+    } catch (err) {
+      if (request === this.loadSequence) {
+        this.listError.set(problemMessage(toProblem(err)));
       }
-      this.documents.set(documents);
-      if (!documents.some((d) => d.type === 'Photo')) {
-        this.photoUrl.set(null);
-        return;
-      }
+      return;
+    }
+    if (request !== this.loadSequence) {
+      return;
+    }
+    this.documents.set(documents);
+    this.photoError.set(false);
+    if (!documents.some((d) => d.type === 'Photo')) {
+      this.photoUrl.set(null);
+      return;
+    }
+    // A failed photo link only hides the thumbnail; the list stays usable.
+    try {
       const link = await this.api.invoke(apiV1StudentsIdPhotoGet, { id });
       if (request === this.loadSequence) {
         this.photoUrl.set(link.url);
       }
-    } catch (err) {
+    } catch {
       if (request === this.loadSequence) {
-        this.listError.set(problemMessage(toProblem(err)));
+        this.photoUrl.set(null);
+        this.photoError.set(true);
       }
     }
   }

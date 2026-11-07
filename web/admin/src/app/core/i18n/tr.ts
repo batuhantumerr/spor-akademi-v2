@@ -297,6 +297,7 @@ export const ui = {
     photo: 'Fotoğraf',
     noPhoto: 'Fotoğraf yok',
     photoAlt: 'Öğrencinin fotoğrafı',
+    photoUnavailable: 'Fotoğraf şu anda gösterilemiyor.',
     types: { HealthReport: 'Sağlık raporu', Photo: 'Fotoğraf' },
     typeLabel: 'Belge türü',
     fileLabel: 'Dosya',
