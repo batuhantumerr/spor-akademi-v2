@@ -40,7 +40,8 @@ internal sealed class StudentReminderContacts(AppDbContext db) : IStudentReminde
                     .DistinctBy(g => g.Email!.Value)
                     .Select(g => new ReminderRecipient(g.Id.Value, g.FirstName, g.LastName, g.Email!.Value)),
             ];
-            if (recipients.Count == 0 && student.Email is { } own && !Student.IsMinor(student.BirthDate, today))
+            if (recipients.Count == 0 && student.Email is { } own
+                && student.BirthDate is { } birthDate && !Student.IsMinor(birthDate, today))
             {
                 recipients.Add(new ReminderRecipient(student.Id.Value, student.FirstName, student.LastName, own.Value));
             }
