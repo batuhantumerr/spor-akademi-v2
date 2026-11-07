@@ -19,6 +19,9 @@
     <!-- Transitive pins: Hangfire.Core asks for Newtonsoft.Json 11.0.1 (GHSA-5crp-9r3c-p9vr). -->
     <PackageVersion Include="Newtonsoft.Json" Version="13.0.4" />
   </ItemGroup>
+  <ItemGroup Label="E-mail (P2-F4, DEC-350)">
+    <PackageVersion Include="MailKit" Version="4.18.2" />
+  </ItemGroup>
   <ItemGroup Label="Application">
     <PackageVersion Include="FluentValidation" Version="12.2.0" />
     <PackageVersion Include="FluentValidation.DependencyInjectionExtensions" Version="12.2.0" />

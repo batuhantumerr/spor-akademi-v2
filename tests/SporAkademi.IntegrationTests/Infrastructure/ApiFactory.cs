@@ -4,6 +4,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Time.Testing;
+using SporAkademi.Application.Abstractions.Notifications;
 
 namespace SporAkademi.IntegrationTests.Infrastructure;
 
@@ -17,6 +18,9 @@ public sealed class ApiFactory(string appConnectionString, string? cacheConnecti
 
     /// <summary>Defaults to 2027-01-14 12:00 UTC (a Thursday) so date rules are deterministic.</summary>
     public FakeTimeProvider Clock { get; } = new(new DateTimeOffset(2027, 1, 14, 12, 0, 0, TimeSpan.Zero));
+
+    /// <summary>Every e-mail the API "sends" (DEC-350); nothing leaves the test.</summary>
+    public CapturingEmailSender Emails { get; } = new();
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
@@ -33,6 +37,10 @@ public sealed class ApiFactory(string appConnectionString, string? cacheConnecti
             ["Outbox:Scheduler"] = "None",
             ["Jobs:ServerEnabled"] = "false",
         }));
-        builder.ConfigureServices(services => services.Replace(ServiceDescriptor.Singleton<TimeProvider>(Clock)));
+        builder.ConfigureServices(services =>
+        {
+            services.Replace(ServiceDescriptor.Singleton<TimeProvider>(Clock));
+            services.Replace(ServiceDescriptor.Singleton<IEmailSender>(Emails));
+        });
     }
 }

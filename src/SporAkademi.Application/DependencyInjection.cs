@@ -16,6 +16,7 @@ public static class DependencyInjection
     public static IServiceCollection AddApplication(this IServiceCollection services)
     {
         services.AddScoped<AccountOpening>();
+        services.AddScoped<Identity.Passwords.PasswordLinkMailer>();
         services.AddScoped<Billing.PaymentViews>();
         services.AddScoped<Billing.Contracts.IBillingSummary, Billing.BillingSummaryService>();
         services.AddScoped<IIdentityModule, IdentityModule>();

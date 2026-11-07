@@ -24,6 +24,8 @@ internal sealed class UserConfiguration : IEntityTypeConfiguration<User>
 
         builder.HasMany(u => u.RefreshTokens).WithOne().HasForeignKey(t => t.UserId).OnDelete(DeleteBehavior.Cascade);
         builder.Navigation(u => u.RefreshTokens).HasField("_refreshTokens").UsePropertyAccessMode(PropertyAccessMode.Field);
+        builder.HasMany(u => u.PasswordTokens).WithOne().HasForeignKey(t => t.UserId).OnDelete(DeleteBehavior.Cascade);
+        builder.Navigation(u => u.PasswordTokens).HasField("_passwordTokens").UsePropertyAccessMode(PropertyAccessMode.Field);
 
         builder.Ignore(u => u.DomainEvents);
     }
@@ -42,6 +44,28 @@ internal sealed class RefreshTokenConfiguration : IEntityTypeConfiguration<Refre
         builder.HasIndex(t => t.TokenHash).IsUnique();
 
         // Two concurrent refreshes with the same token: only one may rotate it, the other gets a conflict.
+        builder.Property<uint>(ConcurrencyToken.PropertyName)
+            .HasColumnName("xmin")
+            .HasColumnType("xid")
+            .ValueGeneratedOnAddOrUpdate()
+            .IsConcurrencyToken();
+    }
+}
+
+/// <summary>Set-password tokens (P2-F4, DEC-352): hash only, at most one per user (the aggregate replaces it).</summary>
+internal sealed class PasswordTokenConfiguration : IEntityTypeConfiguration<PasswordToken>
+{
+    public void Configure(EntityTypeBuilder<PasswordToken> builder)
+    {
+        builder.ToTable("password_tokens", Schemas.Identity);
+        builder.HasKey(t => t.Id);
+        builder.Property(t => t.Id).ValueGeneratedNever();
+
+        builder.Property(t => t.TokenHash).HasMaxLength(PasswordToken.TokenHashLength).IsFixedLength();
+        builder.HasIndex(t => t.TokenHash).IsUnique();
+        builder.HasIndex(t => t.ExpiresAt);
+
+        // Two concurrent confirmations with the same link: only one may use it, the other gets a conflict.
         builder.Property<uint>(ConcurrencyToken.PropertyName)
             .HasColumnName("xmin")
             .HasColumnType("xid")

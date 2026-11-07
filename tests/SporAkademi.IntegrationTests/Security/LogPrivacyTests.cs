@@ -17,6 +17,8 @@ using SporAkademi.Application.Identity;
 using SporAkademi.Domain.Identity;
 using SporAkademi.Domain.SharedKernel;
 using SporAkademi.Domain.Tenancy;
+using SporAkademi.Infrastructure.Jobs;
+using SporAkademi.Infrastructure.Outbox;
 using SporAkademi.Infrastructure.Persistence;
 using SporAkademi.IntegrationTests.Identity;
 using SporAkademi.IntegrationTests.Infrastructure;
@@ -25,7 +27,8 @@ namespace SporAkademi.IntegrationTests.Security;
 
 /// <summary>
 /// NFR-PRV-03: log events carry ids and codes only. Representative requests run with every log level on and a
-/// collecting sink; no e-mail, phone, name, birth date, password or token value may appear in any event.
+/// collecting sink; no e-mail, phone, name, birth date, password or token value may appear in any event, including the
+/// P2-F4 e-mail deliveries (welcome, password reset, fee reminder) and their set-password links.
 /// </summary>
 public sealed class LogPrivacyTests(DatabaseFixture database) : IdentityTest(database)
 {
@@ -39,6 +42,9 @@ public sealed class LogPrivacyTests(DatabaseFixture database) : IdentityTest(dat
     private const string StudentPhone = "0532 987 65 43";
     private const string EmergencyPhone = "0533 876 54 32";
     private const string GuardianPhone = "0534 765 43 21";
+    private const string CoachEmail = "antrenor.gizli@example.com";
+    private const string CoachFirstName = "Gizliantrenor";
+    private const string ResetPassword = "Sifirlanan-Gizli-77";
 
     /// <summary>Free text an admin might write; it can name people, so it must not reach the logs either.</summary>
     private const string CancelReason = "Saklisoyadli ailesi yanlış aya ödedi";
@@ -130,7 +136,34 @@ public sealed class LogPrivacyTests(DatabaseFixture database) : IdentityTest(dat
         changed.StatusCode.ShouldBe(HttpStatusCode.OK);
         var newSession = await SessionFromAsync(changed);
 
+        // P2-F4: e-mails with personal data and set-password links go through the outbox (welcome, reset, fee reminder).
+        (await client.PostAsJsonAsync("/api/v1/coaches", new { firstName = CoachFirstName, lastName = StudentLastName, email = CoachEmail, phone = (string?)null }, ct))
+            .StatusCode.ShouldBe(HttpStatusCode.Created);
+        using var anonymous = api.CreateClient(new WebApplicationFactoryClientOptions { HandleCookies = false });
+        (await anonymous.PostAsJsonAsync("/api/v1/auth/password-reset/request", new { email = Email }, ct)).StatusCode.ShouldBe(HttpStatusCode.Accepted);
+        (await anonymous.PostAsJsonAsync("/api/v1/auth/password-reset/request", new { email = "olmayan.gizli@example.com" }, ct)).StatusCode.ShouldBe(HttpStatusCode.Accepted);
+        await using (var scope = api.Services.CreateAsyncScope())
+        {
+            (await scope.ServiceProvider.GetRequiredService<DuesReminderJob>().RunAsync(ct)).ShouldBe(1);
+        }
+
+        var processor = api.Services.GetRequiredService<OutboxProcessor>();
+        while (await processor.ProcessBatchAsync(ct) > 0)
+        {
+        }
+
+        Api.Emails.To(CoachEmail).ShouldHaveSingleItem();
+        Api.Emails.To(GuardianEmail).ShouldHaveSingleItem().TextBody.ShouldContain(StudentFirstName);
+        var resetToken = CapturingEmailSender.TokenIn(Api.Emails.To(Email).ShouldHaveSingleItem());
+        var welcomeToken = CapturingEmailSender.TokenIn(Api.Emails.To(CoachEmail).Single());
+        (await anonymous.PostAsJsonAsync("/api/v1/auth/password-reset/confirm", new { token = resetToken, newPassword = ResetPassword }, ct))
+            .StatusCode.ShouldBe(HttpStatusCode.NoContent);
+        (await anonymous.PostAsJsonAsync("/api/v1/auth/password-reset/confirm", new { token = resetToken, newPassword = ResetPassword }, ct))
+            .StatusCode.ShouldBe(HttpStatusCode.UnprocessableEntity);
+
         var events = sink.Rendered();
+        events.ShouldContain(e => e.Contains("identity.password-reset", StringComparison.Ordinal) && e.Contains("sent", StringComparison.Ordinal));
+        events.ShouldContain(e => e.Contains("Dues reminder", StringComparison.Ordinal) && e.Contains("sent", StringComparison.Ordinal));
         // The test must see real request logs, otherwise it proves nothing.
         events.ShouldContain(e => e.Contains("LoginCommand", StringComparison.Ordinal) && e.Contains("Auth.InvalidCredentials", StringComparison.Ordinal));
         events.ShouldContain(e => e.Contains("RegisterStudentCommand", StringComparison.Ordinal));
@@ -146,6 +179,8 @@ public sealed class LogPrivacyTests(DatabaseFixture database) : IdentityTest(dat
             OwnPassword, "Yanlis-Sifre-987", "Gizli-Yeni-Sifre-55",
             CancelReason, "Saklisoyadli ailesi",
             session.AccessToken, session.RefreshToken, newSession.AccessToken, newSession.RefreshToken,
+            CoachEmail, CoachFirstName, "olmayan.gizli",
+            resetToken, welcomeToken, ResetPassword,
         ];
         ShouldNotContainAny(events, forbidden);
         // ASP.NET Core request logs ("Request starting ... ?search=...") stay off even though the config asks for them.

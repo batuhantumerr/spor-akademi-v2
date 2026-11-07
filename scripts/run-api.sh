@@ -22,6 +22,16 @@ if [[ -n "${VALKEY_PASSWORD:-}" && "$VALKEY_PASSWORD" != change-me* ]] \
 else
   echo "run-api: Valkey not running (docker compose --profile cache up -d --wait); in-memory cache only"
 fi
+# Optional (DEC-357): e-mail goes to the local Mailpit catcher when the compose "mail" profile's mailpit service is
+# running (plain SMTP on 127.0.0.1, nothing is relayed); otherwise the API only logs each e-mail's template name.
+if (cd "$REPO_ROOT" && docker compose --profile mail ps --status running --services 2>/dev/null | grep -qx mailpit); then
+  export Email__Smtp__Host=127.0.0.1
+  export Email__Smtp__Port="${MAILPIT_SMTP_HOST_PORT:-51025}"
+  export Email__Smtp__Security=None
+  echo "run-api: e-mail goes to Mailpit (web UI http://127.0.0.1:${MAILPIT_UI_HOST_PORT:-58025})"
+else
+  echo "run-api: Mailpit not running (docker compose --profile mail up -d --wait); e-mails are only logged by template name"
+fi
 export ASPNETCORE_ENVIRONMENT="${ASPNETCORE_ENVIRONMENT:-Development}"
 export ASPNETCORE_URLS="${ASPNETCORE_URLS:-http://127.0.0.1:5080}"
 export Seq__ServerUrl="http://127.0.0.1:${SEQ_HOST_PORT:-5341}"

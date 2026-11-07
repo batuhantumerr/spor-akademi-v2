@@ -49,6 +49,25 @@ services:
       timeout: 3s
       retries: 20
 
+  # Local e-mail catcher (P2-F4, DEC-357): Mailpit, MIT licensed. Optional: only started with
+  # `docker compose --profile mail up -d --wait`; scripts/run-api.sh then points the API's SMTP at it. It never relays
+  # mail anywhere: every message stays in Mailpit and is read in its web UI. Both ports listen on 127.0.0.1 only and
+  # need no .env key (the host ports have defaults). Testcontainers reads this image reference too.
+  mailpit:
+    image: axllent/mailpit:v1.32.0@sha256:0790692be935ea4420d085694f7985b1f692ca6a8771ab0e0bd8ba75ac180498
+    profiles: ["mail"]
+    environment:
+      MP_MAX_MESSAGES: "500"
+      MP_DISABLE_VERSION_CHECK: "true"
+    ports:
+      - "127.0.0.1:${MAILPIT_SMTP_HOST_PORT:-51025}:1025"
+      - "127.0.0.1:${MAILPIT_UI_HOST_PORT:-58025}:8025"
+    healthcheck:
+      test: ["CMD", "/mailpit", "readyz"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
   seq:
     image: datalust/seq:2026.1.17526@sha256:76f6ecdf9f742442f5b7e31eb9b94084b952af0575049d5c1e9d9101a6c8100f
     environment:
