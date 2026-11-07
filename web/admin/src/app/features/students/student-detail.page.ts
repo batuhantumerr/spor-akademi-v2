@@ -35,6 +35,7 @@ import {
   StudentEditDialog,
   StudentLeaveDialog,
 } from './student-dialogs';
+import { StudentDocumentsComponent } from './student-documents.component';
 
 /** US-10: one student — profile, guardians, emergency contact, leave and reactivate. */
 @Component({
@@ -45,6 +46,7 @@ import {
     PageHeaderComponent,
     StudentEnrollmentsComponent,
     StudentAttendanceComponent,
+    StudentDocumentsComponent,
     LucideArrowLeft,
     LucideLogOut,
     LucidePencil,
@@ -166,6 +168,7 @@ import {
           [studentActive]="s.status === 'Active'"
         />
         <app-student-attendance [studentId]="s.id" />
+        <app-student-documents [studentId]="s.id" />
       </div>
     }
   `,

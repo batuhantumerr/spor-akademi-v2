@@ -70,6 +70,8 @@ public interface IStudentRepository
 
     void Add(Student student);
 
+    Task<bool> ExistsAsync(StudentId id, CancellationToken cancellationToken);
+
     /// <summary>Optimistic concurrency: the save fails with Concurrency.Conflict if the row changed since <paramref name="version"/>.</summary>
     void ExpectVersion(Student student, uint version);
 

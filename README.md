@@ -17,7 +17,7 @@ Spor okulları için çok kiracılı (multi-tenant) yönetim platformu: okullar,
 
 ```bash
 bash scripts/setup-env.sh          # .env'i rastgele şifrelerle oluşturur (bir kez)
-docker compose up -d --wait        # PostgreSQL ve Seq (Valkey isteğe bağlı, aşağıya bakın)
+docker compose up -d --wait        # PostgreSQL ve Seq (Valkey ve belge deposu isteğe bağlı, aşağıya bakın)
 dotnet tool restore
 bash scripts/ef.sh database update # migration'ları migrator rolüyle uygular
 bash scripts/run-api.sh            # API: http://127.0.0.1:5080
@@ -31,7 +31,7 @@ npm ci
 npm start                          # http://localhost:4200 (/api proxy'si API'ye gider)
 ```
 
-- Sağlık kontrolleri: `/health/live`, `/health/ready`
+- Sağlık kontrolleri: `/health/live`, `/health/ready` (belge deposuna ulaşılamazsa `ready` 200 ama `Degraded` döner, DEC-326)
 - Loglar (Seq): http://127.0.0.1:5341
 - İş paneli (Hangfire, sadece Platform Admin): admin uygulamasında Platform Admin olarak giriş yapın, menüden **İş paneli** → **Paneli yeni sekmede aç**. Panel http://localhost:4200/jobs adresinde açılır (`/jobs` proxy'si API'ye gider). **Panel şimdilik sadece bu yerel dev proxy'siyle çalışır:** üretimdeki admin imajının nginx'i `/jobs`'u API'ye yönlendirmez, bu Deploy bloğunda reverse proxy'de yapılacak; doğrudan adrese gitmek `401` verir, çünkü panel sadece bu düğmenin aldığı 15 dakikalık çerezle açılır. Development'ta işlemler (yeniden dene, sil, şimdi çalıştır) açıktır, diğer ortamlarda panel salt okunurdur (`Jobs__Dashboard__ReadOnly`). Hangfire sunucusu API içinde çalışır; kapatmak için `Jobs__ServerEnabled=false` (DEC-330 – DEC-333).
 
@@ -46,6 +46,23 @@ bash scripts/run-api.sh                         # Valkey çalışıyorsa Connect
 ```
 
 `setup-env.sh` var olan `.env`'in değerlerini değiştirmez ve yazdırmaz. `VALKEY_PASSWORD` olmadan Valkey başlamayı reddeder (hata mesajı `docker compose --profile cache logs valkey`'de); diğer servisler, `scripts/e2e.sh` ve CI'daki `e2e` işi etkilenmez. `ConnectionStrings:Cache` yoksa (ör. testlerde) sadece bellek içi cache kullanılır; Valkey kapanırsa API veritabanından çalışmaya devam eder.
+
+### Belge deposu (P2-F6)
+
+Öğrenci belgeleri (sağlık raporu, fotoğraf) S3 uyumlu bir depoda tutulur. Yerelde ve testlerde compose'daki `storage` servisi (SeaweedFS, Apache-2.0; DEC-320) kullanılır: `127.0.0.1:58333`, bucket açılışta yoksa oluşturulur, herkese açık erişim yoktur. Production deposu Deploy bloğunda seçilecek.
+
+Depo isteğe bağlıdır ve compose'un `storage` profilindedir; düz `docker compose up` onu başlatmaz ve `STORAGE_*` anahtarlarını istemez (DEC-326):
+
+```bash
+bash scripts/setup-env.sh                       # eski bir .env'e sadece eksik STORAGE_* anahtarlarını ekler
+docker compose --profile storage up -d --wait   # PostgreSQL, Seq ve SeaweedFS
+bash scripts/run-api.sh                         # depo çalışıyorsa Storage__* ayarlarını verir
+```
+
+`setup-env.sh` var olan `.env`'in değerlerini değiştirmez ve yazdırmaz. Anahtarlar olmadan SeaweedFS başlamayı reddeder (kimliksiz SeaweedFS anonim isteklere açık olurdu; mesaj `docker compose --profile storage logs storage`'da); diğer servisler, `scripts/e2e.sh` ve CI'daki `e2e` işi etkilenmez. Depo yapılandırılmamışsa API açılır, belgeler kullanılamaz ve `/health/ready` `Degraded` döner.
+
+- API ayarları `Storage__ServiceUrl`, `Storage__AccessKey`, `Storage__SecretKey`, `Storage__Bucket` (isteğe bağlı `Storage__PublicUrl`: tarayıcı depoya başka bir adresten ulaşıyorsa imzalı bağlantıların adresi); `Storage__ServerSideEncryption` (varsayılan `true`, SSE-S3) sağlayıcıya bağlıdır: SeaweedFS ve AWS S3 destekler, desteklemeyen bir serviste `false` yapılıp şifreleme servisin kendi ayarıyla sağlanır (DEC-320); `run-api.sh` bunları, depo çalışıyorsa `.env`'den verir.
+- Yüklemeler API üzerinden geçer ve içerik (magic bytes ve yapı) kontrol edilir; açma bağlantıları 5 dakikalık imzalı URL'lerdir (DEC-321 – DEC-323). Silinen belgenin dosyası commit'ten sonra outbox mesajıyla silinir; başarısız silme yeniden denenir (DEC-325).
 
 ### Demo verisi (P1-38)
 

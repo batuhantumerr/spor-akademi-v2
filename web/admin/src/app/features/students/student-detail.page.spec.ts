@@ -72,8 +72,8 @@ describe('StudentDetailPage', () => {
 
   afterEach(() => {
     TestBed.inject(Dialog).closeAll();
-    // The enrollments section loads on its own; it has its own tests.
-    backend.match((r) => /\/(enrollments|attendance)$/.test(r.url));
+    // The enrollments, attendance and documents sections load on their own; they have their own tests.
+    backend.match((r) => /\/(enrollments|attendance|documents)$/.test(r.url));
     backend.verify();
   });
 
