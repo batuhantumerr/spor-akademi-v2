@@ -71,7 +71,7 @@ Kapsamın tamamı ve maddelerin açıklamaları: [proje dokümanı, Ek G](proje-
 - [ ] P2-F1 Online aidat ödemesi (iyzico sandbox, webhook'lar, idempotency)
 - [x] P2-F2 Hangfire ile arka plan işleri ve iş paneli (DEC-330 – DEC-335)
 - [x] P2-F3 Transactional outbox (DEC-300 – DEC-304)
-- [ ] P2-F4 E-posta bildirimleri
+- [x] P2-F4 E-posta bildirimleri (DEC-350 – DEC-358)
 - [ ] P2-F5 Otomatik anonimleştirme işi
 - [ ] P2-F6 Belge yükleme (MinIO)
 - [x] P2-F7 Redis ve `HybridCache` ile cache (Valkey; DEC-310 – DEC-316)

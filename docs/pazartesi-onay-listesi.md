@@ -7,6 +7,7 @@ Sahip yokken (2026-11-06 – 2026-11-09) agent'ın aldığı ve sahibin onayın�
 - DEC-300 – DEC-304 (P2-F3 transactional outbox): yeni paket eklenmedi; `BackgroundService`, health check ve System.Text.Json paylaşılan ASP.NET Core çerçevesinden, `Decorate` mevcut Scrutor'dan geliyor.
 - DEC-310 – DEC-316 (P2-F7 cache): Redis yerine Valkey (lisans), neyin cache'lendiği ve neyin cache'lenmediği (kişisel veri yok), commit sonrası otomatik invalidation, isteğe bağlı L2. Valkey compose'un `cache` profilinde ve isteğe bağlı; `VALKEY_PASSWORD` olmayan eski `.env` hiçbir şeyi bozmaz. Valkey'i kullanmak için bir kez `bash scripts/setup-env.sh` (sadece eksik `VALKEY_*` anahtarlarını ekler) ve `docker compose --profile cache up -d --wait`.
 - DEC-330 – DEC-335 (P2-F2 Hangfire ve iş paneli): paketler aşağıda. Onay bekleyen seçimler: şemanın migrator migration'ıyla paketin kendi script'lerinden kurulması (DEC-331), panel erişiminin kısa ömürlü çerezle olması ve varsayılan salt okunur panel (DEC-332), outbox'un varsayılan olarak Hangfire'a geçmesi ve `Outbox:Enabled` yerine `Outbox:Scheduler` (DEC-333), refresh token temizlik işi (DEC-334).
+- DEC-350 – DEC-358 (P2-F4 e-posta bildirimleri): MailKit ile SMTP, gönderim sadece outbox'tan commit sonrası (DEC-350); hoş geldin e-postasında geçici şifre yerine şifre belirleme bağlantısı, geçici şifre yönetici yanıtında kalıyor (DEC-351); bağlantı token'ı sadece hash'iyle, tek kullanımlık, 30 dk / 72 sa, URL fragment'ında (DEC-352); `request` her zaman 202, IP başına 15 dk'da 5, hesap başına 2 dk'da 1 (DEC-353); aidatın son ödeme günü varsayılan ayın 10'u, 3 gün önce "yaklaşıyor", sonra "geçti" hatırlatması, kayıt + dönem + tür başına bir kez (DEC-355); alıcı: e-postası olan bütün veliler, yoksa yetişkin öğrencinin kendisi, reşit olmayana asla (DEC-356); Mailpit `mail` profilinde isteğe bağlı (DEC-357). Eski `.env` değişmeden çalışır; Mailpit için bir kez `bash scripts/setup-env.sh` (sadece eksik `MAILPIT_*` port anahtarlarını ekler) ve `docker compose --profile mail up -d --wait`, arayüz `http://127.0.0.1:58025`.
 
 ## Paketler (gerekçe, lisans, alternatifler)
 | Paket | Neden | Lisans | Alternatifler |
@@ -20,6 +21,7 @@ Sahip yokken (2026-11-06 – 2026-11-09) agent'ın aldığı ve sahibin onayın�
 | `Microsoft.Extensions.Caching.Hybrid` 10.11.0 (2026-10-14) | P2-F7: L1 + L2 cache, etiketle invalidation, stampede koruması (DEC-310) | MIT | `IMemoryCache` + `IDistributedCache` elle (stampede koruması ve etiket yok), FusionCache (MIT, üçüncü taraf) |
 | `Microsoft.Extensions.Caching.StackExchangeRedis` 10.0.14 (2026-10-25) | HybridCache'in L2'si için Redis protokolüyle `IDistributedCache` (Valkey ile çalışır) | MIT | Kendi `IDistributedCache` uygulaması |
 | `StackExchange.Redis` 2.13.17 (2026-05-27) | Redis/Valkey istemcisi; doğrudan referans `AbortOnConnectFail`/`BacklogPolicy` ayarları için. 3.x değil: üstteki paket 2.x'e karşı derlenmiş; 2.13.23 7 günlük bekleme süresinde | MIT (bağımlılıkları `Pipelines.Sockets.Unofficial` ve `System.IO.Hashing` de MIT) | NRedisStack (MIT, aynı çekirdek), Valkey GLIDE (Apache-2.0, .NET istemcisi henüz olgun değil) |
+| `MailKit` 4.18.2 (yayın 2026-10-23; geçişli `MimeKit` 4.18.2, `BouncyCastle.Cryptography` 2.7.0, `System.Security.Cryptography.Pkcs` ve `System.Formats.Asn1` 10.0.13) | P2-F4 SMTP ile e-posta gönderimi (DEC-350); sadece `SporAkademi.Infrastructure.Notifications`'ta | MIT (geçişliler de MIT) | `System.Net.Mail.SmtpClient` (Microsoft yeni geliştirmede önermiyor), sağlayıcı SDK'ları (SendGrid, SES), FluentEmail |
 
 ## Araçlar (CI)
 | Araç | Neden | Lisans | Sabitleme |
@@ -27,6 +29,7 @@ Sahip yokken (2026-11-06 – 2026-11-09) agent'ın aldığı ve sahibin onayın�
 | gitleaks `v8.30.1` | NFR-SEC-09: repo geçmişinde gizli bilgi taraması, `repo-checks` işinde (DEC-200) | MIT | Resmi sürüm ikilisi + SHA-256 (`ci.yml`) |
 | `e2e` CI işi (Playwright tarayıcıları `npx playwright install --with-deps`) | P1-36: kritik akışlar gerçek API + PostgreSQL'e karşı, beş proje (DEC-240) | Apache-2.0 | Tarayıcılar Playwright sürümüyle sabit; action'lar SHA'lı |
 | Valkey imajı `valkey/valkey:9.1.3-alpine` (2026-10-27) | P2-F7 L2 cache sunucusu: yerel compose ve Testcontainers (DEC-310, DEC-316). Redis ≥ 7.4 izinli lisanslı değil (RSAL/SSPL/AGPL) | BSD-3-Clause | Tag + digest (`compose.yaml`) |
+| Mailpit imajı `axllent/mailpit:v1.32.0` (2026-10-22) | P2-F4 yerel e-posta yakalayıcı: compose `mail` profili (isteğe bağlı) ve Testcontainers SMTP testi (DEC-357); hiçbir şeyi dışarı iletmez | MIT | Tag + digest (`compose.yaml`) |
 
 ## Sahibe kalan işler
 - `v0.0.1` ve `v0.1.0` etiketleri, faz geçişleri (P0-35, P1-40).
@@ -40,4 +43,6 @@ Sahip yokken (2026-11-06 – 2026-11-09) agent'ın aldığı ve sahibin onayın�
 - İş paneli (DEC-332) için Deploy bloğunda: reverse proxy `/jobs`'u API'ye yönlendirmeli; panel oturumları süreç belleğinde olduğu için birden çok API örneğinde yapışkan oturum veya paylaşılan bir oturum deposu gerekir.
 
 ## Sahibe sorular
+- P2-F4 (DEC-351): hoş geldin e-postası geldiğine göre yöneticiye gösterilen geçici şifre kaldırılsın mı (sadece bağlantı)? Bugün ikisi birlikte çalışıyor; kaldırmak US-01/US-05/US-08'i ve arayüzü değiştirir.
+- P2-F4 (DEC-355, DEC-356): aidatın son ödeme günü (varsayılan ayın 10'u) okul bazında ayarlanabilir mi olmalı? Hatırlatmalar bütün e-postalı velilere gidiyor; "birincil iletişim velisi" seçimi istenir mi?
 - DEC-151: Reşit değilken telefonsuz kaydedilen bir öğrenci 18'ine bastıktan sonra, herhangi bir bilgisi (ör. sadece adı) düzenlenmeden önce kendi telefonunun girilmesi gerekir. Bu kabul edilebilir mi, yoksa yetişkin telefon kuralı sadece telefon/veli değiştiğinde mi kontrol edilsin?

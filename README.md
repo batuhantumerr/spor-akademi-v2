@@ -47,6 +47,18 @@ bash scripts/run-api.sh                         # Valkey çalışıyorsa Connect
 
 `setup-env.sh` var olan `.env`'in değerlerini değiştirmez ve yazdırmaz. `VALKEY_PASSWORD` olmadan Valkey başlamayı reddeder (hata mesajı `docker compose --profile cache logs valkey`'de); diğer servisler, `scripts/e2e.sh` ve CI'daki `e2e` işi etkilenmez. `ConnectionStrings:Cache` yoksa (ör. testlerde) sadece bellek içi cache kullanılır; Valkey kapanırsa API veritabanından çalışmaya devam eder.
 
+### E-posta (P2-F4)
+
+Hoş geldin, şifre sıfırlama ve aidat hatırlatma e-postaları outbox'tan, commit sonrası gönderilir (DEC-350 – DEC-358). SMTP ayarı yoksa (`Email__Smtp__Host`) API e-posta göndermez, sadece şablon adını loglar. Yerelde e-postaları görmek için isteğe bağlı Mailpit (compose'un `mail` profili, sadece `127.0.0.1`, hiçbir şeyi dışarı iletmez):
+
+```bash
+bash scripts/setup-env.sh                       # eski bir .env'e sadece eksik MAILPIT_* port anahtarlarını ekler
+docker compose --profile mail up -d --wait      # PostgreSQL, Seq ve Mailpit
+bash scripts/run-api.sh                         # Mailpit çalışıyorsa API'nin SMTP'sini ona yönlendirir
+```
+
+Gelen kutusu: http://127.0.0.1:58025. E-postalardaki bağlantılar `Email__AppBaseUrl`'e (varsayılan `http://localhost:4200/`) gider. Aidat hatırlatmaları her gün 06:00 UTC'de (`Jobs__DuesReminderCron`) çalışan `billing-dues-reminders` işiyle gönderilir; iş panelinden elle de tetiklenebilir.
+
 ### Demo verisi (P1-38)
 
 ```bash
