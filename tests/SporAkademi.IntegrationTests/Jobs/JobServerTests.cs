@@ -54,9 +54,9 @@ public sealed class JobServerTests(DatabaseFixture database) : OutboxTest(databa
         using var client = Host.CreateClient();
         var storage = Host.Services.GetRequiredService<JobStorage>();
 
-        await WaitUntilAsync(() => RecurringJobIds(storage).Count == 3);
+        await WaitUntilAsync(() => RecurringJobIds(storage).Count == 4);
 
-        RecurringJobIds(storage).ShouldBe([OutboxJobs.CleanupJobId, OutboxJobs.ProcessJobId, RefreshTokenCleanupJob.JobId], ignoreOrder: true);
+        RecurringJobIds(storage).ShouldBe([OutboxJobs.CleanupJobId, OutboxJobs.ProcessJobId, RefreshTokenCleanupJob.JobId, OnlinePaymentReconcileJob.JobId], ignoreOrder: true);
         var health = Host.Services.GetRequiredService<HealthCheckService>();
         await WaitUntilAsync(async () => (await health.CheckHealthAsync(c => c.Name == "jobs", Ct)).Status == HealthStatus.Healthy);
     }
@@ -87,7 +87,7 @@ public sealed class JobServerTests(DatabaseFixture database) : OutboxTest(databa
         var storage = other.Services.GetRequiredService<JobStorage>();
         using var client = other.CreateClient();
 
-        await WaitUntilAsync(() => RecurringJobIds(storage).SetEquals([RefreshTokenCleanupJob.JobId]));
+        await WaitUntilAsync(() => RecurringJobIds(storage).SetEquals([RefreshTokenCleanupJob.JobId, OnlinePaymentReconcileJob.JobId]));
     }
 
     [Fact]

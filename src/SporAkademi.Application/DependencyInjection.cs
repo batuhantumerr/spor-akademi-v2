@@ -20,6 +20,7 @@ public static class DependencyInjection
         services.AddScoped<Billing.OnlinePaymentViews>();
         services.AddScoped<Billing.OnlineCheckout>();
         services.AddScoped<Billing.OnlinePaymentNotifications>();
+        services.AddScoped<Billing.OnlinePaymentReconciliation>();
         services.AddScoped<Billing.Contracts.IBillingSummary, Billing.BillingSummaryService>();
         services.AddScoped<IIdentityModule, IdentityModule>();
         services.AddScoped<EnrollmentModule>();

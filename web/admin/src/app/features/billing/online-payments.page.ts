@@ -21,7 +21,8 @@ const dateTimeFormatter = new Intl.DateTimeFormat(LOCALE, {
   timeStyle: 'short',
 });
 
-const STATUSES: OnlinePaymentStatus[] = ['Pending', 'Succeeded', 'Failed', 'Expired', 'Created'];
+/** Lifecycle order (DEC-342). */
+const STATUSES: OnlinePaymentStatus[] = ['Created', 'Pending', 'Succeeded', 'Failed', 'Expired'];
 
 /** The checkout link as an absolute URL, so it can be shared (the sandbox provider returns a relative one). */
 export function shareableCheckoutUrl(url: string, origin: string): string {
@@ -139,6 +140,14 @@ export function shareableCheckoutUrl(url: string, origin: string): string {
                     [class.badge-muted]="p.status === 'Expired'"
                     >{{ text.statuses[p.status] }}</span
                   >
+                  @if (p.overpaid) {
+                    <span class="badge badge-warning mt-1" data-testid="overpaid">{{
+                      text.overpaid
+                    }}</span>
+                    <span class="mt-1 block text-xs text-muted-foreground">{{
+                      text.overpaidHint
+                    }}</span>
+                  }
                   @if (p.failureCode) {
                     <span class="mt-1 block text-xs text-muted-foreground">{{
                       failure(p.failureCode)

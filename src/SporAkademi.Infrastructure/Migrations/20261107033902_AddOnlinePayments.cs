@@ -42,6 +42,7 @@ namespace SporAkademi.Infrastructure.Migrations
                     failure_code = table.Column<string>(type: "character varying(64)", maxLength: 64, nullable: true),
                     completed_at = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
                     payment_id = table.Column<Guid>(type: "uuid", nullable: true),
+                    overpaid = table.Column<bool>(type: "boolean", nullable: false),
                     created_at = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
                     created_by = table.Column<Guid>(type: "uuid", nullable: true),
                     updated_at = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
@@ -56,6 +57,7 @@ namespace SporAkademi.Infrastructure.Migrations
                     table.UniqueConstraint("ak_online_payments_tenant_id_id", x => new { x.tenant_id, x.id });
                     table.CheckConstraint("ck_online_payments_amount", "amount > 0");
                     table.CheckConstraint("ck_online_payments_checkout", "status IN ('Created', 'Failed', 'Expired') OR provider_token IS NOT NULL");
+                    table.CheckConstraint("ck_online_payments_overpaid", "NOT overpaid OR status = 'Succeeded'");
                     table.CheckConstraint("ck_online_payments_success", "(status = 'Succeeded') = (payment_id IS NOT NULL) AND (status <> 'Succeeded' OR provider_payment_id IS NOT NULL)");
                     table.ForeignKey(
                         name: "fk_online_payments_enrollment_tenant_id_enrollment_id_student_",
@@ -243,8 +245,8 @@ namespace SporAkademi.Infrastructure.Migrations
                         OLD.currency, OLD.provider, OLD.idempotency_key, OLD.request_hash, OLD.started_at) THEN
                         RAISE EXCEPTION 'an online payment''s due and amount never change' USING ERRCODE = 'restrict_violation';
                     END IF;
-                    IF OLD.status = 'Succeeded' AND (NEW.status, NEW.payment_id, NEW.provider_payment_id)
-                       IS DISTINCT FROM (OLD.status, OLD.payment_id, OLD.provider_payment_id) THEN
+                    IF OLD.status = 'Succeeded' AND (NEW.status, NEW.payment_id, NEW.provider_payment_id, NEW.overpaid)
+                       IS DISTINCT FROM (OLD.status, OLD.payment_id, OLD.provider_payment_id, OLD.overpaid) THEN
                         RAISE EXCEPTION 'a succeeded online payment never changes' USING ERRCODE = 'restrict_violation';
                     END IF;
                     RETURN NEW;

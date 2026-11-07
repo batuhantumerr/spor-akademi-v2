@@ -5578,6 +5578,16 @@
               }
             }
           },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
           "401": {
             "description": "Unauthorized",
             "content": {
@@ -7098,7 +7108,8 @@
           "checkoutExpiresAt",
           "completedAt",
           "failureCode",
-          "paymentId"
+          "paymentId",
+          "overpaid"
         ],
         "type": "object",
         "properties": {
@@ -7175,6 +7186,9 @@
               "string"
             ],
             "format": "uuid"
+          },
+          "overpaid": {
+            "type": "boolean"
           }
         }
       },

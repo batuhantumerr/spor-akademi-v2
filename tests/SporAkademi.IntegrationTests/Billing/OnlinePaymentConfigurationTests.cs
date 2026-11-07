@@ -68,6 +68,23 @@ public sealed class OnlinePaymentConfigurationTests(DatabaseFixture database) : 
         result.Succeeded.ShouldBe(valid, result.FailureMessage);
     }
 
+    [Theory]
+    [InlineData("Development", null, "Fake")]
+    [InlineData("Testing", "", "Fake")]
+    [InlineData("Staging", null, null)]
+    [InlineData("Demo", "", null)]
+    [InlineData("Production", null, null)]
+    [InlineData("Staging", "Fake", "Fake")]
+    [InlineData("Development", "None", null)]
+    public void The_fake_provider_is_the_default_only_in_development_and_testing(string environment, string? provider, string? expected)
+    {
+        var options = new PaymentOptions { Provider = provider };
+        var host = new FixedEnvironment(environment);
+
+        new PaymentOptionsValidator(host).Validate(null, options).Succeeded.ShouldBeTrue();
+        options.Resolve(host).ShouldBe(expected);
+    }
+
     [Fact]
     public void A_live_iyzico_url_is_refused()
     {

@@ -1734,6 +1734,7 @@ API'nin döndüğü tüm hata ve uyarı kodlarının kataloğu. Kurallar:
 | `Payment.FeeNotDefined` | BusinessRule | Bu grup için bu dönemde tanımlı bir aidat yok. | US-23 |
 | `Payment.AlreadyCancelled` | BusinessRule | Bu ödeme zaten iptal edilmiş. | US-23 |
 | `Payment.CancelReasonRequired` | Validation | İptal gerekçesi zorunludur. | US-23 |
+| `Payment.OnlinePaymentInProgress` | Conflict | Bu borç için açık bir online ödeme var. Sonuçlanmasını veya bağlantının süresinin dolmasını bekleyin. | P2-F1 |
 | `Payment.OnlineNotCancellable` | BusinessRule | Online ödemeler buradan iptal edilemez; iade ödeme sağlayıcısı üzerinden yapılır. | P2-F1 |
 | `OnlinePayment.NotFound` | NotFound | Online ödeme bulunamadı. | P2-F1 |
 | `OnlinePayment.NothingDue` | BusinessRule | Bu dönem için ödenecek borç yok. | P2-F1 |

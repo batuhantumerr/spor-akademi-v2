@@ -46,7 +46,7 @@ internal sealed class FakePaymentProvider(IOptions<PaymentOptions> options, Time
 
         return Task.FromResult(checkout.State switch
         {
-            FakeState.Succeeded => new ProviderPaymentState(ProviderPaymentOutcome.Succeeded, checkout.ConversationId, ChargeId(checkout), checkout.Amount, null),
+            FakeState.Succeeded => new ProviderPaymentState(ProviderPaymentOutcome.Succeeded, checkout.ConversationId, ChargeId(checkout), checkout.ReportedAmount ?? checkout.Amount, null),
             FakeState.Failed => new ProviderPaymentState(ProviderPaymentOutcome.Failed, checkout.ConversationId, null, null, "FakeDeclined"),
             _ => new ProviderPaymentState(ProviderPaymentOutcome.Pending, checkout.ConversationId, null, null, null),
         });
@@ -63,9 +63,17 @@ internal sealed class FakePaymentProvider(IOptions<PaymentOptions> options, Time
             return false;
         }
 
-        _checkouts.TryUpdate(token, checkout with { State = succeed ? FakeState.Succeeded : FakeState.Failed }, checkout with { State = FakeState.Pending });
+        if (checkout.State == FakeState.Pending)
+        {
+            _checkouts.TryUpdate(token, checkout with { State = succeed ? FakeState.Succeeded : FakeState.Failed }, checkout);
+        }
+
         return true;
     }
+
+    /// <summary>Test hook: the status query reports <paramref name="amount"/> as charged (a provider that disagrees with us).</summary>
+    public bool ReportPaidAmount(string token, Money amount) =>
+        _checkouts.TryGetValue(token, out var checkout) && _checkouts.TryUpdate(token, checkout with { ReportedAmount = amount }, checkout);
 
     /// <summary>The signed webhook iyzico would send for the checkout's current state.</summary>
     public (string Body, IReadOnlyDictionary<string, string> Headers)? Webhook(string token)
@@ -114,5 +122,5 @@ internal sealed class FakePaymentProvider(IOptions<PaymentOptions> options, Time
         Failed,
     }
 
-    private sealed record FakeCheckout(Guid ConversationId, Money Amount, FakeState State);
+    private sealed record FakeCheckout(Guid ConversationId, Money Amount, FakeState State, Money? ReportedAmount = null);
 }

@@ -67,6 +67,22 @@ public sealed class IyzicoProviderTests
         body.RootElement.GetProperty("buyer").GetProperty("name").GetString().ShouldBe("Sandbox");
     }
 
+    [Theory]
+    [InlineData("http://sandbox-cpp.iyzipay.com?token=tok-123")]
+    [InlineData("https://sandbox-cpp.iyzipay.com.example.test?token=tok-123")]
+    [InlineData("https://evil.example.test/iyzipay.com")]
+    [InlineData("https://sandbox-cpp.iyzipay.com:8443/?token=tok-123")]
+    [InlineData("/relative")]
+    public async Task A_payment_page_that_is_not_iyzicos_https_page_is_refused(string pageUrl)
+    {
+        var (provider, _) = Provider($$"""{"status":"success","token":"tok-123","paymentPageUrl":"{{pageUrl}}"}""");
+
+        var error = await Should.ThrowAsync<PaymentProviderException>(() => provider.OpenCheckoutAsync(
+            new CheckoutRequest(OnlinePaymentId, Guid.CreateVersion7(), Guid.CreateVersion7(), "2027-01", Money.Try(10m)), Ct));
+
+        error.Message.ShouldBe("UntrustedPaymentPage");
+    }
+
     [Fact]
     public async Task A_refused_initialize_is_a_provider_error_with_only_the_error_code()
     {

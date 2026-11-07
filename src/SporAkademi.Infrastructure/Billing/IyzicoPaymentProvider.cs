@@ -68,9 +68,15 @@ internal sealed class IyzicoPaymentProvider(IHttpClientFactory httpClients, IOpt
         var root = response.RootElement;
         var token = IyzicoProtocol.Text(root, "token");
         var pageUrl = IyzicoProtocol.Text(root, "paymentPageUrl");
-        if (!IsSuccess(root) || token.Length == 0 || !Uri.TryCreate(pageUrl, UriKind.Absolute, out _))
+        if (!IsSuccess(root) || token.Length == 0)
         {
             throw new PaymentProviderException(ErrorCode(root));
+        }
+
+        // The link is shared with the payer: it must be iyzico's own HTTPS page, never anything else the response says.
+        if (!IsIyzicoPage(pageUrl))
+        {
+            throw new PaymentProviderException("UntrustedPaymentPage");
         }
 
         return new CheckoutOpening(token, pageUrl, clock.GetUtcNow() + options.Value.CheckoutLifetime);
@@ -151,6 +157,13 @@ internal sealed class IyzicoPaymentProvider(IHttpClientFactory httpClients, IOpt
             throw new PaymentProviderException(exception.GetType().Name, exception);
         }
     }
+
+    internal static bool IsIyzicoPage(string url) =>
+        Uri.TryCreate(url, UriKind.Absolute, out var page)
+        && page.Scheme == Uri.UriSchemeHttps
+        && page.IsDefaultPort
+        && (string.Equals(page.Host, "iyzipay.com", StringComparison.OrdinalIgnoreCase)
+            || page.Host.EndsWith(".iyzipay.com", StringComparison.OrdinalIgnoreCase));
 
     private static bool IsSuccess(JsonElement root) =>
         root.ValueKind == JsonValueKind.Object && string.Equals(IyzicoProtocol.Text(root, "status"), "success", StringComparison.OrdinalIgnoreCase);

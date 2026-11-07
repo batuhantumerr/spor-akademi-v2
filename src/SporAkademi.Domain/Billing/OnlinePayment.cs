@@ -26,7 +26,8 @@ public enum OnlinePaymentStatus
 }
 
 /// <summary>A provider's confirmed charge, as the provider's own status query reports it (never a webhook's claim).</summary>
-public sealed record ProviderCharge(string ProviderPaymentId, Money Amount, DateTimeOffset ConfirmedAt);
+/// <param name="PaidOn">The payment date in the school's time zone (the recorded payment's <c>PaidOn</c>).</param>
+public sealed record ProviderCharge(string ProviderPaymentId, Money Amount, DateTimeOffset ConfirmedAt, DateOnly PaidOn);
 
 public sealed record OnlinePaymentSucceeded(SchoolId TenantId, OnlinePaymentId OnlinePaymentId, PaymentId PaymentId) : IDomainEvent;
 
@@ -128,6 +129,12 @@ public sealed class OnlinePayment : AggregateRoot<OnlinePaymentId>, ITenantScope
     /// <summary>The payment recorded on success.</summary>
     public PaymentId? PaymentId { get; private set; }
 
+    /// <summary>
+    /// The success brought the due's recorded total above its fee (e.g. a late success after a cash payment, DEC-342);
+    /// the money is kept and the refund is handled outside the system for now.
+    /// </summary>
+    public bool Overpaid { get; private set; }
+
     public bool IsOpen => Status is OnlinePaymentStatus.Created or OnlinePaymentStatus.Pending;
 
     /// <summary>Starts paying <paramref name="remaining"/> of a due; nothing is charged yet.</summary>
@@ -207,7 +214,7 @@ public sealed class OnlinePayment : AggregateRoot<OnlinePaymentId>, ITenantScope
             new PaidEnrollment(EnrollmentId, StudentId, GroupId, EnrollmentStartDate, null),
             Period,
             Amount,
-            DateOnly.FromDateTime(charge.ConfirmedAt.UtcDateTime),
+            charge.PaidOn,
             Id);
 
         Status = OnlinePaymentStatus.Succeeded;
@@ -231,6 +238,31 @@ public sealed class OnlinePayment : AggregateRoot<OnlinePaymentId>, ITenantScope
 
         Status = OnlinePaymentStatus.Failed;
         FailureCode = failureCode.Length > FailureCodeMaxLength ? failureCode[..FailureCodeMaxLength] : failureCode;
+        CompletedAt = now;
+        return true;
+    }
+
+    /// <summary>Marks a succeeded payment whose credit exceeded the due's fee.</summary>
+    public void FlagOverpaid()
+    {
+        if (Status != OnlinePaymentStatus.Succeeded)
+        {
+            throw new InvalidOperationException("Only a succeeded online payment can be overpaid.");
+        }
+
+        Overpaid = true;
+    }
+
+    /// <summary>An open attempt whose checkout lifetime passed becomes <see cref="OnlinePaymentStatus.Expired"/>.</summary>
+    /// <returns><c>true</c> when the status changed.</returns>
+    public bool Expire(DateTimeOffset now, TimeSpan createdLifetime)
+    {
+        if (!HasExpired(now, createdLifetime))
+        {
+            return false;
+        }
+
+        Status = OnlinePaymentStatus.Expired;
         CompletedAt = now;
         return true;
     }

@@ -23,6 +23,9 @@ public sealed class JobsOptions
 
     public string RefreshTokenCleanupCron { get; set; } = "30 3 * * *";
 
+    /// <summary>Online payment reconciliation (P2-F1, DEC-343): re-queries open attempts and expires old links.</summary>
+    public string OnlinePaymentReconcileCron { get; set; } = "*/5 * * * *";
+
     /// <summary>One outbox run delivers batches until one is not full, at most this many.</summary>
     public int MaxOutboxBatchesPerRun { get; set; } = 50;
 
@@ -38,6 +41,7 @@ public sealed class JobsOptions
         && IsCron(OutboxCron)
         && IsCron(OutboxCleanupCron)
         && IsCron(RefreshTokenCleanupCron)
+        && IsCron(OnlinePaymentReconcileCron)
         && MaxOutboxBatchesPerRun is > 0 and <= 10_000
         && HeartbeatWarning > TimeSpan.Zero
         && Dashboard.SessionLifetime > TimeSpan.Zero

@@ -7,8 +7,9 @@ using SporAkademi.Application.Billing;
 namespace SporAkademi.Infrastructure.Billing;
 
 /// <summary>
-/// Configuration section <c>Payments</c> (DEC-340). Everything is optional: without it the Fake provider is used outside
-/// Production and online payment is disabled in Production. No key is read from <c>.env</c>; iyzico keys come from the
+/// Configuration section <c>Payments</c> (DEC-340). Everything is optional: without it the Fake provider is used only in
+/// Development and Testing; every other environment (Staging, Production, ...) has online payment disabled unless a
+/// provider is configured (Staging may opt into Fake explicitly). No key is read from <c>.env</c>; iyzico keys come from the
 /// environment (<c>Payments__Iyzico__ApiKey</c>, <c>Payments__Iyzico__SecretKey</c>) or user secrets.
 /// </summary>
 internal sealed class PaymentOptions
@@ -18,7 +19,7 @@ internal sealed class PaymentOptions
     public const string IyzicoName = "Iyzico";
     public const string NoneName = "None";
 
-    /// <summary><c>Fake</c>, <c>Iyzico</c> or <c>None</c>; empty picks iyzico when its keys are set, otherwise Fake outside Production.</summary>
+    /// <summary><c>Fake</c>, <c>Iyzico</c> or <c>None</c>; empty picks iyzico when its keys are set, otherwise Fake in Development and Testing only.</summary>
     public string? Provider { get; set; }
 
     /// <summary>How long a checkout stays payable (and an attempt without a checkout blocks a new one).</summary>
@@ -30,27 +31,40 @@ internal sealed class PaymentOptions
 
     internal bool IyzicoConfigured => !string.IsNullOrWhiteSpace(Iyzico.ApiKey) && !string.IsNullOrWhiteSpace(Iyzico.SecretKey);
 
+    /// <summary>Open attempts older than this are re-queried at the provider by the reconciliation job.</summary>
+    public TimeSpan ReconcileAfter { get; set; } = TimeSpan.FromMinutes(10);
+
+    /// <summary>Environments where the Fake provider is the default (DEC-340); elsewhere it must be chosen explicitly.</summary>
+    internal static bool FakeByDefault(IHostEnvironment environment) =>
+        environment.IsDevelopment() || environment.IsEnvironment("Testing");
+
     /// <summary>The provider in effect, or <c>null</c> for disabled.</summary>
-    internal string? Resolve(bool production) => Provider?.Trim() switch
+    internal string? Resolve(IHostEnvironment environment) => Provider?.Trim() switch
     {
-        null or "" => IyzicoConfigured ? IyzicoName : production ? null : FakeName,
+        null or "" => IyzicoConfigured ? IyzicoName : FakeByDefault(environment) ? FakeName : null,
         var name when string.Equals(name, FakeName, StringComparison.OrdinalIgnoreCase) => FakeName,
         var name when string.Equals(name, IyzicoName, StringComparison.OrdinalIgnoreCase) => IyzicoName,
         var name when string.Equals(name, NoneName, StringComparison.OrdinalIgnoreCase) => null,
         _ => throw new InvalidOperationException("Payments:Provider must be Fake, Iyzico or None."),
     };
 
-    internal string? Validate(bool production)
+    internal string? Validate(IHostEnvironment environment)
     {
         if (CheckoutLifetime <= TimeSpan.Zero || CheckoutLifetime > TimeSpan.FromDays(1))
         {
             return "Payments:CheckoutLifetime must be between zero and one day.";
         }
 
+        if (ReconcileAfter <= TimeSpan.Zero || ReconcileAfter > TimeSpan.FromDays(1))
+        {
+            return "Payments:ReconcileAfter must be between zero and one day.";
+        }
+
+        var production = environment.IsProduction();
         string? active;
         try
         {
-            active = Resolve(production);
+            active = Resolve(environment);
         }
         catch (InvalidOperationException exception)
         {
@@ -119,7 +133,7 @@ internal sealed class IyzicoOptions
 internal sealed class PaymentProviders(IOptions<PaymentOptions> options, IHostEnvironment environment, IServiceProvider services) : IPaymentProviders
 {
     private readonly Lazy<IPaymentProvider?> _active = new(() =>
-        options.Value.Resolve(environment.IsProduction()) switch
+        options.Value.Resolve(environment) switch
         {
             PaymentOptions.FakeName => services.GetRequiredService<FakePaymentProvider>(),
             PaymentOptions.IyzicoName => services.GetRequiredService<IyzicoPaymentProvider>(),
@@ -147,7 +161,7 @@ internal sealed class PaymentOptionsValidator(IHostEnvironment environment) : IV
     public ValidateOptionsResult Validate(string? name, PaymentOptions options)
     {
         ArgumentNullException.ThrowIfNull(options);
-        return options.Validate(environment.IsProduction()) is { } failure ? ValidateOptionsResult.Fail(failure) : ValidateOptionsResult.Success;
+        return options.Validate(environment) is { } failure ? ValidateOptionsResult.Fail(failure) : ValidateOptionsResult.Success;
     }
 }
 

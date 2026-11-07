@@ -54,6 +54,7 @@ const attempt = (overrides: Partial<OnlinePaymentDto> = {}): OnlinePaymentDto =>
   completedAt: null,
   failureCode: null,
   paymentId: null,
+  overpaid: false,
   ...overrides,
 });
 
@@ -119,10 +120,17 @@ describe('OnlinePaymentsPage', () => {
           checkoutUrl: null,
           failureCode: 'FakeDeclined',
         }),
+        attempt({
+          id: 'op2',
+          status: 'Succeeded',
+          checkoutUrl: null,
+          paymentId: 'p2',
+          overpaid: true,
+        }),
       ],
       page: 1,
       pageSize: 25,
-      totalCount: 2,
+      totalCount: 3,
       totalPages: 1,
     });
     await settle(fixture);
@@ -137,6 +145,15 @@ describe('OnlinePaymentsPage', () => {
     expect(failed.textContent).toContain(ui.onlinePayments.statuses['Failed']);
     expect(failed.textContent).toContain('FakeDeclined');
     expect(failed.textContent).not.toContain(ui.onlinePayments.copyLink);
+    const overpaid = root.querySelector('[data-testid="online-op2"]') as HTMLElement;
+    expect(overpaid.querySelector('[data-testid="overpaid"]')?.textContent).toContain(
+      ui.onlinePayments.overpaid,
+    );
+    expect(pending.querySelector('[data-testid="overpaid"]')).toBeNull();
+    const options = [
+      ...(root.querySelector('#online-filter-status') as HTMLSelectElement).options,
+    ].map((o) => o.value);
+    expect(options).toEqual(['', 'Created', 'Pending', 'Succeeded', 'Failed', 'Expired']);
     backend.verify();
   });
 });

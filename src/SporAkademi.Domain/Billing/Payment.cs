@@ -180,6 +180,7 @@ public static class PaymentErrors
     public static readonly Error EnrollmentNotActiveInPeriod = Error.BusinessRule("Payment.EnrollmentNotActiveInPeriod", "The enrollment was not active in the period.");
     public static readonly Error FeeNotDefined = Error.BusinessRule("Payment.FeeNotDefined", "The group has no fee for the period.");
     public static readonly Error AlreadyCancelled = Error.BusinessRule("Payment.AlreadyCancelled", "The payment is already cancelled.");
+    public static readonly Error OnlinePaymentInProgress = Error.Conflict("Payment.OnlinePaymentInProgress", "An online payment of the due is in progress.");
     public static readonly Error OnlineNotCancellable = Error.BusinessRule("Payment.OnlineNotCancellable", "An online payment cannot be cancelled here.");
     public static readonly Error CancelReasonRequired = Error.Validation("Payment.CancelReasonRequired", "A cancel reason is required.");
 }

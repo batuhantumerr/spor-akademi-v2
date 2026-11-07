@@ -13,7 +13,7 @@ using SporAkademi.Infrastructure.Persistence;
 namespace SporAkademi.Infrastructure.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    [Migration("20261107031420_AddOnlinePayments")]
+    [Migration("20261107033902_AddOnlinePayments")]
     partial class AddOnlinePayments
     {
         /// <inheritdoc />
@@ -327,6 +327,10 @@ namespace SporAkademi.Infrastructure.Migrations
                         .HasColumnType("character varying(100)")
                         .HasColumnName("idempotency_key");
 
+                    b.Property<bool>("Overpaid")
+                        .HasColumnType("boolean")
+                        .HasColumnName("overpaid");
+
                     b.Property<Guid?>("PaymentId")
                         .HasColumnType("uuid")
                         .HasColumnName("payment_id");
@@ -449,6 +453,8 @@ namespace SporAkademi.Infrastructure.Migrations
                             t.HasCheckConstraint("ck_online_payments_amount", "amount > 0");
 
                             t.HasCheckConstraint("ck_online_payments_checkout", "status IN ('Created', 'Failed', 'Expired') OR provider_token IS NOT NULL");
+
+                            t.HasCheckConstraint("ck_online_payments_overpaid", "NOT overpaid OR status = 'Succeeded'");
 
                             t.HasCheckConstraint("ck_online_payments_success", "(status = 'Succeeded') = (payment_id IS NOT NULL) AND (status <> 'Succeeded' OR provider_payment_id IS NOT NULL)");
                         });

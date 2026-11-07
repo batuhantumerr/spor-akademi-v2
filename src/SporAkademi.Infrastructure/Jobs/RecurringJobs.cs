@@ -3,8 +3,10 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using SporAkademi.Application.Billing;
 using SporAkademi.Domain.Identity;
 using SporAkademi.Domain.Tenancy;
+using SporAkademi.Infrastructure.Billing;
 using SporAkademi.Infrastructure.Outbox;
 using SporAkademi.Infrastructure.Persistence;
 
@@ -33,6 +35,7 @@ internal static class RecurringJobs
         }
 
         manager.AddOrUpdate<RefreshTokenCleanupJob>(RefreshTokenCleanupJob.JobId, job => job.RunAsync(CancellationToken.None), jobs.RefreshTokenCleanupCron, utc);
+        manager.AddOrUpdate<OnlinePaymentReconcileJob>(OnlinePaymentReconcileJob.JobId, job => job.RunAsync(CancellationToken.None), jobs.OnlinePaymentReconcileCron, utc);
     }
 }
 
@@ -159,4 +162,44 @@ internal sealed partial class RefreshTokenCleanupJob(
 
     [LoggerMessage(Level = LogLevel.Information, Message = "Deleted {Count} refresh tokens of ended sessions")]
     private static partial void LogDeleted(ILogger logger, int count);
+}
+
+/// <summary>
+/// P2-F1 (DEC-343): per school (DEC-334), open online payments older than <c>Payments:ReconcileAfter</c> are re-queried at
+/// the provider (a lost webhook still credits the due once) and open attempts past their checkout lifetime become
+/// Expired. Does nothing when online payment is disabled.
+/// </summary>
+internal sealed partial class OnlinePaymentReconcileJob(
+    TenantJobRunner runner,
+    IPaymentProviders providers,
+    IOptions<PaymentOptions> payments,
+    ILogger<OnlinePaymentReconcileJob> logger)
+{
+    public const string JobId = "billing-online-payment-reconcile";
+
+    /// <returns>The number of attempts that changed.</returns>
+    [AutomaticRetry(Attempts = 0)]
+    [JobDisplayName("Billing: reconcile open online payments")]
+    public async Task<int> RunAsync(CancellationToken cancellationToken)
+    {
+        if (providers.Active is null)
+        {
+            return 0;
+        }
+
+        var changed = 0;
+        await runner.ForEachSchoolAsync(
+            JobId,
+            async (services, _, ct) => changed += await services.GetRequiredService<OnlinePaymentReconciliation>().ReconcileAsync(payments.Value.ReconcileAfter, ct),
+            cancellationToken);
+        if (changed > 0)
+        {
+            LogReconciled(logger, changed);
+        }
+
+        return changed;
+    }
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Reconciled {Count} online payments")]
+    private static partial void LogReconciled(ILogger logger, int count);
 }

@@ -1,5 +1,6 @@
 using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.Mvc;
+using SporAkademi.Api.Endpoints.Students;
 using SporAkademi.Api.Errors;
 using SporAkademi.Application.Abstractions;
 using SporAkademi.Application.Abstractions.Authentication;
@@ -35,12 +36,34 @@ internal static class OnlinePaymentEndpoints
     /// <summary>The admin's public result page (DEC-348); it shows only the status from the query string.</summary>
     public const string ResultPage = "/odeme-sonucu";
 
-    public const string RateLimitPolicy = "payment-notifications";
+    /// <summary>Provider webhooks: a provider sends bursts from few addresses, so its bucket is larger (DEC-344).</summary>
+    public const string WebhookRateLimitPolicy = "payment-webhooks";
 
+    /// <summary>Browser returns and the sandbox page: one payer at a time.</summary>
+    public const string BrowserRateLimitPolicy = "payment-callbacks";
+
+    public const int WebhookPermitsPerMinute = 600;
+    public const int BrowserPermitsPerMinute = 60;
+
+    /// <summary>A hosted-checkout webhook is a few hundred bytes; larger bodies are refused before they are read.</summary>
+    public const long WebhookMaxBodyBytes = 16_384;
+
+    /// <summary>
+    /// Partitioned by client IP and path. Behind a reverse proxy the forwarded client address must be applied first,
+    /// otherwise every caller shares the proxy's bucket: <c>UseForwardedHeaders</c> with the proxy as the only known
+    /// proxy is a Deploy-block item (docs/guvenlik-kontrol-listesi.md), not configured here.
+    /// </summary>
     public static IServiceCollection AddPaymentNotificationRateLimiting(this IServiceCollection services) =>
-        services.AddRateLimiter(options => options.AddPolicy(RateLimitPolicy, context => RateLimitPartition.GetFixedWindowLimiter(
+        services.AddRateLimiter(options =>
+        {
+            options.AddPolicy(WebhookRateLimitPolicy, context => Partition(context, WebhookPermitsPerMinute));
+            options.AddPolicy(BrowserRateLimitPolicy, context => Partition(context, BrowserPermitsPerMinute));
+        });
+
+    private static RateLimitPartition<string> Partition(HttpContext context, int permitsPerMinute) =>
+        RateLimitPartition.GetFixedWindowLimiter(
             $"{context.Connection.RemoteIpAddress?.ToString() ?? "unknown"} {context.Request.Path.Value}",
-            _ => new FixedWindowRateLimiterOptions { PermitLimit = 60, Window = TimeSpan.FromMinutes(1), QueueLimit = 0 })));
+            _ => new FixedWindowRateLimiterOptions { PermitLimit = permitsPerMinute, Window = TimeSpan.FromMinutes(1), QueueLimit = 0 });
 
     public static IEndpointRouteBuilder MapOnlinePaymentEndpoints(this IEndpointRouteBuilder app)
     {
@@ -52,12 +75,21 @@ internal static class OnlinePaymentEndpoints
             .Produces<OnlinePaymentDto>()
             .ProducesProblems(400, 404, 409, 422);
 
-        var provider = app.MapGroup("/api/v1").WithTags("Payment provider").AllowAnonymous().RequireRateLimiting(RateLimitPolicy);
+        var provider = app.MapGroup("/api/v1").WithTags("Payment provider").AllowAnonymous();
         provider.MapPost("/payment-webhooks", Webhook)
+            .RequireRateLimiting(WebhookRateLimitPolicy)
+            .WithMetadata(new RequestSizeLimit(WebhookMaxBodyBytes))
             .Produces<NotificationAcknowledgement>()
-            .ProducesProblems(401, 404, 422, 503);
-        provider.MapPost("/payment-callbacks", Callback).Produces(StatusCodes.Status303SeeOther).DisableAntiforgery();
-        provider.MapPost("/sandbox-checkout/complete", CompleteSandbox).Produces<SandboxCompleteResponse>().ProducesProblems(400, 404);
+            .ProducesProblems(400, 401, 404, 422, 503);
+        provider.MapPost("/payment-callbacks", Callback)
+            .RequireRateLimiting(BrowserRateLimitPolicy)
+            .WithMetadata(new RequestSizeLimit(WebhookMaxBodyBytes))
+            .Produces(StatusCodes.Status303SeeOther)
+            .DisableAntiforgery();
+        provider.MapPost("/sandbox-checkout/complete", CompleteSandbox)
+            .RequireRateLimiting(BrowserRateLimitPolicy)
+            .Produces<SandboxCompleteResponse>()
+            .ProducesProblems(400, 404);
 
         return app;
     }

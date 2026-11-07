@@ -28,7 +28,7 @@ public sealed class OnlinePaymentTests
         return payment;
     }
 
-    private static ProviderCharge Charge(string id = "pay-1", decimal amount = 1000m) => new(id, Money.Try(amount), Now.AddMinutes(5));
+    private static ProviderCharge Charge(string id = "pay-1", decimal amount = 1000m) => new(id, Money.Try(amount), Now.AddMinutes(5), new DateOnly(2027, 1, 14));
 
     [Fact]
     public void A_started_attempt_is_created_and_opens_once()

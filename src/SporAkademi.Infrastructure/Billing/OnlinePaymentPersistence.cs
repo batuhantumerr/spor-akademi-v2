@@ -28,6 +28,7 @@ internal sealed class OnlinePaymentConfiguration : IEntityTypeConfiguration<Onli
             t.HasCheckConstraint(
                 "ck_online_payments_success",
                 "(status = 'Succeeded') = (payment_id IS NOT NULL) AND (status <> 'Succeeded' OR provider_payment_id IS NOT NULL)");
+            t.HasCheckConstraint("ck_online_payments_overpaid", "NOT overpaid OR status = 'Succeeded'");
             t.HasCheckConstraint("ck_online_payments_checkout", "status IN ('Created', 'Failed', 'Expired') OR provider_token IS NOT NULL");
         });
         builder.HasKey(p => p.Id);
@@ -139,6 +140,13 @@ internal sealed class OnlinePaymentRepository(AppDbContext db) : IOnlinePaymentR
             .Skip(page.Skip).Take(page.PageSize).ToListAsync(cancellationToken);
         return new PagedResult<OnlinePayment>(items, page.Page, page.PageSize, total);
     }
+
+    public async Task<IReadOnlyList<OnlinePayment>> ListOpenStartedBeforeAsync(DateTimeOffset startedBefore, int max, CancellationToken cancellationToken) =>
+        await db.Set<OnlinePayment>().AsNoTracking()
+            .Where(p => (p.Status == OnlinePaymentStatus.Created || p.Status == OnlinePaymentStatus.Pending) && p.StartedAt < startedBefore)
+            .OrderBy(p => p.StartedAt).ThenBy(p => p.Id)
+            .Take(max)
+            .ToListAsync(cancellationToken);
 
     public Task<bool> NotificationExistsAsync(string provider, string eventKey, CancellationToken cancellationToken) =>
         db.Set<PaymentNotification>().AnyAsync(n => n.Provider == provider && n.EventKey == eventKey, cancellationToken);

@@ -92,7 +92,13 @@ public sealed class OnlinePaymentWebhookTests(DatabaseFixture database) : Online
         var responses = await Task.WhenAll(Enumerable.Range(0, 6).Select(_ => StartOnlineAsync(enrollment, "2027-01", "ayni-anahtar-123")));
 
         responses.Count(r => r.StatusCode == HttpStatusCode.Created).ShouldBe(1);
-        responses.ShouldAllBe(r => r.StatusCode == HttpStatusCode.Created || r.StatusCode == HttpStatusCode.OK || r.StatusCode == HttpStatusCode.Conflict);
+        // DEC-341: every loser is a replay of the winner, never "in progress".
+        foreach (var loser in responses.Where(r => r.StatusCode != HttpStatusCode.Created))
+        {
+            loser.StatusCode.ShouldBe(HttpStatusCode.OK, await loser.Content.ReadAsStringAsync(Ct));
+            loser.Headers.GetValues("Idempotent-Replayed").ShouldBe(["true"]);
+        }
+
         var ids = new HashSet<Guid>();
         foreach (var response in responses.Where(r => r.IsSuccessStatusCode))
         {
@@ -101,6 +107,58 @@ public sealed class OnlinePaymentWebhookTests(DatabaseFixture database) : Online
 
         ids.Count.ShouldBe(1);
         (await CountAsync("SELECT count(*) FROM billing.online_payments")).ShouldBe(1);
+    }
+
+    [Fact]
+    public async Task A_webhook_received_while_the_provider_still_reports_pending_is_applied_when_delivered_again()
+    {
+        var (_, _, enrollment) = await EnrolledAsync();
+        var started = await StartOnlineOkAsync(enrollment);
+        var token = TokenOf(started);
+        var webhook = new HostedWebhook(FakePaymentProvider.EventType, "fp-early", token, IdOf(started).ToString(), "SUCCESS");
+        var headers = new Dictionary<string, string>
+        {
+            [IyzicoProtocol.SignatureHeader] = IyzicoProtocol.WebhookSignature(new FakeProviderOptions().SigningKey, webhook),
+        };
+
+        // The provider has not settled the payment yet: nothing is applied and the delivery is not consumed.
+        var early = await WebhookAsync(webhook.ToJson(), headers);
+        (await BodyOf(early)).GetProperty("outcome").GetString().ShouldBe("Pending");
+        (await CountAsync("SELECT count(*) FROM billing.payment_notifications")).ShouldBe(0);
+
+        Fake.Complete(token, succeed: true).ShouldBeTrue();
+        var retried = await WebhookAsync(webhook.ToJson(), headers);
+
+        (await BodyOf(retried)).GetProperty("outcome").GetString().ShouldBe("Applied");
+        (await OnlinePaymentsRecordedAsync()).ShouldBe(1);
+        (await BodyOf(await WebhookAsync(webhook.ToJson(), headers))).GetProperty("outcome").GetString().ShouldBe("Unchanged");
+    }
+
+    [Fact]
+    public async Task A_charge_whose_amount_differs_from_the_attempt_is_rejected_and_not_credited()
+    {
+        var (id, token) = await PaidButNotAppliedAsync();
+        Fake.ReportPaidAmount(token, SporAkademi.Domain.SharedKernel.Money.Try(999m)).ShouldBeTrue();
+        var (body, headers) = FakeWebhook(token);
+
+        var response = await WebhookAsync(body, headers);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.UnprocessableEntity);
+        (await CodeOf(response)).ShouldBe("OnlinePayment.ProviderMismatch");
+        (await OnlinePaymentAsync(id)).GetProperty("status").GetString().ShouldBe("Pending");
+        (await OnlinePaymentsRecordedAsync()).ShouldBe(0);
+        (await CountAsync("SELECT count(*) FROM billing.payment_notifications")).ShouldBe(0);
+    }
+
+    [Fact]
+    public async Task A_webhook_body_over_16_kb_is_refused_before_it_is_read()
+    {
+        var body = "{\"token\":\"" + new string('a', 20_000) + "\"}";
+
+        var response = await WebhookAsync(body, new Dictionary<string, string> { [IyzicoProtocol.SignatureHeader] = "00" });
+
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        (await CodeOf(response)).ShouldBe("Request.TooLarge");
     }
 
     [Fact]

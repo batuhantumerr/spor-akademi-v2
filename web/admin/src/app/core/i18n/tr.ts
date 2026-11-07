@@ -102,6 +102,8 @@ export const errorMessages: Readonly<Record<string, string>> = {
   'Payment.FeeNotDefined': 'Bu grup için bu dönemde tanımlı bir aidat yok.',
   'Payment.AlreadyCancelled': 'Bu ödeme zaten iptal edilmiş.',
   'Payment.CancelReasonRequired': 'İptal gerekçesi zorunludur.',
+  'Payment.OnlinePaymentInProgress':
+    'Bu borç için açık bir online ödeme var. Sonuçlanmasını veya bağlantının süresinin dolmasını bekleyin.',
   'Payment.OnlineNotCancellable':
     'Online ödemeler buradan iptal edilemez; iade ödeme sağlayıcısı üzerinden yapılır.',
   'OnlinePayment.NotFound': 'Online ödeme bulunamadı.',
@@ -551,6 +553,8 @@ export const ui = {
       Expired: 'Süresi doldu',
     } as Record<string, string>,
     failure: 'Neden: {code}',
+    overpaid: 'Fazla ödeme',
+    overpaidHint: 'Bu dönem başka bir ödemeyle de ödenmiş; fazlası elle iade edilmeli.',
     copyLink: 'Bağlantıyı kopyala',
     copyLinkLabel: 'Ödeme bağlantısını kopyala: {student}, {period}',
     linkCopied: 'Ödeme bağlantısı kopyalandı.',
