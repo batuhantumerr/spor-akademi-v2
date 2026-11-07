@@ -103,6 +103,7 @@ public static class DependencyInjection
         services.AddScoped<IStudentDirectory, StudentDirectory>();
         services.AddScoped<IStudentRepository, StudentRepository>();
         services.AddScoped<IGuardianRepository, GuardianRepository>();
+        services.AddScoped<IAnonymizationRunRepository, AnonymizationRunRepository>();
 
         services.AddOutbox(configuration);
         services.AddJobs();

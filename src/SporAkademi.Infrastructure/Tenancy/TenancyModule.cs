@@ -21,6 +21,12 @@ internal sealed class TenancyModule(AppDbContext dbContext, TimeProvider timePro
                 ?? throw new InvalidOperationException("The school of a signed-in user must exist."),
             timeProvider);
 
+    public async Task<RetentionPolicy?> RetentionPolicyAsync(SchoolId schoolId, CancellationToken cancellationToken) =>
+        (await dbContext.Set<School>().AsNoTracking()
+            .Where(s => s.Id == schoolId)
+            .Select(s => new { s.RetentionPolicy })
+            .SingleOrDefaultAsync(cancellationToken))?.RetentionPolicy;
+
     /// <summary>Cached per school (DEC-311): read on almost every request that needs "today", and a saved change to the school invalidates it.</summary>
     public async Task<string?> TimeZoneAsync(SchoolId schoolId, CancellationToken cancellationToken) =>
         await cache.GetOrCreateAsync(

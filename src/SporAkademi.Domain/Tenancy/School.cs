@@ -76,6 +76,22 @@ public sealed class School : AggregateRoot<SchoolId>
         return Result.Success(new School(EntityId.New<SchoolId>(), trimmedName, slug, timeZone, retentionPolicy));
     }
 
+    /// <summary>
+    /// The School Admin's setting (P2-F5, DEC-361): only the personal data period changes; the payment period is a
+    /// legal minimum and stays as it is.
+    /// </summary>
+    public Result ChangePersonalDataRetention(int personalDataMonths)
+    {
+        var policy = RetentionPolicy.Create(personalDataMonths, RetentionPolicy.PaymentYears);
+        if (policy.IsFailure)
+        {
+            return Result.Failure(policy.Error);
+        }
+
+        RetentionPolicy = policy.Value;
+        return Result.Success();
+    }
+
     /// <summary>Today's date in the school's time zone.</summary>
     public DateOnly Today(TimeProvider timeProvider) => DateOnly.FromDateTime(LocalNow(timeProvider));
 

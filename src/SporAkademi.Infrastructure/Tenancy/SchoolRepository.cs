@@ -17,6 +17,28 @@ internal sealed class SchoolRepository(AppDbContext dbContext) : ISchoolReposito
     public Task<SchoolDto?> FindDtoAsync(SchoolId id, CancellationToken cancellationToken) =>
         Project(dbContext.Set<School>().Where(s => s.Id == id)).SingleOrDefaultAsync(cancellationToken);
 
+    public Task<School?> GetAsync(SchoolId id, CancellationToken cancellationToken) =>
+        dbContext.Set<School>().SingleOrDefaultAsync(s => s.Id == id, cancellationToken);
+
+    public void ExpectVersion(School school, uint version)
+    {
+        var entry = dbContext.Entry(school);
+        entry.Property<uint>(ConcurrencyToken.PropertyName).OriginalValue = version;
+        // Always issue the version-checked UPDATE, so an unchanged value with a stale version still conflicts.
+        entry.State = EntityState.Modified;
+    }
+
+    public Task<RetentionPolicyDto?> FindRetentionPolicyAsync(SchoolId id, CancellationToken cancellationToken) =>
+        dbContext.Set<School>().AsNoTracking()
+            .Where(s => s.Id == id)
+            .Select(s => new RetentionPolicyDto(
+                s.RetentionPolicy.PersonalDataMonths,
+                s.RetentionPolicy.PaymentYears,
+                RetentionPolicy.MinPersonalDataMonths,
+                RetentionPolicy.MaxPersonalDataMonths,
+                EF.Property<uint>(s, ConcurrencyToken.PropertyName)))
+            .SingleOrDefaultAsync(cancellationToken);
+
     public async Task<PagedResult<SchoolDto>> ListAsync(PageRequest page, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(page);

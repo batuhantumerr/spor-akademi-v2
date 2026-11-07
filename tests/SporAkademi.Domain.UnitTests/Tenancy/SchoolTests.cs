@@ -48,8 +48,36 @@ public sealed class SchoolTests
     [InlineData(0, 10)]
     [InlineData(24, 0)]
     [InlineData(-1, 10)]
-    public void Retention_periods_must_be_positive(int months, int years)
+    [InlineData(5, 10)]
+    [InlineData(121, 10)]
+    [InlineData(24, 51)]
+    public void Retention_periods_must_be_within_bounds(int months, int years)
     {
         RetentionPolicy.Create(months, years).Error.ShouldBe(RetentionPolicy.Invalid);
+    }
+
+    [Theory]
+    [Trait("Story", "P2-F5")]
+    [InlineData("2027-01-14", 24, "2025-01-14")]
+    [InlineData("2027-08-31", 6, "2027-02-28")] // clamped to the month's end, so the period never ends early
+    [InlineData("2028-08-31", 6, "2028-02-29")]
+    public void The_anonymization_cutoff_is_today_minus_the_retention_months(string today, int months, string cutoff)
+    {
+        var policy = RetentionPolicy.Create(months, 10).Value;
+
+        policy.AnonymizationCutoff(DateOnly.Parse(today, System.Globalization.CultureInfo.InvariantCulture))
+            .ShouldBe(DateOnly.Parse(cutoff, System.Globalization.CultureInfo.InvariantCulture));
+    }
+
+    [Fact]
+    [Trait("Story", "P2-F5")]
+    public void Changing_the_personal_data_period_keeps_the_payment_period()
+    {
+        var school = School.Create("Okul", ValidSlug, "Europe/Istanbul", RetentionPolicy.Default).Value;
+
+        school.ChangePersonalDataRetention(36).IsSuccess.ShouldBeTrue();
+        school.RetentionPolicy.ShouldBe(RetentionPolicy.Create(36, 10).Value);
+        school.ChangePersonalDataRetention(3).Error.ShouldBe(RetentionPolicy.Invalid);
+        school.RetentionPolicy.PersonalDataMonths.ShouldBe(36);
     }
 }

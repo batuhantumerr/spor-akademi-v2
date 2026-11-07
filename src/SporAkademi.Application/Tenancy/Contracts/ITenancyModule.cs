@@ -16,4 +16,7 @@ public interface ITenancyModule
 
     /// <summary>The school's IANA time zone (e.g. <c>Europe/Istanbul</c>), or null for an unknown school.</summary>
     Task<string?> TimeZoneAsync(SchoolId schoolId, CancellationToken cancellationToken);
+
+    /// <summary>The school's retention policy (DEC-008), or null for an unknown school. Not cached: the anonymization job reads it once a day.</summary>
+    Task<RetentionPolicy?> RetentionPolicyAsync(SchoolId schoolId, CancellationToken cancellationToken);
 }

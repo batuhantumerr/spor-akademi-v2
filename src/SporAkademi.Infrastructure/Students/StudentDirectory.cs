@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using SporAkademi.Application.Students.Contracts;
+using SporAkademi.Domain.SharedKernel;
 using SporAkademi.Domain.Students;
 using SporAkademi.Infrastructure.Persistence;
 
@@ -22,10 +23,10 @@ internal sealed class StudentDirectory(AppDbContext db) : IStudentDirectory
         var ids = studentIds.Distinct().Select(StudentId.From).ToList();
         var rows = await db.Set<Student>().AsNoTracking()
             .Where(s => ids.Contains(s.Id))
-            .Select(s => new { s.Id, s.FirstName, s.LastName, s.BirthDate, s.Status, s.EmergencyContact.Phone })
+            .Select(s => new { s.Id, s.FirstName, s.LastName, s.BirthDate, s.Status, Phone = (PhoneNumber?)s.EmergencyContact!.Phone })
             .ToListAsync(cancellationToken);
         return rows.ToDictionary(
             r => r.Id.Value,
-            r => new StudentInfo(r.Id.Value, r.FirstName, r.LastName, r.BirthDate, r.Status, r.Phone.Value));
+            r => new StudentInfo(r.Id.Value, r.FirstName, r.LastName, r.BirthDate, r.Status, r.Phone?.Value));
     }
 }
