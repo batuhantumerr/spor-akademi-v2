@@ -57,6 +57,16 @@ public sealed class EndpointSecurityTests : IDisposable
         options.FallbackPolicy.Requirements.ShouldContain(r => r is Microsoft.AspNetCore.Authorization.Infrastructure.DenyAnonymousAuthorizationRequirement);
     }
 
+    [Fact]
+    public void The_job_panel_requires_its_platform_admin_policy()
+    {
+        // DEC-332: the Hangfire Dashboard shows every school's jobs.
+        var panel = Endpoints().Single(e => e.RoutePattern.RawText!.StartsWith("/jobs", StringComparison.Ordinal));
+
+        panel.Metadata.GetMetadata<IAllowAnonymous>().ShouldBeNull();
+        panel.Metadata.GetOrderedMetadata<IAuthorizeData>().Select(a => a.Policy).ShouldContain("JobsDashboard");
+    }
+
     public void Dispose() => _factory.Dispose();
 
     private List<RouteEndpoint> Endpoints() =>

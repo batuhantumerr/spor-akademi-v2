@@ -7,6 +7,7 @@ import {
   LucideGraduationCap,
   LucideIconInput,
   LucideLayoutDashboard,
+  LucideListChecks,
   LucideMapPin,
   LucideMegaphone,
   LucideReceipt,
@@ -34,7 +35,12 @@ export function navigationFor(role: Role | null): NavSection[] {
   switch (role) {
     case 'PlatformAdmin':
       return [
-        { items: [{ label: ui.nav.schools, path: '/platform/schools', icon: LucideBuilding }] },
+        {
+          items: [
+            { label: ui.nav.schools, path: '/platform/schools', icon: LucideBuilding },
+            { label: ui.nav.jobs, path: '/platform/jobs', icon: LucideListChecks },
+          ],
+        },
       ];
     case 'SchoolAdmin':
       return [

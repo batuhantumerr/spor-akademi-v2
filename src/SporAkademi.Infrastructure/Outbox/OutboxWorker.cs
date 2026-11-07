@@ -9,7 +9,8 @@ namespace SporAkademi.Infrastructure.Outbox;
 /// Polls <see cref="OutboxProcessor"/> in the API process (DEC-302): a full batch is followed immediately by the next,
 /// otherwise it waits <see cref="OutboxOptions.PollingInterval"/>; old processed messages are cleaned up every
 /// <see cref="OutboxOptions.CleanupInterval"/>. Errors (e.g. the database is down) are logged and retried at the
-/// next poll; they never stop the host. P2-F2 can replace this loop with a recurring job calling the same processor.
+/// next poll; they never stop the host. Runs only with <c>Outbox:Scheduler = Worker</c>; by default Hangfire recurring jobs
+/// call the same processor (P2-F2, DEC-333).
 /// </summary>
 internal sealed partial class OutboxWorker(
     OutboxProcessor processor,
@@ -20,7 +21,7 @@ internal sealed partial class OutboxWorker(
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         var settings = options.Value;
-        if (!settings.Enabled)
+        if (settings.Scheduler != OutboxScheduler.Worker)
         {
             return;
         }

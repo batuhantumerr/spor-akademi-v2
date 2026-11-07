@@ -11,6 +11,14 @@
     <PackageVersion Include="Microsoft.AspNetCore.OpenApi" Version="10.0.14" />
     <PackageVersion Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.0.14" />
   </ItemGroup>
+  <ItemGroup Label="Background jobs (P2-F2, DEC-330)">
+    <PackageVersion Include="Hangfire.Core" Version="1.8.25" />
+    <PackageVersion Include="Hangfire.NetCore" Version="1.8.25" />
+    <PackageVersion Include="Hangfire.AspNetCore" Version="1.8.25" />
+    <PackageVersion Include="Hangfire.PostgreSql" Version="1.21.1" />
+    <!-- Transitive pins: Hangfire.Core asks for Newtonsoft.Json 11.0.1 (GHSA-5crp-9r3c-p9vr). -->
+    <PackageVersion Include="Newtonsoft.Json" Version="13.0.4" />
+  </ItemGroup>
   <ItemGroup Label="Application">
     <PackageVersion Include="FluentValidation" Version="12.2.0" />
     <PackageVersion Include="FluentValidation.DependencyInjectionExtensions" Version="12.2.0" />
@@ -22,6 +30,10 @@
     <PackageVersion Include="Microsoft.Extensions.Caching.Hybrid" Version="10.11.0" />
     <PackageVersion Include="Microsoft.Extensions.Caching.StackExchangeRedis" Version="10.0.14" />
     <PackageVersion Include="StackExchange.Redis" Version="2.13.17" />
+  </ItemGroup>
+  <ItemGroup Label="Object storage">
+    <!-- DEC-320: S3-compatible client (Apache-2.0); used only behind IDocumentStorage. -->
+    <PackageVersion Include="AWSSDK.S3" Version="4.0.104.8" />
   </ItemGroup>
   <ItemGroup Label="Logging">
     <PackageVersion Include="Serilog.AspNetCore" Version="10.0.0" />

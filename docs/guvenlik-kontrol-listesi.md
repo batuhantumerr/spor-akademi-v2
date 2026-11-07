@@ -62,6 +62,7 @@ Sadece bu uygulamaya uygulanabilen maddeler listelenir (dosya yükleme, SOAP, Gr
 | 3.4.1 – 3.4.3 Cookie `Secure`, `HttpOnly`, `SameSite` | ✅ | `LoginTests.Valid_credentials_*`. |
 | 3.5.2 – 3.5.3 Token imza/süre doğrulaması | ✅ | HS256, issuer/audience/lifetime, tutarsız rol/tenant reddi (`JwtSetup.cs`, `ErrorHandlingTests.Invalid_tokens_are_rejected`). |
 | 3.7.1 Hassas işlemde yeniden doğrulama | ✅ | Şifre değişimi mevcut şifreyi ister. |
+| İş paneli oturumu (`/jobs`, DEC-332) | ✅ | Platform Admin'in bearer çağrısıyla (`POST /api/v1/platform/jobs/dashboard-session`) üretilen 256 bit anahtar, sunucuda SHA-256; çerez `HttpOnly; Secure; SameSite=Strict; Path=/jobs`, sabit 15 dk, yeni oturum eskisini bitirir; çıkış, şifre değişikliği/sıfırlama ve token yeniden kullanımı panel oturumunu da bitirir; süresi dolan/sahte çerez `401` (`IntegrationTests/Jobs/JobsDashboardTests`). Oturumlar süreç belleğinde (çok örnekli kurulum Deploy bloğunda); üretim nginx'i `/jobs`'u yönlendirmez, panel Deploy bloğuna kadar sadece dev proxy'siyle çalışır. |
 | Pasif kullanıcının açık access token'ı | 🟡 | En fazla 15 dk geçerli (DEC-056, kabul edilen sınır). |
 
 ### V4 Erişim kontrolü
@@ -70,6 +71,7 @@ Sadece bu uygulamaya uygulanabilen maddeler listelenir (dosya yükleme, SOAP, Gr
 | 4.1.1 – 4.1.3 Sunucu tarafında, en az yetki, varsayılan red | ✅ | Fallback policy, rol grupları (`EndpointConventions.RequireRole`), `EndpointSecurityTests`. |
 | 4.2.1 IDOR / başka okulun kaydı | ✅ | Tenant filtresi + bileşik FK + yazma koruması; başka okulun kaydı `404` (her modülün `*TenantIsolationTests` sınıfı). |
 | 4.2.2 CSRF | ✅ | Bearer token cookie'de değil; cookie ile çalışan refresh/çıkış `SameSite=Strict` + `X-Requested-With` ister (`SessionTests`), CORS yok (`CorsTests`). |
+| İş paneli (Hangfire Dashboard, tüm okulların işleri) | ✅ | Sadece aktif Platform Admin, sadece panel çereziyle: anonim, bearer token, Okul Admini ve Antrenör `401`/`403`; kullanıcı her istekte yeniden kontrol edilir (devre dışı bırakılan admin anında düşer); Hangfire'ın kendi filtresi de rol ister; varsayılan salt okunur, işlemler açıksa antiforgery (`sa_jobs_af`, `X-Jobs-Antiforgery`); `no-store`, `X-Frame-Options: DENY`; bağlantı dizesi gösterilmez (`JobsDashboardTests`, `EndpointSecurityTests.The_job_panel_requires_its_platform_admin_policy`). İş argümanları sadece ID (`ArchitectureTests/JobsRulesTests`). |
 | 4.3.1 Yönetim arayüzlerinde ek koruma | 🟡 | Platform Admin rolüyle ayrılmış; MFA yok (Fikirler 5). |
 | Antrenör görünümü (NFR-PRV-02) | ✅ | Roster yanıt şekli sabit (`IntegrationTests/Enrollments/RosterTests`). |
 
@@ -108,7 +110,13 @@ Sadece bu uygulamaya uygulanabilen maddeler listelenir (dosya yükleme, SOAP, Gr
 ### V12 Dosyalar ve kaynaklar
 | Madde | Durum | Kanıt / not |
 | --- | --- | --- |
-| Dosya yükleme | — | MVP'de yok. |
+| 12.1.1 (L1) Dosya boyutu sınırı; 12.1.3 (L2) kullanıcı başına kota | ✅ | P2-F6: türe göre 5 MB (rapor) / 2 MB (fotoğraf), istek sınırı yalnız yükleme uç noktasında 5 MB + 64 KB, diğer her yerde 1 MB (`RequestSizeLimitMiddleware`, `IRequestSizeLimitMetadata`); `IntegrationTests/Students/DocumentTests` (`Bodies_over_the_upload_limit...`, `jpeg-over-2mb`), `Application.UnitTests/Students/DocumentContentTests`. Öğrenci başına en fazla 20 rapor (DEC-322). |
+| 12.2.1 (L2) İçerik türü doğrulaması (uzantıya/beyana güvenmeden) | ✅ | Magic bytes + yapısal ayrıştırma (`DocumentContent`); `Content-Type` yok sayılır; çift uzantı (`foto.jpg.html`) reddedilir; SVG/HTML/EXE/GIF reddedilir; görsellerde EXIF/GPS/XMP/metin chunk'ları ve dosya sonu sonrası baytlar silinir; etkin içerikli PDF (`/JavaScript`, `/Launch`, gömülü dosya; `#xx` kaçışlı adlar dahil) reddedilir (DEC-322). Testler: `DocumentContentTests`, `DocumentTests.Hostile_files_are_refused_and_nothing_is_stored`. Sınır: sıkıştırılmış PDF nesne akışları taranmaz, antivirüs yok (Fikirler 12). |
+| 12.3.1, 12.3.2 (L1) Kullanıcı dosya adı yol/anahtar olarak kullanılmaz | ✅ | Nesne anahtarı `{okul}/{öğrenci}/{128 bit rastgele}`; dosya adı yalnız veritabanında, temizlenmiş; indirme adı ve imzalı URL kullanıcı adını içermez (DEC-322, DEC-323; `DocumentTests`). |
+| 12.4.1 (L2) web kökü dışında, kısıtlı izinle saklama; 12.5.1, 12.5.2 (L1) yüklenen dosya HTML/JS olarak çalıştırılmaz; dosyalar herkese açık değil, yetkiyle ve süreli sunulur | ✅ | Silinen belgenin dosyası outbox ile silinir, hata yeniden denenir (`DocumentTests.A_failed_object_delete_is_retried...`, DEC-325). Bucket private; imzasız veya imzalı parametresi değiştirilmiş istek `403`; 5 dakikalık imzalı GET, süresi dolunca `403` (`DocumentTests.Download_links_...`). PDF her zaman `attachment`, `Content-Type` imzayla sabit (DEC-323). |
+| 4.1.1, 4.2.1 (L1) Dosya erişim yetkisi, IDOR ve tenant izolasyonu | ✅ | Sağlık raporu yalnız Okul Admini; antrenör yalnız kendi aktif grubundaki öğrencinin fotoğrafı (DEC-324; `DocumentTests.A_coach_sees_only...`); başka okul `404` (`CrossTenantEndpointTests`, multipart probe ve depo anahtarlarıyla parmak izi). |
+| Yüklenen dosya meta verisi loglanmaz | ✅ | `LogPrivacyTests` kişi adı içeren dosya adıyla yükleme ve reddedilen yüklemeyi kapsar; nesne silme outbox mesajı ve olası yetim nesne logu sadece üretilmiş anahtarı içerir (DEC-325). |
+| 12.4.2 (L2) Yüklenen dosyalarda antivirüs taraması | ⛔ | Yok; sadece yapısal kontrol ve etkin içerik reddi (DEC-322). Fikirler 12. |
 
 ### V13 API
 | Madde | Durum | Kanıt / not |
@@ -140,4 +148,7 @@ Sadece bu uygulamaya uygulanabilen maddeler listelenir (dosya yükleme, SOAP, Gr
 8. **Kişisel veri envanteri (NFR-PRV-01):** her kişisel veri alanını, amacını ve saklama süresini listeleyen doküman; faz geçişinde gözden geçirilir.
 9. **Log gizliliği testinin kapsamı:** ödeme, aidat, kayıt, iptal gerekçesi ve 500 yolu artık `LogPrivacyTests`'te; yoklama (not alanı) ve duyurular (serbest metin) henüz yok, teste eklenmeli.
 11. **Peşin ödemeli kaydın erken bitirilmesi:** ileri bir ay için ödemesi olan kayıt o aydan önce bitirilebiliyor (DEC-184); iade akışı veya uyarı değerlendirilmeli.
+12. **Yüklenen dosyalarda antivirüs ve derin PDF denetimi (P2-F6):** ClamAV (GPL-2.0, ayrı servis olarak) veya yönetilen tarama; sıkıştırılmış nesne akışlarının açılarak taranması; gerekirse PDF'lerin rasterize edilip yeniden üretilmesi. CSP gelince `img-src`'ye depo origin'i eklenmeli (fotoğraf küçük resmi doğrudan imzalı URL'den yüklenir).
+13. **Yükleme ile commit arasında çökme (P2-F6):** nesne depoya yazıldıktan sonra süreç metadata commit'inden önce çökerse nesne yetim kalır (DEC-325 istisnası). Ara sıra çalışan bir temizlik işi (P2-F2 Hangfire ile) `students.student_documents`'ta karşılığı olmayan ve belirli bir yaştan eski anahtarları silmeli.
+14. **Yükleme bellek kullanımı (P2-F6):** form bellekte tamponlanır (DEC-321); eşzamanlı N yükleme ~N × 5 MB bellek kullanır. Yükleme uç noktasına eşzamanlılık/oran sınırı (ör. okul başına) veya akış hâlinde inceleme değerlendirilmeli.
 10. **Refresh token yarışı:** aynı token'la eşzamanlı iki sekme birini `409` ile düşürür (DEC-119); kısa bir tolerans penceresi değerlendirilebilir.
