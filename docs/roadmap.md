@@ -68,7 +68,7 @@ Kapsamın tamamı ve maddelerin açıklamaları: [proje dokümanı, Ek G](proje-
 
 ## Faz 2 — İş mantığı derinliği (`v0.2.0`)
 
-- [ ] P2-F1 Online aidat ödemesi (iyzico sandbox, webhook'lar, idempotency)
+- [x] P2-F1 Online aidat ödemesi (iyzico sandbox, webhook'lar, idempotency; DEC-340 – DEC-349). Fake sağlayıcı varsayılan; iyzico adaptörü anahtar verilince ve sadece sandbox'ta. Veli portalı yok: Okul Admini ödeme bağlantısını paylaşır (DEC-348). Gerçek iyzico sandbox'a karşı deneme ve iade akışı açık.
 - [ ] P2-F2 Hangfire ile arka plan işleri ve iş paneli
 - [x] P2-F3 Transactional outbox (DEC-300 – DEC-304)
 - [ ] P2-F4 E-posta bildirimleri

@@ -17,8 +17,8 @@ namespace SporAkademi.IntegrationTests.Billing;
 [Trait("Roadmap", "P2-F1")]
 public sealed class IyzicoProviderTests
 {
-    private const string ApiKey = "sandbox-test-api-key";
-    private const string SecretKey = "sandbox-test-secret-key";
+    private const string ApiKey = "test-api-test-api-test";
+    private const string SecretKey = "test-secret-test-secret";
     private static readonly Guid OnlinePaymentId = Guid.Parse("0192f0c5-3b7a-7c2e-9f1a-2b3c4d5e6f70");
 
     private static CancellationToken Ct => TestContext.Current.CancellationToken;
