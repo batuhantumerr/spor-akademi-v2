@@ -73,4 +73,26 @@ public abstract class BillingTest(DatabaseFixture database) : EnrollmentsTest(da
     }
 
     protected static string AmountOf(JsonElement money) => money.GetProperty("amount").GetString()!;
+
+    /// <summary>P2-F1: starts an online payment of a due with an <c>Idempotency-Key</c> (none when <paramref name="key"/> is null).</summary>
+    protected async Task<HttpResponseMessage> StartOnlineAsync(Guid enrollmentId, string period, string? key, HttpClient? client = null)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Post, new Uri("/api/v1/online-payments", UriKind.Relative))
+        {
+            Content = JsonContent.Create(new { enrollmentId, period }),
+        };
+        if (key is not null)
+        {
+            request.Headers.Add("Idempotency-Key", key);
+        }
+
+        return await (client ?? Admin).SendAsync(request, Ct);
+    }
+
+    protected async Task<JsonElement> StartOnlineOkAsync(Guid enrollmentId, string period = "2027-01", string? key = null, HttpClient? client = null)
+    {
+        var response = await StartOnlineAsync(enrollmentId, period, key ?? $"key-{Guid.NewGuid():N}", client);
+        response.StatusCode.ShouldBe(HttpStatusCode.Created);
+        return await BodyOf(response);
+    }
 }

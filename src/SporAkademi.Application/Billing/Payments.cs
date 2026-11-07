@@ -48,7 +48,9 @@ internal sealed class RecordPaymentValidator : AbstractValidator<RecordPaymentCo
             .NotNull().WithErrorCode(CommonErrors.FieldRequired.Code)
             .Must(a => a.ToMoney().IsSuccess).WithErrorCode(Money.Invalid.Code)
             .Must(a => a.ToMoney().Value.Amount > 0).WithErrorCode(PaymentErrors.InvalidAmount.Code);
-        RuleFor(c => c.Method).IsInEnum().WithErrorCode(CommonErrors.FieldInvalid.Code);
+        // Online payments are recorded only by a provider's confirmation (P2-F1), never by hand.
+        RuleFor(c => c.Method).IsInEnum().WithErrorCode(CommonErrors.FieldInvalid.Code)
+            .NotEqual(PaymentMethod.Online).WithErrorCode(CommonErrors.FieldInvalid.Code);
         RuleFor(c => c.PaidOn).NotNull().WithErrorCode(CommonErrors.FieldRequired.Code)
             .Must(BillingInput.IsSupportedDate).WithErrorCode(CommonErrors.FieldInvalid.Code);
     }

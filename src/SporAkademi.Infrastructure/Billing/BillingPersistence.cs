@@ -14,6 +14,8 @@ namespace SporAkademi.Infrastructure.Billing;
 
 internal sealed class PaymentConfiguration : IEntityTypeConfiguration<Payment>
 {
+    public const string OnlinePaymentIndex = "ix_payments_online_payment_id";
+
     public void Configure(EntityTypeBuilder<Payment> builder)
     {
         builder.ToTable("payments", Schemas.Billing, t =>
@@ -49,6 +51,15 @@ internal sealed class PaymentConfiguration : IEntityTypeConfiguration<Payment>
         builder.HasIndex(p => new { p.TenantId, p.GroupId, p.Period });
         builder.HasIndex(p => new { p.TenantId, p.StudentId });
         builder.HasIndex(p => new { p.TenantId, p.PaidOn });
+
+        // DEC-342: an online payment records at most one payment, whatever races between webhook deliveries.
+        builder.HasOne<OnlinePayment>().WithMany()
+            .HasForeignKey(p => new { p.TenantId, p.OnlinePaymentId })
+            .HasPrincipalKey(o => new { o.TenantId, o.Id })
+            .OnDelete(DeleteBehavior.Restrict);
+        builder.HasIndex(p => p.OnlinePaymentId).IsUnique().HasFilter("online_payment_id IS NOT NULL").HasDatabaseName(OnlinePaymentIndex);
+        // Only the online flow sets it, and only for the Online method.
+        builder.ToTable(t => t.HasCheckConstraint("ck_payments_online", "(method = 'Online') = (online_payment_id IS NOT NULL)"));
         builder.Ignore(p => p.DomainEvents);
     }
 }

@@ -39,6 +39,7 @@ builder.Services.AddApplication();
 builder.Services.AddInfrastructure(builder.Configuration);
 builder.Services.AddJwtAuthentication();
 builder.Services.AddAuthRateLimiting();
+builder.Services.AddPaymentNotificationRateLimiting();
 
 builder.Services.ConfigureHttpJsonOptions(json => json.SerializerOptions.Converters.Add(new JsonStringEnumConverter()));
 builder.Services.AddProblemDetails(options => options.CustomizeProblemDetails = ProblemShape.Complete);
@@ -69,6 +70,7 @@ app.MapAnnouncementEndpoints();
 app.MapEnrollmentEndpoints();
 app.MapAttendanceEndpoints();
 app.MapBillingEndpoints();
+app.MapOnlinePaymentEndpoints();
 app.MapDashboardEndpoints();
 app.MapApiDocument();
 

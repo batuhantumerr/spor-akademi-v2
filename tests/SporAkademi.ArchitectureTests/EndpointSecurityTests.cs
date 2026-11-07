@@ -19,6 +19,10 @@ public sealed class EndpointSecurityTests : IDisposable
         "/api/v1/auth/login",
         "/api/v1/auth/refresh",
         "/api/v1/auth/logout",
+        // P2-F1 (DEC-344): signed or re-queried provider endpoints; rate limited, school from the stored payment.
+        "/api/v1/payment-webhooks",
+        "/api/v1/payment-callbacks",
+        "/api/v1/sandbox-checkout/complete",
     ];
 
     private readonly WebApplicationFactory<Program> _factory = new WebApplicationFactory<Program>()

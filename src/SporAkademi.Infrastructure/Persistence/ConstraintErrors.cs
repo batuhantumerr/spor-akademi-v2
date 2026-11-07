@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
 using SporAkademi.Application.Abstractions.Data;
+using SporAkademi.Domain.Billing;
 using SporAkademi.Domain.Enrollments;
 using SporAkademi.Domain.Groups;
 using SporAkademi.Domain.Identity;
@@ -9,6 +10,7 @@ using SporAkademi.Domain.SharedKernel;
 using SporAkademi.Domain.Students;
 using SporAkademi.Domain.Tenancy;
 using SporAkademi.Infrastructure.Attendance;
+using SporAkademi.Infrastructure.Billing;
 
 namespace SporAkademi.Infrastructure.Persistence;
 
@@ -40,6 +42,13 @@ internal static class ConstraintErrors
         // DEC-173: a concurrent first save of the same session or student record; the caller retries.
         [SessionConfiguration.UniqueKeyIndex] = PersistenceErrors.ConcurrencyConflict,
         [AttendanceRecordConfiguration.PrimaryKey] = PersistenceErrors.ConcurrencyConflict,
+        // DEC-341: a concurrent request with the same Idempotency-Key committed first; the caller replays it.
+        [OnlinePaymentConfiguration.IdempotencyKeyIndex] = IdempotencyErrors.InProgress,
+        [OnlinePaymentConfiguration.OpenDueIndex] = OnlinePaymentErrors.CheckoutInProgress,
+        [OnlinePaymentConfiguration.ProviderPaymentIndex] = OnlinePaymentErrors.ProviderMismatch,
+        // DEC-343: a concurrent delivery of the same notification or result won; the retry sees it applied.
+        [PaymentNotificationConfiguration.EventKeyIndex] = PersistenceErrors.ConcurrencyConflict,
+        [PaymentConfiguration.OnlinePaymentIndex] = PersistenceErrors.ConcurrencyConflict,
     };
 
     /// <summary>

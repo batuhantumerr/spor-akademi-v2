@@ -123,6 +123,20 @@ public sealed class LogPrivacyTests(DatabaseFixture database) : IdentityTest(dat
         (await client.PostAsJsonAsync($"/api/v1/payments/{payment}/cancel", new { reason = CancelReason }, ct)).StatusCode.ShouldBe(HttpStatusCode.OK);
         (await client.GetAsync(new Uri($"/api/v1/dues/outstanding?groupId={group}", UriKind.Relative), ct)).StatusCode.ShouldBe(HttpStatusCode.OK);
 
+        // P2-F1: the due is paid online through the sandbox provider (webhook and browser return), ids only in the logs.
+        using (var start = new HttpRequestMessage(HttpMethod.Post, new Uri("/api/v1/online-payments", UriKind.Relative)))
+        {
+            start.Content = JsonContent.Create(new { enrollmentId = enrollment, period = "2027-01" });
+            start.Headers.Add("Idempotency-Key", "gizlilik-anahtari-1");
+            var started = await client.SendAsync(start, ct);
+            started.StatusCode.ShouldBe(HttpStatusCode.Created);
+            var checkoutUrl = (await started.Content.ReadFromJsonAsync<JsonElement>(ct)).GetProperty("checkoutUrl").GetString()!;
+            var token = checkoutUrl[(checkoutUrl.IndexOf('=', StringComparison.Ordinal) + 1)..];
+            (await client.PostAsJsonAsync("/api/v1/sandbox-checkout/complete", new { token, succeed = true }, ct)).StatusCode.ShouldBe(HttpStatusCode.OK);
+            using var form = new FormUrlEncodedContent(new Dictionary<string, string> { ["token"] = token });
+            (await client.PostAsync(new Uri("/api/v1/payment-callbacks", UriKind.Relative), form, ct)).StatusCode.ShouldNotBe(HttpStatusCode.InternalServerError);
+        }
+
         // Password change (old and new passwords in the body) and a wrong current password.
         (await client.PostAsJsonAsync("/api/v1/auth/change-password", new { currentPassword = "Yanlis-Sifre-987", newPassword = "Gizli-Yeni-Sifre-55" }, ct))
             .StatusCode.ShouldBe(HttpStatusCode.UnprocessableEntity);
@@ -135,6 +149,8 @@ public sealed class LogPrivacyTests(DatabaseFixture database) : IdentityTest(dat
         events.ShouldContain(e => e.Contains("LoginCommand", StringComparison.Ordinal) && e.Contains("Auth.InvalidCredentials", StringComparison.Ordinal));
         events.ShouldContain(e => e.Contains("RegisterStudentCommand", StringComparison.Ordinal));
         events.ShouldContain(e => e.Contains("RecordPaymentCommand", StringComparison.Ordinal));
+        events.ShouldContain(e => e.Contains("StartOnlinePaymentCommand", StringComparison.Ordinal));
+        events.ShouldContain(e => e.Contains("ApplyProviderStateCommand", StringComparison.Ordinal));
 
         string[] forbidden =
         [

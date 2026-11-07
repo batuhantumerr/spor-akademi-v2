@@ -103,6 +103,7 @@ public static class DependencyInjection
         services.AddScoped<IGuardianRepository, GuardianRepository>();
 
         services.AddOutbox(configuration);
+        services.AddPaymentProviders(configuration);
 
         services.AddHealthChecks()
             .AddDbContextCheck<AppDbContext>("database", tags: ["ready"])
