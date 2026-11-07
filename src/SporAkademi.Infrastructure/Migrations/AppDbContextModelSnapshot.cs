@@ -1334,6 +1334,70 @@ namespace SporAkademi.Infrastructure.Migrations
                     b.ToTable("schools", "tenancy");
                 });
 
+            modelBuilder.Entity("SporAkademi.Infrastructure.Outbox.OutboxMessage", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<int>("Attempts")
+                        .HasColumnType("integer")
+                        .HasColumnName("attempts");
+
+                    b.Property<DateTimeOffset?>("DeadLetteredAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("dead_lettered_at");
+
+                    b.Property<string>("LastError")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("last_error");
+
+                    b.Property<DateTimeOffset>("NextAttemptAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("next_attempt_at");
+
+                    b.Property<DateTimeOffset>("OccurredAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("occurred_at");
+
+                    b.Property<string>("Payload")
+                        .IsRequired()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("payload");
+
+                    b.Property<DateTimeOffset?>("ProcessedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("processed_at");
+
+                    b.Property<Guid?>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("tenant_id");
+
+                    b.Property<string>("Type")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("type");
+
+                    b.HasKey("Id")
+                        .HasName("pk_messages");
+
+                    b.HasIndex("DeadLetteredAt")
+                        .HasDatabaseName("ix_messages_dead_lettered_at")
+                        .HasFilter("dead_lettered_at IS NOT NULL");
+
+                    b.HasIndex("ProcessedAt")
+                        .HasDatabaseName("ix_messages_processed_at")
+                        .HasFilter("processed_at IS NOT NULL");
+
+                    b.HasIndex("NextAttemptAt", "Id")
+                        .HasDatabaseName("ix_messages_pending")
+                        .HasFilter("processed_at IS NULL AND dead_lettered_at IS NULL");
+
+                    b.ToTable("messages", "outbox");
+                });
+
             modelBuilder.Entity("SporAkademi.Domain.Announcements.Announcement", b =>
                 {
                     b.HasOne("SporAkademi.Domain.Tenancy.School", null)

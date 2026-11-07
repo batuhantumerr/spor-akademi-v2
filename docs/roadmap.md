@@ -60,7 +60,7 @@ Kapsamın tamamı ve maddelerin açıklamaları: [proje dokümanı, Ek G](proje-
 
 ### Sürüm hazırlığı
 - [x] P1-35 Tenant izolasyon test paketi
-- [ ] P1-36 Uçtan uca testler (Playwright)
+- [x] P1-36 Uçtan uca testler (Playwright)
 - [x] P1-37 MVP güvenlik kontrol listesi
 - [x] P1-38 Demo verisi seed betiği
 - [x] P1-39 CHANGELOG (etiket sahipte)
@@ -70,7 +70,7 @@ Kapsamın tamamı ve maddelerin açıklamaları: [proje dokümanı, Ek G](proje-
 
 - [ ] P2-F1 Online aidat ödemesi (iyzico sandbox, webhook'lar, idempotency)
 - [ ] P2-F2 Hangfire ile arka plan işleri ve iş paneli
-- [ ] P2-F3 Transactional outbox
+- [x] P2-F3 Transactional outbox (DEC-300 – DEC-304)
 - [ ] P2-F4 E-posta bildirimleri
 - [ ] P2-F5 Otomatik anonimleştirme işi
 - [ ] P2-F6 Belge yükleme (MinIO)

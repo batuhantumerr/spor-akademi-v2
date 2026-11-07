@@ -21,10 +21,14 @@ internal static class AuditColumns
 
 internal static class ModelConventions
 {
-    /// <summary>Shadow audit columns on every table, filled by <see cref="AuditingInterceptor"/>.</summary>
+    /// <summary>
+    /// Shadow audit columns on every module table, filled by <see cref="AuditingInterceptor"/>. Outbox rows are
+    /// platform records with their own timestamps (DEC-300).
+    /// </summary>
     public static void AddAuditColumns(this ModelBuilder modelBuilder)
     {
-        foreach (var entityType in modelBuilder.Model.GetEntityTypes().Where(t => !t.IsOwned() && t.BaseType is null).ToList())
+        foreach (var entityType in modelBuilder.Model.GetEntityTypes()
+                     .Where(t => !t.IsOwned() && t.BaseType is null && t.GetSchema() != Schemas.Outbox).ToList())
         {
             var entity = modelBuilder.Entity(entityType.ClrType);
             entity.Property<DateTimeOffset>(AuditColumns.CreatedAt);
