@@ -62,3 +62,13 @@ targetRules = ["generic-api-key"]
 condition = "AND"
 paths = ['''^tests/SporAkademi\.IntegrationTests/Infrastructure/StorageContainer\.cs$''']
 regexes = ['''^storage(?:testaccess|TestSecret)1$''']
+
+[[allowlists]]
+description = "Synthetic new passwords of the P2-F4 password reset tests (backend and admin spec)"
+targetRules = ["generic-api-key"]
+condition = "AND"
+paths = [
+  '''^tests/SporAkademi\.IntegrationTests/Identity/PasswordResetTests\.cs$''',
+  '''^web/admin/src/app/features/auth/password-reset\.spec\.ts$''',
+]
+regexes = ['''^(?:Yepyeni|Baska-Bir|Baska|Birinci|Ikinci)-Sifre-2027$''']
