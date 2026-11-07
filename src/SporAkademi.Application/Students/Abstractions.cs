@@ -77,6 +77,8 @@ public interface IStudentRepository
 
     Task<bool> ExistsAsync(StudentId id, CancellationToken cancellationToken);
 
+    Task<bool> IsAnonymizedAsync(StudentId id, CancellationToken cancellationToken);
+
     /// <summary>Optimistic concurrency: the save fails with Concurrency.Conflict if the row changed since <paramref name="version"/>.</summary>
     void ExpectVersion(Student student, uint version);
 

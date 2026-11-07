@@ -13,7 +13,7 @@ using SporAkademi.Infrastructure.Persistence;
 namespace SporAkademi.Infrastructure.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    [Migration("20261107025629_AddStudentAnonymization")]
+    [Migration("20261107030257_AddStudentAnonymization")]
     partial class AddStudentAnonymization
     {
         /// <inheritdoc />
@@ -1291,6 +1291,99 @@ namespace SporAkademi.Infrastructure.Migrations
                         });
                 });
 
+            modelBuilder.Entity("SporAkademi.Domain.Students.StudentDocument", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid?>("CreatedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("created_by");
+
+                    b.Property<string>("FileName")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("file_name");
+
+                    b.Property<string>("Format")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .HasColumnName("format");
+
+                    b.Property<long>("SizeBytes")
+                        .HasColumnType("bigint")
+                        .HasColumnName("size_bytes");
+
+                    b.Property<string>("StorageKey")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("storage_key");
+
+                    b.Property<Guid>("StudentId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("student_id");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("tenant_id");
+
+                    b.Property<string>("Type")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .HasColumnName("type");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<Guid?>("UpdatedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("updated_by");
+
+                    b.Property<DateTimeOffset>("UploadedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("uploaded_at");
+
+                    b.Property<Guid>("UploadedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("uploaded_by");
+
+                    b.Property<uint>("Version")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
+
+                    b.HasKey("Id")
+                        .HasName("pk_student_documents");
+
+                    b.HasIndex("StorageKey")
+                        .IsUnique()
+                        .HasDatabaseName("ix_student_documents_storage_key");
+
+                    b.HasIndex("TenantId", "StudentId")
+                        .IsUnique()
+                        .HasDatabaseName("ix_student_documents_one_photo")
+                        .HasFilter("type = 'Photo'");
+
+                    b.HasIndex("TenantId", "StudentId", "Type")
+                        .HasDatabaseName("ix_student_documents_tenant_id_student_id_type");
+
+                    b.ToTable("student_documents", "students", t =>
+                        {
+                            t.HasCheckConstraint("ck_student_documents_size_bytes", "size_bytes > 0");
+                        });
+                });
+
             modelBuilder.Entity("SporAkademi.Domain.Students.StudentGuardian", b =>
                 {
                     b.Property<Guid>("StudentId")
@@ -1707,6 +1800,24 @@ namespace SporAkademi.Infrastructure.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired()
                         .HasConstraintName("fk_students_school_tenant_id");
+                });
+
+            modelBuilder.Entity("SporAkademi.Domain.Students.StudentDocument", b =>
+                {
+                    b.HasOne("SporAkademi.Domain.Tenancy.School", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_student_documents_school_tenant_id");
+
+                    b.HasOne("SporAkademi.Domain.Students.Student", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId", "StudentId")
+                        .HasPrincipalKey("TenantId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_student_documents_students_tenant_id_student_id");
                 });
 
             modelBuilder.Entity("SporAkademi.Domain.Students.StudentGuardian", b =>

@@ -2,6 +2,9 @@ using SporAkademi.Application.Abstractions;
 using SporAkademi.Application.Abstractions.Authentication;
 using SporAkademi.Application.Abstractions.Data;
 using SporAkademi.Application.Abstractions.Messaging;
+using SporAkademi.Application.Abstractions.Outbox;
+using SporAkademi.Application.Students.Contracts;
+using SporAkademi.Application.Students.Documents;
 using SporAkademi.Application.Tenancy.Contracts;
 using SporAkademi.Domain.SharedKernel;
 using SporAkademi.Domain.Students;
@@ -171,6 +174,29 @@ internal sealed class DeleteGuardiansOfAnonymizedStudent(IGuardianRepository gua
             {
                 guardians.Remove(guardian);
             }
+        }
+
+        return Result.Success();
+    }
+}
+
+/// <summary>
+/// DEC-366: an anonymized student's documents (health reports, photo) are deleted: the metadata rows in this
+/// transaction, the stored objects after commit through the existing <see cref="DocumentObjectDeletedMessage"/>
+/// outbox message (DEC-325), which the outbox retries until the storage confirms. The per-student document lock keeps
+/// a concurrent upload from slipping in; the upload re-checks the student under the same lock.
+/// </summary>
+internal sealed class DeleteDocumentsOfAnonymizedStudent(IStudentDocumentRepository documents, IOutbox outbox)
+    : IDomainEventConsumer<StudentAnonymized>
+{
+    public async Task<Result> Handle(StudentAnonymized domainEvent, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(domainEvent);
+        await documents.LockStudentAsync(domainEvent.StudentId, cancellationToken);
+        foreach (var document in await documents.ListOfStudentForDeletionAsync(domainEvent.StudentId, cancellationToken))
+        {
+            documents.Remove(document);
+            outbox.Enqueue(new DocumentObjectDeletedMessage(document.StorageKey), domainEvent.TenantId.Value);
         }
 
         return Result.Success();

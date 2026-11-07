@@ -58,6 +58,9 @@ public interface IStudentDocumentRepository
 
     /// <summary>Photo first, then health reports newest first.</summary>
     Task<IReadOnlyList<StudentDocument>> ListOfStudentAsync(StudentId studentId, CancellationToken cancellationToken);
+
+    /// <summary>Every document of the student, tracked, for deletion (DEC-366).</summary>
+    Task<IReadOnlyList<StudentDocument>> ListOfStudentForDeletionAsync(StudentId studentId, CancellationToken cancellationToken);
 }
 
 /// <param name="Type">The document type's name (<see cref="DocumentType"/>), as sent in the form.</param>
@@ -178,6 +181,12 @@ internal sealed partial class UploadStudentDocumentHandler(
 
                     // The count before the upload is a fast path; this one, under the per-student lock, is the rule.
                     await documents.LockStudentAsync(command.StudentId, ct);
+                    // Under the same lock the anonymization takes (DEC-366): no document is added after it removed them.
+                    if (await students.IsAnonymizedAsync(command.StudentId, ct))
+                    {
+                        return Result.Failure<StudentDocumentDto>(StudentErrors.Anonymized);
+                    }
+
                     if (type == DocumentType.HealthReport
                         && await documents.CountAsync(command.StudentId, type, ct) >= DocumentRules.MaxHealthReportsPerStudent)
                     {
