@@ -27,6 +27,7 @@ using SporAkademi.Infrastructure.Billing;
 using SporAkademi.Infrastructure.Enrollments;
 using SporAkademi.Infrastructure.Groups;
 using SporAkademi.Infrastructure.Identity;
+using SporAkademi.Infrastructure.Jobs;
 using SporAkademi.Infrastructure.Organization;
 using SporAkademi.Infrastructure.Outbox;
 using SporAkademi.Infrastructure.Persistence;
@@ -100,11 +101,15 @@ public static class DependencyInjection
         services.AddScoped<IGuardianRepository, GuardianRepository>();
 
         services.AddOutbox(configuration);
+        services.AddJobs();
+        services.AddSingleton(new HeartbeatClock(TimeProvider.System));
 
         services.AddHealthChecks()
             .AddDbContextCheck<AppDbContext>("database", tags: ["ready"])
             // A broken outbox degrades readiness but never fails it; the database check covers outages.
-            .AddCheck<OutboxHealthCheck>("outbox", failureStatus: HealthStatus.Degraded, tags: ["ready"]);
+            .AddCheck<OutboxHealthCheck>("outbox", failureStatus: HealthStatus.Degraded, tags: ["ready"])
+            // A stopped job server degrades readiness too (DEC-335).
+            .AddCheck<JobsHealthCheck>("jobs", failureStatus: HealthStatus.Degraded, tags: ["ready"]);
 
         return services;
     }
@@ -132,7 +137,7 @@ internal static class OutboxRegistration
         services.AddScoped<IOutbox, EfOutbox>();
         services.AddSingleton<OutboxProcessor>();
 
-        // Always registered; it returns at once when Outbox:Enabled is false (read at start, so test hosts can set it).
+        // Always registered; it returns at once unless Outbox:Scheduler is Worker (read at start, so test hosts can set it).
         services.AddHostedService<OutboxWorker>();
 
         return services;

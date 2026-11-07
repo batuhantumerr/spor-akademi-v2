@@ -24,8 +24,10 @@ public sealed class ApiFactory(string appConnectionString) : WebApplicationFacto
             ["Jwt:SigningKey"] = JwtSigningKey,
             ["Seq:ServerUrl"] = null,
             ["Serilog:MinimumLevel:Default"] = "Fatal",
-            // Tests drive OutboxProcessor themselves so delivery happens exactly when they decide (OutboxWorkerTests turn it on).
-            ["Outbox:Enabled"] = "false",
+            // Tests drive OutboxProcessor themselves so delivery happens exactly when they decide (OutboxWorkerTests and
+            // the job tests turn a scheduler on), and run no Hangfire server unless a test asks for one.
+            ["Outbox:Scheduler"] = "None",
+            ["Jobs:ServerEnabled"] = "false",
         }));
         builder.ConfigureServices(services => services.Replace(ServiceDescriptor.Singleton<TimeProvider>(Clock)));
     }
