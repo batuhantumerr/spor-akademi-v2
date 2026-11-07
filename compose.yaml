@@ -78,6 +78,38 @@ services:
     volumes:
       - seq-data:/data
 
+  # S3-compatible document storage for local development only (DEC-320); production storage is a deploy
+  # decision. Testcontainers reads this same image reference. Objects are private: only signed requests
+  # with the credentials below (or links the API signs) can read or write. The bucket is created on start
+  # if it does not exist yet (idempotent).
+  # Optional (DEC-326): only started with `docker compose --profile storage up -d --wait`. The credentials are not
+  # required compose variables (compose interpolates every service, even ones outside the active profiles), so a
+  # .env without them still works for everything else; the container itself refuses to start without them or
+  # with the .env.example placeholders (SeaweedFS without credentials would accept anonymous requests).
+  storage:
+    image: chrislusf/seaweedfs:4.51@sha256:f7a49e3f3972ebed5be2ed4befa4a0c68eb7bdddba6e692d42729ceb545134b8
+    profiles: ["storage"]
+    environment:
+      AWS_ACCESS_KEY_ID: ${STORAGE_ACCESS_KEY:-}
+      AWS_SECRET_ACCESS_KEY: ${STORAGE_SECRET_KEY:-}
+      STORAGE_BUCKET: ${STORAGE_BUCKET:-spor-akademi-documents}
+    entrypoint:
+      - sh
+      - -c
+      - >-
+        case "$$AWS_ACCESS_KEY_ID:$$AWS_SECRET_ACCESS_KEY" in :*|*:|change-me*|*:change-me*) echo "STORAGE_ACCESS_KEY and STORAGE_SECRET_KEY are not set in .env, or still change-me (bash scripts/setup-env.sh adds them)" >&2; exit 1;; esac;
+        exec /entrypoint.sh mini -dir=/data -bucket="$$STORAGE_BUCKET" -master.telemetry=false -admin.ui=false -webdav=false -s3.port.iceberg=0 -s3.port.lance=0
+    ports:
+      - "127.0.0.1:${STORAGE_HOST_PORT:-58333}:8333"
+    volumes:
+      - storage-data:/data
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8333/healthz"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+
 volumes:
   postgres-data:
   seq-data:
+  storage-data:

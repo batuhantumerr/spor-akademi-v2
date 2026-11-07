@@ -27,6 +27,20 @@ public sealed class HealthTests(DatabaseFixture database) : IntegrationTest(data
     }
 
     [Fact]
+    public async Task Ready_stays_200_but_degraded_without_document_storage()
+    {
+        // DEC-326: everything except documents works without the store, so the API stays in rotation.
+        await using var factory = new ApiFactory(Database.AppConnectionString);
+        using var client = factory.CreateClient();
+
+        var ready = await client.GetAsync(new Uri("/health/ready", UriKind.Relative), TestContext.Current.CancellationToken);
+
+        ready.StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await ready.Content.ReadAsStringAsync(TestContext.Current.CancellationToken)).ShouldBe("Degraded");
+        (await Client.GetStringAsync(new Uri("/health/ready", UriKind.Relative), TestContext.Current.CancellationToken)).ShouldBe("Healthy");
+    }
+
+    [Fact]
     public void Startup_fails_fast_without_a_connection_string()
     {
         using var factory = new ApiFactory(string.Empty);

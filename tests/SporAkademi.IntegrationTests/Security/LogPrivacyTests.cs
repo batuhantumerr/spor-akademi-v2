@@ -129,6 +129,19 @@ public sealed class LogPrivacyTests(DatabaseFixture database) : IdentityTest(dat
         (await client.PostAsJsonAsync($"/api/v1/payments/{payment}/cancel", new { reason = CancelReason }, ct)).StatusCode.ShouldBe(HttpStatusCode.OK);
         (await client.GetAsync(new Uri($"/api/v1/dues/outstanding?groupId={group}", UriKind.Relative), ct)).StatusCode.ShouldBe(HttpStatusCode.OK);
 
+        // A health report whose file name names the student, a refused upload, and a download link (P2-F6).
+        using (var report = new MultipartFormDataContent { { new StringContent("HealthReport"), "type" }, { new ByteArrayContent(Testing.TestFiles.Pdf()), "file", $"{StudentLastName} saglik.pdf" } })
+        {
+            var uploaded = await client.PostAsync(new Uri($"/api/v1/students/{studentId}/documents", UriKind.Relative), report, ct);
+            uploaded.StatusCode.ShouldBe(HttpStatusCode.Created);
+            (await client.GetAsync(new Uri($"/api/v1/documents/{await IdOfAsync(uploaded)}/link", UriKind.Relative), ct)).StatusCode.ShouldBe(HttpStatusCode.OK);
+        }
+
+        using (var refused = new MultipartFormDataContent { { new StringContent("Photo"), "type" }, { new ByteArrayContent(Testing.TestFiles.Svg()), "file", $"{StudentFirstName}.png" } })
+        {
+            (await client.PostAsync(new Uri($"/api/v1/students/{studentId}/documents", UriKind.Relative), refused, ct)).StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        }
+
         // Password change (old and new passwords in the body) and a wrong current password.
         (await client.PostAsJsonAsync("/api/v1/auth/change-password", new { currentPassword = "Yanlis-Sifre-987", newPassword = "Gizli-Yeni-Sifre-55" }, ct))
             .StatusCode.ShouldBe(HttpStatusCode.UnprocessableEntity);
@@ -168,6 +181,7 @@ public sealed class LogPrivacyTests(DatabaseFixture database) : IdentityTest(dat
         events.ShouldContain(e => e.Contains("LoginCommand", StringComparison.Ordinal) && e.Contains("Auth.InvalidCredentials", StringComparison.Ordinal));
         events.ShouldContain(e => e.Contains("RegisterStudentCommand", StringComparison.Ordinal));
         events.ShouldContain(e => e.Contains("RecordPaymentCommand", StringComparison.Ordinal));
+        events.ShouldContain(e => e.Contains("UploadStudentDocumentCommand", StringComparison.Ordinal) && e.Contains("Document.UnsupportedType", StringComparison.Ordinal));
 
         string[] forbidden =
         [

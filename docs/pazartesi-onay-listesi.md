@@ -22,16 +22,19 @@ Sahip yokken (2026-11-06 – 2026-11-09) agent'ın aldığı ve sahibin onayın�
 | `Microsoft.Extensions.Caching.StackExchangeRedis` 10.0.14 (2026-10-25) | HybridCache'in L2'si için Redis protokolüyle `IDistributedCache` (Valkey ile çalışır) | MIT | Kendi `IDistributedCache` uygulaması |
 | `StackExchange.Redis` 2.13.17 (2026-05-27) | Redis/Valkey istemcisi; doğrudan referans `AbortOnConnectFail`/`BacklogPolicy` ayarları için. 3.x değil: üstteki paket 2.x'e karşı derlenmiş; 2.13.23 7 günlük bekleme süresinde | MIT (bağımlılıkları `Pipelines.Sockets.Unofficial` ve `System.IO.Hashing` de MIT) | NRedisStack (MIT, aynı çekirdek), Valkey GLIDE (Apache-2.0, .NET istemcisi henüz olgun değil) |
 | `MailKit` 4.18.2 (yayın 2026-10-23; geçişli `MimeKit` 4.18.2, `BouncyCastle.Cryptography` 2.7.0, `System.Security.Cryptography.Pkcs` ve `System.Formats.Asn1` 10.0.13) | P2-F4 SMTP ile e-posta gönderimi (DEC-350); sadece `SporAkademi.Infrastructure.Notifications`'ta | MIT (geçişliler de MIT) | `System.Net.Mail.SmtpClient` (Microsoft yeni geliştirmede önermiyor), sağlayıcı SDK'ları (SendGrid, SES), FluentEmail |
+| `AWSSDK.S3` 4.0.104.8 (→ `AWSSDK.Core` 4.0.102.14) | P2-F6 belge deposu istemcisi; sadece `Infrastructure/Storage` içinde, `IDocumentStorage` arkasında (DEC-320). Yayın 2026-10-29 / 2026-10-26 (7 günlük bekleme geçti) | Apache-2.0 | Minio .NET SDK (Apache-2.0, MinIO'ya bağlı geliştirme), FluentStorage (MIT, ek soyutlama katmanı), elle SigV4 imzalama |
 
 ## Araçlar (CI)
 | Araç | Neden | Lisans | Sabitleme |
 | --- | --- | --- | --- |
+| SeaweedFS `chrislusf/seaweedfs:4.51` (compose `storage` servisi ve Testcontainers) | P2-F6: yerel geliştirme ve testlerde S3 uyumlu belge deposu (DEC-320). Sadece yerel/CI; production deposu Deploy bloğunda seçilir | Apache-2.0 | Digest ile (`compose.yaml`); yayın 2026-10-25 |
 | gitleaks `v8.30.1` | NFR-SEC-09: repo geçmişinde gizli bilgi taraması, `repo-checks` işinde (DEC-200) | MIT | Resmi sürüm ikilisi + SHA-256 (`ci.yml`) |
 | `e2e` CI işi (Playwright tarayıcıları `npx playwright install --with-deps`) | P1-36: kritik akışlar gerçek API + PostgreSQL'e karşı, beş proje (DEC-240) | Apache-2.0 | Tarayıcılar Playwright sürümüyle sabit; action'lar SHA'lı |
 | Valkey imajı `valkey/valkey:9.1.3-alpine` (2026-10-27) | P2-F7 L2 cache sunucusu: yerel compose ve Testcontainers (DEC-310, DEC-316). Redis ≥ 7.4 izinli lisanslı değil (RSAL/SSPL/AGPL) | BSD-3-Clause | Tag + digest (`compose.yaml`) |
 | Mailpit imajı `axllent/mailpit:v1.32.0` (2026-10-22) | P2-F4 yerel e-posta yakalayıcı: compose `mail` profili (isteğe bağlı) ve Testcontainers SMTP testi (DEC-357); hiçbir şeyi dışarı iletmez | MIT | Tag + digest (`compose.yaml`) |
 
 ## Sahibe kalan işler
+- **Belge deposu (P2-F6), isteğe bağlı:** `.env`'e elle bir şey eklemek gerekmez. Depoyu kullanmak isterseniz `bash scripts/setup-env.sh` (sadece eksik `STORAGE_*` anahtarlarını ekler) ve `docker compose --profile storage up -d --wait` (DEC-326).
 - `v0.0.1` ve `v0.1.0` etiketleri, faz geçişleri (P0-35, P1-40).
 - Deploy bloğu.
 - Öğrenme günlüğü notları (taslaklar `docs/ogrenme-gunlugu.md`'de).
@@ -45,4 +48,8 @@ Sahip yokken (2026-11-06 – 2026-11-09) agent'ın aldığı ve sahibin onayın�
 ## Sahibe sorular
 - P2-F4 (DEC-351): hoş geldin e-postası geldiğine göre yöneticiye gösterilen geçici şifre kaldırılsın mı (sadece bağlantı)? Bugün ikisi birlikte çalışıyor; kaldırmak US-01/US-05/US-08'i ve arayüzü değiştirir.
 - P2-F4 (DEC-355, DEC-356): aidatın son ödeme günü (varsayılan ayın 10'u) okul bazında ayarlanabilir mi olmalı? Hatırlatmalar bütün e-postalı velilere gidiyor; "birincil iletişim velisi" seçimi istenir mi?
+- DEC-320: Production belge deposu ne olacak (ör. Cloudflare R2, Hetzner Object Storage, AWS S3, kendi sunucunda SeaweedFS)? Gerçek veri dönemi için KVKK yurt dışı aktarım koşulu (NFR-PRV-07) seçimi etkiler. Yerelde MinIO yerine SeaweedFS kullanılmasını (MinIO topluluk sürümünün arşivlenmesi, AGPL-3.0) onaylıyor musunuz?
+- DEC-324: Sağlık raporlarını yalnız Okul Admini görüyor; antrenör sadece kendi grubundaki öğrencinin fotoğrafını görüyor. Antrenörün (ör. "spora uygundur" bilgisini görmek için) sağlık raporlarına erişmesi gerekir mi? Gerekirse rapor yerine sadece "rapor var / geçerlilik tarihi" gibi bir alan önerilir.
+- DEC-322: Sınırlar uygun mu (rapor 5 MB, fotoğraf 2 MB, öğrenci başına 20 rapor)? Raporun geçerlilik tarihi/son kullanım takibi istenir mi?
+- DEC-322: Fotoğraflardaki EXIF silindiği için telefon fotoğrafları yan görünebilir (yön bilgisi gider). Sunucuda görüntü işleme kütüphanesi (izinli lisanslı, ör. SkiaSharp MIT) eklenip fotoğraf döndürülerek yeniden kodlansın mı? Bu ayrıca virüs taraması (ClamAV, GPL-2.0, ayrı servis) ile birlikte değerlendirilebilir.
 - DEC-151: Reşit değilken telefonsuz kaydedilen bir öğrenci 18'ine bastıktan sonra, herhangi bir bilgisi (ör. sadece adı) düzenlenmeden önce kendi telefonunun girilmesi gerekir. Bu kabul edilebilir mi, yoksa yetişkin telefon kuralı sadece telefon/veli değiştiğinde mi kontrol edilsin?

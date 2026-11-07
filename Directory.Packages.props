@@ -34,6 +34,10 @@
     <PackageVersion Include="Microsoft.Extensions.Caching.StackExchangeRedis" Version="10.0.14" />
     <PackageVersion Include="StackExchange.Redis" Version="2.13.17" />
   </ItemGroup>
+  <ItemGroup Label="Object storage">
+    <!-- DEC-320: S3-compatible client (Apache-2.0); used only behind IDocumentStorage. -->
+    <PackageVersion Include="AWSSDK.S3" Version="4.0.104.8" />
+  </ItemGroup>
   <ItemGroup Label="Logging">
     <PackageVersion Include="Serilog.AspNetCore" Version="10.0.0" />
     <PackageVersion Include="Serilog.Sinks.Seq" Version="9.1.0" />

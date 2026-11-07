@@ -20,7 +20,7 @@ public abstract class IntegrationTest(DatabaseFixture database) : IAsyncLifetime
     }
 
     /// <summary>The API under test; override to configure it differently (e.g. with a distributed cache).</summary>
-    protected virtual ApiFactory CreateApi() => new(Database.AppConnectionString);
+    protected virtual ApiFactory CreateApi() => new(Database.AppConnectionString, storage: Database.Storage.Settings);
 
     public virtual async ValueTask DisposeAsync()
     {

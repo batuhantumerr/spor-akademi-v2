@@ -1552,6 +1552,16 @@ Yoklamanın kaydedilmesi neden `POST` değil `PUT`: aynı istek iki kez gönderi
 | --- | --- | --- | --- | --- |
 | `GET` | `/dashboard` | Okul Admini ana sayfasının tüm sayıları tek yanıtta: KPI'lar, son 6 ayın tahsilat/borç serisi, son 8 haftanın devam oranı, branş bazında kayıtlar, en dolu 10 grup, bugünkü antrenmanlar (DEC-210) | SA | — |
 
+##### 2.13 Belgeler — `Students` (faz 2, P2-F6)
+
+| Metot | Yol | Açıklama | Rol | Hikaye |
+| --- | --- | --- | --- | --- |
+| `POST` | `/students/{id}/documents` | `multipart/form-data` (`type` = `HealthReport` \| `Photo`, `file`). İçerik API'de incelenir (DEC-321, DEC-322); fotoğraf öncekinin yerine geçer. İstek sınırı bu uç noktada 5 MB + 64 KB | SA | P2-F6 |
+| `GET` | `/students/{id}/documents` | Öğrencinin belgeleri (fotoğraf önce, raporlar yeniden eskiye) | SA | P2-F6 |
+| `GET` | `/documents/{id}/link` | 5 dakikalık imzalı indirme bağlantısı (`{ url, expiresAt }`, DEC-323) | SA | P2-F6 |
+| `DELETE` | `/documents/{id}` | Belgeyi ve dosyasını kalıcı olarak siler (DEC-325) | SA | P2-F6 |
+| `GET` | `/students/{id}/photo` | Öğrenci fotoğrafının imzalı bağlantısı; antrenör sadece kendi aktif gruplarındaki öğrenciler için (DEC-324) | SA, CO (kendi) | P2-F6 |
+
 #### 3. Kapsam kontrolü
 
 Her Must ve Should kullanıcı hikayesinin en az bir endpoint'i vardır. Kullanıcı hikayelerinde açıkça geçmeyen ama arayüzün çalışması için gereken endpoint'ler: `GET /me`, `GET /guardians`, `POST /students/{id}/reactivate`, `PUT /guardians/{id}` ve Platform Admin'in okul listesi. Bunlar ilgili hikayelerin parçası olarak geliştirilir.
@@ -1674,6 +1684,18 @@ API'nin döndüğü tüm hata ve uyarı kodlarının kataloğu. Kurallar:
 | `Student.InvalidLeaveDate` | BusinessRule | Ayrılma tarihi, aktif kayıtların başlangıç tarihinden önce olamaz. | US-15 |
 | `Guardian.NotFound` | NotFound | Veli bulunamadı. | US-13 |
 | `Guardian.PhoneTaken` | Conflict | Bu telefon numarasıyla kayıtlı başka bir veli var. | US-13 |
+
+#### Belgeler — `Students` (P2-F6)
+
+| Kod | Tür | Türkçe mesaj | Hikaye |
+| --- | --- | --- | --- |
+| `Document.NotFound` | NotFound | Belge bulunamadı. | P2-F6 |
+| `Document.Empty` | Validation | Dosya boş. | P2-F6 |
+| `Document.TooLarge` | Validation | Dosya bu belge türü için çok büyük. Sağlık raporu en fazla 5 MB, fotoğraf en fazla 2 MB olabilir. | P2-F6 |
+| `Document.UnsupportedType` | Validation | Bu dosya türü kabul edilmiyor. Sağlık raporu için PDF, JPEG veya PNG; fotoğraf için JPEG, PNG veya WebP yükleyin. | P2-F6 |
+| `Document.ExtensionMismatch` | Validation | Dosya adının uzantısı, dosyanın içeriğiyle uyuşmuyor. | P2-F6 |
+| `Document.ActiveContent` | Validation | Bu PDF betik veya gömülü dosya gibi çalıştırılabilir içerik barındırdığı için kabul edilmiyor. | P2-F6 |
+| `Document.LimitReached` | BusinessRule | Bir öğrenci için en fazla {max} sağlık raporu yüklenebilir. Yenisini yüklemeden önce eskilerden birini silin. | P2-F6 |
 
 #### Kayıtlar — `Enrollments`
 

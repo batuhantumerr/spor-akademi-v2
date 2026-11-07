@@ -12,6 +12,14 @@ public interface ICommand<TResponse>;
 /// </summary>
 public interface IKeepChangesOnFailure;
 
+/// <summary>
+/// Marks a command whose handler also writes outside the database (object storage, DEC-321). The transaction
+/// decorator does not wrap it: the handler opens its own <c>IUnitOfWork</c> around the database part only, so a
+/// slow storage call never holds a database transaction open, and it undoes its storage write when the database
+/// part fails.
+/// </summary>
+public interface IManagesOwnTransaction;
+
 /// <summary>A read-only request. Projects straight to a DTO; never runs in the transaction decorator.</summary>
 public interface IQuery<TResponse>;
 

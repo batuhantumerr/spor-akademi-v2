@@ -71,6 +71,17 @@ export const errorMessages: Readonly<Record<string, string>> = {
   'Student.InvalidLeaveDate': 'Ayrılma tarihi, aktif kayıtların başlangıç tarihinden önce olamaz.',
   'Guardian.NotFound': 'Veli bulunamadı.',
   'Guardian.PhoneTaken': 'Bu telefon numarasıyla kayıtlı başka bir veli var.',
+  'Document.NotFound': 'Belge bulunamadı.',
+  'Document.Empty': 'Dosya boş.',
+  'Document.TooLarge':
+    'Dosya bu belge türü için çok büyük. Sağlık raporu en fazla 5 MB, fotoğraf en fazla 2 MB olabilir.',
+  'Document.UnsupportedType':
+    'Bu dosya türü kabul edilmiyor. Sağlık raporu için PDF, JPEG veya PNG; fotoğraf için JPEG, PNG veya WebP yükleyin.',
+  'Document.ExtensionMismatch': 'Dosya adının uzantısı, dosyanın içeriğiyle uyuşmuyor.',
+  'Document.ActiveContent':
+    'Bu PDF betik veya gömülü dosya gibi çalıştırılabilir içerik barındırdığı için kabul edilmiyor.',
+  'Document.LimitReached':
+    'Bir öğrenci için en fazla {max} sağlık raporu yüklenebilir. Yenisini yüklemeden önce eskilerden birini silin.',
   'Enrollment.NotFound': 'Kayıt bulunamadı.',
   'Enrollment.StudentNotActive': 'Ayrılmış bir öğrenci gruba kaydedilemez.',
   'Enrollment.BirthYearOutOfRange':
@@ -310,6 +321,36 @@ export const ui = {
     reactivated: 'Öğrenci yeniden aktifleştirildi.',
     saved: 'Öğrenci bilgileri kaydedildi.',
     guardianSaved: 'Veli bilgileri kaydedildi.',
+  },
+  documents: {
+    title: 'Belgeler',
+    photo: 'Fotoğraf',
+    noPhoto: 'Fotoğraf yok',
+    photoAlt: 'Öğrencinin fotoğrafı',
+    photoUnavailable: 'Fotoğraf şu anda gösterilemiyor.',
+    types: { HealthReport: 'Sağlık raporu', Photo: 'Fotoğraf' },
+    typeLabel: 'Belge türü',
+    fileLabel: 'Dosya',
+    hints: {
+      HealthReport: 'PDF, JPEG veya PNG; en fazla 5 MB.',
+      Photo: 'JPEG, PNG veya WebP; en fazla 2 MB. Yeni fotoğraf öncekinin yerine geçer.',
+    },
+    privacy:
+      'Sağlık raporları hassas kişisel veridir; yalnızca okul yöneticileri görebilir. Açma bağlantıları 5 dakika geçerlidir.',
+    upload: 'Yükle',
+    uploading: 'Yükleniyor… %{percent}',
+    progress: 'Yükleme ilerlemesi',
+    chooseFile: 'Önce bir dosya seçin.',
+    uploaded: 'Belge yüklendi.',
+    empty: 'Henüz belge yok.',
+    open: 'Aç',
+    openLabel: 'Aç: {name}',
+    remove: 'Sil',
+    removeLabel: 'Sil: {name}',
+    removeTitle: 'Belge silinsin mi?',
+    removeText: '"{name}" kalıcı olarak silinecek. Bu işlem geri alınamaz.',
+    removed: 'Belge silindi.',
+    details: '{size} · {date}',
   },
   sports: {
     title: 'Branşlar',

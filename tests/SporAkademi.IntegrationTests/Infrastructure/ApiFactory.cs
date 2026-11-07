@@ -10,9 +10,13 @@ namespace SporAkademi.IntegrationTests.Infrastructure;
 
 /// <summary>
 /// The real API wired to the test database, with a controllable clock. Without <paramref name="cacheConnectionString"/>
-/// the cache is in memory only (DEC-315).
+/// the cache is in memory only (DEC-315); without <paramref name="storage"/> (the <c>Storage</c> settings) the document
+/// store is unconfigured and readiness reports Degraded (DEC-326).
 /// </summary>
-public sealed class ApiFactory(string appConnectionString, string? cacheConnectionString = null) : WebApplicationFactory<Program>
+public sealed class ApiFactory(
+    string appConnectionString,
+    string? cacheConnectionString = null,
+    IReadOnlyDictionary<string, string?>? storage = null) : WebApplicationFactory<Program>
 {
     public const string JwtSigningKey = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
 
@@ -25,18 +29,20 @@ public sealed class ApiFactory(string appConnectionString, string? cacheConnecti
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
         builder.UseEnvironment("Testing");
-        builder.ConfigureAppConfiguration(config => config.AddInMemoryCollection(new Dictionary<string, string?>
-        {
-            ["ConnectionStrings:App"] = appConnectionString,
-            ["ConnectionStrings:Cache"] = cacheConnectionString,
-            ["Jwt:SigningKey"] = JwtSigningKey,
-            ["Seq:ServerUrl"] = null,
-            ["Serilog:MinimumLevel:Default"] = "Fatal",
-            // Tests drive OutboxProcessor themselves so delivery happens exactly when they decide (OutboxWorkerTests and
-            // the job tests turn a scheduler on), and run no Hangfire server unless a test asks for one.
-            ["Outbox:Scheduler"] = "None",
-            ["Jobs:ServerEnabled"] = "false",
-        }));
+        builder.ConfigureAppConfiguration(config => config
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["ConnectionStrings:App"] = appConnectionString,
+                ["ConnectionStrings:Cache"] = cacheConnectionString,
+                ["Jwt:SigningKey"] = JwtSigningKey,
+                ["Seq:ServerUrl"] = null,
+                ["Serilog:MinimumLevel:Default"] = "Fatal",
+                // Tests drive OutboxProcessor themselves so delivery happens exactly when they decide (OutboxWorkerTests and
+                // the job tests turn a scheduler on), and run no Hangfire server unless a test asks for one.
+                ["Outbox:Scheduler"] = "None",
+                ["Jobs:ServerEnabled"] = "false",
+            })
+            .AddInMemoryCollection(storage ?? new Dictionary<string, string?>()));
         builder.ConfigureServices(services =>
         {
             services.Replace(ServiceDescriptor.Singleton<TimeProvider>(Clock));

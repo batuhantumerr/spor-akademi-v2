@@ -85,6 +85,9 @@ internal sealed class StudentRepository(AppDbContext db) : IStudentRepository
 
     public void Add(Student student) => db.Add(student);
 
+    public Task<bool> ExistsAsync(StudentId id, CancellationToken cancellationToken) =>
+        db.Set<Student>().AnyAsync(s => s.Id == id, cancellationToken);
+
     public void ExpectVersion(Student student, uint version)
     {
         var entry = db.Entry(student);
