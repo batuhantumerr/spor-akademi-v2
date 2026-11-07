@@ -1538,6 +1538,12 @@ Yoklamanın kaydedilmesi neden `POST` değil `PUT`: aynı istek iki kez gönderi
 | `POST` | `/payments` | Elle ödeme kaydı | SA | US-23 |
 | `POST` | `/payments/{id}/cancel` | Gerekçeyle iptal; düzenleme ve silme yok | SA | US-23 |
 | `GET` | `/dues/outstanding` | Ödenmemiş borçlar (`?groupId=&period=`) | SA | US-24 |
+| `POST` | `/online-payments` | Bir borcun (kayıt + dönem) kalanı için online ödeme başlatır; `Idempotency-Key` başlığı zorunlu, tekrarında aynı deneme `200` + `Idempotent-Replayed` (P2-F1, DEC-341) | SA | US-23 |
+| `GET` | `/online-payments` | Online ödeme denemeleri (`?enrollmentId=&period=&status=`) | SA | US-23 |
+| `GET` | `/online-payments/{id}` | Bir deneme: durum, ödeme bağlantısı (açıkken), kaydedilen ödeme | SA | US-23 |
+| `POST` | `/payment-webhooks` | Sağlayıcı webhook'u; imza doğrulanır, okul saklı denemeden okunur (DEC-343, DEC-344) | Anonim | — |
+| `POST` | `/payment-callbacks` | Ödeyenin hosted checkout'tan dönüşü (form `token`); `303` → `/odeme-sonucu` | Anonim | — |
+| `POST` | `/sandbox-checkout/complete` | Sadece Fake sağlayıcı etkinken: sandbox ödeme sayfasının sonucu (DEC-347) | Anonim | — |
 
 ##### 2.11 Duyurular — `Announcements`
 
@@ -1731,6 +1737,21 @@ API'nin döndüğü tüm hata ve uyarı kodlarının kataloğu. Kurallar:
 | `Payment.FeeNotDefined` | BusinessRule | Bu grup için bu dönemde tanımlı bir aidat yok. | US-23 |
 | `Payment.AlreadyCancelled` | BusinessRule | Bu ödeme zaten iptal edilmiş. | US-23 |
 | `Payment.CancelReasonRequired` | Validation | İptal gerekçesi zorunludur. | US-23 |
+| `Payment.OnlinePaymentInProgress` | Conflict | Bu borç için açık bir online ödeme var. Sonuçlanmasını veya bağlantının süresinin dolmasını bekleyin. | P2-F1 |
+| `Payment.OnlineNotCancellable` | BusinessRule | Online ödemeler buradan iptal edilemez; iade ödeme sağlayıcısı üzerinden yapılır. | P2-F1 |
+| `OnlinePayment.NotFound` | NotFound | Online ödeme bulunamadı. | P2-F1 |
+| `OnlinePayment.NothingDue` | BusinessRule | Bu dönem için ödenecek borç yok. | P2-F1 |
+| `OnlinePayment.PeriodInFuture` | BusinessRule | Gelecek bir dönemin aidatı henüz ödenemez. | P2-F1 |
+| `OnlinePayment.CheckoutInProgress` | Conflict | Bu borç için açık bir ödeme bağlantısı var. | P2-F1 |
+| `OnlinePayment.NotOpen` | BusinessRule | Bu online ödeme artık açık değil. | P2-F1 |
+| `OnlinePayment.ProviderUnavailable` | BusinessRule (webhook'ta `503`) | Ödeme sağlayıcısına şu anda ulaşılamıyor. | P2-F1 |
+| `OnlinePayment.ProviderMismatch` | BusinessRule | Ödeme sağlayıcısının bildirimi bu ödemeyle eşleşmiyor. | P2-F1 |
+| `OnlinePayment.Disabled` | BusinessRule | Online ödeme bu ortamda yapılandırılmamış. | P2-F1 |
+| `OnlinePayment.InvalidSignature` | Unauthorized | Bildirim imzası geçersiz. | P2-F1 |
+| `Idempotency.KeyRequired` | Validation | İstek anahtarı eksik. | P2-F1 |
+| `Idempotency.KeyInvalid` | Validation | İstek anahtarı geçersiz. | P2-F1 |
+| `Idempotency.KeyReused` | BusinessRule | Bu istek anahtarı başka bir işlem için kullanılmış. | P2-F1 |
+| `Idempotency.InProgress` | Conflict | Aynı işlem şu anda sürüyor. | P2-F1 |
 
 ---
 

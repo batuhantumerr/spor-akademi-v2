@@ -43,6 +43,7 @@ internal static class JobsRegistration
         services.AddSingleton<TenantJobRunner>();
         services.AddScoped<OutboxJobs>();
         services.AddScoped<RefreshTokenCleanupJob>();
+        services.AddScoped<OnlinePaymentReconcileJob>();
         services.AddScoped<StudentAnonymizationJob>();
         services.AddScoped<DuesReminderJob>();
         services.AddSingleton<JobsDashboardSessions>();

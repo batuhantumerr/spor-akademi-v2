@@ -16,6 +16,9 @@ public enum PaymentMethod
 {
     Cash,
     BankTransfer,
+
+    /// <summary>Paid through a payment provider (P2-F1); only recorded by <see cref="OnlinePayment"/>, never by hand.</summary>
+    Online,
 }
 
 public enum PaymentStatus
@@ -84,6 +87,9 @@ public sealed class Payment : AggregateRoot<PaymentId>, ITenantScoped
 
     public DateTimeOffset? CancelledAt { get; private set; }
 
+    /// <summary>The online payment that recorded this payment; <c>null</c> for cash and bank transfer.</summary>
+    public OnlinePaymentId? OnlinePaymentId { get; private set; }
+
     /// <summary>
     /// Records a payment. The enrollment must have been active at least one day of <paramref name="period"/>
     /// and the group must have a fee for it (<paramref name="feeDefined"/>, looked up by the caller).
@@ -116,8 +122,20 @@ public sealed class Payment : AggregateRoot<PaymentId>, ITenantScoped
             return Result.Failure<Payment>(PaymentErrors.FeeNotDefined);
         }
 
+        if (method == PaymentMethod.Online)
+        {
+            return Result.Failure<Payment>(CommonErrors.FieldInvalid);
+        }
+
         return Result.Success(new Payment(EntityId.New<PaymentId>(), tenantId, enrollment, period, amount, method, paidOn));
     }
+
+    /// <summary>
+    /// Records a charge the provider confirmed (DEC-342). The due's rules were checked when the online payment started;
+    /// the money is taken, so it is recorded even if the enrollment changed since.
+    /// </summary>
+    internal static Payment RecordOnline(SchoolId tenantId, PaidEnrollment enrollment, YearMonth period, Money amount, DateOnly paidOn, OnlinePaymentId onlinePaymentId) =>
+        new(EntityId.New<PaymentId>(), tenantId, enrollment, period, amount, PaymentMethod.Online, paidOn) { OnlinePaymentId = onlinePaymentId };
 
     /// <summary>Cancels a wrong entry with a reason; who and when are kept. The amount and the rest never change.</summary>
     public Result Cancel(string reason, UserId cancelledBy, DateTimeOffset now)
@@ -127,6 +145,13 @@ public sealed class Payment : AggregateRoot<PaymentId>, ITenantScoped
         if (Status == PaymentStatus.Cancelled)
         {
             return Result.Failure(PaymentErrors.AlreadyCancelled);
+        }
+
+        // DEC-346: the money of an online payment was really taken; cancelling it here would reopen the due for a
+        // second charge. Refunds go through the provider (not in P2-F1).
+        if (Method == PaymentMethod.Online)
+        {
+            return Result.Failure(PaymentErrors.OnlineNotCancellable);
         }
 
         var trimmed = reason.Trim();
@@ -155,5 +180,7 @@ public static class PaymentErrors
     public static readonly Error EnrollmentNotActiveInPeriod = Error.BusinessRule("Payment.EnrollmentNotActiveInPeriod", "The enrollment was not active in the period.");
     public static readonly Error FeeNotDefined = Error.BusinessRule("Payment.FeeNotDefined", "The group has no fee for the period.");
     public static readonly Error AlreadyCancelled = Error.BusinessRule("Payment.AlreadyCancelled", "The payment is already cancelled.");
+    public static readonly Error OnlinePaymentInProgress = Error.Conflict("Payment.OnlinePaymentInProgress", "An online payment of the due is in progress.");
+    public static readonly Error OnlineNotCancellable = Error.BusinessRule("Payment.OnlineNotCancellable", "An online payment cannot be cancelled here.");
     public static readonly Error CancelReasonRequired = Error.Validation("Payment.CancelReasonRequired", "A cancel reason is required.");
 }

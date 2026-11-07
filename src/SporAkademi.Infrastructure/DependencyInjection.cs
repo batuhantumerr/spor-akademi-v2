@@ -121,6 +121,7 @@ public static class DependencyInjection
         services.AddEmail();
 
         services.AddOutbox(configuration);
+        services.AddPaymentProviders(configuration);
         services.AddJobs();
         services.AddSingleton(new HeartbeatClock(TimeProvider.System));
 

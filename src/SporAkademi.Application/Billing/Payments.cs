@@ -48,7 +48,9 @@ internal sealed class RecordPaymentValidator : AbstractValidator<RecordPaymentCo
             .NotNull().WithErrorCode(CommonErrors.FieldRequired.Code)
             .Must(a => a.ToMoney().IsSuccess).WithErrorCode(Money.Invalid.Code)
             .Must(a => a.ToMoney().Value.Amount > 0).WithErrorCode(PaymentErrors.InvalidAmount.Code);
-        RuleFor(c => c.Method).IsInEnum().WithErrorCode(CommonErrors.FieldInvalid.Code);
+        // Online payments are recorded only by a provider's confirmation (P2-F1), never by hand.
+        RuleFor(c => c.Method).IsInEnum().WithErrorCode(CommonErrors.FieldInvalid.Code)
+            .NotEqual(PaymentMethod.Online).WithErrorCode(CommonErrors.FieldInvalid.Code);
         RuleFor(c => c.PaidOn).NotNull().WithErrorCode(CommonErrors.FieldRequired.Code)
             .Must(BillingInput.IsSupportedDate).WithErrorCode(CommonErrors.FieldInvalid.Code);
     }
@@ -78,7 +80,10 @@ internal sealed class RecordPaymentHandler(
     IEnrollmentDirectory enrollments,
     IGroupFeeSchedule fees,
     ITenancyModule tenancy,
-    ICurrentUser currentUser) : ICommandHandler<RecordPaymentCommand, PaymentId>
+    ICurrentUser currentUser,
+    IOnlinePaymentRepository onlinePayments,
+    IPaymentProviders providers,
+    TimeProvider clock) : ICommandHandler<RecordPaymentCommand, PaymentId>
 {
     public async Task<Result<PaymentId>> Handle(RecordPaymentCommand command, CancellationToken cancellationToken)
     {
@@ -99,6 +104,14 @@ internal sealed class RecordPaymentHandler(
 
         var period = YearMonth.Parse(command.Period).Value;
         var amount = command.Amount.ToMoney().Value;
+
+        // DEC-342: while the payer may still pay this due online, a manual payment could double the credit. Under the
+        // enrollment lock, so a concurrent online start or success waits for this check.
+        if (await onlinePayments.FindOpenAsync(enrollment.Id, period, cancellationToken) is { } open
+            && !open.HasExpired(clock.GetUtcNow(), providers.CheckoutLifetime))
+        {
+            return Result.Failure<PaymentId>(PaymentErrors.OnlinePaymentInProgress);
+        }
 
         // A period's recorded total stays within the money bound, so totals and reports never overflow.
         if (await payments.RecordedTotalAsync(enrollment.Id, period, cancellationToken) + amount.Amount > Money.MaxAmount)

@@ -47,6 +47,11 @@ public sealed partial class CrossTenantEndpointTests(DatabaseFixture database) :
         ["POST /api/v1/facilities"] = "name, type, address, capacity",
         ["POST /api/v1/coaches"] = "names, e-mail, phone",
         ["POST /api/v1/platform/schools"] = "Platform Admin only; creates a school",
+        // P2-F1 (DEC-344): anonymous provider endpoints. They take no school from the caller; the school comes from the
+        // stored online payment found by the provider token (OnlinePaymentWebhookTests pins this).
+        ["POST /api/v1/payment-webhooks"] = "anonymous; signed provider webhook, school from the stored payment",
+        ["POST /api/v1/payment-callbacks"] = "anonymous; provider token only, result re-queried from the provider",
+        ["POST /api/v1/sandbox-checkout/complete"] = "anonymous; Fake provider sandbox page, token only",
         ["POST /api/v1/platform/jobs/dashboard-session"] = "Platform Admin only; no body, starts the caller's job panel session (DEC-332)",
         ["PUT /api/v1/settings/data-retention"] = "the caller's own school; retention months and version only (DEC-361)",
     };
@@ -169,6 +174,7 @@ public sealed partial class CrossTenantEndpointTests(DatabaseFixture database) :
         {
             (Admin, "/api/v1/students?search=Kaynak", _a.Student),
             (Admin, "/api/v1/payments", _a.Payment),
+            (Admin, "/api/v1/online-payments", _a.OnlinePayment),
             (Admin, "/api/v1/coaches", _a.Coach),
             (Admin, "/api/v1/groups", _a.Group),
             (Admin, "/api/v1/sports", _a.Sport),
@@ -277,6 +283,7 @@ public sealed partial class CrossTenantEndpointTests(DatabaseFixture database) :
             "/api/v1/me/announcements",
             "/api/v1/me/groups",
             "/api/v1/me/sessions",
+            "/api/v1/online-payments",
             "/api/v1/payments",
             "/api/v1/sports",
             "/api/v1/settings/data-retention",
@@ -298,6 +305,11 @@ public sealed partial class CrossTenantEndpointTests(DatabaseFixture database) :
         else if (probe.Body is not null)
         {
             request.Content = JsonContent.Create(probe.Body);
+        }
+
+        foreach (var (name, value) in probe.Headers ?? new Dictionary<string, string>())
+        {
+            request.Headers.Add(name, value);
         }
 
         var response = await client.SendAsync(request, Ct);
@@ -342,6 +354,7 @@ public sealed partial class CrossTenantEndpointTests(DatabaseFixture database) :
         "guardians" => _a.Guardian,
         "enrollments" => _a.Enrollment,
         "payments" => _a.Payment,
+        "online-payments" => _a.OnlinePayment,
         "documents" => _a.Document,
         var other => throw new InvalidOperationException($"{endpoint.Key}: no school A resource for '{other}'."),
     };
@@ -357,6 +370,7 @@ public sealed partial class CrossTenantEndpointTests(DatabaseFixture database) :
         "guardians" => "Guardian.NotFound",
         "enrollments" => "Enrollment.NotFound",
         "payments" => "Payment.NotFound",
+        "online-payments" => "OnlinePayment.NotFound",
         "documents" => "Document.NotFound",
         var other => throw new InvalidOperationException($"No not-found code for '{other}'."),
     };
@@ -433,6 +447,7 @@ public sealed partial class CrossTenantEndpointTests(DatabaseFixture database) :
             ["POST /api/v1/enrollments/{id:guid}/end"] = (new { date = "2027-01-14" }, ""),
             ["GET /api/v1/payments/{id:guid}"] = (null, ""),
             ["POST /api/v1/payments/{id:guid}/cancel"] = (new { reason = "Hack" }, ""),
+            ["GET /api/v1/online-payments/{id:guid}"] = (null, ""),
         };
         return probes.ToDictionary(p => p.Key, p => new Probe(p.Key, p.Value.Body, p.Value.Query, 404, NotFoundOf(p.Key.Split(' ')[1])), StringComparer.Ordinal);
     }
@@ -482,8 +497,14 @@ public sealed partial class CrossTenantEndpointTests(DatabaseFixture database) :
             [
                 new("A's enrollment", new { enrollmentId = a.Enrollment, period = "2027-01", amount = new { amount = "1000.00", currency = "TRY" }, method = "Cash", paidOn = "2027-01-10" }, Status: 404, Code: "Enrollment.NotFound"),
             ],
+            ["POST /api/v1/online-payments"] =
+            [
+                new("A's enrollment", new { enrollmentId = a.UnpaidEnrollment, period = "2027-01" }, Status: 404, Code: "Enrollment.NotFound", Headers: IdempotencyKey),
+            ],
         };
     }
+
+    private static readonly Dictionary<string, string> IdempotencyKey = new(StringComparer.Ordinal) { ["Idempotency-Key"] = "sizma-denemesi-1" };
 
     /// <summary>Query strings a list needs to answer at all; the guardian search uses school A's real phone.</summary>
     private Dictionary<string, string> ListQueries => new(StringComparer.Ordinal)
@@ -568,7 +589,9 @@ public sealed partial class CrossTenantEndpointTests(DatabaseFixture database) :
         var enrollment = IdOf(await EnrollOkAsync(student, group, "2027-01-04"));
         var payment = IdOf(await RecordOkAsync(enrollment, "2027-01", "1000.00"));
         var unpaid = await RegisterStudentAsync("Borçlu", "Okulu");
-        await EnrollOkAsync(unpaid, group, "2027-01-04");
+        var unpaidEnrollment = IdOf(await EnrollOkAsync(unpaid, group, "2027-01-04"));
+        // P2-F1: an online payment attempt for the unpaid month.
+        var onlinePayment = IdOf(await StartOnlineOkAsync(unpaidEnrollment));
         (await Admin.PutAsJsonAsync($"/api/v1/groups/{group}/sessions/{RecordedSessionKey}/attendance", new { records = new[] { new { studentId = student, status = "Present" } } }, Ct))
             .StatusCode.ShouldBe(HttpStatusCode.OK);
         var announcement = await Admin.PostAsJsonAsync($"/api/v1/groups/{group}/announcements", new { title = "Duyuru", body = "Antrenman saati değişti." }, Ct);
@@ -589,7 +612,9 @@ public sealed partial class CrossTenantEndpointTests(DatabaseFixture database) :
             guardian.GetProperty("guardianId").GetGuid(),
             guardian.GetProperty("phone").GetString()!,
             enrollment,
+            unpaidEnrollment,
             payment,
+            onlinePayment,
             IdOf(await BodyOf(announcement)),
             IdOf(await BodyOf(document)));
     }
@@ -622,7 +647,7 @@ public sealed partial class CrossTenantEndpointTests(DatabaseFixture database) :
     }
 
     /// <summary>A request and the "not found" it must get.</summary>
-    private sealed record Probe(string Name, object? Body, string Query = "", int Status = 404, string Code = "");
+    private sealed record Probe(string Name, object? Body, string Query = "", int Status = 404, string Code = "", IReadOnlyDictionary<string, string>? Headers = null);
 
     /// <summary>A multipart upload body (document upload); everything else is sent as JSON.</summary>
     private sealed record MultipartForm(string Type, byte[] File, string FileName)
@@ -644,14 +669,16 @@ public sealed partial class CrossTenantEndpointTests(DatabaseFixture database) :
         Guid Guardian,
         string GuardianPhone,
         Guid Enrollment,
+        Guid UnpaidEnrollment,
         Guid Payment,
+        Guid OnlinePayment,
         Guid Announcement,
         Guid Document)
     {
         /// <summary>Ids and personal data of school A that must never appear in school B's responses.</summary>
         public string[] LeakMarkers =>
         [
-            .. new[] { Sport, Facility, Coach, Group, Student, UnpaidStudent, Guardian, Enrollment, Payment, Announcement, Document }.Select(id => id.ToString()),
+            .. new[] { Sport, Facility, Coach, Group, Student, UnpaidStudent, Guardian, Enrollment, UnpaidEnrollment, Payment, OnlinePayment, Announcement, Document }.Select(id => id.ToString()),
             "kaynak-rapor",
             GuardianPhone.TrimStart('+'), // JSON may escape the '+'
             "Kaynak",

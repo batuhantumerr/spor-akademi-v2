@@ -155,7 +155,7 @@ type StatusFilter = PaymentStatus | '';
                   }
                 </td>
                 <td class="text-right">
-                  @if (p.status === 'Recorded') {
+                  @if (p.status === 'Recorded' && p.method !== 'Online') {
                     <button
                       type="button"
                       class="btn btn-ghost btn-sm hover:!bg-destructive/10 hover:!text-destructive"

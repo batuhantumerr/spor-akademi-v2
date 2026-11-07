@@ -23,6 +23,9 @@ public sealed class JobsOptions
 
     public string RefreshTokenCleanupCron { get; set; } = "30 3 * * *";
 
+    /// <summary>Online payment reconciliation (P2-F1, DEC-343): re-queries open attempts and expires old links.</summary>
+    public string OnlinePaymentReconcileCron { get; set; } = "*/5 * * * *";
+
     /// <summary>P2-F5 (DEC-362): once a day, 02:00 UTC (05:00 in Istanbul), outside training hours.</summary>
     public string StudentAnonymizationCron { get; set; } = "0 2 * * *";
 
@@ -46,6 +49,7 @@ public sealed class JobsOptions
         && IsCron(OutboxCron)
         && IsCron(OutboxCleanupCron)
         && IsCron(RefreshTokenCleanupCron)
+        && IsCron(OnlinePaymentReconcileCron)
         && IsCron(StudentAnonymizationCron)
         && AnonymizationBatchSize is > 0 and <= 1_000
         && IsCron(DuesReminderCron)

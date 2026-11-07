@@ -169,6 +169,26 @@ public sealed class LogPrivacyTests(DatabaseFixture database) : IdentityTest(dat
         Api.Emails.To(GuardianEmail).ShouldHaveSingleItem().TextBody.ShouldContain(StudentFirstName);
         var resetToken = CapturingEmailSender.TokenIn(Api.Emails.To(Email).ShouldHaveSingleItem());
         var welcomeToken = CapturingEmailSender.TokenIn(Api.Emails.To(CoachEmail).Single());
+
+        // P2-F1: after the fee reminder was sent (it needs the unpaid due), the due is paid online through the sandbox
+        // provider (webhook and browser return); the admin session is still valid until the password reset is confirmed.
+        using (var start = new HttpRequestMessage(HttpMethod.Post, new Uri("/api/v1/online-payments", UriKind.Relative)))
+        {
+            start.Content = JsonContent.Create(new { enrollmentId = enrollment, period = "2027-01" });
+            start.Headers.Add("Idempotency-Key", "gizlilik-anahtari-1");
+            var started = await client.SendAsync(start, ct);
+            started.StatusCode.ShouldBe(HttpStatusCode.Created);
+            var checkoutUrl = (await started.Content.ReadFromJsonAsync<JsonElement>(ct)).GetProperty("checkoutUrl").GetString()!;
+            var token = checkoutUrl[(checkoutUrl.IndexOf('=', StringComparison.Ordinal) + 1)..];
+            (await client.PostAsJsonAsync("/api/v1/sandbox-checkout/complete", new { token, succeed = true }, ct)).StatusCode.ShouldBe(HttpStatusCode.OK);
+            using var form = new FormUrlEncodedContent(new Dictionary<string, string> { ["token"] = token });
+            (await client.PostAsync(new Uri("/api/v1/payment-callbacks", UriKind.Relative), form, ct)).StatusCode.ShouldNotBe(HttpStatusCode.InternalServerError);
+        }
+
+        while (await processor.ProcessBatchAsync(ct) > 0)
+        {
+        }
+
         (await anonymous.PostAsJsonAsync("/api/v1/auth/password-reset/confirm", new { token = resetToken, newPassword = ResetPassword }, ct))
             .StatusCode.ShouldBe(HttpStatusCode.NoContent);
         (await anonymous.PostAsJsonAsync("/api/v1/auth/password-reset/confirm", new { token = resetToken, newPassword = ResetPassword }, ct))
@@ -196,6 +216,8 @@ public sealed class LogPrivacyTests(DatabaseFixture database) : IdentityTest(dat
         events.ShouldContain(e => e.Contains("LoginCommand", StringComparison.Ordinal) && e.Contains("Auth.InvalidCredentials", StringComparison.Ordinal));
         events.ShouldContain(e => e.Contains("RegisterStudentCommand", StringComparison.Ordinal));
         events.ShouldContain(e => e.Contains("RecordPaymentCommand", StringComparison.Ordinal));
+        events.ShouldContain(e => e.Contains("StartOnlinePaymentCommand", StringComparison.Ordinal));
+        events.ShouldContain(e => e.Contains("ApplyProviderStateCommand", StringComparison.Ordinal));
         events.ShouldContain(e => e.Contains("UploadStudentDocumentCommand", StringComparison.Ordinal) && e.Contains("Document.UnsupportedType", StringComparison.Ordinal));
 
         string[] forbidden =

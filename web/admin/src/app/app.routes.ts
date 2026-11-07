@@ -172,6 +172,12 @@ export const routes: Routes = [
             loadComponent: () => import('./features/billing/dues.page').then((m) => m.DuesPage),
           },
           {
+            path: 'online-payments',
+            title: ui.nav.onlinePayments,
+            loadComponent: () =>
+              import('./features/billing/online-payments.page').then((m) => m.OnlinePaymentsPage),
+          },
+          {
             path: 'settings/data-retention',
             title: ui.nav.dataRetention,
             loadComponent: () =>
@@ -180,6 +186,20 @@ export const routes: Routes = [
         ],
       },
     ],
+  },
+  // P2-F1 (DEC-347, DEC-348): public pages of the hosted checkout; the payer does not sign in.
+  // After the shell, which matches them with none of its children, so the router falls through to them.
+  {
+    path: 'sandbox-odeme',
+    loadComponent: () =>
+      import('./features/billing/sandbox-checkout.page').then((m) => m.SandboxCheckoutPage),
+    title: ui.onlinePayments.sandbox.title,
+  },
+  {
+    path: 'odeme-sonucu',
+    loadComponent: () =>
+      import('./features/billing/payment-result.page').then((m) => m.PaymentResultPage),
+    title: ui.onlinePayments.result['title'],
   },
   // P2-F4: no shell child matches these paths, so the router reaches them after the shell without running its guard.
   {
