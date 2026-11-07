@@ -54,6 +54,18 @@ public sealed class PipelineTests
     }
 
     [Fact]
+    public async Task Commands_that_manage_their_own_transaction_are_validated_but_not_wrapped()
+    {
+        using var provider = BuildProvider();
+        using var scope = provider.CreateScope();
+        var handler = scope.ServiceProvider.GetRequiredService<ICommandHandler<StoreThing, Guid>>();
+
+        (await handler.Handle(new StoreThing("ok"), CancellationToken.None)).IsSuccess.ShouldBeTrue();
+        (await handler.Handle(new StoreThing(""), CancellationToken.None)).Error.Code.ShouldBe("Validation.Failed");
+        _calls.Entries.ShouldBe(["store"]);
+    }
+
+    [Fact]
     public async Task Invalid_command_never_reaches_the_transaction_or_handler()
     {
         using var provider = BuildProvider();
@@ -152,6 +164,22 @@ public sealed class AttemptThingHandler(CallLog calls) : ICommandHandler<Attempt
     {
         calls.Entries.Add("attempt");
         return Task.FromResult(Result.Failure<Guid>(Error.BusinessRule("Thing.Failed", "d")));
+    }
+}
+
+public sealed record StoreThing(string Name) : ICommand<Guid>, IManagesOwnTransaction;
+
+public sealed class StoreThingValidator : AbstractValidator<StoreThing>
+{
+    public StoreThingValidator() => RuleFor(c => c.Name).NotEmpty().WithErrorCode("Field.Required");
+}
+
+public sealed class StoreThingHandler(CallLog calls) : ICommandHandler<StoreThing, Guid>
+{
+    public Task<Result<Guid>> Handle(StoreThing command, CancellationToken cancellationToken)
+    {
+        calls.Entries.Add("store");
+        return Task.FromResult(Result.Success(Guid.CreateVersion7()));
     }
 }
 

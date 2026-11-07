@@ -64,6 +64,7 @@ app.MapCoachEndpoints();
 app.MapSchoolEndpoints();
 app.MapOrganizationEndpoints();
 app.MapStudentEndpoints();
+app.MapDocumentEndpoints();
 app.MapGroupsEndpoints();
 app.MapAnnouncementEndpoints();
 app.MapEnrollmentEndpoints();

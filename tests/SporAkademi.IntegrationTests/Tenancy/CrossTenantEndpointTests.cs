@@ -11,6 +11,7 @@ using Npgsql;
 using SporAkademi.Domain.Identity;
 using SporAkademi.IntegrationTests.Billing;
 using SporAkademi.IntegrationTests.Infrastructure;
+using SporAkademi.Testing;
 
 namespace SporAkademi.IntegrationTests.Tenancy;
 
@@ -249,6 +250,7 @@ public sealed partial class CrossTenantEndpointTests(DatabaseFixture database) :
             "GET /api/v1/groups/{id:guid}/sessions/{sessionKey}/attendance",
             "PUT /api/v1/groups/{id:guid}/sessions/{sessionKey}/attendance",
             "GET /api/v1/students/{id:guid}/attendance",
+            "GET /api/v1/students/{id:guid}/photo",
             "GET /api/v1/me/groups",
             "GET /api/v1/me/sessions",
             "GET /api/v1/me/announcements",
@@ -282,7 +284,11 @@ public sealed partial class CrossTenantEndpointTests(DatabaseFixture database) :
     {
         var target = url + probe.Query;
         using var request = new HttpRequestMessage(new HttpMethod(method), new Uri(target, UriKind.Relative));
-        if (probe.Body is not null)
+        if (probe.Body is MultipartForm form)
+        {
+            request.Content = form.Create();
+        }
+        else if (probe.Body is not null)
         {
             request.Content = JsonContent.Create(probe.Body);
         }
@@ -329,6 +335,7 @@ public sealed partial class CrossTenantEndpointTests(DatabaseFixture database) :
         "guardians" => _a.Guardian,
         "enrollments" => _a.Enrollment,
         "payments" => _a.Payment,
+        "documents" => _a.Document,
         var other => throw new InvalidOperationException($"{endpoint.Key}: no school A resource for '{other}'."),
     };
 
@@ -343,6 +350,7 @@ public sealed partial class CrossTenantEndpointTests(DatabaseFixture database) :
         "guardians" => "Guardian.NotFound",
         "enrollments" => "Enrollment.NotFound",
         "payments" => "Payment.NotFound",
+        "documents" => "Document.NotFound",
         var other => throw new InvalidOperationException($"No not-found code for '{other}'."),
     };
 
@@ -407,6 +415,12 @@ public sealed partial class CrossTenantEndpointTests(DatabaseFixture database) :
             ["POST /api/v1/students/{id:guid}/reactivate"] = (null, ""),
             ["GET /api/v1/students/{id:guid}/enrollments"] = (null, ""),
             ["GET /api/v1/students/{id:guid}/attendance"] = (null, "?from=2027-01-01&to=2027-01-31"),
+            // A valid upload: only the foreign student can stop it (DEC-324), and nothing may reach storage.
+            ["POST /api/v1/students/{id:guid}/documents"] = (new MultipartForm("Photo", TestFiles.Jpeg(), "sizma.jpg"), ""),
+            ["GET /api/v1/students/{id:guid}/documents"] = (null, ""),
+            ["GET /api/v1/students/{id:guid}/photo"] = (null, ""),
+            ["GET /api/v1/documents/{id:guid}/link"] = (null, ""),
+            ["DELETE /api/v1/documents/{id:guid}"] = (null, ""),
             ["PUT /api/v1/guardians/{id:guid}"] = (new { firstName = "Hack", lastName = "Deneme", phone = "0533 999 99 97", version = 1 }, ""),
             ["GET /api/v1/enrollments/{id:guid}"] = (null, ""),
             ["POST /api/v1/enrollments/{id:guid}/end"] = (new { date = "2027-01-14" }, ""),
@@ -531,6 +545,8 @@ public sealed partial class CrossTenantEndpointTests(DatabaseFixture database) :
             fingerprint.Append(table).Append('=').Append(await command.ExecuteScalarAsync(Ct)).Append('\n');
         }
 
+        // Stored objects too: a probe must not upload, replace or delete any file.
+        fingerprint.Append("storage=").AppendJoin(',', (await Database.Storage.KeysAsync(string.Empty)).Order(StringComparer.Ordinal));
         return fingerprint.ToString();
     }
 
@@ -550,6 +566,11 @@ public sealed partial class CrossTenantEndpointTests(DatabaseFixture database) :
             .StatusCode.ShouldBe(HttpStatusCode.OK);
         var announcement = await Admin.PostAsJsonAsync($"/api/v1/groups/{group}/announcements", new { title = "Duyuru", body = "Antrenman saati değişti." }, Ct);
         announcement.StatusCode.ShouldBe(HttpStatusCode.Created);
+        using var photo = new MultipartForm("Photo", TestFiles.Png(), "kaynak.png").Create();
+        (await Admin.PostAsync(new Uri($"/api/v1/students/{student}/documents", UriKind.Relative), photo, Ct)).StatusCode.ShouldBe(HttpStatusCode.Created);
+        using var report = new MultipartForm("HealthReport", TestFiles.Pdf(), "kaynak-rapor.pdf").Create();
+        var document = await Admin.PostAsync(new Uri($"/api/v1/students/{student}/documents", UriKind.Relative), report, Ct);
+        document.StatusCode.ShouldBe(HttpStatusCode.Created);
 
         return new SchoolA(
             Football,
@@ -562,7 +583,8 @@ public sealed partial class CrossTenantEndpointTests(DatabaseFixture database) :
             guardian.GetProperty("phone").GetString()!,
             enrollment,
             payment,
-            IdOf(await BodyOf(announcement)));
+            IdOf(await BodyOf(announcement)),
+            IdOf(await BodyOf(document)));
     }
 
     /// <summary>
@@ -595,6 +617,16 @@ public sealed partial class CrossTenantEndpointTests(DatabaseFixture database) :
     /// <summary>A request and the "not found" it must get.</summary>
     private sealed record Probe(string Name, object? Body, string Query = "", int Status = 404, string Code = "");
 
+    /// <summary>A multipart upload body (document upload); everything else is sent as JSON.</summary>
+    private sealed record MultipartForm(string Type, byte[] File, string FileName)
+    {
+        public MultipartFormDataContent Create() => new()
+        {
+            { new StringContent(Type), "type" },
+            { new ByteArrayContent(File), "file", FileName },
+        };
+    }
+
     private sealed record SchoolA(
         Guid Sport,
         Guid Facility,
@@ -606,12 +638,14 @@ public sealed partial class CrossTenantEndpointTests(DatabaseFixture database) :
         string GuardianPhone,
         Guid Enrollment,
         Guid Payment,
-        Guid Announcement)
+        Guid Announcement,
+        Guid Document)
     {
         /// <summary>Ids and personal data of school A that must never appear in school B's responses.</summary>
         public string[] LeakMarkers =>
         [
-            .. new[] { Sport, Facility, Coach, Group, Student, UnpaidStudent, Guardian, Enrollment, Payment, Announcement }.Select(id => id.ToString()),
+            .. new[] { Sport, Facility, Coach, Group, Student, UnpaidStudent, Guardian, Enrollment, Payment, Announcement, Document }.Select(id => id.ToString()),
+            "kaynak-rapor",
             GuardianPhone.TrimStart('+'), // JSON may escape the '+'
             "Kaynak",
             "Borçlu",

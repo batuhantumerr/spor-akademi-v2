@@ -15,7 +15,7 @@ public abstract class IntegrationTest(DatabaseFixture database) : IAsyncLifetime
     public virtual async ValueTask InitializeAsync()
     {
         await Database.ResetAsync();
-        Api = new ApiFactory(Database.AppConnectionString);
+        Api = new ApiFactory(Database.AppConnectionString, Database.Storage.Settings);
         Client = Api.CreateClient();
     }
 

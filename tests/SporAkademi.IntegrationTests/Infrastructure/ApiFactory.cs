@@ -7,8 +7,9 @@ using Microsoft.Extensions.Time.Testing;
 
 namespace SporAkademi.IntegrationTests.Infrastructure;
 
-/// <summary>The real API wired to the test database, with a controllable clock.</summary>
-public sealed class ApiFactory(string appConnectionString) : WebApplicationFactory<Program>
+/// <summary>The real API wired to the test database and document store, with a controllable clock.</summary>
+/// <param name="storage">The <c>Storage</c> settings; without them the store is unconfigured (readiness reports Degraded).</param>
+public sealed class ApiFactory(string appConnectionString, IReadOnlyDictionary<string, string?>? storage = null) : WebApplicationFactory<Program>
 {
     public const string JwtSigningKey = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
 
@@ -18,13 +19,15 @@ public sealed class ApiFactory(string appConnectionString) : WebApplicationFacto
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
         builder.UseEnvironment("Testing");
-        builder.ConfigureAppConfiguration(config => config.AddInMemoryCollection(new Dictionary<string, string?>
-        {
-            ["ConnectionStrings:App"] = appConnectionString,
-            ["Jwt:SigningKey"] = JwtSigningKey,
-            ["Seq:ServerUrl"] = null,
-            ["Serilog:MinimumLevel:Default"] = "Fatal",
-        }));
+        builder.ConfigureAppConfiguration(config => config
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["ConnectionStrings:App"] = appConnectionString,
+                ["Jwt:SigningKey"] = JwtSigningKey,
+                ["Seq:ServerUrl"] = null,
+                ["Serilog:MinimumLevel:Default"] = "Fatal",
+            })
+            .AddInMemoryCollection(storage ?? new Dictionary<string, string?>()));
         builder.ConfigureServices(services => services.Replace(ServiceDescriptor.Singleton<TimeProvider>(Clock)));
     }
 }

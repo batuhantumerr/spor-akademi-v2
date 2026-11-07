@@ -40,6 +40,8 @@ internal static class ConstraintErrors
         // DEC-173: a concurrent first save of the same session or student record; the caller retries.
         [SessionConfiguration.UniqueKeyIndex] = PersistenceErrors.ConcurrencyConflict,
         [AttendanceRecordConfiguration.PrimaryKey] = PersistenceErrors.ConcurrencyConflict,
+        // Two photos uploaded for one student at the same time: the later one retries (DEC-325).
+        [Students.StudentDocumentConfiguration.OnePhotoIndex] = PersistenceErrors.ConcurrencyConflict,
     };
 
     /// <summary>

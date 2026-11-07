@@ -11,7 +11,8 @@ namespace SporAkademi.IntegrationTests.Infrastructure;
 /// <summary>
 /// One PostgreSQL container per test run, built exactly like local development: the image comes from
 /// compose.yaml, roles from the same init script (executable, so it runs as a subprocess like the
-/// local bind mount), and migrations run as the migrator role (P1-08).
+/// local bind mount), and migrations run as the migrator role (P1-08). The document storage container
+/// (<see cref="StorageContainer"/>, DEC-320) starts alongside it and is shared the same way.
 /// </summary>
 public sealed partial class DatabaseFixture : IAsyncLifetime
 {
@@ -31,13 +32,15 @@ public sealed partial class DatabaseFixture : IAsyncLifetime
 
     private Respawner? _respawner;
 
+    public StorageContainer Storage { get; } = new(ReadImage(StorageImage()));
+
     public string AppConnectionString => Connection("spor_akademi_app", AppPassword);
 
     public string MigratorConnectionString => Connection("spor_akademi_migrator", MigratorPassword);
 
     public async ValueTask InitializeAsync()
     {
-        await _container.StartAsync();
+        await Task.WhenAll(_container.StartAsync(), Storage.StartAsync().AsTask());
 
         var options = new DbContextOptionsBuilder<AppDbContext>()
             .UseNpgsql(MigratorConnectionString, npgsql => npgsql.MigrationsHistoryTable("__ef_migrations_history", "public"))
@@ -65,7 +68,11 @@ public sealed partial class DatabaseFixture : IAsyncLifetime
         await _respawner!.ResetAsync(connection);
     }
 
-    public async ValueTask DisposeAsync() => await _container.DisposeAsync();
+    public async ValueTask DisposeAsync()
+    {
+        await _container.DisposeAsync();
+        await Storage.DisposeAsync();
+    }
 
     private string Connection(string user, string password) =>
         new NpgsqlConnectionStringBuilder(_container.GetConnectionString())
@@ -76,17 +83,23 @@ public sealed partial class DatabaseFixture : IAsyncLifetime
         }.ConnectionString;
 
     /// <summary>compose.yaml is the single source of truth for the PostgreSQL image (tag + digest).</summary>
-    private static string ReadPostgresImage()
+    private static string ReadPostgresImage() => ReadImage(PostgresImage());
+
+    /// <summary>The image (tag + digest) of a compose.yaml service, so tests run exactly what development runs.</summary>
+    private static string ReadImage(Regex pattern)
     {
         var compose = File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "Infrastructure", "compose.yaml"));
-        var match = PostgresImage().Match(compose);
+        var match = pattern.Match(compose);
         return match.Success
             ? match.Groups["image"].Value
-            : throw new InvalidOperationException("compose.yaml has no postgres image.");
+            : throw new InvalidOperationException($"compose.yaml has no image matching {pattern}.");
     }
 
     [GeneratedRegex(@"^\s*image:\s*(?<image>postgres:\S+)\s*$", RegexOptions.Multiline)]
     private static partial Regex PostgresImage();
+
+    [GeneratedRegex(@"^\s*image:\s*(?<image>chrislusf/seaweedfs:\S+)\s*$", RegexOptions.Multiline)]
+    private static partial Regex StorageImage();
 }
 
 [CollectionDefinition(Name)]
