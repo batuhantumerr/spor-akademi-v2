@@ -2,7 +2,7 @@
 
 Sahip yokken (2026-11-06 – 2026-11-09) agent'ın aldığı ve sahibin onayını bekleyen kararlar ve işler. Her madde için: **onayla**, **değiştir** veya **geri al**. Karar verilince ilgili DEC satırı [karar-gunlugu-v2.md](karar-gunlugu-v2.md)'de `Accepted` yapılır.
 
-Durum: Faz 1 tamamlandı; Faz 2'de P2-F1 – P2-F7 bitti ve ana dala girdi (PR #43 – #65). P2-F8 başlamadı, sahibin ayrıntısını bekliyor. Faz geçişleri ve etiketler sahibe aittir, işaretlenmedi.
+Durum: Faz 1 işleri tamamlandı (P1-40 faz geçişi ve `v0.1.0` etiketi sahipte); Faz 2'de P2-F1 – P2-F7 bitti ve ana dala girdi (PR #43 – #65). P2-F8 başlamadı, sahibin ayrıntısını bekliyor. Faz geçişleri ve etiketler sahibe aittir, işaretlenmedi.
 
 Karar sayısı: **33 soru** (aşağıda numaralı). Her sorunun sonundaki "Öneri", cevap verilmezse sürecek varsayılandır.
 
