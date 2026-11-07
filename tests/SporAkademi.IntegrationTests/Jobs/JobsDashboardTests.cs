@@ -1,8 +1,11 @@
 using System.Net;
+using System.Net.Http.Json;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
 using SporAkademi.Domain.Identity;
+using SporAkademi.Infrastructure.Outbox;
 using SporAkademi.IntegrationTests.Identity;
 using SporAkademi.IntegrationTests.Infrastructure;
 
@@ -134,6 +137,26 @@ public sealed class JobsDashboardTests(DatabaseFixture database) : IdentityTest(
 
         var changed = await SendAsync(HttpMethod.Post, "/api/v1/auth/change-password", session.AccessToken, new { currentPassword = OwnPassword, newPassword = "Yepyeni-Sifre-2027" });
         changed.IsSuccessStatusCode.ShouldBeTrue();
+
+        (await OpenAsync("/jobs", cookie)).StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
+    }
+
+    [Fact]
+    [Trait("Story", "P2-F4")]
+    public async Task Setting_a_new_password_with_a_reset_link_ends_the_panel_session()
+    {
+        await SeedUserAsync("platform@example.com", UserRole.PlatformAdmin, null);
+        var session = await LoginOkAsync("platform@example.com");
+        var cookie = await StartPanelSessionAsync(session.AccessToken);
+        (await Http.PostAsJsonAsync("/api/v1/auth/password-reset/request", new { email = "platform@example.com" }, Ct)).StatusCode.ShouldBe(HttpStatusCode.Accepted);
+        var processor = Api.Services.GetRequiredService<OutboxProcessor>();
+        while (await processor.ProcessBatchAsync(Ct) > 0)
+        {
+        }
+
+        var token = CapturingEmailSender.TokenIn(Api.Emails.Sent.ShouldHaveSingleItem());
+        (await Http.PostAsJsonAsync("/api/v1/auth/password-reset/confirm", new { token, newPassword = "Yepyeni-Sifre-2027" }, Ct))
+            .StatusCode.ShouldBe(HttpStatusCode.NoContent);
 
         (await OpenAsync("/jobs", cookie)).StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
     }

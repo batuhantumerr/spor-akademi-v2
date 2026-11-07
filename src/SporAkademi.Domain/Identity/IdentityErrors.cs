@@ -14,6 +14,9 @@ public static class AuthErrors
     public static readonly Error CurrentPasswordIncorrect = Error.BusinessRule("Auth.CurrentPasswordIncorrect", "The current password is wrong.");
     public static readonly Error PasswordTooWeak = Error.Validation("Auth.PasswordTooWeak", "The password does not meet the policy.");
     public static readonly Error PasswordUnchanged = Error.Validation("Auth.PasswordUnchanged", "The new password must differ from the current one.");
+
+    /// <summary>P2-F4: an unknown, expired or used set-password link; never says which.</summary>
+    public static readonly Error ResetTokenInvalid = Error.BusinessRule("Auth.ResetTokenInvalid", "The set-password link is invalid or has expired.");
 }
 
 public static class UserErrors

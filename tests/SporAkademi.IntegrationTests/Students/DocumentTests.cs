@@ -131,7 +131,10 @@ public sealed class DocumentTests(DatabaseFixture database) : EnrollmentsTest(da
         var inline = new Uri(link.Url.AbsoluteUri.Replace("attachment", "inline", StringComparison.Ordinal));
         inline.ShouldNotBe(link.Url);
         (await Browser.GetAsync(inline, Ct)).StatusCode.ShouldBe(HttpStatusCode.Forbidden);
-        var otherKey = new Uri(link.Url.AbsoluteUri.Replace(link.Url.AbsolutePath, link.Url.AbsolutePath[..^1] + "0", StringComparison.Ordinal));
+        // Change the key's last character to a different one (replacing it with a fixed "0" was a no-op 1 time in 16).
+        var path = link.Url.AbsolutePath;
+        var otherKey = new Uri(link.Url.AbsoluteUri.Replace(path, path[..^1] + (path[^1] == '0' ? '1' : '0'), StringComparison.Ordinal));
+        otherKey.ShouldNotBe(link.Url);
         (await Browser.GetAsync(otherKey, Ct)).StatusCode.ShouldBe(HttpStatusCode.Forbidden);
         (await Browser.GetAsync(link.Url, Ct)).StatusCode.ShouldBe(HttpStatusCode.OK);
     }

@@ -1348,7 +1348,7 @@ Para tutarının neden sayı değil de metin olduğu: JSON sayıları JavaScript
 ##### 1.3 Kimlik doğrulama
 
 - Herkese açık endpoint'ler dışındaki her istek `Authorization: Bearer <access token>` başlığı taşır (NFR-SEC-07, ADR-0006).
-- Herkese açık endpoint'ler: `POST /auth/login`. `POST /auth/refresh` ve `POST /auth/logout` access token yerine refresh cookie'si ve `X-Requested-With` başlığıyla çalışır (DEC-055).
+- Herkese açık endpoint'ler: `POST /auth/login`, `POST /auth/password-reset/request` ve `POST /auth/password-reset/confirm` (P2-F4). `POST /auth/refresh` ve `POST /auth/logout` access token yerine refresh cookie'si ve `X-Requested-With` başlığıyla çalışır (DEC-055).
 - Rol yetkisi her endpoint'te açıkça tanımlanır (aşağıdaki tablolardaki "Rol" sütunu).
 
 ##### 1.4 HTTP metotları ve durum kodları
@@ -1432,6 +1432,8 @@ Roller: **PA** = Platform Admin, **SA** = Okul Admini, **CO** = Antrenör, **Her
 | `POST` | `/auth/refresh` | Refresh token ile yeni token çifti | Refresh cookie | US-04 |
 | `POST` | `/auth/logout` | Refresh token'ı iptal eder, cookie'yi siler | Refresh cookie | US-04 |
 | `POST` | `/auth/change-password` | Şifre değiştirme; `pwd_change_required` olan token ile de çalışır | Herkes | US-05 |
+| `POST` | `/auth/password-reset/request` | Şifre belirleme bağlantısı e-postası ister; her zaman `202`, adresin kayıtlı olup olmadığını belli etmez (P2-F4, DEC-353) | Herkese açık | — |
+| `POST` | `/auth/password-reset/confirm` | E-postadaki bağlantının token'ıyla yeni şifre belirler, bütün oturumları bitirir; `204` (DEC-352) | Herkese açık | — |
 | `GET` | `/me` | Giriş yapmış kullanıcının profili ve rolü | Herkes | — |
 
 ##### 2.2 Platform — `Tenancy`
@@ -1623,6 +1625,7 @@ API'nin döndüğü tüm hata ve uyarı kodlarının kataloğu. Kurallar:
 | `Auth.CurrentPasswordIncorrect` | BusinessRule | Mevcut şifreniz hatalı. | US-05 |
 | `Auth.PasswordTooWeak` | Validation | Şifre en az 10 karakter olmalı ve çok yaygın bir şifre olmamalı. | US-05 |
 | `Auth.PasswordUnchanged` | Validation | Yeni şifre mevcut şifrenizle aynı olamaz. | US-05 |
+| `Auth.ResetTokenInvalid` | BusinessRule | Bu bağlantı geçersiz, kullanılmış veya süresi dolmuş. Yeni bir şifre belirleme bağlantısı isteyin. | P2-F4 |
 | `User.EmailTaken` | Conflict | Bu e-posta adresi zaten kullanılıyor. | US-01, US-08 |
 | `User.NotFound` | NotFound | Kullanıcı bulunamadı. | US-08 |
 | `User.AlreadyInactive` | BusinessRule | Bu kullanıcı zaten pasif. | US-08 |

@@ -33,6 +33,8 @@ export const errorMessages: Readonly<Record<string, string>> = {
   'Auth.CurrentPasswordIncorrect': 'Mevcut şifreniz hatalı.',
   'Auth.PasswordTooWeak': 'Şifre en az 10 karakter olmalı ve çok yaygın bir şifre olmamalı.',
   'Auth.PasswordUnchanged': 'Yeni şifre mevcut şifrenizle aynı olamaz.',
+  'Auth.ResetTokenInvalid':
+    'Bu bağlantı geçersiz, kullanılmış veya süresi dolmuş. Yeni bir şifre belirleme bağlantısı isteyin.',
   'User.EmailTaken': 'Bu e-posta adresi zaten kullanılıyor.',
   'User.NotFound': 'Kullanıcı bulunamadı.',
   'User.AlreadyInactive': 'Bu kullanıcı zaten pasif.',
@@ -163,6 +165,7 @@ export const ui = {
     submitting: 'Giriş yapılıyor…',
     showPassword: 'Şifreyi göster',
     hidePassword: 'Şifreyi gizle',
+    forgotPassword: 'Şifremi unuttum',
     highlights: [
       'Gruplar, programlar ve kontenjanlar tek yerde',
       'Antrenörler için telefondan hızlı yoklama',
@@ -180,6 +183,32 @@ export const ui = {
     mismatch: 'Şifreler eşleşmiyor.',
     submit: 'Şifreyi değiştir',
     success: 'Şifreniz değiştirildi.',
+  },
+  forgotPassword: {
+    title: 'Şifremi unuttum',
+    subtitle:
+      'Hesabınızın e-posta adresini girin; yeni şifrenizi belirlemeniz için size bir bağlantı gönderelim.',
+    email: 'E-posta',
+    submit: 'Bağlantı gönder',
+    submitting: 'Gönderiliyor…',
+    sent: 'Bu adrese kayıtlı bir hesap varsa birkaç dakika içinde bir e-posta alacaksınız. Bağlantı 30 dakika geçerlidir ve yalnızca bir kez kullanılabilir.',
+    backToLogin: 'Giriş sayfasına dön',
+  },
+  resetPassword: {
+    title: 'Yeni şifre belirle',
+    subtitle:
+      'Hesabınız için yeni bir şifre belirleyin. Şifreniz değiştiğinde bütün oturumlarınız kapanır.',
+    next: 'Yeni şifre',
+    confirm: 'Yeni şifre (tekrar)',
+    hint: 'En az 10 karakter. Yaygın şifreler kabul edilmez.',
+    mismatch: 'Şifreler eşleşmiyor.',
+    submit: 'Şifreyi kaydet',
+    submitting: 'Kaydediliyor…',
+    missingToken:
+      'Bağlantı eksik veya hatalı. E-postadaki bağlantıyı açın ya da yeni bir bağlantı isteyin.',
+    requestNew: 'Yeni bağlantı iste',
+    success: 'Şifreniz kaydedildi. Yeni şifrenizle giriş yapabilirsiniz.',
+    toLogin: 'Giriş yap',
   },
   students: {
     title: 'Öğrenciler',

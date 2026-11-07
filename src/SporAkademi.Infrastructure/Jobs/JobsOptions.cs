@@ -28,6 +28,8 @@ public sealed class JobsOptions
 
     /// <summary>Students anonymized per transaction (DEC-362).</summary>
     public int AnonymizationBatchSize { get; set; } = 100;
+    /// <summary>Fee reminders (P2-F4, DEC-355): 06:00 UTC, 09:00 in Istanbul.</summary>
+    public string DuesReminderCron { get; set; } = "0 6 * * *";
 
     /// <summary>One outbox run delivers batches until one is not full, at most this many.</summary>
     public int MaxOutboxBatchesPerRun { get; set; } = 50;
@@ -46,6 +48,7 @@ public sealed class JobsOptions
         && IsCron(RefreshTokenCleanupCron)
         && IsCron(StudentAnonymizationCron)
         && AnonymizationBatchSize is > 0 and <= 1_000
+        && IsCron(DuesReminderCron)
         && MaxOutboxBatchesPerRun is > 0 and <= 10_000
         && HeartbeatWarning > TimeSpan.Zero
         && Dashboard.SessionLifetime > TimeSpan.Zero

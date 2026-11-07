@@ -41,6 +41,8 @@ public sealed partial class CrossTenantEndpointTests(DatabaseFixture database) :
         ["POST /api/v1/auth/refresh"] = "anonymous; refresh cookie only",
         ["POST /api/v1/auth/logout"] = "anonymous; refresh cookie only",
         ["POST /api/v1/auth/change-password"] = "the caller's own password",
+        ["POST /api/v1/auth/password-reset/request"] = "anonymous; e-mail only, always 202, signed-in callers are ignored (DEC-353)",
+        ["POST /api/v1/auth/password-reset/confirm"] = "anonymous; set-password token and new password only (DEC-352)",
         ["POST /api/v1/sports"] = "name only",
         ["POST /api/v1/facilities"] = "name, type, address, capacity",
         ["POST /api/v1/coaches"] = "names, e-mail, phone",

@@ -36,4 +36,11 @@ internal sealed class TenancyModule(AppDbContext dbContext, TimeProvider timePro
                 .Select(s => (string?)s.TimeZone)
                 .SingleOrDefaultAsync(ct),
             cancellationToken);
+
+    /// <summary>Not cached: read once per e-mail, in background work.</summary>
+    public Task<string?> SchoolNameAsync(SchoolId schoolId, CancellationToken cancellationToken) =>
+        dbContext.Set<School>().AsNoTracking()
+            .Where(s => s.Id == schoolId)
+            .Select(s => (string?)s.Name)
+            .SingleOrDefaultAsync(cancellationToken);
 }

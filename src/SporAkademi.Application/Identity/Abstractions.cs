@@ -45,6 +45,17 @@ public interface IRefreshTokenFactory
     string Hash(string token);
 }
 
+/// <summary>A new set-password token (P2-F4): <see cref="Token"/> goes into the e-mail once, only <see cref="Hash"/> is stored.</summary>
+public sealed record NewPasswordToken(string Token, string Hash);
+
+/// <summary>Set-password tokens (DEC-352): 256 random bits, URL-safe text, stored as a SHA-256 hash.</summary>
+public interface IPasswordTokenFactory
+{
+    NewPasswordToken Create();
+
+    string Hash(string token);
+}
+
 /// <summary>Loads users with their refresh tokens. Users are not tenant-filtered (DEC-105).</summary>
 public interface IUserRepository
 {
@@ -53,6 +64,9 @@ public interface IUserRepository
     Task<User?> GetByEmailAsync(Email email, CancellationToken cancellationToken);
 
     Task<User?> GetByRefreshTokenHashAsync(string tokenHash, CancellationToken cancellationToken);
+
+    /// <summary>The user whose pending set-password token has this hash (P2-F4), with its tokens.</summary>
+    Task<User?> GetByPasswordTokenHashAsync(string tokenHash, CancellationToken cancellationToken);
 
     Task<UserSummary?> GetSummaryAsync(UserId id, CancellationToken cancellationToken);
 
