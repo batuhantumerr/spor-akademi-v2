@@ -28,7 +28,8 @@ export Seq__ServerUrl="http://127.0.0.1:${SEQ_HOST_PORT:-5341}"
 # Optional (DEC-326): document storage, configured only when its keys are set and the compose "storage" profile's
 # service is running; otherwise documents are unavailable and /health/ready reports Degraded. The browser opens
 # the signed links at the same address.
-if [[ -n "${STORAGE_ACCESS_KEY:-}" && "$STORAGE_ACCESS_KEY" != change-me* && -n "${STORAGE_SECRET_KEY:-}" && "$STORAGE_SECRET_KEY" != change-me* ]]   && (cd "$REPO_ROOT" && docker compose --profile storage ps --status running --services 2>/dev/null | grep -qx storage); then
+if [[ -n "${STORAGE_ACCESS_KEY:-}" && "$STORAGE_ACCESS_KEY" != change-me* && -n "${STORAGE_SECRET_KEY:-}" && "$STORAGE_SECRET_KEY" != change-me* ]] \
+  && (cd "$REPO_ROOT" && docker compose --profile storage ps --status running --services 2>/dev/null | grep -qx storage); then
   export Storage__ServiceUrl="http://127.0.0.1:${STORAGE_HOST_PORT:-58333}"
   export Storage__AccessKey="$STORAGE_ACCESS_KEY"
   export Storage__SecretKey="$STORAGE_SECRET_KEY"
