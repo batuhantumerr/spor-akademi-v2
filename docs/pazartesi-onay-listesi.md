@@ -7,6 +7,7 @@ Sahip yokken (2026-11-06 – 2026-11-09) agent'ın aldığı ve sahibin onayın�
 - DEC-300 – DEC-304 (P2-F3 transactional outbox): yeni paket eklenmedi; `BackgroundService`, health check ve System.Text.Json paylaşılan ASP.NET Core çerçevesinden, `Decorate` mevcut Scrutor'dan geliyor.
 - DEC-310 – DEC-316 (P2-F7 cache): Redis yerine Valkey (lisans), neyin cache'lendiği ve neyin cache'lenmediği (kişisel veri yok), commit sonrası otomatik invalidation, isteğe bağlı L2. Valkey compose'un `cache` profilinde ve isteğe bağlı; `VALKEY_PASSWORD` olmayan eski `.env` hiçbir şeyi bozmaz. Valkey'i kullanmak için bir kez `bash scripts/setup-env.sh` (sadece eksik `VALKEY_*` anahtarlarını ekler) ve `docker compose --profile cache up -d --wait`.
 - DEC-330 – DEC-335 (P2-F2 Hangfire ve iş paneli): paketler aşağıda. Onay bekleyen seçimler: şemanın migrator migration'ıyla paketin kendi script'lerinden kurulması (DEC-331), panel erişiminin kısa ömürlü çerezle olması ve varsayılan salt okunur panel (DEC-332), outbox'un varsayılan olarak Hangfire'a geçmesi ve `Outbox:Enabled` yerine `Outbox:Scheduler` (DEC-333), refresh token temizlik işi (DEC-334).
+- DEC-360 – DEC-367 (P2-F5 otomatik anonimleştirme): yeni paket yok. Onay bekleyen seçimler: varsayılan saklama süresi ve sınırlar (DEC-360, DEC-361), nelerin silinip nelerin kaldığı (cinsiyet kalıyor, DEC-363), başka öğrencisi kalmayan velinin tamamen silinmesi (DEC-365), ödemelerin yasal süre sonunda henüz silinmemesi (DEC-367).
 
 ## Paketler (gerekçe, lisans, alternatifler)
 | Paket | Neden | Lisans | Alternatifler |
@@ -43,6 +44,9 @@ Sahip yokken (2026-11-06 – 2026-11-09) agent'ın aldığı ve sahibin onayın�
 - İş paneli (DEC-332) için Deploy bloğunda: reverse proxy `/jobs`'u API'ye yönlendirmeli; panel oturumları süreç belleğinde olduğu için birden çok API örneğinde yapışkan oturum veya paylaşılan bir oturum deposu gerekir.
 
 ## Sahibe sorular
+- **DEC-360 (sahip ve hukuki onay gerekli):** Ayrılan öğrencinin kişisel verisi için varsayılan saklama süresi **24 ay**, okulun seçebileceği aralık **6–120 ay** uygun mu? Ödeme kayıtları için **10 yıl** (TTK md. 82; VUK 5 yıl) doğru yasal süre mi? Bu süreler aydınlatma metnine (NFR-PRV-06) de yazılmalı; gerçek veri döneminden (Faz 4) önce bir hukukçuya teyit ettirilmesi önerilir.
+- DEC-363: Anonimleştirmede **cinsiyet** istatistik için tutuluyor; ad, doğum tarihi, iletişim, acil kişi, veliler ve belgeler siliniyor. Cinsiyet de silinsin mi?
+- DEC-367: Ödeme iptal gerekçesi serbest metin ve kişi adı içerebilir; ödeme kayıtları değişmez olduğu için anonimleştirme onu silmiyor. Anonimleştirmede gerekçe silinsin mi (değişmezlik kuralına istisna), yoksa arayüzde "gerekçeye kişi adı yazmayın" uyarısı mı yeterli? Ödemeler 10 yıl sonunda silinsin mi, anonim kalsın mı?
 - DEC-320: Production belge deposu ne olacak (ör. Cloudflare R2, Hetzner Object Storage, AWS S3, kendi sunucunda SeaweedFS)? Gerçek veri dönemi için KVKK yurt dışı aktarım koşulu (NFR-PRV-07) seçimi etkiler. Yerelde MinIO yerine SeaweedFS kullanılmasını (MinIO topluluk sürümünün arşivlenmesi, AGPL-3.0) onaylıyor musunuz?
 - DEC-324: Sağlık raporlarını yalnız Okul Admini görüyor; antrenör sadece kendi grubundaki öğrencinin fotoğrafını görüyor. Antrenörün (ör. "spora uygundur" bilgisini görmek için) sağlık raporlarına erişmesi gerekir mi? Gerekirse rapor yerine sadece "rapor var / geçerlilik tarihi" gibi bir alan önerilir.
 - DEC-322: Sınırlar uygun mu (rapor 5 MB, fotoğraf 2 MB, öğrenci başına 20 rapor)? Raporun geçerlilik tarihi/son kullanım takibi istenir mi?
