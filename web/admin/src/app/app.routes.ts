@@ -45,6 +45,11 @@ export const routes: Routes = [
             loadComponent: () =>
               import('./features/platform/schools.page').then((m) => m.SchoolsPage),
           },
+          {
+            path: 'jobs',
+            title: ui.nav.jobs,
+            loadComponent: () => import('./features/platform/jobs.page').then((m) => m.JobsPage),
+          },
         ],
       },
       {
