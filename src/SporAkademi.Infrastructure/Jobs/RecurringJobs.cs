@@ -36,17 +36,67 @@ internal static class RecurringJobs
     }
 }
 
-/// <summary>Drives <see cref="OutboxProcessor"/> from Hangfire (DEC-302, DEC-333); the processor itself is unchanged.</summary>
-internal sealed class OutboxJobs(OutboxProcessor processor, IOptions<OutboxOptions> outbox, IOptions<JobsOptions> jobs)
+/// <summary>
+/// Drives <see cref="OutboxProcessor"/> from Hangfire (DEC-302, DEC-333); the processor itself is unchanged. Hangfire
+/// starts a run every interval even if the previous one is still delivering, so a run first takes a session-level
+/// advisory lock without waiting; when another run (in any API instance) holds it, this one does nothing.
+/// <c>SKIP LOCKED</c> alone already prevents double delivery; the lock keeps runs from piling up.
+/// </summary>
+internal sealed partial class OutboxJobs(
+    IServiceScopeFactory scopeFactory,
+    OutboxProcessor processor,
+    IOptions<OutboxOptions> outbox,
+    IOptions<JobsOptions> jobs,
+    ILogger<OutboxJobs> logger)
 {
     public const string ProcessJobId = "outbox-process";
     public const string CleanupJobId = "outbox-cleanup";
 
+    /// <summary>Advisory lock key of the delivery run ("SAOUTBOX" as bytes).</summary>
+    internal const long ProcessLockKey = 0x5341_4F55_5442_4F58;
+
+    private const string TryLockSql = "SELECT pg_try_advisory_lock(5999163406538657624)";
+
     /// <summary>Delivers batches until one is not full (or the per-run cap is reached).</summary>
-    /// <returns>How many messages were claimed.</returns>
+    /// <returns>How many messages were claimed; 0 when another run is in progress.</returns>
     [AutomaticRetry(Attempts = 0)]
     [JobDisplayName("Outbox: deliver due messages")]
     public async Task<int> ProcessAsync(CancellationToken cancellationToken)
+    {
+        await using var scope = scopeFactory.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        await db.Database.OpenConnectionAsync(cancellationToken);
+        try
+        {
+            await using var command = db.Database.GetDbConnection().CreateCommand();
+            command.CommandText = TryLockSql;
+            var acquired = await command.ExecuteScalarAsync(cancellationToken) is true;
+            if (!acquired)
+            {
+                LogSkipped(logger);
+                return 0;
+            }
+
+            try
+            {
+                return await DeliverAsync(cancellationToken);
+            }
+            finally
+            {
+                await db.Database.ExecuteSqlAsync($"SELECT pg_advisory_unlock({ProcessLockKey})", CancellationToken.None);
+            }
+        }
+        finally
+        {
+            await db.Database.CloseConnectionAsync();
+        }
+    }
+
+    [AutomaticRetry(Attempts = 0)]
+    [JobDisplayName("Outbox: delete processed messages past retention")]
+    public Task<int> CleanupAsync(CancellationToken cancellationToken) => processor.CleanupAsync(cancellationToken);
+
+    private async Task<int> DeliverAsync(CancellationToken cancellationToken)
     {
         var total = 0;
         for (var batch = 0; batch < jobs.Value.MaxOutboxBatchesPerRun && !cancellationToken.IsCancellationRequested; batch++)
@@ -62,9 +112,8 @@ internal sealed class OutboxJobs(OutboxProcessor processor, IOptions<OutboxOptio
         return total;
     }
 
-    [AutomaticRetry(Attempts = 0)]
-    [JobDisplayName("Outbox: delete processed messages past retention")]
-    public Task<int> CleanupAsync(CancellationToken cancellationToken) => processor.CleanupAsync(cancellationToken);
+    [LoggerMessage(Level = LogLevel.Debug, Message = "Outbox run skipped: another run is in progress")]
+    private static partial void LogSkipped(ILogger logger);
 }
 
 /// <summary>

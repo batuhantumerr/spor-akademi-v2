@@ -25,6 +25,7 @@ internal static class JobsRegistration
             .SetDataCompatibilityLevel(CompatibilityLevel.Version_180)
             .UseSimpleAssemblyNameTypeSerializer()
             .UseRecommendedSerializerSettings()
+            .UseFilter(new FailedJobExceptionFilter())
             .UsePostgreSqlStorage(
                 storage => storage.UseNpgsqlConnection(
                     provider.GetRequiredService<IConfiguration>().GetConnectionString("App")
@@ -37,11 +38,13 @@ internal static class JobsRegistration
                 }));
 
         services.AddSingleton<JobServerIdentity>();
+        services.AddSingleton<JobsMonitoringSnapshot>();
         services.AddHostedService<JobServerHost>();
         services.AddSingleton<TenantJobRunner>();
         services.AddScoped<OutboxJobs>();
         services.AddScoped<RefreshTokenCleanupJob>();
         services.AddSingleton<JobsDashboardSessions>();
+        services.AddSingleton<PanelSessionRevocationInterceptor>();
         services.AddScoped<IJobsDashboardAccess, JobsDashboardAccess>();
         return services;
     }

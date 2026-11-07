@@ -65,10 +65,10 @@ public sealed class JobServerTests(DatabaseFixture database) : OutboxTest(databa
     public async Task Without_a_heartbeat_readiness_is_degraded_not_unhealthy()
     {
         // The server is enabled but this process's heartbeat never shows up under its name.
+        var clock = new HeartbeatClock(TimeProvider.System);
         var check = new JobsHealthCheck(
-            Host.Services.GetRequiredService<JobStorage>(),
-            new JobServerIdentity(),
-            new HeartbeatClock(TimeProvider.System),
+            new JobsMonitoringSnapshot(Host.Services.GetRequiredService<JobStorage>(), new JobServerIdentity(), clock),
+            clock,
             Microsoft.Extensions.Options.Options.Create(new JobsOptions { ServerEnabled = true }));
 
         var result = await check.CheckHealthAsync(new HealthCheckContext(), Ct);
@@ -90,6 +90,35 @@ public sealed class JobServerTests(DatabaseFixture database) : OutboxTest(databa
         await WaitUntilAsync(() => RecurringJobIds(storage).SetEquals([RefreshTokenCleanupJob.JobId]));
     }
 
+    [Fact]
+    public async Task A_failed_job_keeps_only_the_exception_type_in_the_storage()
+    {
+        using var client = Host.CreateClient();
+        var storage = Host.Services.GetRequiredService<JobStorage>();
+        var id = Host.Services.GetRequiredService<IBackgroundJobClient>().Enqueue(() => FailingJob.Run());
+
+        await WaitUntilAsync(() => storage.GetMonitoringApi().JobDetails(id)?.History.FirstOrDefault()?.StateName == "Failed");
+
+        var failed = storage.GetMonitoringApi().JobDetails(id).History.First().Data;
+        failed["ExceptionType"].ShouldBe(typeof(JobFailedException).FullName);
+        failed["ExceptionMessage"].ShouldBe(typeof(InvalidOperationException).FullName);
+        string.Join(' ', failed.Values).ShouldNotContain(FailingJob.PersonalData);
+    }
+
+    [Fact]
+    public async Task The_api_stays_up_when_the_job_server_cannot_reach_the_database()
+    {
+        await using var factory = new ApiFactory("Host=127.0.0.1;Port=1;Database=none;Username=none;Password=none;Timeout=2");
+        await using var unreachable = factory.WithWebHostBuilder(builder => builder.ConfigureAppConfiguration((_, config) =>
+            config.AddInMemoryCollection(new Dictionary<string, string?> { ["Jobs:ServerEnabled"] = "true", ["Outbox:Scheduler"] = "Hangfire" })));
+        using var http = unreachable.CreateClient();
+
+        await Task.Delay(TimeSpan.FromSeconds(5), Ct); // several failed attempts to reach the storage
+
+        unreachable.Services.GetRequiredService<Microsoft.Extensions.Hosting.IHostApplicationLifetime>().ApplicationStopping.IsCancellationRequested.ShouldBeFalse();
+        (await http.GetAsync(new Uri("/health/live", UriKind.Relative), Ct)).StatusCode.ShouldBe(System.Net.HttpStatusCode.OK);
+    }
+
     private static HashSet<string> RecurringJobIds(JobStorage storage)
     {
         using var connection = storage.GetConnection();
@@ -107,4 +136,13 @@ public sealed class JobServerTests(DatabaseFixture database) : OutboxTest(databa
             await Task.Delay(TimeSpan.FromMilliseconds(200), Ct);
         }
     }
+}
+
+/// <summary>A job whose exception message carries (synthetic) personal data.</summary>
+public static class FailingJob
+{
+    public const string PersonalData = "veli.kaya@example.test";
+
+    [AutomaticRetry(Attempts = 0)]
+    public static void Run() => throw new InvalidOperationException($"Duplicate e-mail {PersonalData}");
 }

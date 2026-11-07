@@ -68,7 +68,8 @@ public static class DependencyInjection
             .AddInterceptors(
                 provider.GetRequiredService<TenantWriteGuardInterceptor>(),
                 provider.GetRequiredService<AuditingInterceptor>(),
-                provider.GetRequiredService<CacheInvalidationInterceptor>()));
+                provider.GetRequiredService<CacheInvalidationInterceptor>(),
+                provider.GetRequiredService<PanelSessionRevocationInterceptor>()));
 
         services.AddScoped<DomainEventDispatcher>();
         services.AddScoped<IUnitOfWork, UnitOfWork>();

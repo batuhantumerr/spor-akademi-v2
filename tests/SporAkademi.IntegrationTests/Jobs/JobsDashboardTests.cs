@@ -110,6 +110,35 @@ public sealed class JobsDashboardTests(DatabaseFixture database) : IdentityTest(
     }
 
     [Fact]
+    public async Task Logging_out_ends_the_panel_session_but_refreshing_the_token_does_not()
+    {
+        await SeedUserAsync("platform@example.com", UserRole.PlatformAdmin, null);
+        var session = await LoginOkAsync("platform@example.com");
+        var cookie = await StartPanelSessionAsync(session.AccessToken);
+
+        var refreshed = await RefreshAsync(session.RefreshToken);
+        refreshed.StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await OpenAsync("/jobs", cookie)).StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        (await LogoutAsync(RefreshCookieOf(refreshed)!.Value)).StatusCode.ShouldBe(HttpStatusCode.NoContent);
+
+        (await OpenAsync("/jobs", cookie)).StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
+    }
+
+    [Fact]
+    public async Task Changing_the_password_ends_the_panel_session()
+    {
+        await SeedUserAsync("platform@example.com", UserRole.PlatformAdmin, null);
+        var session = await LoginOkAsync("platform@example.com");
+        var cookie = await StartPanelSessionAsync(session.AccessToken);
+
+        var changed = await SendAsync(HttpMethod.Post, "/api/v1/auth/change-password", session.AccessToken, new { currentPassword = OwnPassword, newPassword = "Yepyeni-Sifre-2027" });
+        changed.IsSuccessStatusCode.ShouldBeTrue();
+
+        (await OpenAsync("/jobs", cookie)).StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
+    }
+
+    [Fact]
     public async Task The_panel_is_read_only_by_default_even_with_a_valid_antiforgery_token()
     {
         var cookie = await StartPanelSessionAsync(await PlatformAdminTokenAsync());
