@@ -9,4 +9,9 @@
     <PackageReference Include="Microsoft.Extensions.TimeProvider.Testing" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- Synthetic files for the document tests (P2-F6), shared by the unit and integration tests. -->
+    <Compile Include="..\Shared\TestFiles.cs" Link="Shared\TestFiles.cs" />
+  </ItemGroup>
+
 </Project>

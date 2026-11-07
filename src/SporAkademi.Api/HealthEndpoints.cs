@@ -13,7 +13,8 @@ internal static class HealthEndpoints
         app.MapHealthChecks("/health/live", new HealthCheckOptions { Predicate = _ => false })
             .AllowAnonymous();
 
-        // Readiness: the database is reachable.
+        // Readiness: the database is reachable. Document storage is checked too, but only reports Degraded (still 200,
+        // DEC-326): without it everything except documents keeps working.
         app.MapHealthChecks("/health/ready", new HealthCheckOptions { Predicate = check => check.Tags.Contains(ReadyTag) })
             .AllowAnonymous();
 
