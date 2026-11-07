@@ -22,7 +22,7 @@ Sahip yokken (2026-11-06 – 2026-11-09) agent'ın aldığı ve sahibin onayın�
 | `e2e` CI işi (Playwright tarayıcıları `npx playwright install --with-deps`) | P1-36: kritik akışlar gerçek API + PostgreSQL'e karşı, beş proje (DEC-240) | Apache-2.0 | Tarayıcılar Playwright sürümüyle sabit; action'lar SHA'lı |
 
 ## Sahibe kalan işler
-- **`.env` güncellemesi (P2-F6):** compose artık `STORAGE_ACCESS_KEY` ve `STORAGE_SECRET_KEY` istiyor; mevcut `.env`'e README'deki iki satırı ekleyin (agent `.env`'e dokunmadı). Eklenmeden `docker compose up` ve `scripts/e2e.sh` çalışmaz.
+- **Belge deposu (P2-F6), isteğe bağlı:** `.env`'e elle bir şey eklemek gerekmez. Depoyu kullanmak isterseniz `bash scripts/setup-env.sh` (sadece eksik `STORAGE_*` anahtarlarını ekler) ve `docker compose --profile storage up -d --wait` (DEC-326).
 - `v0.0.1` ve `v0.1.0` etiketleri, faz geçişleri (P0-35, P1-40).
 - Deploy bloğu.
 - Öğrenme günlüğü notları (taslaklar `docs/ogrenme-gunlugu.md`'de).

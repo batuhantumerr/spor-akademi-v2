@@ -17,7 +17,7 @@ Spor okulları için çok kiracılı (multi-tenant) yönetim platformu: okullar,
 
 ```bash
 bash scripts/setup-env.sh          # .env'i rastgele şifrelerle oluşturur (bir kez)
-docker compose up -d --wait        # PostgreSQL, Seq ve belge deposu (SeaweedFS)
+docker compose up -d --wait        # PostgreSQL ve Seq (belge deposu isteğe bağlı, aşağıya bakın)
 dotnet tool restore
 bash scripts/ef.sh database update # migration'ları migrator rolüyle uygular
 bash scripts/run-api.sh            # API: http://127.0.0.1:5080
@@ -38,15 +38,18 @@ npm start                          # http://localhost:4200 (/api proxy'si API'ye
 
 Öğrenci belgeleri (sağlık raporu, fotoğraf) S3 uyumlu bir depoda tutulur. Yerelde ve testlerde compose'daki `storage` servisi (SeaweedFS, Apache-2.0; DEC-320) kullanılır: `127.0.0.1:58333`, bucket açılışta yoksa oluşturulur, herkese açık erişim yoktur. Production deposu Deploy bloğunda seçilecek.
 
-- `.env`'de `STORAGE_ACCESS_KEY` ve `STORAGE_SECRET_KEY` gerekir (`setup-env.sh` üretir). Bu değişiklikten önce oluşturulmuş bir `.env`'e iki satırı kendiniz ekleyin; compose bu değerler olmadan hiçbir servisi başlatmaz:
+Depo isteğe bağlıdır ve compose'un `storage` profilindedir; düz `docker compose up` onu başlatmaz ve `STORAGE_*` anahtarlarını istemez (DEC-326):
 
-  ```bash
-  echo "STORAGE_ACCESS_KEY=$(openssl rand -hex 10)" >> .env
-  echo "STORAGE_SECRET_KEY=$(openssl rand -hex 20)" >> .env
-  ```
+```bash
+bash scripts/setup-env.sh                       # eski bir .env'e sadece eksik STORAGE_* anahtarlarını ekler
+docker compose --profile storage up -d --wait   # PostgreSQL, Seq ve SeaweedFS
+bash scripts/run-api.sh                         # depo çalışıyorsa Storage__* ayarlarını verir
+```
 
-- API ayarları `Storage__ServiceUrl`, `Storage__AccessKey`, `Storage__SecretKey`, `Storage__Bucket` (isteğe bağlı `Storage__PublicUrl`: tarayıcı depoya başka bir adresten ulaşıyorsa imzalı bağlantıların adresi); `run-api.sh` bunları `.env`'den verir.
-- Yüklemeler API üzerinden geçer ve içerik (magic bytes ve yapı) kontrol edilir; açma bağlantıları 5 dakikalık imzalı URL'lerdir (DEC-321 – DEC-323).
+`setup-env.sh` var olan `.env`'in değerlerini değiştirmez ve yazdırmaz. Anahtarlar olmadan SeaweedFS başlamayı reddeder (kimliksiz SeaweedFS anonim isteklere açık olurdu; mesaj `docker compose --profile storage logs storage`'da); diğer servisler, `scripts/e2e.sh` ve CI'daki `e2e` işi etkilenmez. Depo yapılandırılmamışsa API açılır, belgeler kullanılamaz ve `/health/ready` `Degraded` döner.
+
+- API ayarları `Storage__ServiceUrl`, `Storage__AccessKey`, `Storage__SecretKey`, `Storage__Bucket` (isteğe bağlı `Storage__PublicUrl`: tarayıcı depoya başka bir adresten ulaşıyorsa imzalı bağlantıların adresi); `run-api.sh` bunları, depo çalışıyorsa `.env`'den verir.
+- Yüklemeler API üzerinden geçer ve içerik (magic bytes ve yapı) kontrol edilir; açma bağlantıları 5 dakikalık imzalı URL'lerdir (DEC-321 – DEC-323). Silinen belgenin dosyası commit'ten sonra outbox mesajıyla silinir; başarısız silme yeniden denenir (DEC-325).
 
 ### Demo verisi (P1-38)
 
