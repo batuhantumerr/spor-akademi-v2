@@ -49,7 +49,7 @@ Karar sayısı: **33 soru** (aşağıda numaralı). Her sorunun sonundaki "Öner
 28. **axe-core lisansı (DEC-240).** `@axe-core/playwright` MPL-2.0 (zayıf copyleft), dev bağımlılığı, dağıtılmaz. Kabul edilmezse e2e'deki axe adımları kaldırılır. Öneri: kabul.
 29. **`e2e` zorunlu check (P1-36, DEC-240).** Ruleset bugün dört check istiyor (`backend`, `frontend`, `repo-checks`, `images`); `e2e` bilerek eklenmedi. Birkaç yeşil çalıştırmadan sonra ruleset'e eklensin mi? Öneri: evet.
 30. **CODEOWNERS ve code-owner incelemesi.** `.github/CODEOWNERS` eklendi (CI, `.gitleaks.toml`, `docker/`, `scripts/`, `src/`, `tests/`, `docs/adr/`, paket dosyaları), ruleset değiştirilmedi. Code-owner incelemesini zorunlu yapmak sahibin kararı; zorunlu olursa hafta sonu otonom merge'leri (DEC-098) sahip onayı olmadan ilerleyemez. Sahip PR'ları kendisi açtığında GitHub kendi onayını code-owner onayı saymaz; ruleset'te bypass ya da ikinci bir inceleyici gerekir. Öneri: şimdilik zorunlu yapma, Faz 4'te yeniden değerlendir.
-31. **Şifre uzunluğu (NFR-SEC-04).** Politika 10 karakter; ASVS L1 12 önerir. 12'ye çıkarılsın mı? Öneri: 12.
+31. **Şifre uzunluğu (NFR-SEC-04).** Politika 10 karakter; ASVS L1 12 önerir. 12'ye çıkarılsın mı? Öneri: 12. **Onaylandı (2026-11-10): 12 karakter, DEC-369.**
 
 ### Toplu onay ve ertelenenler
 32. **Proposed kararların toplu kabulü (DEC-099 – DEC-368, ADR-0010).** Bölüm 5'teki tablodaki kararlar (yukarıda ayrıca sorulanlar dahil) toplu `Accepted` yapılsın mı, itiraz ettikleriniz ayrı mı işaretlensin? Öneri: itirazı olmayanlar toplu kabul.
