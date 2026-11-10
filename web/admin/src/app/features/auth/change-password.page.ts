@@ -122,7 +122,7 @@ export class ChangePasswordPage {
   protected readonly form = inject(FormBuilder).nonNullable.group(
     {
       currentPassword: ['', Validators.required],
-      newPassword: ['', [Validators.required, Validators.minLength(10)]],
+      newPassword: ['', [Validators.required, Validators.minLength(12)]],
       confirm: ['', Validators.required],
     },
     { validators: matchingPasswords },

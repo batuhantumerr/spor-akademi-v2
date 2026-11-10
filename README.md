@@ -103,7 +103,7 @@ bash scripts/seed-demo.sh   # migration'lardan sonra, API çalışmıyorken de o
 - Hiç Platform Admin yoksa ve ikisi de verilmişse, şifre değiştirme zorunlu bir Platform Admin oluşturur. Aynı anda açılan birden fazla örnek bir advisory lock ile sıraya girer; en fazla bir Platform Admin oluşur.
 - Platform Admin zaten varsa hiçbir şey yapmaz (yapılandırmadaki e-posta farklı olsa bile).
 - İkisi de verilmemişse hiçbir şey yapmaz. Sadece biri verilmişse, şifre hâlâ `change-me…` ise veya e-posta başka bir hesaba aitse, eksik/sorunlu ayarın **adını** uyarı olarak loglar ve atlar (değerler asla loglanmaz).
-- E-posta geçersizse veya şifre politikaya uymuyorsa (en az 10 karakter, yaygın şifre değil) API açılmaz (fail-closed).
+- E-posta geçersizse veya şifre politikaya uymuyorsa (en az 12 karakter, yaygın şifre değil) API açılmaz (fail-closed).
 
 İlk girişte şifreyi değiştirdikten sonra `PLATFORM_ADMIN_PASSWORD` satırını `.env`'den silin.
 

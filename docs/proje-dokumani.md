@@ -162,7 +162,7 @@ Sonra gelecekler: `BirthYearRange`, `Address`, `EmergencyContact`, `ScheduleSlot
 
 | Alan | Hedef |
 | --- | --- |
-| Güvenlik | OWASP ASVS L1 (MVP), L2 (faz 4); sadece HTTPS + HSTS; PBKDF2; şifre ≥10 karakter; token: access 15 dk, refresh 7 gün rotation, mutlak 30 gün; refresh JS'e kapalı; deny-by-default yetki; repoda gizli bilgi yok; uygulama DB kullanıcısı şema değiştiremez; high/critical açık yok |
+| Güvenlik | OWASP ASVS L1 (MVP), L2 (faz 4); sadece HTTPS + HSTS; PBKDF2; şifre ≥12 karakter; token: access 15 dk, refresh 7 gün rotation, mutlak 30 gün; refresh JS'e kapalı; deny-by-default yetki; repoda gizli bilgi yok; uygulama DB kullanıcısı şema değiştiremez; high/critical açık yok |
 | Gizlilik / KVKK | Veri minimizasyonu; antrenör sadece acil durum telefonu; loglarda kişisel veri yok; ayrılan öğrencinin verisi süre sonunda anonimleştirilir; **faz 4'e kadar sadece sentetik veri** |
 | Performans | p95 okuma <300 ms, yazma <500 ms; 20 kişilik yoklama telefonda <30 sn; listeler sayfalı (max 100); N+1 yok |
 | Güvenilirlik | %99,5 (tek sunucu); günlük şifreli yedek, sunucu dışında, 30 gün; RPO 24 sa (faz 4: 15 dk), RTO 4 sa; migration öncesi yedek; `/health/live` ve `/health/ready`; önemli kurallar DB kısıtlarıyla da |
@@ -699,7 +699,7 @@ Platform Admin, hiçbir okulun iş verisini (öğrenciler, yoklama, ödemeler) a
 **Geçici şifresi olan bir** kullanıcı **olarak**, kendi şifremi belirlemeye zorlanmak **istiyorum**, **böylece** şifremi benden başka kimse bilmez.
 
 - **Diyelim ki** hesabımda geçici şifre var, **ne zaman** giriş yaparsam, **o zaman** şifremi değiştirene kadar sadece şifre değiştirme işlemine erişebilirim.
-- **Diyelim ki** şifremi değiştirdim, **o zaman** yeni şifre şifre politikasına uymalıdır (en az 10 karakter) ve diğer tüm oturumlarım iptal edilir.
+- **Diyelim ki** şifremi değiştirdim, **o zaman** yeni şifre şifre politikasına uymalıdır (en az 12 karakter) ve diğer tüm oturumlarım iptal edilir.
 - **Diyelim ki** şifremi unuttum, **o zaman** MVP'de bir Okul Admini şifremi sıfırlar ve yeni bir geçici şifre verilir. (E-posta ile kendi kendine şifre sıfırlama faz 2'dedir.)
 
 ---
@@ -1203,7 +1203,7 @@ Aşağıdaki hedefler, faz 3 sonundaki şu yüke göre belirlenmiştir:
 | NFR-SEC-01 | Güvenlik standardı | MVP'de OWASP ASVS Seviye 1, faz 4'e kadar Seviye 2 | Faz geçişinde kontrol listesi | Faz 1 |
 | NFR-SEC-02 | İletişim güvenliği | Sadece HTTPS; HTTP istekleri HTTPS'e yönlendirilir; HSTS açık; TLS 1.2 ve üzeri | Deploy sonrası otomatik kontrol | Faz 0 |
 | NFR-SEC-03 | Şifre saklama | ASP.NET Core `PasswordHasher` (PBKDF2) ile tuzlanmış (salted), yavaş hash; düz metin şifre asla saklanmaz ve loglanmaz | Kod incelemesi, birim testi | Faz 1 |
-| NFR-SEC-04 | Şifre politikası | En az 10 karakter; zorunlu karakter türü kuralı yok; yaygın şifreler listesine karşı kontrol edilir | Birim testi | Faz 1 |
+| NFR-SEC-04 | Şifre politikası | En az 12 karakter (DEC-369); zorunlu karakter türü kuralı yok; yaygın şifreler listesine karşı kontrol edilir | Birim testi | Faz 1 |
 | NFR-SEC-05 | Token süreleri | Access token 15 dakika; refresh token 7 gün ve her kullanımda yenilenir (rotation); oturumun mutlak üst sınırı 30 gün | Entegrasyon testi | Faz 1 |
 | NFR-SEC-06 | Tarayıcıda token saklama | Refresh token hiçbir zaman JavaScript tarafından okunamaz. Access token sadece bellekte tutulur. Kesin yöntem ADR-0006'da belirlenecek | Kod incelemesi, e2e test | Faz 1 |
 | NFR-SEC-07 | Varsayılan olarak yetki | Açıkça "public" işaretlenmedikçe her endpoint kimlik doğrulama ister (deny by default) | Mimari testi | Faz 1 |
@@ -1629,7 +1629,7 @@ API'nin döndüğü tüm hata ve uyarı kodlarının kataloğu. Kurallar:
 | `Auth.SessionExpired` | Unauthorized | Oturumunuzun süresi doldu. Lütfen tekrar giriş yapın. | US-04 |
 | `Auth.PasswordChangeRequired` | Forbidden | Devam etmek için şifrenizi değiştirmeniz gerekiyor. | US-05 |
 | `Auth.CurrentPasswordIncorrect` | BusinessRule | Mevcut şifreniz hatalı. | US-05 |
-| `Auth.PasswordTooWeak` | Validation | Şifre en az 10 karakter olmalı ve çok yaygın bir şifre olmamalı. | US-05 |
+| `Auth.PasswordTooWeak` | Validation | Şifre en az 12 karakter olmalı ve çok yaygın bir şifre olmamalı. | US-05 |
 | `Auth.PasswordUnchanged` | Validation | Yeni şifre mevcut şifrenizle aynı olamaz. | US-05 |
 | `Auth.ResetTokenInvalid` | BusinessRule | Bu bağlantı geçersiz, kullanılmış veya süresi dolmuş. Yeni bir şifre belirleme bağlantısı isteyin. | P2-F4 |
 | `User.EmailTaken` | Conflict | Bu e-posta adresi zaten kullanılıyor. | US-01, US-08 |

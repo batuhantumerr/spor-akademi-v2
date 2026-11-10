@@ -3,10 +3,10 @@ using System.Security.Cryptography;
 
 namespace SporAkademi.Application.Identity;
 
-/// <summary>NFR-SEC-04: at least 10 characters, no character-class rules, not a common password.</summary>
+/// <summary>NFR-SEC-04: at least 12 characters, no character-class rules, not a common password.</summary>
 public static class PasswordPolicy
 {
-    public const int MinLength = 10;
+    public const int MinLength = 12;
 
     /// <summary>Upper bound so hashing cost stays bounded.</summary>
     public const int MaxLength = 128;

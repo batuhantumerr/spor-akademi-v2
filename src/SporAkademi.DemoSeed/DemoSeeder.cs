@@ -73,7 +73,7 @@ internal sealed class DemoSeeder(IServiceScopeFactory scopes, SeedClock clock, S
         var password = string.IsNullOrWhiteSpace(options.Password) ? GeneratePassword() : options.Password;
         if (!PasswordPolicy.IsStrongEnough(password))
         {
-            throw new DemoSeedException("The demo password does not meet the password policy (at least 10 characters, not a common password).");
+            throw new DemoSeedException("The demo password does not meet the password policy (at least 12 characters, not a common password).");
         }
 
         var summaries = new List<DemoSchoolSummary>();

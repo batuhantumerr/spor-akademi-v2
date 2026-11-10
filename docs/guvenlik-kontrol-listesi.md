@@ -13,7 +13,7 @@ Test sınıfları `tests/` altındaki yollarıyla verilir (`IntegrationTests/...
 | NFR-SEC-02 | Sadece HTTPS, HSTS, TLS ≥ 1.2 | ⛔ | Uygulama TLS'i reverse proxy'ye bırakır; HTTPS yönlendirmesi ve HSTS Deploy bloğunda proxy'de yapılacak. Refresh cookie'si zaten `Secure` (`IntegrationTests/Identity/LoginTests`). |
 | NFR-SEC-03 | Şifre saklama (PBKDF2, salt) | ✅ | `src/SporAkademi.Infrastructure/Identity/Credentials.cs` (`PasswordHasher<T>`); `IntegrationTests/Security/PasswordStorageTests` hash'in V3 biçiminde (PBKDF2-HMAC-SHA512, ≥100.000 tekrar, ≥16 bayt salt) olduğunu ve aynı şifrenin farklı hash ürettiğini doğrular. Eski parametreli hash girişte yenilenir (`Application.UnitTests/Identity/IdentityHandlerTests`). |
 | NFR-SEC-03 | Şifre ve hash asla dönülmez/loglanmaz | ✅ | `PasswordStorageTests.No_response_schema_exposes_a_password_or_hash` OpenAPI dokümanındaki her yanıt şemasını tarar (tek istisna: bir kez dönen `temporaryPassword`). Log: `IntegrationTests/Security/LogPrivacyTests`. |
-| NFR-SEC-04 | Şifre politikası (≥10, yaygın şifre listesi) | ✅ | `src/SporAkademi.Application/Identity/PasswordPolicy.cs`, `common-passwords.txt`; `Application.UnitTests/Identity/PasswordPolicyTests`, `IntegrationTests/Identity/PasswordTests`. Aynı şifreye değiştirme reddedilir (`Auth.PasswordUnchanged`, `AuthHardeningTests`). |
+| NFR-SEC-04 | Şifre politikası (≥12, yaygın şifre listesi) | ✅ | `src/SporAkademi.Application/Identity/PasswordPolicy.cs`, `common-passwords.txt`; `Application.UnitTests/Identity/PasswordPolicyTests`, `IntegrationTests/Identity/PasswordTests`. Aynı şifreye değiştirme reddedilir (`Auth.PasswordUnchanged`, `AuthHardeningTests`). |
 | NFR-SEC-05 | Token süreleri (15 dk / 7 gün rotation / mutlak 30 gün) | ✅ | `IntegrationTests/Identity/SessionTests`, `LoginTests` (saat ilerletilerek, DEC-107); reuse detection `SessionTests`, `Domain.UnitTests/Identity/RefreshTokenTests`. |
 | NFR-SEC-06 | Tarayıcıda token saklama | ✅ | Refresh token `HttpOnly; Secure; SameSite=Strict; Path=/api/v1/auth` (`LoginTests`); access token sadece yanıt gövdesinde, istemci bellekte tutar (`web/admin/src/app/core/auth/auth.service.ts`). |
 | NFR-SEC-07 | Varsayılan olarak yetki | ✅ | `tests/SporAkademi.ArchitectureTests/EndpointSecurityTests` (fallback policy + gözden geçirilmiş anonim endpoint listesi); `IntegrationTests/Platform/ErrorHandlingTests`. |
@@ -39,7 +39,7 @@ Sadece bu uygulamaya uygulanabilen maddeler listelenir (dosya yükleme, SOAP, Gr
 ### V2 Kimlik doğrulama
 | Madde | Durum | Kanıt / not |
 | --- | --- | --- |
-| 2.1.1 Şifre ≥ 12 karakter | 🟡 | Politika ≥ 10 karakter (NFR-SEC-04, sahip kararı). ASVS 12 önerir; bkz. Fikirler 3. |
+| 2.1.1 Şifre ≥ 12 karakter | ✅ | `PasswordPolicy.MinLength = 12` (NFR-SEC-04, DEC-369); `PasswordPolicyTests`, `PasswordTests`. |
 | 2.1.2 – 2.1.4 Uzun şifreler, kırpılmaz, her karakter | ✅ | En fazla 128 karakter, kırpma ve karakter sınıfı kuralı yok (`PasswordPolicy`, `PasswordPolicyTests`). |
 | 2.1.5 – 2.1.6 Kullanıcı şifresini değiştirebilir, mevcut şifre istenir | ✅ | `POST /auth/change-password`; `PasswordTests`. |
 | 2.1.7 İhlal edilmiş/yaygın şifre kontrolü | 🟡 | Gömülü yaygın şifre listesi (Türkçe olanlar dahil); büyük bir ihlal listesine (k-anonymity) karşı kontrol yok. Fikirler 4. |
@@ -140,7 +140,7 @@ Sadece bu uygulamaya uygulanabilen maddeler listelenir (dosya yükleme, SOAP, Gr
 
 1. **HTTPS/HSTS ve forwarded header'lar (Deploy bloğu):** reverse proxy'de TLS 1.2+, HSTS, HTTP→HTTPS; API'de `UseForwardedHeaders` (sadece proxy'nin IP'si güvenilir), aksi halde rate limit tüm istemcileri proxy IP'siyle sayar.
 2. **Güvenlik başlıkları (NFR-SEC-13, faz 4 öne alınabilir):** API ve admin imajında `X-Content-Type-Options: nosniff`, `Referrer-Policy: no-referrer`, `frame-ancestors 'none'` / `X-Frame-Options: DENY`, admin için CSP; Kestrel `AddServerHeader = false`. Otomatik başlık testi.
-3. **Şifre uzunluğu:** ASVS L1 12 karakter önerir; politika şu an 10 (sahip kararı, NFR-SEC-04). Sahip isterse 12'ye çıkarılır.
+3. **Şifre uzunluğu:** Yapıldı. Politika 12 karakter (DEC-369, sahibin 2026-11-10 onayı).
 4. **İhlal edilmiş şifre kontrolü:** k-anonymity ile HIBP benzeri bir servis veya daha büyük bir gömülü liste (çevrimdışı çalışmalı, KVKK açısından şifrenin kendisi dışarı çıkmamalı).
 5. **MFA (Platform Admin ve Okul Admini için TOTP):** faz 4 adayı.
 6. **Güvenlik denetim kaydı:** başarısız giriş, kilit, şifre değişimi/sıfırlama, pasifleştirme için ayrı, kişisel veri içermeyen audit event'leri ve Seq/alarm.
