@@ -27,6 +27,9 @@ public sealed partial class CrossTenantEndpointTests(DatabaseFixture database) :
 {
     private const string RecordedSessionKey = "2027-01-14T10:00";
 
+    /// <summary>School A has a fee rules version planned for this month (school B has none), so B's withdrawal finds nothing.</summary>
+    private const string PlannedRulesPeriod = "2027-06";
+
     /// <summary>Platform Admin endpoints with route parameters: school users are refused by role (403).</summary>
     private static readonly string[] PlatformEndpoints =
     [
@@ -54,6 +57,7 @@ public sealed partial class CrossTenantEndpointTests(DatabaseFixture database) :
         ["POST /api/v1/sandbox-checkout/complete"] = "anonymous; Fake provider sandbox page, token only",
         ["POST /api/v1/platform/jobs/dashboard-session"] = "Platform Admin only; no body, starts the caller's job panel session (DEC-332)",
         ["PUT /api/v1/settings/data-retention"] = "the caller's own school; retention months and version only (DEC-361)",
+        ["POST /api/v1/settings/billing-rules"] = "the caller's own school; period, percents and a flag only (DEC-370)",
     };
 
     /// <summary>Endpoints any signed-in user may call, so they carry no role metadata.</summary>
@@ -182,6 +186,7 @@ public sealed partial class CrossTenantEndpointTests(DatabaseFixture database) :
             (Admin, "/api/v1/guardians" + ListQueries["/api/v1/guardians"], _a.Guardian),
             (Admin, "/api/v1/dues/outstanding", _a.UnpaidStudent),
             (Admin, "/api/v1/dashboard", _a.Group),
+            (Admin, "/api/v1/settings/billing-rules", _a.BillingRules),
             (ayse, "/api/v1/me", _a.Coach),
             (ayse, "/api/v1/me/groups", _a.Group),
             (ayse, "/api/v1/me/sessions", _a.Group),
@@ -289,6 +294,7 @@ public sealed partial class CrossTenantEndpointTests(DatabaseFixture database) :
             "/api/v1/settings/data-retention",
             "/api/v1/settings/data-retention/runs",
             "/api/v1/settings/data-retention/impact",
+            "/api/v1/settings/billing-rules",
             "/api/v1/students",
         ], ignoreOrder: true);
     }
@@ -336,6 +342,8 @@ public sealed partial class CrossTenantEndpointTests(DatabaseFixture database) :
         {
             "id" => ResourceId(endpoint).ToString(),
             "sessionKey" => RecordedSessionKey,
+            // P2-F8 (DEC-376): school A's planned fee rules version.
+            "effectiveFrom" => PlannedRulesPeriod,
             var other => throw new InvalidOperationException($"{endpoint.Key}: no value for route parameter '{other}'."),
         });
         url.ShouldNotContain("{", customMessage: endpoint.Key);
@@ -372,6 +380,7 @@ public sealed partial class CrossTenantEndpointTests(DatabaseFixture database) :
         "payments" => "Payment.NotFound",
         "online-payments" => "OnlinePayment.NotFound",
         "documents" => "Document.NotFound",
+        "settings" => "BillingRules.NotFound",
         var other => throw new InvalidOperationException($"No not-found code for '{other}'."),
     };
 
@@ -448,6 +457,7 @@ public sealed partial class CrossTenantEndpointTests(DatabaseFixture database) :
             ["GET /api/v1/payments/{id:guid}"] = (null, ""),
             ["POST /api/v1/payments/{id:guid}/cancel"] = (new { reason = "Hack" }, ""),
             ["GET /api/v1/online-payments/{id:guid}"] = (null, ""),
+            ["DELETE /api/v1/settings/billing-rules/{effectiveFrom}"] = (null, ""),
         };
         return probes.ToDictionary(p => p.Key, p => new Probe(p.Key, p.Value.Body, p.Value.Query, 404, NotFoundOf(p.Key.Split(' ')[1])), StringComparer.Ordinal);
     }
@@ -583,6 +593,11 @@ public sealed partial class CrossTenantEndpointTests(DatabaseFixture database) :
     {
         var group = IdOf(await GroupAsync("U10 Futbol", 20, Ayse, Slot("Thursday", "10:00", "11:00")));
         await DefineFeeOkAsync(group, "2027-01", "1000.00");
+        // P2-F8: a fee rules version (no siblings in school A, so no amount changes).
+        var rules = await Admin.PostAsJsonAsync("/api/v1/settings/billing-rules", new { effectiveFrom = "2027-01", secondChildPercent = 10, thirdAndLaterChildPercent = 15, singleChargeOnGroupChange = true }, Ct);
+        rules.StatusCode.ShouldBe(HttpStatusCode.Created);
+        (await Admin.PostAsJsonAsync("/api/v1/settings/billing-rules", new { effectiveFrom = PlannedRulesPeriod, secondChildPercent = 20, thirdAndLaterChildPercent = 20, singleChargeOnGroupChange = true }, Ct))
+            .StatusCode.ShouldBe(HttpStatusCode.Created);
         var student = await RegisterStudentAsync("Kaynak", "Okulu");
         var studentDto = await Admin.GetFromJsonAsync<JsonElement>($"/api/v1/students/{student}", Ct);
         var guardian = studentDto.GetProperty("guardians")[0];
@@ -616,7 +631,8 @@ public sealed partial class CrossTenantEndpointTests(DatabaseFixture database) :
             payment,
             onlinePayment,
             IdOf(await BodyOf(announcement)),
-            IdOf(await BodyOf(document)));
+            IdOf(await BodyOf(document)),
+            (await BodyOf(rules)).EnumerateArray().Single(r => r.GetProperty("effectiveFrom").GetString() == "2027-01").GetProperty("id").GetGuid());
     }
 
     /// <summary>
@@ -673,12 +689,13 @@ public sealed partial class CrossTenantEndpointTests(DatabaseFixture database) :
         Guid Payment,
         Guid OnlinePayment,
         Guid Announcement,
-        Guid Document)
+        Guid Document,
+        Guid BillingRules)
     {
         /// <summary>Ids and personal data of school A that must never appear in school B's responses.</summary>
         public string[] LeakMarkers =>
         [
-            .. new[] { Sport, Facility, Coach, Group, Student, UnpaidStudent, Guardian, Enrollment, UnpaidEnrollment, Payment, OnlinePayment, Announcement, Document }.Select(id => id.ToString()),
+            .. new[] { Sport, Facility, Coach, Group, Student, UnpaidStudent, Guardian, Enrollment, UnpaidEnrollment, Payment, OnlinePayment, Announcement, Document, BillingRules }.Select(id => id.ToString()),
             "kaynak-rapor",
             GuardianPhone.TrimStart('+'), // JSON may escape the '+'
             "Kaynak",

@@ -552,6 +552,10 @@ describe('DuesPage', () => {
     fee: tl(fee),
     paid: tl(paid),
     remaining: tl(remaining),
+    listFee: tl(fee),
+    discount: tl('0.00'),
+    adjustment: 'None',
+    discountPercent: 0,
   });
 
   it('sums every page exactly and opens a prefilled payment', async () => {
@@ -627,6 +631,53 @@ describe('DuesPage', () => {
     }
     await settle(fixture);
     expect(toast.success).toHaveBeenCalledWith(ui.billing.paymentRecorded);
+    backend.verify();
+  });
+
+  it('explains a sibling discount: list fee struck through, owed fee and the percent', async () => {
+    TestBed.configureTestingModule({
+      imports: [DuesPage],
+      providers: providers([
+        { provide: Dialog, useValue: { open: vi.fn() } },
+        { provide: ToastService, useValue: { success: vi.fn(), error: vi.fn() } },
+      ]),
+    });
+    const fixture = TestBed.createComponent(DuesPage);
+    const backend = TestBed.inject(HttpTestingController);
+    await settle(fixture);
+    backend
+      .expectOne((r) => r.url === '/api/v1/groups')
+      .flush({ items: [], page: 1, pageSize: 100, totalCount: 0, totalPages: 0 });
+    const discounted: OutstandingDueDto = {
+      ...due('a', '720.00', '0.00', '720.00'),
+      listFee: tl('800.00'),
+      discount: tl('80.00'),
+      adjustment: 'SiblingDiscount',
+      discountPercent: 10,
+    };
+    const full = due('b', '1000.00', '0.00', '1000.00');
+    for (const r of backend.match((r) => r.url === '/api/v1/dues/outstanding')) {
+      r.flush({ items: [discounted, full], page: 1, pageSize: 25, totalCount: 2, totalPages: 1 });
+    }
+    await settle(fixture);
+
+    const root = fixture.nativeElement as HTMLElement;
+    const rows = [...root.querySelectorAll('tbody tr')];
+    const feeCell = rows[0].querySelectorAll('td')[2];
+    expect(feeCell.querySelector('s')?.textContent?.trim()).toBe('₺800,00');
+    expect(feeCell.querySelector('[data-testid="list-fee"] .sr-only')?.textContent).toContain(
+      ui.billing.listFee,
+    );
+    expect(feeCell.textContent).toContain('₺720,00');
+    expect(feeCell.querySelector('[data-testid="discount-hint"]')?.textContent?.trim()).toBe(
+      'Kardeş indirimi %10',
+    );
+    // A due without a discount shows only its fee.
+    const plainCell = rows[1].querySelectorAll('td')[2];
+    expect(plainCell.querySelector('s')).toBeNull();
+    expect(plainCell.querySelector('[data-testid="discount-hint"]')).toBeNull();
+    // Totals sum what is owed, not the list fees.
+    expect(root.querySelector('[data-testid="total-fee"]')?.textContent?.trim()).toBe('₺1.720,00');
     backend.verify();
   });
 

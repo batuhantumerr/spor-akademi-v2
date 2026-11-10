@@ -13,7 +13,7 @@ import {
 import { NamedReferenceDto, OutstandingDueDto } from '../../api/models';
 import { problemMessage, toProblem } from '../../core/api/problem';
 import { interpolate, ui } from '../../core/i18n/tr';
-import { displayMoney, sumAmounts } from '../../core/money/money';
+import { displayMoney, isPositive, sumAmounts } from '../../core/money/money';
 import { PagedList } from '../../shared/data/paged-list';
 import { PageHeaderComponent } from '../../shared/ui/page-header.component';
 import { PaginationComponent } from '../../shared/ui/pagination.component';
@@ -168,7 +168,22 @@ const TOTALS_RETRIES = 2;
                 </th>
                 <td>{{ d.groupName }}</td>
                 <td>{{ periodText(d.period) }}</td>
-                <td class="text-right font-mono whitespace-nowrap">{{ show(d.fee.amount) }}</td>
+                <td class="text-right font-mono whitespace-nowrap">
+                  @if (hasDiscount(d)) {
+                    <span class="block text-xs text-muted-foreground" data-testid="list-fee">
+                      <span class="sr-only">{{ text.listFee }}: </span>
+                      <s>{{ show(d.listFee.amount) }}</s>
+                    </span>
+                  }
+                  {{ show(d.fee.amount) }}
+                  @if (discountHint(d); as hint) {
+                    <span
+                      class="block font-sans text-xs text-success"
+                      data-testid="discount-hint"
+                      >{{ hint }}</span
+                    >
+                  }
+                </td>
                 <td class="text-right font-mono whitespace-nowrap">{{ show(d.paid.amount) }}</td>
                 <td class="text-right font-mono font-semibold whitespace-nowrap text-destructive">
                   {{ show(d.remaining.amount) }}
@@ -252,6 +267,17 @@ export class DuesPage {
 
   protected show(amount: string): string {
     return displayMoney(amount);
+  }
+
+  /** P2-F8 (DEC-373): the owed fee differs from the group's fee, e.g. after a sibling discount. */
+  protected hasDiscount(due: OutstandingDueDto): boolean {
+    return isPositive(due.discount.amount);
+  }
+
+  protected discountHint(due: OutstandingDueDto): string | null {
+    return due.adjustment === 'SiblingDiscount'
+      ? interpolate(this.text.siblingDiscount, { percent: Number(due.discountPercent) })
+      : null;
   }
 
   protected totalsLabel(count: number): string {

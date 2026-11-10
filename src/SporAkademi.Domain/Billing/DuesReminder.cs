@@ -121,7 +121,10 @@ public sealed class DuesReminder : AggregateRoot<DuesReminderId>, ITenantScoped
 
     public DateOnly DueDate { get; private set; }
 
-    /// <summary>The group's full fee for the period; the e-mail states what is still unpaid when it is sent.</summary>
+    /// <summary>
+    /// What the period owed when the reminder was scheduled (the group's fee after the fee rules, P2-F8); the e-mail
+    /// states what is still unpaid when it is sent.
+    /// </summary>
     public Money Fee { get; private set; }
 
     public DuesReminderStatus Status { get; private set; }

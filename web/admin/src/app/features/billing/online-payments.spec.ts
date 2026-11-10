@@ -170,6 +170,10 @@ describe('DuesPage online payment', () => {
     fee: tl('1250.00'),
     paid: tl('0.00'),
     remaining: tl('1250.00'),
+    listFee: tl('1250.00'),
+    discount: tl('0.00'),
+    adjustment: 'None',
+    discountPercent: 0,
   };
 
   async function duesPage(toast: {

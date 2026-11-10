@@ -24,4 +24,14 @@ public interface IEnrollmentDirectory
     /// <paramref name="lastDay"/> (both inclusive; no first day means from the beginning), optionally of one group only.
     /// </summary>
     Task<IReadOnlyList<EnrollmentInfo>> ListActiveBetweenAsync(GroupId? groupId, DateOnly? firstDay, DateOnly lastDay, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Enrollments (any status, any group) of the given students that were active at least one day between
+    /// <paramref name="firstDay"/> and <paramref name="lastDay"/> (both inclusive), in one query (fee rules, DEC-373).
+    /// </summary>
+    Task<IReadOnlyList<EnrollmentInfo>> ListOfStudentsActiveBetweenAsync(
+        IReadOnlyCollection<StudentId> studentIds,
+        DateOnly firstDay,
+        DateOnly lastDay,
+        CancellationToken cancellationToken);
 }

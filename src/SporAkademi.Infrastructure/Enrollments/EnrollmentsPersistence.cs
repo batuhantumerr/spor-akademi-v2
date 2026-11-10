@@ -176,4 +176,23 @@ internal sealed class EnrollmentDirectory(AppDbContext db, ICurrentUser currentU
                 && (firstDay == null || e.EndDate == null || e.EndDate >= firstDay))
             .Select(e => new EnrollmentInfo(e.Id, e.StudentId, e.GroupId, e.StartDate, e.EndDate))
             .ToListAsync(cancellationToken);
+
+    public async Task<IReadOnlyList<EnrollmentInfo>> ListOfStudentsActiveBetweenAsync(
+        IReadOnlyCollection<StudentId> studentIds,
+        DateOnly firstDay,
+        DateOnly lastDay,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(studentIds);
+        if (studentIds.Count == 0)
+        {
+            return [];
+        }
+
+        var ids = studentIds.Distinct().ToList();
+        return await db.Set<Enrollment>().AsNoTracking()
+            .Where(e => ids.Contains(e.StudentId) && e.StartDate <= lastDay && (e.EndDate == null || e.EndDate >= firstDay))
+            .Select(e => new EnrollmentInfo(e.Id, e.StudentId, e.GroupId, e.StartDate, e.EndDate))
+            .ToListAsync(cancellationToken);
+    }
 }

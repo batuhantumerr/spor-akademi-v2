@@ -17,6 +17,7 @@ public static class DependencyInjection
     {
         services.AddScoped<AccountOpening>();
         services.AddScoped<Identity.Passwords.PasswordLinkMailer>();
+        services.AddScoped<Billing.DueCharges>();
         services.AddScoped<Billing.PaymentViews>();
         services.AddScoped<Billing.OnlinePaymentViews>();
         services.AddScoped<Billing.OnlineCheckout>();

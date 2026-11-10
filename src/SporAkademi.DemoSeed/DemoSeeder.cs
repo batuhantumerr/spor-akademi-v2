@@ -185,6 +185,7 @@ internal sealed class DemoSeeder(IServiceScopeFactory scopes, SeedClock clock, S
             await RegisterAndEnrollStudentsAsync();
             PlanPaymentsAndLeaves();
             await ReplayDaysAsync();
+            await DefineFeeRulesAsync();
             return new DemoSchoolSummary(plan.Name, plan.Slug, plan.AdminEmail, _schoolId);
         }
 
@@ -498,6 +499,21 @@ internal sealed class DemoSeeder(IServiceScopeFactory scopes, SeedClock clock, S
 
                 await TakeAttendanceAsync(day);
             }
+        }
+
+        /// <summary>
+        /// P2-F8: the first school turns on the fee rules today, from the current month (DEC-370), so the dues list shows
+        /// sibling discounts (a fifth of the children share a guardian). Earlier months keep their bill.
+        /// </summary>
+        private async Task DefineFeeRulesAsync()
+        {
+            if (index != 0)
+            {
+                return;
+            }
+
+            AsAdmin();
+            await Send<DefineBillingRulesCommand, Unit>(new DefineBillingRulesCommand(YearMonth.From(_today).ToString(), 10, 15, true));
         }
 
         private async Task RecordPaymentAsync(DemoEnrollment enrollment, string period, decimal amount, bool mistake, DateOnly day)

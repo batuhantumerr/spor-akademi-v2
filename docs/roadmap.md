@@ -75,4 +75,4 @@ Kapsamın tamamı ve maddelerin açıklamaları: [proje dokümanı, Ek G](proje-
 - [x] P2-F5 Otomatik anonimleştirme işi (DEC-360 – DEC-368)
 - [x] P2-F6 Belge yükleme (S3 uyumlu; yerelde SeaweedFS, DEC-320 – DEC-326)
 - [x] P2-F7 Redis ve `HybridCache` ile cache (Valkey; DEC-310 – DEC-316)
-- [ ] P2-F8 Aidat kuralları (kardeş indirimi, dönem ortası değişiklik)
+- [x] P2-F8 Aidat kuralları: sürümlü kardeş indirimi ve grup değişikliğinde tek aidat (DEC-370 – DEC-376, **Proposed**; geçmiş aylar her gece kapanır ve borçları dondurulur; varsayılanlar onay listesinde soru 17). Kural sürümü olmayan okulda hesap değişmez; kıst yok (DEC-017).

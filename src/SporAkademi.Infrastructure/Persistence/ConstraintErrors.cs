@@ -36,6 +36,10 @@ internal static class ConstraintErrors
         ["ix_users_email"] = UserErrors.EmailTaken,
         ["ix_groups_tenant_id_name_key"] = GroupErrors.NameTaken,
         ["ix_group_fees_group_id_effective_from"] = FeeErrors.AlreadyDefined,
+        [BillingRulesConfiguration.PeriodIndex] = BillingRulesErrors.AlreadyDefined,
+        // DEC-375: a concurrent close run of the same school committed first; this run's work is already done.
+        [ChargeSnapshotConfiguration.UniqueIndex] = PersistenceErrors.ConcurrencyConflict,
+        [ClosedPeriodConfiguration.UniqueIndex] = PersistenceErrors.ConcurrencyConflict,
         // DEC-050: the partial unique index behind "already enrolled".
         ["ix_enrollments_active_student_group"] = EnrollmentErrors.AlreadyEnrolled,
         ["ix_guardians_tenant_id_phone"] = GuardianErrors.PhoneTaken,

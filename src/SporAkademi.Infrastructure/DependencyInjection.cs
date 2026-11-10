@@ -111,6 +111,9 @@ public static class DependencyInjection
         services.AddScoped<IStudentDocumentRepository, StudentDocumentRepository>();
         services.AddDocumentStorage(configuration);
         services.AddScoped<IStudentReminderContacts, StudentReminderContacts>();
+        services.AddScoped<IStudentSiblings, StudentSiblings>();
+        services.AddScoped<IBillingRulesRepository, BillingRulesRepository>();
+        services.AddScoped<IChargeSnapshotRepository, ChargeSnapshotRepository>();
         services.AddScoped<IDuesReminderRepository, DuesReminderRepository>();
         services.AddSingleton<IPasswordTokenFactory, PasswordTokenFactory>();
         services.AddOptions<DuesReminderSettings>()
@@ -131,7 +134,9 @@ public static class DependencyInjection
             // A broken outbox degrades readiness but never fails it; the database check covers outages.
             .AddCheck<OutboxHealthCheck>("outbox", failureStatus: HealthStatus.Degraded, tags: ["ready"])
             // A stopped job server degrades readiness too (DEC-335).
-            .AddCheck<JobsHealthCheck>("jobs", failureStatus: HealthStatus.Degraded, tags: ["ready"]);
+            .AddCheck<JobsHealthCheck>("jobs", failureStatus: HealthStatus.Degraded, tags: ["ready"])
+            // A school's past month left open by a failing close job degrades readiness (DEC-375).
+            .AddCheck<BillingCloseHealthCheck>("billing-close", failureStatus: HealthStatus.Degraded, tags: ["ready"]);
 
         return services;
     }
