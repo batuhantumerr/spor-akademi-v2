@@ -345,7 +345,7 @@ Bu repoya eklenen her paket ve imaj tek tabloda. Dokümandaki baz listeden gelen
 | DEC-372 | Grup değişikliğinde tek aidat: ay içinde biten kaydın ardından aynı ay (bitiş gününde veya sonra) başlayan kayıt o ay ücretlendirilmez; çakışan kayıtlar ikisi de öder; kıst yok. |
 | DEC-373 | Tek hesap servisi (`DueCharges`): borç listesi, dashboard, online ödeme, elle ödeme ve hatırlatmalar aynı tutarı görür; borç satırı `listFee` ve `discount` taşır. |
 | DEC-374 | Kardeşlik bugünkü veli bağlantılarından hesaplanır (geçmiş yok); kapanmış ayın borcu hiçbir yönde değişmez, yalnızca açık aylar (bu ay ve sonrası) güncel bağlantıları izler. |
-| DEC-375 | Ay kapanışı: günlük `billing-close-periods` işi kural sürümü olan geçmiş ayların borçlarını `billing.charge_snapshots`'a dondurur, ayı `billing.closed_periods`'a yazar; tablolar değiştirilemez. |
+| DEC-375 | Ay kapanışı: günlük `billing-close-periods` işi kural sürümü olan geçmiş ayların borçlarını `billing.charge_snapshots`'a dondurur, ayı `billing.closed_periods`'a yazar; tablolar değiştirilemez. Kapanmış aya geç eklenen kardeş dondurulmuşlardan sonra sıralanır; kapanmayan ay `/health/ready`'de `billing-close` uyarısı verir. |
 | DEC-376 | Form gelecek ayı önerir, bu ay seçilirse onay ister; başlamamış sürüm `DELETE /api/v1/settings/billing-rules/{effectiveFrom}` ile geri alınır, başlamış sürüm `422 BillingRules.AlreadyStarted`. |
 
 ## 6. Sapmalar / bilgilendirme
