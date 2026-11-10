@@ -110,6 +110,8 @@ export const errorMessages: Readonly<Record<string, string>> = {
   'BillingRules.PeriodInPast': 'Geçmiş bir dönemin aidat kuralları değiştirilemez.',
   'BillingRules.AlreadyDefined': 'Bu dönem için aidat kuralları zaten tanımlı.',
   'BillingRules.InvalidPercent': 'İndirim oranı 0 ile 100 arasında bir tam sayı olmalı.',
+  'BillingRules.NotFound': 'Bu ay için aidat kuralı sürümü bulunamadı.',
+  'BillingRules.AlreadyStarted': 'Başlamış bir aidat kuralı sürümü geri alınamaz.',
   'Payment.OnlinePaymentInProgress':
     'Bu borç için açık bir online ödeme var. Sonuçlanmasını veya bağlantının süresinin dolmasını bekleyin.',
   'Payment.OnlineNotCancellable':
@@ -467,17 +469,31 @@ export const ui = {
   billingRules: {
     title: 'Aidat kuralları',
     description:
-      'Kardeş indirimi ve ay içinde grup değiştiren öğrencinin aidatı. Kurallar seçtiğiniz aydan itibaren geçerlidir; geçmiş ayların borçları değişmez.',
+      'Kardeş indirimi ve ay içinde grup değiştiren öğrencinin aidatı. Kurallar seçtiğiniz aydan itibaren geçerlidir.',
+    closingHow:
+      'Her ay bittikten sonraki gece kapanır: kapanan ayın borçları dondurulur ve veli bağlantıları sonradan değişse de (veli ayrılsa, öğrenci anonimleşse ya da yeni kardeş bağlansa) artık değişmez. İçinde bulunulan ayın ve sonraki ayların açık borçları güncel veli bağlantılarına göre hesaplanır.',
     howTitle: 'Nasıl hesaplanır?',
     siblingsHow:
-      'Aynı veliye bağlı öğrenciler kardeş sayılır. Her ay en yüksek aidatlı kardeş tam öder; 2. kardeş ve 3. ve sonraki kardeşler o ayki aidatlarında indirim alır.',
+      'Ortak bir veli üzerinden bağlı öğrenciler, dolaylı bağlar dahil, kardeş sayılır (Ali ile Veli aynı annenin, Veli ile Can aynı babanın çocuğuysa üçü de kardeştir). Her ay en yüksek aidatlı kardeş tam öder; 2. kardeş ve 3. ve sonraki kardeşler o ayki aidatlarında indirim alır.',
     example:
       'Örnek: 2. kardeş %{second}, 3. ve sonraki %{third} indirim. Aidatları {a}, {b} ve {c} olan üç kardeş {a}, {b2} ve {c2} öder; en yüksek aidatlı kardeş tam öder.',
     groupChangeHow:
       'Ay içinde grup değiştiren öğrenci o ay yalnızca bir kez, eski grubun aidatıyla ücretlendirilir; yeni grubun aidatı ertesi aydan başlar. Aynı anda iki gruba kayıtlı öğrenci ikisini de öder.',
     formTitle: 'Yeni kural sürümü',
     effectiveFrom: 'Geçerlilik başlangıcı',
-    effectiveFromHint: 'Bu ay veya sonraki bir ay. Her ay için en fazla bir sürüm olabilir.',
+    effectiveFromHint:
+      'Varsayılan gelecek ay. Bu ayı seçerseniz bu ayın açık borçları hemen değişir. Her ay için en fazla bir sürüm olabilir.',
+    currentMonthTitle: 'Kurallar bu aydan itibaren mi geçerli olsun?',
+    currentMonthText:
+      '{month} için tanımlanan kurallar bu ayın açık borçlarını, online ödeme tutarlarını ve hatırlatmaları hemen değiştirir; bu ay tam aidat ödemiş bir kardeşin ödemesi fazla ödemeye dönüşebilir. Başlamış bir sürüm geri alınamaz.',
+    currentMonthConfirm: 'Bu aydan itibaren kaydet',
+    withdraw: 'Geri al',
+    withdrawLabel: '{month} sürümünü geri al',
+    withdrawTitle: 'Kural sürümü geri alınsın mı?',
+    withdrawText:
+      '{month} ayından başlayacak kural sürümü silinir. Henüz başlamadığı için hiçbir borç etkilenmez.',
+    withdrawn: 'Kural sürümü geri alındı.',
+    actions: 'İşlemler',
     second: '2. kardeş indirimi (%)',
     third: '3. ve sonraki kardeş indirimi (%)',
     percentHint: '0–100 arası tam sayı; 0 indirimi kapatır.',
@@ -831,6 +847,8 @@ export const ui = {
     chooseStudent: 'Bir öğrenci seçin.',
     startDateLabel: 'Başlangıç tarihi',
     startDateHint: 'Bugün veya daha önceki bir tarih.',
+    groupChangeHint:
+      'Grup değişikliğinde yeni kayıt, eski kaydın bitiş gününde veya sonra başlamalı; o ay tek aidat alınır. Kayıtlar çakışırsa (öğrenci aynı anda iki grupta) o ay iki aidat alınır.',
     enrolled: 'Öğrenci gruba kaydedildi.',
     studentLeft: 'Ayrılmış öğrenciler gruba kaydedilemez.',
     end: 'Kaydı sonlandır',

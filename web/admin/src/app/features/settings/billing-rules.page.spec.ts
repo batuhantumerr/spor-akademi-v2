@@ -5,8 +5,9 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { BillingRulesDto } from '../../api/models';
 import { errorMessages, ui } from '../../core/i18n/tr';
 import { SchoolClock } from '../../core/time/school-clock';
+import { ConfirmService } from '../../shared/ui/confirm-dialog.component';
 import { ToastService } from '../../shared/ui/toast.service';
-import { BillingRulesPage, discounted } from './billing-rules.page';
+import { BillingRulesPage, discounted, nextMonth } from './billing-rules.page';
 
 async function settle(fixture: ComponentFixture<unknown>): Promise<void> {
   await new Promise((resolve) => setTimeout(resolve));
@@ -31,12 +32,20 @@ describe('discounted', () => {
   });
 });
 
+describe('nextMonth', () => {
+  it('rolls over the year', () => {
+    expect(nextMonth('2027-01')).toBe('2027-02');
+    expect(nextMonth('2027-12')).toBe('2028-01');
+  });
+});
+
 describe('BillingRulesPage', () => {
   let fixture: ComponentFixture<BillingRulesPage>;
   let backend: HttpTestingController;
   let root: HTMLElement;
   let thisMonth: string;
   const toasts = { success: vi.fn(), error: vi.fn() };
+  const confirm = vi.fn<(options: { title: string; message: string }) => Promise<boolean>>();
 
   const version = (
     effectiveFrom: string,
@@ -53,12 +62,14 @@ describe('BillingRulesPage', () => {
   beforeEach(async () => {
     toasts.success.mockClear();
     toasts.error.mockClear();
+    confirm.mockReset().mockResolvedValue(true);
     TestBed.configureTestingModule({
       imports: [BillingRulesPage],
       providers: [
         provideHttpClient(),
         provideHttpClientTesting(),
         { provide: ToastService, useValue: toasts },
+        { provide: ConfirmService, useValue: { confirm } },
       ],
     });
     fixture = TestBed.createComponent(BillingRulesPage);
@@ -90,7 +101,12 @@ describe('BillingRulesPage', () => {
     expect((root.querySelector('#rules-second') as HTMLInputElement).value).toBe('10');
     expect((root.querySelector('#rules-third') as HTMLInputElement).value).toBe('15');
     expect((root.querySelector('#rules-single-charge') as HTMLInputElement).checked).toBe(true);
-    expect((root.querySelector('#rules-from') as HTMLInputElement).value).toBe(thisMonth);
+    // DEC-376: next month by default, so this month's open dues never change by accident.
+    expect((root.querySelector('#rules-from') as HTMLInputElement).value).toBe(
+      nextMonth(thisMonth),
+    );
+    expect(root.textContent).toContain('dolaylı bağlar dahil');
+    expect(root.textContent).toContain(ui.billingRules.closingHow);
     const example = root.querySelector('[data-testid="rules-example"]')!;
     expect(example.getAttribute('aria-live')).toBe('polite');
     expect(example.textContent).toContain('2. kardeş %10, 3. ve sonraki %15');
@@ -131,21 +147,65 @@ describe('BillingRulesPage', () => {
 
     const post = backend.expectOne((r) => r.method === 'POST');
     expect(post.request.url).toBe('/api/v1/settings/billing-rules');
+    expect(confirm).not.toHaveBeenCalled();
     expect(post.request.body).toEqual({
-      effectiveFrom: thisMonth,
+      effectiveFrom: nextMonth(thisMonth),
       secondChildPercent: 12,
       thirdAndLaterChildPercent: 15,
       singleChargeOnGroupChange: false,
     });
-    post.flush([version(thisMonth, { secondChildPercent: 12, singleChargeOnGroupChange: false })], {
-      status: 201,
-      statusText: 'Created',
-    });
+    post.flush(
+      [version(nextMonth(thisMonth), { secondChildPercent: 12, singleChargeOnGroupChange: false })],
+      {
+        status: 201,
+        statusText: 'Created',
+      },
+    );
     await settle(fixture);
 
     expect(toasts.success).toHaveBeenCalledWith(ui.billingRules.saved);
     expect(root.querySelectorAll('tbody tr')).toHaveLength(1);
     expect(root.querySelector('tbody tr')?.textContent).toContain('%12');
+  });
+
+  it('asks before a version starts this month and sends nothing when declined', async () => {
+    list().flush([]);
+    await settle(fixture);
+    await type('rules-from', thisMonth);
+    confirm.mockResolvedValueOnce(false);
+    await submit();
+    expect(confirm).toHaveBeenCalledTimes(1);
+    expect(confirm.mock.calls[0][0].message).toContain('açık borçlarını');
+    backend.expectNone((r) => r.method === 'POST');
+
+    await submit();
+    await settle(fixture);
+    const post = backend.expectOne((r) => r.method === 'POST');
+    expect(post.request.body.effectiveFrom).toBe(thisMonth);
+    post.flush([version(thisMonth)], { status: 201, statusText: 'Created' });
+    await settle(fixture);
+    expect(toasts.success).toHaveBeenCalledWith(ui.billingRules.saved);
+  });
+
+  it('withdraws only a version that has not started, after confirmation', async () => {
+    const planned = version(nextMonth(thisMonth), { id: 'planned' });
+    list().flush([planned, version(thisMonth)]);
+    await settle(fixture);
+
+    const buttons = [...root.querySelectorAll('tbody button')] as HTMLButtonElement[];
+    expect(buttons).toHaveLength(1);
+    expect(buttons[0].getAttribute('aria-label')).toContain('geri al');
+    buttons[0].click();
+    await settle(fixture);
+    expect(confirm).toHaveBeenCalledWith(expect.objectContaining({ destructive: true }));
+    const del = backend.expectOne((r) => r.method === 'DELETE');
+    expect(del.request.url).toBe(`/api/v1/settings/billing-rules/${planned.effectiveFrom}`);
+    del.flush(null, { status: 204, statusText: 'No Content' });
+    await settle(fixture);
+    list().flush([version(thisMonth)]);
+    await settle(fixture);
+    expect(toasts.success).toHaveBeenCalledWith(ui.billingRules.withdrawn);
+    expect(root.querySelectorAll('tbody button')).toHaveLength(0);
   });
 
   it('refuses invalid percents and a past month on the client and focuses the first one', async () => {

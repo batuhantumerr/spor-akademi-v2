@@ -166,6 +166,11 @@ describe('enrollment dialogs', () => {
 
     it("sends the student, group and the school's today as the start date", async () => {
       expect(el('enroll-start').value).toBe(TestBed.inject(SchoolClock).today());
+      // P2-F8 (DEC-372): a group change should not overlap, or the month is charged twice.
+      expect(el('enroll-start').getAttribute('aria-describedby')).toContain(
+        'enroll-group-change-hint',
+      );
+      expect(root.querySelector('#enroll-group-change-hint')?.textContent).toContain('iki aidat');
       await chooseGroup('g1', 3);
       await submit();
 
@@ -411,6 +416,10 @@ describe('enrollment dialogs', () => {
       const today = TestBed.inject(SchoolClock).today();
       expect(el('end-date').value).toBe(today);
       expect(el('end-date').min).toBe('2026-09-01');
+      expect(el('end-date').getAttribute('aria-describedby')).toContain('end-group-change-hint');
+      expect(root.querySelector('#end-group-change-hint')?.textContent).toContain(
+        'bitiş gününde veya sonra',
+      );
       await submit();
       const post = backend.expectOne('/api/v1/enrollments/e1/end');
       expect(post.request.body).toEqual({ date: today });

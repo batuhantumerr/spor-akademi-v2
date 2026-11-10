@@ -212,11 +212,15 @@ export interface EnrollGroupData {
           (input)="startDate.set($any($event.target).value); clearTarget('startDate')"
           [attr.aria-invalid]="!!targetError('startDate')"
           [attr.aria-describedby]="
-            'enroll-start-hint' + (targetError('startDate') ? ' enroll-start-error' : '')
+            'enroll-start-hint enroll-group-change-hint' +
+            (targetError('startDate') ? ' enroll-start-error' : '')
           "
         />
         <p id="enroll-start-hint" class="mt-1.5 text-xs text-muted-foreground">
           {{ text.startDateHint }}
+        </p>
+        <p id="enroll-group-change-hint" class="mt-1 text-xs text-muted-foreground">
+          {{ text.groupChangeHint }}
         </p>
         @if (targetError('startDate'); as m) {
           <p id="enroll-start-error" class="field-error">{{ m }}</p>
@@ -527,10 +531,15 @@ export interface EndEnrollmentData {
           [value]="date()"
           (input)="date.set($any($event.target).value); dateError.set(null)"
           [attr.aria-invalid]="!!dateError()"
-          [attr.aria-describedby]="'end-date-hint' + (dateError() ? ' end-date-error' : '')"
+          [attr.aria-describedby]="
+            'end-date-hint end-group-change-hint' + (dateError() ? ' end-date-error' : '')
+          "
         />
         <p id="end-date-hint" class="mt-1.5 text-xs text-muted-foreground">
           {{ text.endDateHint }}
+        </p>
+        <p id="end-group-change-hint" class="mt-1 text-xs text-muted-foreground">
+          {{ text.groupChangeHint }}
         </p>
         @if (dateError(); as m) {
           <p id="end-date-error" class="field-error">{{ m }}</p>

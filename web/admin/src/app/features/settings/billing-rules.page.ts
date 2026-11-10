@@ -10,12 +10,17 @@ import {
 } from '@angular/core';
 
 import { Api } from '../../api/api';
-import { apiV1SettingsBillingRulesGet, apiV1SettingsBillingRulesPost } from '../../api/functions';
+import {
+  apiV1SettingsBillingRulesEffectiveFromDelete,
+  apiV1SettingsBillingRulesGet,
+  apiV1SettingsBillingRulesPost,
+} from '../../api/functions';
 import { BillingRulesDto } from '../../api/models';
 import { fieldErrors, problemMessage, toProblem } from '../../core/api/problem';
 import { errorMessages, interpolate, ui } from '../../core/i18n/tr';
 import { displayMoney, fromKurus, toKurus } from '../../core/money/money';
 import { SchoolClock } from '../../core/time/school-clock';
+import { ConfirmService } from '../../shared/ui/confirm-dialog.component';
 import { PageHeaderComponent } from '../../shared/ui/page-header.component';
 import { ToastService } from '../../shared/ui/toast.service';
 import { periodLabel } from '../billing/billing-format';
@@ -24,6 +29,12 @@ type Field = 'effectiveFrom' | 'secondChildPercent' | 'thirdAndLaterChildPercent
 
 /** The fee each of three siblings pays in the example, list fees as API text. */
 const EXAMPLE_FEES = ['1000.00', '800.00', '600.00'] as const;
+
+/** The month after `month` (both YYYY-MM). */
+export function nextMonth(month: string): string {
+  const [year, m] = month.split('-').map(Number);
+  return m === 12 ? `${year + 1}-01` : `${year}-${String(m + 1).padStart(2, '0')}`;
+}
 
 /**
  * The fee less a whole percent, rounded to kuruş half away from zero, like the API (DEC-371). Integer arithmetic on
@@ -51,7 +62,8 @@ export function discounted(amount: string, percent: number): string {
       <p class="mb-2 text-muted-foreground" aria-live="polite" data-testid="rules-example">
         {{ example() }}
       </p>
-      <p>{{ text.groupChangeHow }}</p>
+      <p class="mb-2">{{ text.groupChangeHow }}</p>
+      <p>{{ text.closingHow }}</p>
     </section>
 
     <form
@@ -187,6 +199,7 @@ export function discounted(amount: string, percent: number): string {
                 <th scope="col" class="text-right">{{ text.secondShort }}</th>
                 <th scope="col" class="text-right">{{ text.thirdShort }}</th>
                 <th scope="col">{{ text.groupChange }}</th>
+                <th scope="col" class="text-right">{{ text.actions }}</th>
               </tr>
             </thead>
             <tbody>
@@ -205,6 +218,19 @@ export function discounted(amount: string, percent: number): string {
                   <td>
                     {{ v.singleChargeOnGroupChange ? text.singleChargeOn : text.singleChargeOff }}
                   </td>
+                  <td class="text-right">
+                    @if (v.effectiveFrom > thisMonth()) {
+                      <button
+                        type="button"
+                        class="btn btn-ghost btn-sm"
+                        [attr.aria-label]="withdrawLabel(v)"
+                        [disabled]="saving()"
+                        (click)="withdraw(v)"
+                      >
+                        {{ text.withdraw }}
+                      </button>
+                    }
+                  </td>
                 </tr>
               }
             </tbody>
@@ -220,11 +246,13 @@ export class BillingRulesPage {
   private readonly clock = inject(SchoolClock);
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
   private readonly injector = inject(Injector);
+  private readonly confirmer = inject(ConfirmService);
 
   protected readonly text = ui.billingRules;
   protected readonly common = ui.common;
   protected readonly thisMonth = computed(() => this.clock.today().slice(0, 7));
-  protected readonly effectiveFrom = signal(this.clock.today().slice(0, 7));
+  /** DEC-376: next month by default, so a new version never changes this month's open dues by accident. */
+  protected readonly effectiveFrom = signal(nextMonth(this.clock.today().slice(0, 7)));
   /** Suggested defaults (DEC-371): 10 % for the second child, 15 % for the third and later. */
   protected readonly second = signal('10');
   protected readonly third = signal('15');
@@ -321,6 +349,9 @@ export class BillingRulesPage {
     this.error.set(null);
     this.errors.set({});
     try {
+      if (from === this.thisMonth() && !(await this.confirmCurrentMonth(from))) {
+        return;
+      }
       const versions = await this.api.invoke(apiV1SettingsBillingRulesPost, {
         body: {
           effectiveFrom: from,
@@ -357,6 +388,46 @@ export class BillingRulesPage {
     } finally {
       this.saving.set(false);
     }
+  }
+
+  protected withdrawLabel(version: BillingRulesDto): string {
+    return interpolate(this.text.withdrawLabel, { month: periodLabel(version.effectiveFrom) });
+  }
+
+  /** DEC-376: a version that has not started can be withdrawn; nothing was billed with it yet. */
+  protected async withdraw(version: BillingRulesDto): Promise<void> {
+    if (this.saving()) {
+      return;
+    }
+    const confirmed = await this.confirmer.confirm({
+      title: this.text.withdrawTitle,
+      message: interpolate(this.text.withdrawText, { month: periodLabel(version.effectiveFrom) }),
+      confirmLabel: this.text.withdraw,
+      destructive: true,
+    });
+    if (!confirmed) {
+      return;
+    }
+    this.saving.set(true);
+    try {
+      await this.api.invoke(apiV1SettingsBillingRulesEffectiveFromDelete, {
+        effectiveFrom: version.effectiveFrom,
+      });
+      this.toasts.success(this.text.withdrawn);
+    } catch (err) {
+      this.toasts.error(problemMessage(toProblem(err)));
+    } finally {
+      this.saving.set(false);
+    }
+    await this.load();
+  }
+
+  private confirmCurrentMonth(month: string): Promise<boolean> {
+    return this.confirmer.confirm({
+      title: this.text.currentMonthTitle,
+      message: interpolate(this.text.currentMonthText, { month: periodLabel(month) }),
+      confirmLabel: this.text.currentMonthConfirm,
+    });
   }
 
   private focusFirstInvalid(): void {
