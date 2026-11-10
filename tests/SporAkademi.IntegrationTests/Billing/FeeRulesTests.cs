@@ -3,6 +3,10 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Diagnostics.HealthChecks;
+using SporAkademi.Application.Students.Contracts;
+using SporAkademi.Domain.Students;
+using SporAkademi.Domain.Tenancy;
 using SporAkademi.Infrastructure.Jobs;
 using SporAkademi.Infrastructure.Outbox;
 using SporAkademi.IntegrationTests.Infrastructure;
@@ -415,6 +419,69 @@ public sealed class FeeRulesTests(DatabaseFixture database) : BillingTest(databa
 
         using var coach = CoachClient(Ayse);
         (await coach.DeleteAsync(new Uri($"{RulesUrl}/2027-01", UriKind.Relative), Ct)).StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+    }
+
+    [Fact]
+    public async Task Readiness_is_degraded_while_a_past_month_under_rules_stays_open_after_the_grace_days()
+    {
+        await DefineRulesOkAsync(Rules("2027-01"));
+        var health = Api.Services.GetRequiredService<HealthCheckService>();
+        async Task<HealthStatus> StatusAsync() => (await health.CheckHealthAsync(c => c.Name == "billing-close", Ct)).Entries["billing-close"].Status;
+
+        (await StatusAsync()).ShouldBe(HealthStatus.Healthy); // January is the current month
+        AdvanceTo(new DateTimeOffset(2027, 2, 2, 23, 0, 0, TimeSpan.Zero));
+        (await StatusAsync()).ShouldBe(HealthStatus.Healthy); // grace days
+        AdvanceTo(new DateTimeOffset(2027, 2, 3, 9, 0, 0, TimeSpan.Zero));
+        (await StatusAsync()).ShouldBe(HealthStatus.Degraded); // the close job has not closed January
+
+        (await RunCloseJobAsync()).ShouldBe(1);
+        (await StatusAsync()).ShouldBe(HealthStatus.Healthy);
+    }
+
+    [Fact]
+    public async Task A_single_family_is_found_through_indirect_links_and_cycles_within_the_school_only()
+    {
+        // Ali–g1–Ece–g2–Can, and Can also linked to g1 (a cycle); Zeynep is unrelated.
+        var (ali, aliGuardians) = await RegisterWithGuardiansAsync("Ali", NewGuardianLink(NextPhone(), "Ayşe", "ayse@example.com"));
+        var g1 = aliGuardians[0];
+        var (ece, eceGuardians) = await RegisterWithGuardiansAsync("Ece", ExistingGuardianLink(g1), NewGuardianLink(NextPhone(), "Mehmet", "mehmet@example.com"));
+        var g2 = eceGuardians.Single(g => g != g1);
+        var (can, _) = await RegisterWithGuardiansAsync("Can", ExistingGuardianLink(g2), new { guardianId = g1, relationship = "Mother" });
+        var (zeynep, _) = await RegisterWithGuardiansAsync("Zeynep", NewGuardianLink(NextPhone(), "Fatma", "fatma@example.com"));
+
+        // Another school's family with the same shape must never show up.
+        var otherSchool = await TestSchools.CreateAsync(Api, "okul-b");
+        using var other = Api.SchoolAdminClient(otherSchool);
+        var foreign = await other.PostAsJsonAsync("/api/v1/students", new
+        {
+            firstName = "Yabancı",
+            lastName = "Kardeş",
+            birthDate = "2015-05-01",
+            gender = "Male",
+            emergencyContact = new { name = "Acil Kişi", phone = NextPhone(), relationship = "Teyze" },
+            guardians = new[] { NewGuardianLink(NextPhone(), "Hülya", "hulya@example.com") },
+        }, Ct);
+        foreign.StatusCode.ShouldBe(HttpStatusCode.Created);
+        var foreignStudent = IdOf(await BodyOf(foreign));
+
+        var expected = new[] { ali, ece, can }.Select(StudentId.From).OrderBy(s => s.Value).ToList();
+        foreach (var member in new[] { ali, ece, can })
+        {
+            (await FamilyOfAsync(School, member)).ShouldBe(expected);
+        }
+
+        (await FamilyOfAsync(School, zeynep)).ShouldBe([StudentId.From(zeynep)]);
+        // Asked in school A, B's student has no links there; asked in B, it never reaches A's family.
+        (await FamilyOfAsync(School, foreignStudent)).ShouldBe([StudentId.From(foreignStudent)]);
+        (await FamilyOfAsync(otherSchool, foreignStudent)).ShouldBe([StudentId.From(foreignStudent)]);
+        (await FamilyOfAsync(otherSchool, ali)).ShouldBe([StudentId.From(ali)]);
+    }
+
+    private async Task<IReadOnlyList<StudentId>> FamilyOfAsync(SchoolId school, Guid student)
+    {
+        await using var scope = Api.Services.CreateAsyncScope();
+        scope.ServiceProvider.GetRequiredService<SporAkademi.Infrastructure.Persistence.BackgroundTenantContext>().Enter(school.Value);
+        return await scope.ServiceProvider.GetRequiredService<IStudentSiblings>().GetFamilyAsync(StudentId.From(student), Ct);
     }
 
     private async Task<Guid> GroupOfAsync(Guid enrollment) =>
