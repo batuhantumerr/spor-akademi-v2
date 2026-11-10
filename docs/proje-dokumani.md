@@ -1106,7 +1106,7 @@ Bir antrenman, onun için ilk kez yoklama kaydedildiğinde **tembel (lazy) olara
 | Status | `Recorded` / `Cancelled` | |
 | CancelReason, CancelledBy, CancelledAt | | İptal edildiğinde zorunlu |
 
-**Invariant'lar:** asla düzenlenmez, asla silinmez; iptal için gerekçe zorunludur. **Borç hesaplanır, saklanmaz:** kaydın en az bir gün aktif olduğu her dönem için `borç = o dönemin grup aidatı − Recorded durumundaki ödemelerin toplamı`. Faz 2'de (P2-F8) okulun aidat kuralları sürümü varsa grup aidatı yerine kurallar uygulanmış tutar kullanılır (kardeş indirimi, grup değişikliğinde tek aidat; `BillingRules`, `FeeRules`, DEC-370 – DEC-374); sürüm yoksa formül aynen geçerlidir.
+**Invariant'lar:** asla düzenlenmez, asla silinmez; iptal için gerekçe zorunludur. **Borç hesaplanır, saklanmaz:** kaydın en az bir gün aktif olduğu her dönem için `borç = o dönemin grup aidatı − Recorded durumundaki ödemelerin toplamı`. Faz 2'de (P2-F8) okulun aidat kuralları sürümü varsa grup aidatı yerine kurallar uygulanmış tutar kullanılır (kardeş indirimi, grup değişikliğinde tek aidat; `BillingRules`, `FeeRules`, DEC-370 – DEC-374); sürüm yoksa formül aynen geçerlidir. Kural sürümü olan geçmiş aylar her gece kapanır ve borçları `ChargeSnapshot` olarak dondurulur; kapanmış ayın borcu veli bağlantıları değişse de değişmez (DEC-375).
 
 ##### 4.11 Announcement (aggregate root, Could)
 
@@ -1547,6 +1547,7 @@ Yoklamanın kaydedilmesi neden `POST` değil `PUT`: aynı istek iki kez gönderi
 | `POST` | `/sandbox-checkout/complete` | Sadece Fake sağlayıcı etkinken: sandbox ödeme sayfasının sonucu (DEC-347) | Anonim | — |
 | `GET` | `/settings/billing-rules` | Okulun aidat kuralları sürümleri (kardeş indirimi, grup değişikliğinde tek aidat), yeniden eskiye (P2-F8, DEC-370) | SA | P2-F8 |
 | `POST` | `/settings/billing-rules` | Bir dönemden itibaren geçerli yeni kural sürümü; `201` ile bütün sürümler. Geçmiş dönem ve aynı dönem reddedilir | SA | P2-F8 |
+| `DELETE` | `/settings/billing-rules/{effectiveFrom}` | Henüz başlamamış (gelecek ay) bir kural sürümünü geri alır; `204`. Başlamış sürüm `422`, olmayan `404` (DEC-376) | SA | P2-F8 |
 
 ##### 2.11 Duyurular — `Announcements`
 
@@ -1743,6 +1744,8 @@ API'nin döndüğü tüm hata ve uyarı kodlarının kataloğu. Kurallar:
 | `BillingRules.PeriodInPast` | BusinessRule | Geçmiş bir dönemin aidat kuralları değiştirilemez. | P2-F8 |
 | `BillingRules.AlreadyDefined` | Conflict | Bu dönem için aidat kuralları zaten tanımlı. | P2-F8 |
 | `BillingRules.InvalidPercent` | Validation | İndirim oranı 0 ile 100 arasında bir tam sayı olmalı. | P2-F8 |
+| `BillingRules.NotFound` | NotFound | Bu ay için aidat kuralı sürümü bulunamadı. | P2-F8 |
+| `BillingRules.AlreadyStarted` | BusinessRule | Başlamış bir aidat kuralı sürümü geri alınamaz. | P2-F8 |
 | `Payment.OnlinePaymentInProgress` | Conflict | Bu borç için açık bir online ödeme var. Sonuçlanmasını veya bağlantının süresinin dolmasını bekleyin. | P2-F1 |
 | `Payment.OnlineNotCancellable` | BusinessRule | Online ödemeler buradan iptal edilemez; iade ödeme sağlayıcısı üzerinden yapılır. | P2-F1 |
 | `OnlinePayment.NotFound` | NotFound | Online ödeme bulunamadı. | P2-F1 |

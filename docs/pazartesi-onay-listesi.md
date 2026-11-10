@@ -14,7 +14,7 @@ Sahip bu listedeki **bütün önerileri onayladı**. Sonuç:
 - **Soru 4:** iptal penceresine gerekçeye kişisel veri yazılmaması uyarısı eklendi (#69).
 - **Soru 29:** `e2e` ruleset'e beşinci zorunlu check olarak eklendi (main'deki son çalıştırmaların hepsi yeşil).
 - **Soru 31:** şifre en az 12 karakter (DEC-369, #73); kod, testler ve politikayı anan dokümanlar güncellendi. Mevcut şifreler geçerli kalır, kural yeni şifre belirlemede uygulanır.
-- **Soru 17 (P2-F8):** sahip önerilen varsayılanlarla ilerlenmesini istedi (2026-11-10). P2-F8 bu varsayılanlarla yapıldı (DEC-370 – DEC-374, **Proposed**, #75); varsayılanların onayı [bölüm 7](#7-p2-f8-aidat-kuralları-onay-bekleyen-varsayılanlar)'de açık.
+- **Soru 17 (P2-F8):** sahip önerilen varsayılanlarla ilerlenmesini istedi (2026-11-10). P2-F8 bu varsayılanlarla yapıldı (DEC-370 – DEC-376, **Proposed**, #75); varsayılanların onayı [bölüm 7](#7-p2-f8-aidat-kuralları-onay-bekleyen-varsayılanlar)'de açık.
 
 Aşağıdaki metin karar anındaki hâliyle kayıt olarak bırakıldı.
 
@@ -344,7 +344,9 @@ Bu repoya eklenen her paket ve imaj tek tabloda. Dokümandaki baz listeden gelen
 | DEC-371 | Kardeş = ortak veliye (geçişli) bağlı öğrenciler; o ayki toplam aidata göre sıralanır, en yüksek aidatlı tam öder, 2. kardeş %p2, 3. ve sonrası %p3; kuruşa yuvarlama. |
 | DEC-372 | Grup değişikliğinde tek aidat: ay içinde biten kaydın ardından aynı ay (bitiş gününde veya sonra) başlayan kayıt o ay ücretlendirilmez; çakışan kayıtlar ikisi de öder; kıst yok. |
 | DEC-373 | Tek hesap servisi (`DueCharges`): borç listesi, dashboard, online ödeme, elle ödeme ve hatırlatmalar aynı tutarı görür; borç satırı `listFee` ve `discount` taşır. |
-| DEC-374 | Bilinen sınır: kardeşlik bugünkü veli bağlantılarından hesaplanır, bağlantı geçmişi yok; bağlantı değişirse eski ödenmemiş bir ay yeniden sıralanabilir. |
+| DEC-374 | Kardeşlik bugünkü veli bağlantılarından hesaplanır (geçmiş yok); kapanmış ayın borcu hiçbir yönde değişmez, yalnızca açık aylar (bu ay ve sonrası) güncel bağlantıları izler. |
+| DEC-375 | Ay kapanışı: günlük `billing-close-periods` işi kural sürümü olan geçmiş ayların borçlarını `billing.charge_snapshots`'a dondurur, ayı `billing.closed_periods`'a yazar; tablolar değiştirilemez. |
+| DEC-376 | Form gelecek ayı önerir, bu ay seçilirse onay ister; başlamamış sürüm `DELETE /api/v1/settings/billing-rules/{effectiveFrom}` ile geri alınır, başlamış sürüm `422 BillingRules.AlreadyStarted`. |
 
 ## 6. Sapmalar / bilgilendirme
 
@@ -357,9 +359,10 @@ Bu repoya eklenen her paket ve imaj tek tabloda. Dokümandaki baz listeden gelen
 
 ## 7. P2-F8 aidat kuralları: onay bekleyen varsayılanlar
 
-Soru 17'ye cevap olarak sahip "önerilen varsayılanlarla ilerle" dedi (2026-11-10). Aşağıdakiler kodda böyle çalışıyor; her biri için **onayla** veya **değiştir**. Ayrıntı: DEC-370 – DEC-374.
+Soru 17'ye cevap olarak sahip "önerilen varsayılanlarla ilerle" dedi (2026-11-10). Aşağıdakiler kodda böyle çalışıyor; her biri için **onayla** veya **değiştir**. Ayrıntı: DEC-370 – DEC-376.
 
 1. **İndirim oranları.** Kurallar okul bazında ve bir aydan itibaren tanımlanıyor; formdaki varsayılan **2. kardeş %10, 3. ve sonraki kardeşler %15**. Okul 0–100 arası istediği oranı girebilir (0 = kapalı). Bu varsayılanlar uygun mu?
 2. **Kim tam öder (sıralama).** O ay en yüksek toplam aidatlı kardeş tam öder; eşitlikte en erken kayıt başlangıcı, sonra öğrenci ID'si. İndirim, sıralamadaki kardeşin o ayki **bütün** aidatlarına uygulanır; ücretsiz gruptaki kardeş sıra almaz. Kardeş = en az bir ortak veli (geçişli). "En pahalı çocuk tam öder" kuralı uygun mu, yoksa ör. en büyük/ilk kaydolan çocuk mu tam ödesin?
 3. **Grup değişikliği.** Ay içinde grup değiştiren öğrencinin o ayı yalnızca eski grubun aidatıyla ücretlendiriliyor (yeni grup ertesi aydan; kıst yok, DEC-017). İki gruba aynı anda kayıtlı öğrenci ikisini de öder. Okul bu kuralı kapatabilir (o zaman iki kayıt da o ayı öder). Uygun mu, yoksa ay yeni grubun (veya yüksek olanın) aidatıyla mı ücretlendirilsin?
-4. **Geçmiş aylar ve bağlantı geçmişi.** Kural sürümleri geçmiş aya tanımlanamaz, bu yüzden geçmiş ayların faturası değişmez. Ancak kardeşlik bugünkü veli bağlantılarından hesaplanıyor (bağlantı geçmişi yok): veli ayrılır/silinir veya öğrenci anonimleşirse, kalan kardeşin **ödenmemiş** eski bir ayının indirimi değişebilir (ödenmişler değişmez). Bu sınır kabul edilebilir mi, yoksa bağlantı geçmişi veya ay kapanışında borç anlık görüntüsü mü istenir?
+4. **Geçmiş aylar ve bağlantı geçmişi.** Kardeşlik bugünkü veli bağlantılarından hesaplanıyor (bağlantı geçmişi yok). Bunun yerine kural sürümü olan her geçmiş ay, bittikten sonraki gece kapanıyor ve borçları donduruluyor (DEC-375): **kapanmış bir ayın borcu hiçbir yönde değişmez**; veli ayrılsa veya silinse, öğrenci anonimleşse ya da sonradan yeni kardeş bağlansa da ödenmiş ay yeniden borçlanmaz, gecikme e-postası gitmez, fazla ödeme oluşmaz. Değişebilen yalnızca **açık aylardır** (içinde bulunulan ay ve sonrası): bağlantı değişirse bu ayın borcu güncel bağlantılara göre yeniden hesaplanır. Bu ayrım uygun mu, yoksa bağlantı geçmişi (geçerlilik tarihli veli bağlantısı) da istenir mi?
+5. **Bu ay için kural ve geri alma (DEC-376).** Form gelecek ayı öneriyor; bu ay seçilirse bu ayın açık borçlarının hemen değişeceği söylenip onay isteniyor. Başlamamış (gelecek ay) bir sürüm geri alınabiliyor, başlamış sürüm alınamıyor (hata bir sonraki ay için yeni sürümle düzeltilir). Uygun mu?
