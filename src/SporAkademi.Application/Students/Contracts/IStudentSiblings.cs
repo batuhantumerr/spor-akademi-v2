@@ -15,4 +15,11 @@ public interface IStudentSiblings
     /// included, ordered by id. Its first id is a stable key of the family. Students without siblings are omitted.
     /// </summary>
     Task<IReadOnlyDictionary<StudentId, IReadOnlyList<StudentId>>> GetSiblingSetsAsync(IReadOnlyCollection<StudentId> studentIds, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// The sibling set of one student (the student included, ordered by id, so its first id is the same family key as in
+    /// <see cref="GetSiblingSetsAsync"/>); just the student when they have no siblings. Reads only that family's links,
+    /// not the whole school's (a single due: payments, reminders; DEC-373).
+    /// </summary>
+    Task<IReadOnlyList<StudentId>> GetFamilyAsync(StudentId studentId, CancellationToken cancellationToken);
 }

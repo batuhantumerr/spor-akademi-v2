@@ -28,6 +28,7 @@ public sealed class DueChargesTests
     private readonly IGroupFeeSchedule _fees = Substitute.For<IGroupFeeSchedule>();
     private readonly IBillingRulesRepository _rules = Substitute.For<IBillingRulesRepository>();
     private readonly IStudentSiblings _siblings = Substitute.For<IStudentSiblings>();
+    private readonly IChargeSnapshotRepository _snapshots = Substitute.For<IChargeSnapshotRepository>();
 
     public DueChargesTests()
     {
@@ -44,11 +45,14 @@ public sealed class DueChargesTests
         IReadOnlyList<StudentId> family = [.. new[] { Ali, Veli }.OrderBy(s => s.Value)];
         _siblings.GetSiblingSetsAsync(Arg.Any<IReadOnlyCollection<StudentId>>(), Arg.Any<CancellationToken>())
             .Returns(new Dictionary<StudentId, IReadOnlyList<StudentId>> { [Ali] = family, [Veli] = family });
+        _siblings.GetFamilyAsync(Arg.Any<StudentId>(), Arg.Any<CancellationToken>()).Returns(family);
+        _snapshots.ListAsync(Arg.Any<YearMonth>(), Arg.Any<YearMonth>(), Arg.Any<CancellationToken>()).Returns([]);
+        _snapshots.ListOfStudentsAsync(Arg.Any<IReadOnlyCollection<StudentId>>(), Arg.Any<YearMonth>(), Arg.Any<CancellationToken>()).Returns([]);
     }
 
     private static CancellationToken Ct => TestContext.Current.CancellationToken;
 
-    private DueCharges Service() => new(_enrollments, _fees, _rules, _siblings);
+    private DueCharges Service() => new(_enrollments, _fees, _rules, _siblings, _snapshots);
 
     private void WithRules(params BillingRuleTerms[] versions) =>
         _rules.ListAsync(Arg.Any<CancellationToken>())
@@ -94,6 +98,38 @@ public sealed class DueChargesTests
         var book = await Service().ForSchoolAsync(January, January, Ct);
 
         book.Charges.ShouldAllBe(c => c.Adjustment == ChargeAdjustment.None);
+        await _siblings.DidNotReceiveWithAnyArgs().GetSiblingSetsAsync(default!, Ct);
+    }
+
+    [Fact]
+    public async Task A_closed_month_keeps_its_snapshots_and_ranks_an_unsnapshotted_enrollment_against_them()
+    {
+        WithRules(new BillingRuleTerms(January, 10, 15, true));
+        // Closed with Ali in full (e.g. Veli was not linked yet); Veli was enrolled afterwards and has no snapshot.
+        var aliFrozen = ChargeSnapshot.Take(
+            EntityId.New<SchoolId>(),
+            new EffectiveCharge(new DueEnrollment(AliInU10.Id, U10, AliInU10.StartDate, null), Ali, January, Money.Try(800m), Money.Try(800m), ChargeAdjustment.None, 0, null));
+        _snapshots.ListAsync(January, January, Arg.Any<CancellationToken>()).Returns([aliFrozen]);
+        _snapshots.ListOfStudentsAsync(Arg.Any<IReadOnlyCollection<StudentId>>(), January, Arg.Any<CancellationToken>()).Returns([aliFrozen]);
+
+        var book = await Service().ForSchoolAsync(January, January, Ct);
+        var veli = await Service().ForEnrollmentAsync(VeliInU12, January, Ct);
+
+        // Ali keeps the frozen 800 although today he is the second child; Veli (1000) ranks first against Ali's frozen 800.
+        book.Charges.Single(c => c.Enrollment.Id == AliInU10.Id).Fee.Amount.ShouldBe(800m);
+        book.Charges.Single(c => c.Enrollment.Id == VeliInU12.Id).Fee.Amount.ShouldBe(1000m);
+        veli!.Fee.Amount.ShouldBe(1000m);
+        (await Service().ForEnrollmentAsync(AliInU10, January, Ct))!.Fee.Amount.ShouldBe(800m);
+    }
+
+    [Fact]
+    public async Task One_due_reads_only_the_students_family()
+    {
+        WithRules(new BillingRuleTerms(January, 10, 15, true));
+
+        await Service().ForEnrollmentAsync(AliInU10, January, Ct);
+
+        await _siblings.Received(1).GetFamilyAsync(Ali, Arg.Any<CancellationToken>());
         await _siblings.DidNotReceiveWithAnyArgs().GetSiblingSetsAsync(default!, Ct);
     }
 
