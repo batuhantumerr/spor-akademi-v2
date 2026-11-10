@@ -584,6 +584,8 @@ export const ui = {
     cancelText:
       '{student} · {period} · {amount}. İptal edilen ödeme silinmez; gerekçesiyle saklanır.',
     cancelReason: 'İptal gerekçesi',
+    cancelReasonHint:
+      'Gerekçeye kişi adı veya başka kişisel veri yazmayın; ödeme kayıtları değişmez ve gerekçe silinmez.',
     cancelled: 'Ödeme iptal edildi.',
     cancelledBecause: 'İptal: {reason}',
     noPayments: 'Bu filtrelere uyan ödeme yok.',

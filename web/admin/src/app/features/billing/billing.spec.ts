@@ -454,8 +454,17 @@ describe('billing dialogs', () => {
     } as PaymentDto;
     await open(CancelPaymentDialog, { payment });
     expect(root.textContent).toContain('Ayşe Yılmaz · Kasım 2026 · ₺1.250,00');
+    // DEC-367: the reason is never erased, so the dialog warns against personal data.
+    const reasonField = root.querySelector('#cancel-reason') as HTMLTextAreaElement;
+    expect(reasonField.getAttribute('aria-describedby')).toBe('cancel-reason-hint');
+    expect(root.querySelector('#cancel-reason-hint')?.textContent).toContain(
+      ui.billing.cancelReasonHint,
+    );
     await submit();
     backend.expectNone('/api/v1/payments/p1/cancel');
+    expect(reasonField.getAttribute('aria-describedby')).toBe(
+      'cancel-reason-hint cancel-reason-error',
+    );
     expect(root.querySelector('#cancel-reason-error')?.textContent).toContain(
       errorMessages['Payment.CancelReasonRequired'],
     );
