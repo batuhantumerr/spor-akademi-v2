@@ -32,12 +32,12 @@ public sealed class PasswordPolicyTests
     }
 
     [Theory]
-    [InlineData("1234567890")]
-    [InlineData("qwertyuiop")]
-    [InlineData("QWERTYUIOP")]
-    [InlineData("sifre12345")]
+    [InlineData("1q2w3e4r5t6y")]
+    [InlineData("qwerty123456")]
+    [InlineData("QWERTY123456")]
+    [InlineData("sifre1234567")]
     [InlineData("Galatasaray1905")]
-    [InlineData("password123")]
+    [InlineData("password1234")]
     public void Common_passwords_are_rejected_case_insensitively(string password)
     {
         PasswordPolicy.IsStrongEnough(password).ShouldBeFalse();

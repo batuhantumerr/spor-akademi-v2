@@ -51,6 +51,7 @@ public sealed class PasswordTests(DatabaseFixture database) : IdentityTest(datab
     [InlineData("1234567890")]
     [InlineData("qwertyuiop")]
     [InlineData("sifre12345")]
+    [InlineData("qwerty123456")]
     public async Task New_password_must_follow_the_policy(string weak)
     {
         var school = await SeedSchoolAsync();
