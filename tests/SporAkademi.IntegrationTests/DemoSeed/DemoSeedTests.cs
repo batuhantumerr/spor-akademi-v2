@@ -10,6 +10,7 @@ using SporAkademi.Application.Abstractions.Messaging;
 using SporAkademi.Application.Billing;
 using SporAkademi.Application.Groups;
 using SporAkademi.DemoSeed;
+using SporAkademi.Domain.Billing;
 using SporAkademi.Domain.Groups;
 using SporAkademi.IntegrationTests.Infrastructure;
 
@@ -103,6 +104,12 @@ public sealed class DemoSeedTests(DatabaseFixture database) : IntegrationTest(da
             var dues = await AskAsAdminAsync<ListOutstandingDuesQuery, PagedResult<OutstandingDueDto>>(host, t, new ListOutstandingDuesQuery(null, null, new PageRequest(1, 1)));
             dues.TotalCount.ShouldBeGreaterThan(10);
             (await CountAsync("SELECT count(*) FROM announcements.announcements WHERE tenant_id = @tenant", t)).ShouldBeGreaterThanOrEqualTo(3);
+
+            // P2-F8: the first school has fee rules from the current month, and its dues show sibling discounts.
+            var firstSchool = school.Slug == "kadikoy-spor";
+            (await CountAsync("SELECT count(*) FROM billing.billing_rules WHERE tenant_id = @tenant AND effective_from = '2027-01'", t)).ShouldBe(firstSchool ? 1 : 0);
+            var allDues = await AskAsAdminAsync<ListOutstandingDuesQuery, PagedResult<OutstandingDueDto>>(host, t, new ListOutstandingDuesQuery(null, "2027-01", new PageRequest(1, 100)));
+            allDues.Items.Any(d => d.Adjustment == ChargeAdjustment.SiblingDiscount).ShouldBe(firstSchool);
 
             // No coach has two groups at the same time.
             var groups = await AskAsAdminAsync<ListGroupsQuery, PagedResult<GroupDto>>(host, t, new ListGroupsQuery(null, null, GroupStatus.Active, new PageRequest(1, 100)));
