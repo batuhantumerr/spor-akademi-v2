@@ -355,6 +355,7 @@ Bu repoya eklenen her paket ve imaj tek tabloda. Dokümandaki baz listeden gelen
 - **gitleaks CI çıktısı.** CI'daki gitleaks artık `--verbose` ile `--redact` birlikte çalışır: bulgunun kuralı, dosyası ve satırı görünür, sır değeri maskelenir.
 - **Otonom merge (DEC-098).** PR #43 – #65, dört zorunlu check yeşil ve bağımsız agent incelemesiyle agent tarafından squash merge edildi; inceleme özetleri PR yorumlarındadır.
 - **iyzico gerçek sandbox'ta çalıştırılmadı.** Anahtar olmadığı için yalnızca sahte HTTP handler'la test edildi (bkz. "Tek seferlik işlemler").
+- **CI `backend` süre sınırı 15 → 25 dakika (P2-F8 PR'ı, 2026-11-10).** Entegrasyon paketi (~740 test, her biri ayrı API host'u, sıralı) hosted runner'larda 8–13,5 dakika sürüyor; restore ve build'le birlikte 15 dakika sınırı `main`'de bile (6a47840, paket geçmişken) ve P2-F8 dalında iki kez işi iptal etti. Asıl çözüm paketi hızlandırmak (paylaşılan host veya paralel koleksiyonlar); fikir olarak açık.
 - **Roadmap ve CHANGELOG.** Faz geçişi kapıları ve etiketler işaretlenmedi; Faz 2 `v0.2.0` etiketi sahipte.
 
 ## 7. P2-F8 aidat kuralları: onay bekleyen varsayılanlar
