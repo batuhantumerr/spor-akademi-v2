@@ -10,6 +10,7 @@ import {
   LucideListChecks,
   LucideMapPin,
   LucideMegaphone,
+  LucidePercent,
   LucideReceipt,
   LucideShieldCheck,
   LucideUsers,
@@ -78,6 +79,7 @@ export function navigationFor(role: Role | null): NavSection[] {
               path: '/settings/data-retention',
               icon: LucideShieldCheck,
             },
+            { label: ui.nav.billingRules, path: '/settings/billing-rules', icon: LucidePercent },
           ],
         },
       ];

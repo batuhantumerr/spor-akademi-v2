@@ -183,6 +183,12 @@ export const routes: Routes = [
             loadComponent: () =>
               import('./features/settings/data-retention.page').then((m) => m.DataRetentionPage),
           },
+          {
+            path: 'settings/billing-rules',
+            title: ui.nav.billingRules,
+            loadComponent: () =>
+              import('./features/settings/billing-rules.page').then((m) => m.BillingRulesPage),
+          },
         ],
       },
     ],

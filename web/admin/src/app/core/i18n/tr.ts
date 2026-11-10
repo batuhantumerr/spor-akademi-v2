@@ -107,6 +107,9 @@ export const errorMessages: Readonly<Record<string, string>> = {
   'Payment.FeeNotDefined': 'Bu grup için bu dönemde tanımlı bir aidat yok.',
   'Payment.AlreadyCancelled': 'Bu ödeme zaten iptal edilmiş.',
   'Payment.CancelReasonRequired': 'İptal gerekçesi zorunludur.',
+  'BillingRules.PeriodInPast': 'Geçmiş bir dönemin aidat kuralları değiştirilemez.',
+  'BillingRules.AlreadyDefined': 'Bu dönem için aidat kuralları zaten tanımlı.',
+  'BillingRules.InvalidPercent': 'İndirim oranı 0 ile 100 arasında bir tam sayı olmalı.',
   'Payment.OnlinePaymentInProgress':
     'Bu borç için açık bir online ödeme var. Sonuçlanmasını veya bağlantının süresinin dolmasını bekleyin.',
   'Payment.OnlineNotCancellable':
@@ -154,6 +157,7 @@ export const ui = {
     today: 'Bugün',
     settings: 'Ayarlar',
     dataRetention: 'Veri saklama',
+    billingRules: 'Aidat kuralları',
   },
   roles: {
     PlatformAdmin: 'Platform yöneticisi',
@@ -460,6 +464,41 @@ export const ui = {
     status: 'Durum',
     statuses: { Succeeded: 'Başarılı', Failed: 'Başarısız' } as Record<string, string>,
   },
+  billingRules: {
+    title: 'Aidat kuralları',
+    description:
+      'Kardeş indirimi ve ay içinde grup değiştiren öğrencinin aidatı. Kurallar seçtiğiniz aydan itibaren geçerlidir; geçmiş ayların borçları değişmez.',
+    howTitle: 'Nasıl hesaplanır?',
+    siblingsHow:
+      'Aynı veliye bağlı öğrenciler kardeş sayılır. Her ay en yüksek aidatlı kardeş tam öder; 2. kardeş ve 3. ve sonraki kardeşler o ayki aidatlarında indirim alır.',
+    example:
+      'Örnek: 2. kardeş %{second}, 3. ve sonraki %{third} indirim. Aidatları {a}, {b} ve {c} olan üç kardeş {a}, {b2} ve {c2} öder; en yüksek aidatlı kardeş tam öder.',
+    groupChangeHow:
+      'Ay içinde grup değiştiren öğrenci o ay yalnızca bir kez, eski grubun aidatıyla ücretlendirilir; yeni grubun aidatı ertesi aydan başlar. Aynı anda iki gruba kayıtlı öğrenci ikisini de öder.',
+    formTitle: 'Yeni kural sürümü',
+    effectiveFrom: 'Geçerlilik başlangıcı',
+    effectiveFromHint: 'Bu ay veya sonraki bir ay. Her ay için en fazla bir sürüm olabilir.',
+    second: '2. kardeş indirimi (%)',
+    third: '3. ve sonraki kardeş indirimi (%)',
+    percentHint: '0–100 arası tam sayı; 0 indirimi kapatır.',
+    singleCharge: 'Grup değişikliğinde ay bir kez ücretlendirilsin',
+    singleChargeHint: 'Kapalıysa o ay hem eski hem yeni grubun aidatı alınır.',
+    save: 'Kuralları kaydet',
+    saving: 'Kaydediliyor…',
+    saved: 'Aidat kuralları kaydedildi.',
+    historyTitle: 'Kural sürümleri',
+    historyCaption: 'Aidat kuralları sürümleri, yeniden eskiye',
+    none: 'Henüz kural yok: aidatlar indirimsiz, aktif her ay için tam alınır.',
+    from: 'Başlangıç',
+    secondShort: '2. kardeş',
+    thirdShort: '3.+ kardeş',
+    groupChange: 'Grup değişikliği',
+    singleChargeOn: 'Ay bir kez',
+    singleChargeOff: 'Her kayıt ayrı',
+    current: 'Güncel',
+    upcoming: 'Yaklaşan',
+    percent: '%{value}',
+  },
   jobs: {
     title: 'İş paneli',
     description: 'Arka plan işleri: e-posta kuyruğu (outbox), temizlik işleri ve hatalar.',
@@ -595,6 +634,8 @@ export const ui = {
     fee: 'Aidat',
     paid: 'Ödenen',
     remaining: 'Kalan',
+    listFee: 'Liste aidatı',
+    siblingDiscount: 'Kardeş indirimi %{percent}',
     totals: 'Toplam ({count} kayıt)',
     totalsNoCount: 'Toplam',
     totalsChanged: 'Liste hesaplama sırasında değişti; toplamlar yaklaşık olabilir.',
