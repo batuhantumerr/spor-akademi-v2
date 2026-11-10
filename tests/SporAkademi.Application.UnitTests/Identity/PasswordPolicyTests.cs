@@ -6,7 +6,7 @@ namespace SporAkademi.Application.UnitTests.Identity;
 public sealed class PasswordPolicyTests
 {
     [Theory]
-    [InlineData("kısa-şifre")]
+    [InlineData("kısa-şifre-1")]
     [InlineData("Yaz-Kampı-2027")]
     [InlineData("correct horse battery staple")]
     public void Long_uncommon_passwords_are_accepted(string password)
@@ -14,11 +14,19 @@ public sealed class PasswordPolicyTests
         PasswordPolicy.IsStrongEnough(password).ShouldBeTrue();
     }
 
+    [Fact]
+    public void The_minimum_length_is_twelve_characters()
+    {
+        PasswordPolicy.MinLength.ShouldBe(12);
+    }
+
     [Theory]
     [InlineData("")]
     [InlineData("123456789")]
     [InlineData("Kisa-sifr")]
-    public void Passwords_shorter_than_ten_characters_are_rejected(string password)
+    [InlineData("kısa-şifre")]
+    [InlineData("Kisa-sifre1")]
+    public void Passwords_shorter_than_twelve_characters_are_rejected(string password)
     {
         PasswordPolicy.IsStrongEnough(password).ShouldBeFalse();
     }
