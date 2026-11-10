@@ -486,8 +486,13 @@ export interface CancelPaymentData {
           [value]="reason()"
           (input)="reason.set($any($event.target).value); reasonError.set(null)"
           [attr.aria-invalid]="!!reasonError()"
-          [attr.aria-describedby]="reasonError() ? 'cancel-reason-error' : null"
+          [attr.aria-describedby]="
+            'cancel-reason-hint' + (reasonError() ? ' cancel-reason-error' : '')
+          "
         ></textarea>
+        <p id="cancel-reason-hint" class="mt-1.5 text-xs text-muted-foreground">
+          {{ text.cancelReasonHint }}
+        </p>
         @if (reasonError(); as m) {
           <p id="cancel-reason-error" class="field-error">{{ m }}</p>
         }
