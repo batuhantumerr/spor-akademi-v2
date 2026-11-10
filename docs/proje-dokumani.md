@@ -485,7 +485,7 @@ Projede bir öğrenme günlüğü tutulur: her maddeden sonra kendi cümlelerinl
 **GitHub iş akışı:**
 - GitHub durumuna bağlı her işlemden önce durumu `gh pr view --json state` gibi bir komutla doğrula; sahip bildirse bile.
 - Issue (roadmap formu, milestone, etiketler) → branch (güncel `main`'den) → küçük commit'ler → push'tan önce `git pull` → PR (`Closes #n`) → dur ve bildir.
-- **Merge'i sadece sahip yapar.** "Merge'e hazır" sadece dört zorunlu check (`backend`, `frontend`, `repo-checks`, `images`) yeşilken.
+- **Merge'i sadece sahip yapar.** "Merge'e hazır" sadece zorunlu check'ler (`backend`, `frontend`, `repo-checks`, `images`, `e2e`) yeşilken.
 - PR güncel değilse `main` branch'e merge edilir; rebase ve force push yok.
 - Merge sonrası durum doğrulanır, `main` güncellenir, yerel branch silinir.
 - Push, PR açma ve CI bekleme ayrı komutlarla; push çıktısı `grep`'e aktarılmaz (pipe çıkış kodunu gizler).
