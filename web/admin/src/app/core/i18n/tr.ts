@@ -474,7 +474,7 @@ export const ui = {
       'Her ay bittikten sonraki gece kapanır: kapanan ayın borçları dondurulur ve veli bağlantıları sonradan değişse de (veli ayrılsa, öğrenci anonimleşse ya da yeni kardeş bağlansa) artık değişmez. İçinde bulunulan ayın ve sonraki ayların açık borçları güncel veli bağlantılarına göre hesaplanır.',
     howTitle: 'Nasıl hesaplanır?',
     siblingsHow:
-      'Ortak bir veli üzerinden bağlı öğrenciler, dolaylı bağlar dahil, kardeş sayılır (Ali ile Veli aynı annenin, Veli ile Can aynı babanın çocuğuysa üçü de kardeştir). Her ay en yüksek aidatlı kardeş tam öder; 2. kardeş ve 3. ve sonraki kardeşler o ayki aidatlarında indirim alır.',
+      'Ortak bir veli üzerinden bağlı öğrenciler, dolaylı bağlar dahil, kardeş sayılır (Ali ile Ece aynı annenin, Ece ile Can aynı babanın çocuğuysa üçü de kardeştir). Her ay en yüksek aidatlı kardeş tam öder; 2. kardeş ve 3. ve sonraki kardeşler o ayki aidatlarında indirim alır.',
     example:
       'Örnek: 2. kardeş %{second}, 3. ve sonraki %{third} indirim. Aidatları {a}, {b} ve {c} olan üç kardeş {a}, {b2} ve {c2} öder; en yüksek aidatlı kardeş tam öder.',
     groupChangeHow:
@@ -847,8 +847,9 @@ export const ui = {
     chooseStudent: 'Bir öğrenci seçin.',
     startDateLabel: 'Başlangıç tarihi',
     startDateHint: 'Bugün veya daha önceki bir tarih.',
-    groupChangeHint:
-      'Grup değişikliğinde yeni kayıt, eski kaydın bitiş gününde veya sonra başlamalı; o ay tek aidat alınır. Kayıtlar çakışırsa (öğrenci aynı anda iki grupta) o ay iki aidat alınır.',
+    overlapHint: 'Kayıtlar çakışırsa (öğrenci aynı gün iki grupta) o ay iki aidat alınır.',
+    singleChargeHint:
+      'Grup değişikliğinde yeni kaydı eski kaydın bitiş gününde veya sonra başlatın; aidat kurallarına göre o ay tek aidat alınır.',
     enrolled: 'Öğrenci gruba kaydedildi.',
     studentLeft: 'Ayrılmış öğrenciler gruba kaydedilemez.',
     end: 'Kaydı sonlandır',

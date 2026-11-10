@@ -25,6 +25,7 @@ import { formatDate } from '../../core/format/format';
 import { errorMessages, interpolate, ui } from '../../core/i18n/tr';
 import { SchoolClock } from '../../core/time/school-clock';
 import { EnrollTarget, enrollProblem } from './enrollment-errors';
+import { GroupChangeHint } from './group-change-hint';
 
 export const ENROLL_TITLE_ID = 'enroll-title';
 export const END_ENROLLMENT_TITLE_ID = 'end-enrollment-title';
@@ -220,7 +221,7 @@ export interface EnrollGroupData {
           {{ text.startDateHint }}
         </p>
         <p id="enroll-group-change-hint" class="mt-1 text-xs text-muted-foreground">
-          {{ text.groupChangeHint }}
+          {{ groupChangeHint.text() }}
         </p>
         @if (targetError('startDate'); as m) {
           <p id="enroll-start-error" class="field-error">{{ m }}</p>
@@ -258,6 +259,7 @@ export class EnrollDialog {
 
   protected readonly today = inject(SchoolClock).today;
   protected readonly startDate = signal(this.today());
+  protected readonly groupChangeHint = new GroupChangeHint(inject(Api), this.startDate);
   protected readonly groups = signal<GroupDto[]>([]);
   protected readonly groupId = signal(this.fixedGroup?.id ?? '');
   protected readonly selectedGroup = computed(
@@ -539,7 +541,7 @@ export interface EndEnrollmentData {
           {{ text.endDateHint }}
         </p>
         <p id="end-group-change-hint" class="mt-1 text-xs text-muted-foreground">
-          {{ text.groupChangeHint }}
+          {{ groupChangeHint.text() }}
         </p>
         @if (dateError(); as m) {
           <p id="end-date-error" class="field-error">{{ m }}</p>
@@ -571,6 +573,7 @@ export class EndEnrollmentDialog {
   });
   protected readonly today = inject(SchoolClock).today;
   protected readonly date = signal(this.today());
+  protected readonly groupChangeHint = new GroupChangeHint(this.api, this.date);
   protected readonly dateError = signal<string | null>(null);
   protected readonly saving = signal(false);
   protected readonly error = signal<string | null>(null);

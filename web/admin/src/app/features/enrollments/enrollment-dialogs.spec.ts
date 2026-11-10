@@ -99,6 +99,8 @@ describe('enrollment dialogs', () => {
   let backend: HttpTestingController;
   let root: HTMLElement;
   const close = vi.fn();
+  /** The school's fee rules versions the dialogs read for the group-change hint (P2-F8); null fails the request. */
+  let rules: unknown[] | null = [];
 
   async function open<T>(component: Type<T>, data: unknown): Promise<void> {
     close.mockReset();
@@ -117,9 +119,18 @@ describe('enrollment dialogs', () => {
     root = fixture.nativeElement as HTMLElement;
     document.body.appendChild(root);
     await settle(fixture);
+    for (const request of backend.match((r) => r.url === '/api/v1/settings/billing-rules')) {
+      if (rules === null) {
+        request.flush({ code: 'Unexpected.Error' }, { status: 500, statusText: 'Server Error' });
+      } else {
+        request.flush(rules);
+      }
+    }
+    await settle(fixture);
   }
 
   afterEach(() => {
+    rules = [];
     root?.remove();
     backend.verify();
   });
@@ -166,11 +177,13 @@ describe('enrollment dialogs', () => {
 
     it("sends the student, group and the school's today as the start date", async () => {
       expect(el('enroll-start').value).toBe(TestBed.inject(SchoolClock).today());
-      // P2-F8 (DEC-372): a group change should not overlap, or the month is charged twice.
+      // P2-F8 (DEC-372): overlapping enrollments are charged twice; without rules nothing else is promised.
       expect(el('enroll-start').getAttribute('aria-describedby')).toContain(
         'enroll-group-change-hint',
       );
-      expect(root.querySelector('#enroll-group-change-hint')?.textContent).toContain('iki aidat');
+      expect(root.querySelector('#enroll-group-change-hint')?.textContent?.trim()).toBe(
+        ui.enrollments.overlapHint,
+      );
       await chooseGroup('g1', 3);
       await submit();
 
@@ -407,6 +420,35 @@ describe('enrollment dialogs', () => {
     });
   });
 
+  describe('group-change hint (P2-F8)', () => {
+    const version = (effectiveFrom: string, singleChargeOnGroupChange: boolean) => ({
+      id: effectiveFrom,
+      effectiveFrom,
+      secondChildPercent: 10,
+      thirdAndLaterChildPercent: 15,
+      singleChargeOnGroupChange,
+    });
+    const hint = () => root.querySelector('#end-group-change-hint')?.textContent?.trim();
+
+    it('promises one fee only when the version in force for the month charges a group change once', async () => {
+      rules = [version('9999-12', false), version('2000-01', true)];
+      await open(EndEnrollmentDialog, { enrollment });
+      expect(hint()).toBe(`${ui.enrollments.singleChargeHint} ${ui.enrollments.overlapHint}`);
+    });
+
+    it('promises nothing when the version in force has the single charge off', async () => {
+      rules = [version('9999-12', true), version('2000-01', false)];
+      await open(EndEnrollmentDialog, { enrollment });
+      expect(hint()).toBe(ui.enrollments.overlapHint);
+    });
+
+    it('shows only the overlap warning when the rules cannot be loaded', async () => {
+      rules = null;
+      await open(EndEnrollmentDialog, { enrollment });
+      expect(hint()).toBe(ui.enrollments.overlapHint);
+    });
+  });
+
   describe('EndEnrollmentDialog', () => {
     beforeEach(async () => {
       await open(EndEnrollmentDialog, { enrollment });
@@ -417,8 +459,8 @@ describe('enrollment dialogs', () => {
       expect(el('end-date').value).toBe(today);
       expect(el('end-date').min).toBe('2026-09-01');
       expect(el('end-date').getAttribute('aria-describedby')).toContain('end-group-change-hint');
-      expect(root.querySelector('#end-group-change-hint')?.textContent).toContain(
-        'bitiş gününde veya sonra',
+      expect(root.querySelector('#end-group-change-hint')?.textContent?.trim()).toBe(
+        ui.enrollments.overlapHint,
       );
       await submit();
       const post = backend.expectOne('/api/v1/enrollments/e1/end');
