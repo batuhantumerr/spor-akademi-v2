@@ -1,6 +1,6 @@
 # ADR-0010 — Admin arayüzü UI kütüphanesi
 
-- **Durum:** Proposed (agent, 2026-11-06; sahibin onayı bekleniyor)
+- **Durum:** Accepted (agent önerisi 2026-11-06; sahip onayı 2026-11-10)
 - **İlgili:** P1-13, DEC-103, DEC-112, [ui-tema.md](../ui-tema.md)
 
 ## Bağlam
