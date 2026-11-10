@@ -49,6 +49,16 @@ public sealed class BillingRules : AggregateRoot<BillingRulesId>, ITenantScoped
     /// <summary>A month already charged by an enrollment that ended in it is not charged again by the next one (group change).</summary>
     public bool SingleChargeOnGroupChange { get; private set; }
 
+    /// <summary>
+    /// DEC-376: a version can be withdrawn only before it starts (its period is after <paramref name="currentPeriod"/>), so
+    /// a typo in a planned version can be fixed while no month was ever billed with it.
+    /// </summary>
+    public Result EnsureWithdrawable(YearMonth currentPeriod)
+    {
+        ArgumentNullException.ThrowIfNull(currentPeriod);
+        return EffectiveFrom > currentPeriod ? Result.Success() : Result.Failure(BillingRulesErrors.AlreadyStarted);
+    }
+
     public BillingRuleTerms Terms => new(EffectiveFrom, SecondChildPercent, ThirdAndLaterChildPercent, SingleChargeOnGroupChange);
 
     public static bool IsValidPercent(int percent) => percent is >= MinPercent and <= MaxPercent;
@@ -102,4 +112,6 @@ public static class BillingRulesErrors
     public static readonly Error PeriodInPast = Error.BusinessRule("BillingRules.PeriodInPast", "A past period's fee rules cannot change.");
     public static readonly Error AlreadyDefined = Error.Conflict("BillingRules.AlreadyDefined", "Fee rules are already defined for this period.");
     public static readonly Error InvalidPercent = Error.Validation("BillingRules.InvalidPercent", "A discount is a whole percent from 0 to 100.");
+    public static readonly Error NotFound = Error.NotFound("BillingRules.NotFound", "No fee rules version starts in this period.");
+    public static readonly Error AlreadyStarted = Error.BusinessRule("BillingRules.AlreadyStarted", "A fee rules version that has already started cannot be withdrawn.");
 }

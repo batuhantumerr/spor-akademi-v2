@@ -34,6 +34,12 @@ public sealed class JobsOptions
     /// <summary>Fee reminders (P2-F4, DEC-355): 06:00 UTC, 09:00 in Istanbul.</summary>
     public string DuesReminderCron { get; set; } = "0 6 * * *";
 
+    /// <summary>
+    /// Closing past months under fee rules (P2-F8, DEC-375): 01:00 UTC (04:00 in Istanbul), after the school's month has
+    /// turned over and before the reminders.
+    /// </summary>
+    public string BillingPeriodCloseCron { get; set; } = "0 1 * * *";
+
     /// <summary>One outbox run delivers batches until one is not full, at most this many.</summary>
     public int MaxOutboxBatchesPerRun { get; set; } = 50;
 
@@ -53,6 +59,7 @@ public sealed class JobsOptions
         && IsCron(StudentAnonymizationCron)
         && AnonymizationBatchSize is > 0 and <= 1_000
         && IsCron(DuesReminderCron)
+        && IsCron(BillingPeriodCloseCron)
         && MaxOutboxBatchesPerRun is > 0 and <= 10_000
         && HeartbeatWarning > TimeSpan.Zero
         && Dashboard.SessionLifetime > TimeSpan.Zero

@@ -69,3 +69,37 @@ public sealed class BillingRulesTests
         new BillingRuleTerms(M(2027, 1), 10, 15, true).PercentForRank(rank).ShouldBe(percent);
     }
 }
+
+[Trait("Story", "P2-F8")]
+public sealed class BillingRulesWithdrawalAndClosingTests
+{
+    private static readonly SchoolId School = EntityId.New<SchoolId>();
+
+    private static YearMonth M(int year, int month) => YearMonth.Create(year, month).Value;
+
+    [Fact]
+    public void Only_a_version_that_has_not_started_can_be_withdrawn()
+    {
+        var planned = BillingRules.Define(School, new BillingRuleTerms(M(2027, 3), 10, 15, true), M(2027, 1)).Value;
+        var started = BillingRules.Define(School, new BillingRuleTerms(M(2027, 1), 10, 15, true), M(2027, 1)).Value;
+
+        planned.EnsureWithdrawable(M(2027, 2)).IsSuccess.ShouldBeTrue();
+        planned.EnsureWithdrawable(M(2027, 3)).Error.ShouldBe(BillingRulesErrors.AlreadyStarted);
+        started.EnsureWithdrawable(M(2027, 1)).Error.ShouldBe(BillingRulesErrors.AlreadyStarted);
+    }
+
+    [Fact]
+    public void A_snapshot_freezes_the_charge_and_only_a_past_period_can_close()
+    {
+        var enrollment = new SporAkademi.Domain.Billing.DueEnrollment(EntityId.New<SporAkademi.Domain.Enrollments.EnrollmentId>(), EntityId.New<SporAkademi.Domain.Groups.GroupId>(), new DateOnly(2027, 1, 4), null);
+        var charge = new EffectiveCharge(enrollment, EntityId.New<SporAkademi.Domain.Students.StudentId>(), M(2027, 1), Money.Try(800m), Money.Try(720m), ChargeAdjustment.SiblingDiscount, 10, 2);
+
+        var snapshot = ChargeSnapshot.Take(School, charge);
+
+        (snapshot.ListFee.Amount, snapshot.Discount.Amount, snapshot.Fee.Amount, snapshot.DiscountPercent).ShouldBe((800m, 80m, 720m, 10));
+        (snapshot.ToCharge(enrollment) with { SiblingRank = 2 }).ShouldBe(charge);
+        Should.Throw<ArgumentException>(() => snapshot.ToCharge(enrollment with { Id = EntityId.New<SporAkademi.Domain.Enrollments.EnrollmentId>() }));
+        ClosedPeriod.Close(School, M(2027, 1), M(2027, 2), DateTimeOffset.UnixEpoch, 1).Period.ShouldBe(M(2027, 1));
+        Should.Throw<InvalidOperationException>(() => ClosedPeriod.Close(School, M(2027, 2), M(2027, 2), DateTimeOffset.UnixEpoch, 0));
+    }
+}

@@ -18,16 +18,24 @@ internal sealed record ChargeBook(IReadOnlyList<EffectiveCharge> Charges, IReadO
 /// applies the school's fee rules versions with <see cref="FeeRules"/>. Without a version in force the charges are the
 /// group fees unchanged, and the sibling sets are not even read.
 /// <para>
-/// A fixed number of queries per call: the rules versions, the enrollments, their groups' fees and (only when a version
-/// applies) the school's sibling sets. Ranking siblings needs every sibling's enrollments of the period, in any group,
-/// so a school window always loads all of the school's enrollments of the window; callers filter the result.
+/// Closed periods (DEC-375) are frozen: an enrollment with a <see cref="ChargeSnapshot"/> for a period owes exactly the
+/// snapshot, whatever happened to guardian links since. An enrollment without one in a closed period (enrolled
+/// retroactively after the close) is computed live, ranked against its siblings' frozen list fees, and never changes
+/// theirs. Only open months (the current one and later) follow today's links and rules.
+/// </para>
+/// <para>
+/// A fixed number of queries per call: the rules versions, the enrollments, their groups' fees and, only when a version
+/// applies, the sibling sets and the snapshots. A school window reads all of the school's enrollments of the window
+/// (siblings rank across groups; callers filter the result) and all sibling links at once; a single due reads only the
+/// student's family (DEC-373).
 /// </para>
 /// </summary>
 internal sealed class DueCharges(
     IEnrollmentDirectory enrollments,
     IGroupFeeSchedule fees,
     IBillingRulesRepository rules,
-    IStudentSiblings siblings)
+    IStudentSiblings siblings,
+    IChargeSnapshotRepository snapshots)
 {
     /// <summary>Every effective charge of the school from <paramref name="from"/> to <paramref name="to"/> (inclusive).</summary>
     public async Task<ChargeBook> ForSchoolAsync(YearMonth from, YearMonth to, CancellationToken cancellationToken)
@@ -37,10 +45,14 @@ internal sealed class DueCharges(
 
         var versions = await VersionsAsync(cancellationToken);
         var active = await enrollments.ListActiveBetweenAsync(null, from.FirstDay, to.LastDay, cancellationToken);
-        var familyOf = versions.Any(v => v.EffectiveFrom <= to)
-            ? await FamiliesAsync([.. active.Select(e => e.StudentId).Distinct()], cancellationToken)
-            : new Dictionary<StudentId, StudentId>();
-        return await ChargeAsync(active, from, to, versions, familyOf, cancellationToken);
+        if (!versions.Any(v => v.EffectiveFrom <= to))
+        {
+            return await ChargeAsync(active, from, to, versions, new Dictionary<StudentId, StudentId>(), [], cancellationToken);
+        }
+
+        var familyOf = await FamiliesAsync([.. active.Select(e => e.StudentId).Distinct()], cancellationToken);
+        var frozen = await snapshots.ListAsync(from, to, cancellationToken);
+        return await ChargeAsync(active, from, to, versions, familyOf, frozen, cancellationToken);
     }
 
     /// <summary>
@@ -56,19 +68,25 @@ internal sealed class DueCharges(
         var versions = await VersionsAsync(cancellationToken);
         IReadOnlyList<EnrollmentInfo> related = [enrollment];
         var familyOf = new Dictionary<StudentId, StudentId>();
+        IReadOnlyList<ChargeSnapshot> frozen = [];
         if (BillingRuleTerms.For(versions, period) is not null)
         {
-            // The student's own other enrollments (group change) and every sibling's enrollments (ranking), in one query.
-            var family = (await siblings.GetSiblingSetsAsync([enrollment.StudentId], cancellationToken)).GetValueOrDefault(enrollment.StudentId);
-            foreach (var student in family ?? [])
+            // Only this student's family is read; then the student's own other enrollments (group change), every
+            // sibling's enrollments (ranking) and their frozen charges of a closed period, one query each.
+            var family = await siblings.GetFamilyAsync(enrollment.StudentId, cancellationToken);
+            if (family.Count > 1)
             {
-                familyOf[student] = family![0];
+                foreach (var student in family)
+                {
+                    familyOf[student] = family[0];
+                }
             }
 
-            related = await enrollments.ListOfStudentsActiveBetweenAsync(family ?? [enrollment.StudentId], period.FirstDay, period.LastDay, cancellationToken);
+            related = await enrollments.ListOfStudentsActiveBetweenAsync(family, period.FirstDay, period.LastDay, cancellationToken);
+            frozen = await snapshots.ListOfStudentsAsync(family, period, cancellationToken);
         }
 
-        var book = await ChargeAsync(related, period, period, versions, familyOf, cancellationToken);
+        var book = await ChargeAsync(related, period, period, versions, familyOf, frozen, cancellationToken);
         return book.Charges.FirstOrDefault(c => c.Enrollment.Id == enrollment.Id);
     }
 
@@ -87,6 +105,7 @@ internal sealed class DueCharges(
         YearMonth to,
         IReadOnlyList<BillingRuleTerms> versions,
         IReadOnlyDictionary<StudentId, StudentId> familyOf,
+        IReadOnlyList<ChargeSnapshot> frozen,
         CancellationToken cancellationToken)
     {
         var groupFees = await fees.GetFeesAsync([.. active.Select(e => e.GroupId).Distinct()], cancellationToken);
@@ -94,13 +113,24 @@ internal sealed class DueCharges(
             g => g.Key,
             g => (IReadOnlyList<FeeRate>)[.. g.Value.Select(f => new FeeRate(f.EffectiveFrom, f.Amount))]);
         var byId = active.ToDictionary(e => e.Id);
+        var snapshotOf = frozen.ToDictionary(f => (f.EnrollmentId, f.Period));
 
+        // A frozen charge ranks with its frozen list fee and keeps its frozen amounts; charges without a snapshot are live.
         var raw = DueCalculator.Charges(
                 active.Select(e => new DueEnrollment(e.Id, e.GroupId, e.StartDate, e.EndDate)),
                 rates,
                 to,
                 from)
-            .Select(c => new StudentCharge(c.Enrollment, byId[c.Enrollment.Id].StudentId, c.Period, c.Fee));
-        return new ChargeBook(FeeRules.Apply(raw, familyOf, versions), byId);
+            .Select(c => new StudentCharge(
+                c.Enrollment,
+                byId[c.Enrollment.Id].StudentId,
+                c.Period,
+                snapshotOf.TryGetValue((c.Enrollment.Id, c.Period), out var snapshot) ? snapshot.ListFee : c.Fee));
+        var charges = FeeRules.Apply(raw, familyOf, versions);
+        return snapshotOf.Count == 0
+            ? new ChargeBook(charges, byId)
+            : new ChargeBook(
+                [.. charges.Select(c => snapshotOf.TryGetValue((c.Enrollment.Id, c.Period), out var snapshot) ? snapshot.ToCharge(c.Enrollment) : c)],
+                byId);
     }
 }

@@ -113,6 +113,7 @@ public static class DependencyInjection
         services.AddScoped<IStudentReminderContacts, StudentReminderContacts>();
         services.AddScoped<IStudentSiblings, StudentSiblings>();
         services.AddScoped<IBillingRulesRepository, BillingRulesRepository>();
+        services.AddScoped<IChargeSnapshotRepository, ChargeSnapshotRepository>();
         services.AddScoped<IDuesReminderRepository, DuesReminderRepository>();
         services.AddSingleton<IPasswordTokenFactory, PasswordTokenFactory>();
         services.AddOptions<DuesReminderSettings>()

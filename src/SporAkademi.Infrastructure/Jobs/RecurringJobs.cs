@@ -39,6 +39,7 @@ internal static class RecurringJobs
         manager.AddOrUpdate<OnlinePaymentReconcileJob>(OnlinePaymentReconcileJob.JobId, job => job.RunAsync(CancellationToken.None), jobs.OnlinePaymentReconcileCron, utc);
         manager.AddOrUpdate<StudentAnonymizationJob>(StudentAnonymizationJob.JobId, job => job.RunAsync(CancellationToken.None), jobs.StudentAnonymizationCron, utc);
         manager.AddOrUpdate<DuesReminderJob>(DuesReminderJob.JobId, job => job.RunAsync(CancellationToken.None), jobs.DuesReminderCron, utc);
+        manager.AddOrUpdate<BillingPeriodCloseJob>(BillingPeriodCloseJob.JobId, job => job.RunAsync(CancellationToken.None), jobs.BillingPeriodCloseCron, utc);
     }
 }
 
@@ -208,6 +209,46 @@ internal sealed partial class OnlinePaymentReconcileJob(
 
     [LoggerMessage(Level = LogLevel.Information, Message = "Reconciled {Count} online payments")]
     private static partial void LogReconciled(ILogger logger, int count);
+}
+
+/// <summary>
+/// P2-F8 (DEC-375): once a day, per school (DEC-334), freezes the charges of every month before the school's current one
+/// that a fee rules version applies to and that is not closed yet. Re-running is harmless. Logs counts only.
+/// </summary>
+internal sealed partial class BillingPeriodCloseJob(TenantJobRunner runner, ILogger<BillingPeriodCloseJob> logger)
+{
+    public const string JobId = "billing-close-periods";
+
+    /// <returns>The number of periods closed (over all schools).</returns>
+    [AutomaticRetry(Attempts = 0)]
+    [JobDisplayName("Billing: close past months under fee rules")]
+    public async Task<int> RunAsync(CancellationToken cancellationToken)
+    {
+        var closed = 0;
+        await runner.ForEachSchoolAsync(
+            JobId,
+            async (services, school, ct) =>
+            {
+                var result = await services.GetRequiredService<ICommandHandler<CloseBillingPeriodsCommand, ClosedPeriodsSummary>>()
+                    .Handle(new CloseBillingPeriodsCommand(), ct);
+                if (result.IsFailure)
+                {
+                    throw new InvalidOperationException($"Closing billing periods failed with {result.Error.Code}.");
+                }
+
+                if (result.Value.Periods > 0)
+                {
+                    LogClosed(logger, school.Value, result.Value.Periods, result.Value.Snapshots);
+                }
+
+                closed += result.Value.Periods;
+            },
+            cancellationToken);
+        return closed;
+    }
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "School {SchoolId}: closed {Periods} billing periods with {Snapshots} charge snapshots")]
+    private static partial void LogClosed(ILogger logger, Guid schoolId, int periods, int snapshots);
 }
 
 /// <summary>

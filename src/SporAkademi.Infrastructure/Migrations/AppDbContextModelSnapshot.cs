@@ -339,6 +339,197 @@ namespace SporAkademi.Infrastructure.Migrations
                         });
                 });
 
+            modelBuilder.Entity("SporAkademi.Domain.Billing.ChargeSnapshot", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("Adjustment")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .HasColumnName("adjustment");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid?>("CreatedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("created_by");
+
+                    b.Property<int>("DiscountPercent")
+                        .HasColumnType("integer")
+                        .HasColumnName("discount_percent");
+
+                    b.Property<Guid>("EnrollmentId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("enrollment_id");
+
+                    b.Property<Guid>("GroupId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("group_id");
+
+                    b.Property<string>("Period")
+                        .IsRequired()
+                        .HasMaxLength(7)
+                        .HasColumnType("character varying(7)")
+                        .HasColumnName("period");
+
+                    b.Property<Guid>("StudentId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("student_id");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("tenant_id");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<Guid?>("UpdatedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("updated_by");
+
+                    b.Property<uint>("Version")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
+
+                    b.ComplexProperty(typeof(Dictionary<string, object>), "Discount", "SporAkademi.Domain.Billing.ChargeSnapshot.Discount#Money", b1 =>
+                        {
+                            b1.IsRequired();
+
+                            b1.Property<decimal>("Amount")
+                                .HasPrecision(12, 2)
+                                .HasColumnType("numeric(12,2)")
+                                .HasColumnName("discount_amount");
+
+                            b1.Property<string>("Currency")
+                                .IsRequired()
+                                .HasMaxLength(3)
+                                .HasColumnType("character varying(3)")
+                                .HasColumnName("discount_currency");
+                        });
+
+                    b.ComplexProperty(typeof(Dictionary<string, object>), "Fee", "SporAkademi.Domain.Billing.ChargeSnapshot.Fee#Money", b1 =>
+                        {
+                            b1.IsRequired();
+
+                            b1.Property<decimal>("Amount")
+                                .HasPrecision(12, 2)
+                                .HasColumnType("numeric(12,2)")
+                                .HasColumnName("fee_amount");
+
+                            b1.Property<string>("Currency")
+                                .IsRequired()
+                                .HasMaxLength(3)
+                                .HasColumnType("character varying(3)")
+                                .HasColumnName("fee_currency");
+                        });
+
+                    b.ComplexProperty(typeof(Dictionary<string, object>), "ListFee", "SporAkademi.Domain.Billing.ChargeSnapshot.ListFee#Money", b1 =>
+                        {
+                            b1.IsRequired();
+
+                            b1.Property<decimal>("Amount")
+                                .HasPrecision(12, 2)
+                                .HasColumnType("numeric(12,2)")
+                                .HasColumnName("list_fee_amount");
+
+                            b1.Property<string>("Currency")
+                                .IsRequired()
+                                .HasMaxLength(3)
+                                .HasColumnType("character varying(3)")
+                                .HasColumnName("list_fee_currency");
+                        });
+
+                    b.HasKey("Id")
+                        .HasName("pk_charge_snapshots");
+
+                    b.HasIndex("TenantId", "Period")
+                        .HasDatabaseName("ix_charge_snapshots_tenant_id_period");
+
+                    b.HasIndex("TenantId", "EnrollmentId", "Period")
+                        .IsUnique()
+                        .HasDatabaseName("ix_charge_snapshots_tenant_id_enrollment_id_period");
+
+                    b.HasIndex("TenantId", "StudentId", "Period")
+                        .HasDatabaseName("ix_charge_snapshots_tenant_id_student_id_period");
+
+                    b.HasIndex("TenantId", "EnrollmentId", "StudentId", "GroupId")
+                        .HasDatabaseName("ix_charge_snapshots_tenant_id_enrollment_id_student_id_group_id");
+
+                    b.ToTable("charge_snapshots", "billing", t =>
+                        {
+                            t.HasCheckConstraint("ck_charge_snapshots_amounts", "fee_amount >= 0 AND discount_amount >= 0 AND fee_amount + discount_amount = list_fee_amount");
+
+                            t.HasCheckConstraint("ck_charge_snapshots_discount_percent", "discount_percent BETWEEN 0 AND 100");
+                        });
+                });
+
+            modelBuilder.Entity("SporAkademi.Domain.Billing.ClosedPeriod", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTimeOffset>("ClosedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("closed_at");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid?>("CreatedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("created_by");
+
+                    b.Property<string>("Period")
+                        .IsRequired()
+                        .HasMaxLength(7)
+                        .HasColumnType("character varying(7)")
+                        .HasColumnName("period");
+
+                    b.Property<int>("SnapshotCount")
+                        .HasColumnType("integer")
+                        .HasColumnName("snapshot_count");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("tenant_id");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<Guid?>("UpdatedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("updated_by");
+
+                    b.Property<uint>("Version")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
+
+                    b.HasKey("Id")
+                        .HasName("pk_closed_periods");
+
+                    b.HasIndex("TenantId", "Period")
+                        .IsUnique()
+                        .HasDatabaseName("ix_closed_periods_tenant_id_period");
+
+                    b.ToTable("closed_periods", "billing", t =>
+                        {
+                            t.HasCheckConstraint("ck_closed_periods_snapshot_count", "snapshot_count >= 0");
+                        });
+                });
+
             modelBuilder.Entity("SporAkademi.Domain.Billing.DuesReminder", b =>
                 {
                     b.Property<Guid>("Id")
@@ -2158,6 +2349,34 @@ namespace SporAkademi.Infrastructure.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired()
                         .HasConstraintName("fk_billing_rules_school_tenant_id");
+                });
+
+            modelBuilder.Entity("SporAkademi.Domain.Billing.ChargeSnapshot", b =>
+                {
+                    b.HasOne("SporAkademi.Domain.Tenancy.School", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_charge_snapshots_school_tenant_id");
+
+                    b.HasOne("SporAkademi.Domain.Enrollments.Enrollment", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId", "EnrollmentId", "StudentId", "GroupId")
+                        .HasPrincipalKey("TenantId", "Id", "StudentId", "GroupId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_charge_snapshots_enrollment_tenant_id_enrollment_id_student");
+                });
+
+            modelBuilder.Entity("SporAkademi.Domain.Billing.ClosedPeriod", b =>
+                {
+                    b.HasOne("SporAkademi.Domain.Tenancy.School", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_closed_periods_school_tenant_id");
                 });
 
             modelBuilder.Entity("SporAkademi.Domain.Billing.DuesReminder", b =>
