@@ -14,7 +14,7 @@ Sahip bu listedeki **bütün önerileri onayladı**. Sonuç:
 - **Soru 4:** iptal penceresine gerekçeye kişisel veri yazılmaması uyarısı eklendi (#69).
 - **Soru 29:** `e2e` ruleset'e beşinci zorunlu check olarak eklendi (main'deki son çalıştırmaların hepsi yeşil).
 - **Soru 31:** şifre en az 12 karakter (DEC-369, #73); kod, testler ve politikayı anan dokümanlar güncellendi. Mevcut şifreler geçerli kalır, kural yeni şifre belirlemede uygulanır.
-- **Soru 17 (P2-F8):** öneri yoktu; sahibin ayrıntısını bekliyor, açık.
+- **Soru 17 (P2-F8):** sahip önerilen varsayılanlarla ilerlenmesini istedi (2026-11-10). P2-F8 bu varsayılanlarla yapıldı (DEC-370 – DEC-374, **Proposed**, #75); varsayılanların onayı [bölüm 7](#7-p2-f8-aidat-kuralları-onay-bekleyen-varsayılanlar)'de açık.
 
 Aşağıdaki metin karar anındaki hâliyle kayıt olarak bırakıldı.
 
@@ -43,7 +43,7 @@ Aşağıdaki metin karar anındaki hâliyle kayıt olarak bırakıldı.
 16. **Resmi iyzico paketi yerine `HttpClient` (DEC-345).** Resmi `iyzipay-dotnet` (MIT) eklenmedi; adaptör `HttpClient` ve dokümandaki IYZWSv2 imzasını kullanıyor (tedarik zinciri yüzeyi küçük). Onaylıyor musunuz? Öneri: evet.
 
 ### P2-F8
-17. **Aidat kuralları ayrıntısı (P2-F8).** Roadmap'te "kardeş indirimi, dönem ortası değişiklik" yazıyor; ayrıntı gerektiği için başlanmadı: indirim oranı ve hangi kardeşe uygulanacağı, kardeş tanımı (aynı veli mi), dönem ortası grup değişikliğinde kıst veya ücret kuralı (bugün kıst yok, DEC-017, DEC-183), geçmiş aylara etkisi. Öneri yok; ayrıntıyı iletin.
+17. **Aidat kuralları ayrıntısı (P2-F8).** Roadmap'te "kardeş indirimi, dönem ortası değişiklik" yazıyor; ayrıntı gerektiği için başlanmadı: indirim oranı ve hangi kardeşe uygulanacağı, kardeş tanımı (aynı veli mi), dönem ortası grup değişikliğinde kıst veya ücret kuralı (bugün kıst yok, DEC-017, DEC-183), geçmiş aylara etkisi. Sahip önerilen varsayılanlarla ilerlenmesini istedi; seçilen varsayılanlar [bölüm 7](#7-p2-f8-aidat-kuralları-onay-bekleyen-varsayılanlar)'de onay bekliyor.
 
 ### Arayüz ve belgeler
 18. **ADR-0010 ve arayüz teması (DEC-103, DEC-112).** ADR-0010 (Tailwind v4 + Angular CDK + lucide; grafik Apache ECharts) hâlâ **Proposed**. Tutarsızlık: DEC-103 grafikleri "ApexCharts" diye yazıyor, DEC-112 ve ADR-0010 ApexCharts'ı lisans nedeniyle reddedip ECharts seçiyor (kod ECharts kullanıyor). ADR-0010 kabul edilsin ve DEC-103'ün grafik ifadesi DEC-112'ye göre düzeltilsin mi? Öneri: evet.
@@ -336,6 +336,16 @@ Bu repoya eklenen her paket ve imaj tek tabloda. Dokümandaki baz listeden gelen
 | DEC-367 | Ödemeler ve aidatlar: ödeme ve kayıt satırları silinmez, değişmez (tutar, dönem, ödeme tarihi, yöntem, durum kalır); kişisel veriyle bağ öğrencinin anonimleşmesiyle… |
 | DEC-368 | Öğrencisi kalmayan veli silinir (KVKK veri minimizasyonu): `ReplaceGuardians` bir veliyi öğrenciden ayırınca `StudentGuardiansUnlinked` domain event'i yayınlanır; o veli… |
 
+#### P2-F8 Aidat kuralları (2026-11-10)
+
+| ID | Özet |
+| --- | --- |
+| DEC-370 | Aidat kuralları grup aidatı gibi sürümlüdür: dönem başına tek sürüm, geçmiş dönem reddedilir, sürüm yoksa hesap bugünküyle aynı; `GET/POST /api/v1/settings/billing-rules`. |
+| DEC-371 | Kardeş = ortak veliye (geçişli) bağlı öğrenciler; o ayki toplam aidata göre sıralanır, en yüksek aidatlı tam öder, 2. kardeş %p2, 3. ve sonrası %p3; kuruşa yuvarlama. |
+| DEC-372 | Grup değişikliğinde tek aidat: ay içinde biten kaydın ardından aynı ay (bitiş gününde veya sonra) başlayan kayıt o ay ücretlendirilmez; çakışan kayıtlar ikisi de öder; kıst yok. |
+| DEC-373 | Tek hesap servisi (`DueCharges`): borç listesi, dashboard, online ödeme, elle ödeme ve hatırlatmalar aynı tutarı görür; borç satırı `listFee` ve `discount` taşır. |
+| DEC-374 | Bilinen sınır: kardeşlik bugünkü veli bağlantılarından hesaplanır, bağlantı geçmişi yok; bağlantı değişirse eski ödenmemiş bir ay yeniden sıralanabilir. |
+
 ## 6. Sapmalar / bilgilendirme
 
 - **`docker image inspect` (P2-F6).** P2-F6 sırasında bir agent, herkese açık SeaweedFS imajı üzerinde bir kez `docker image inspect` çalıştırdı (sadece metadata; belirtilen kurala aykırıydı). Tekrarlanmadı.
@@ -344,3 +354,12 @@ Bu repoya eklenen her paket ve imaj tek tabloda. Dokümandaki baz listeden gelen
 - **Otonom merge (DEC-098).** PR #43 – #65, dört zorunlu check yeşil ve bağımsız agent incelemesiyle agent tarafından squash merge edildi; inceleme özetleri PR yorumlarındadır.
 - **iyzico gerçek sandbox'ta çalıştırılmadı.** Anahtar olmadığı için yalnızca sahte HTTP handler'la test edildi (bkz. "Tek seferlik işlemler").
 - **Roadmap ve CHANGELOG.** Faz geçişi kapıları ve etiketler işaretlenmedi; Faz 2 `v0.2.0` etiketi sahipte.
+
+## 7. P2-F8 aidat kuralları: onay bekleyen varsayılanlar
+
+Soru 17'ye cevap olarak sahip "önerilen varsayılanlarla ilerle" dedi (2026-11-10). Aşağıdakiler kodda böyle çalışıyor; her biri için **onayla** veya **değiştir**. Ayrıntı: DEC-370 – DEC-374.
+
+1. **İndirim oranları.** Kurallar okul bazında ve bir aydan itibaren tanımlanıyor; formdaki varsayılan **2. kardeş %10, 3. ve sonraki kardeşler %15**. Okul 0–100 arası istediği oranı girebilir (0 = kapalı). Bu varsayılanlar uygun mu?
+2. **Kim tam öder (sıralama).** O ay en yüksek toplam aidatlı kardeş tam öder; eşitlikte en erken kayıt başlangıcı, sonra öğrenci ID'si. İndirim, sıralamadaki kardeşin o ayki **bütün** aidatlarına uygulanır; ücretsiz gruptaki kardeş sıra almaz. Kardeş = en az bir ortak veli (geçişli). "En pahalı çocuk tam öder" kuralı uygun mu, yoksa ör. en büyük/ilk kaydolan çocuk mu tam ödesin?
+3. **Grup değişikliği.** Ay içinde grup değiştiren öğrencinin o ayı yalnızca eski grubun aidatıyla ücretlendiriliyor (yeni grup ertesi aydan; kıst yok, DEC-017). İki gruba aynı anda kayıtlı öğrenci ikisini de öder. Okul bu kuralı kapatabilir (o zaman iki kayıt da o ayı öder). Uygun mu, yoksa ay yeni grubun (veya yüksek olanın) aidatıyla mı ücretlendirilsin?
+4. **Geçmiş aylar ve bağlantı geçmişi.** Kural sürümleri geçmiş aya tanımlanamaz, bu yüzden geçmiş ayların faturası değişmez. Ancak kardeşlik bugünkü veli bağlantılarından hesaplanıyor (bağlantı geçmişi yok): veli ayrılır/silinir veya öğrenci anonimleşirse, kalan kardeşin **ödenmemiş** eski bir ayının indirimi değişebilir (ödenmişler değişmez). Bu sınır kabul edilebilir mi, yoksa bağlantı geçmişi veya ay kapanışında borç anlık görüntüsü mü istenir?
