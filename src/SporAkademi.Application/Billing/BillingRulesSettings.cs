@@ -27,9 +27,20 @@ public sealed record DefineBillingRulesCommand(
 /// <summary>The current school's fee rules versions, newest first.</summary>
 public sealed record ListBillingRulesQuery : IQuery<IReadOnlyList<BillingRulesDto>>;
 
-/// <summary>Fee rules versions of the current school (tenant filter applies). Never updated or deleted.</summary>
+/// <summary>
+/// Withdraws the version starting in <see cref="EffectiveFrom"/> (<c>YYYY-MM</c>) before it starts (DEC-376); a started
+/// version stays forever.
+/// </summary>
+public sealed record WithdrawBillingRulesCommand(string EffectiveFrom) : ICommand<Unit>;
+
+/// <summary>Fee rules versions of the current school (tenant filter applies). Never updated; removed only before they start.</summary>
 public interface IBillingRulesRepository
 {
+    /// <summary>Tracked, for withdrawing.</summary>
+    Task<BillingRules?> GetAsync(YearMonth effectiveFrom, CancellationToken cancellationToken);
+
+    void Remove(BillingRules rules);
+
     /// <summary>Every version, newest <see cref="BillingRules.EffectiveFrom"/> first. A school has a handful.</summary>
     Task<IReadOnlyList<BillingRules>> ListAsync(CancellationToken cancellationToken);
 
@@ -75,7 +86,10 @@ internal sealed class DefineBillingRulesHandler(IBillingRulesRepository rules, I
         var defined = BillingRules.Define(tenant, terms, currentPeriod);
         if (defined.IsFailure)
         {
-            return Result.Failure<Unit>(defined.Error);
+            // Reported on the failing field, like the validator (which normally catches it first).
+            return Result.Failure<Unit>(defined.Error == BillingRulesErrors.InvalidPercent
+                ? ValidationErrors.ForField(BillingRules.IsValidPercent(terms.SecondChildPercent) ? "thirdAndLaterChildPercent" : "secondChildPercent", defined.Error)
+                : defined.Error);
         }
 
         if (await rules.ExistsAsync(terms.EffectiveFrom, cancellationToken))
@@ -84,6 +98,30 @@ internal sealed class DefineBillingRulesHandler(IBillingRulesRepository rules, I
         }
 
         rules.Add(defined.Value);
+        return Result.Success(Unit.Value);
+    }
+}
+
+internal sealed class WithdrawBillingRulesHandler(IBillingRulesRepository rules, ITenancyModule tenancy, ICurrentUser currentUser)
+    : ICommandHandler<WithdrawBillingRulesCommand, Unit>
+{
+    public async Task<Result<Unit>> Handle(WithdrawBillingRulesCommand command, CancellationToken cancellationToken)
+    {
+        // The period is a route segment: a malformed one names no version.
+        var period = YearMonth.Parse(command.EffectiveFrom);
+        if (period.IsFailure || await rules.GetAsync(period.Value, cancellationToken) is not { } version)
+        {
+            return Result.Failure<Unit>(BillingRulesErrors.NotFound);
+        }
+
+        var currentPeriod = YearMonth.From(await tenancy.TodayAsync(currentUser.RequireTenant(), cancellationToken));
+        var withdrawable = version.EnsureWithdrawable(currentPeriod);
+        if (withdrawable.IsFailure)
+        {
+            return Result.Failure<Unit>(withdrawable.Error);
+        }
+
+        rules.Remove(version);
         return Result.Success(Unit.Value);
     }
 }

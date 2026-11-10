@@ -71,16 +71,54 @@ public sealed class FeeRulesTests(DatabaseFixture database) : BillingTest(databa
     /// </summary>
     private async Task<(Guid Ali, Guid Veli, Guid Can)> SiblingsAsync()
     {
+        var family = await FamilyAsync();
+        return (family.Ali, family.Veli, family.Can);
+    }
+
+    /// <summary>The <see cref="SiblingsAsync"/> family with the student and guardian ids, for changing links later.</summary>
+    private async Task<Family> FamilyAsync()
+    {
         var (aliStudent, aliGuardians) = await RegisterWithGuardiansAsync("Ali", NewGuardianLink(NextPhone(), "Ayşe", "ayse@example.com"));
         var (veliStudent, veliGuardians) = await RegisterWithGuardiansAsync("Veli", ExistingGuardianLink(aliGuardians[0]), NewGuardianLink(NextPhone(), "Mehmet", "mehmet@example.com"));
         var mehmet = veliGuardians.Single(g => g != aliGuardians[0]);
         var (canStudent, _) = await RegisterWithGuardiansAsync("Can", ExistingGuardianLink(mehmet));
 
-        return (
+        return new Family(
             await EnrollInNewGroupAsync(aliStudent, "U10 Futbol", "800.00"),
             await EnrollInNewGroupAsync(veliStudent, "U12 Futbol", "1000.00"),
-            await EnrollInNewGroupAsync(canStudent, "U14 Futbol", "600.00"));
+            await EnrollInNewGroupAsync(canStudent, "U14 Futbol", "600.00"),
+            veliStudent,
+            mehmet);
     }
+
+    private sealed record Family(Guid Ali, Guid Veli, Guid Can, Guid VeliStudent, Guid Mehmet);
+
+    /// <summary>Replaces a student's guardians (US-13) with the given existing ones.</summary>
+    private static async Task ReplaceGuardiansAsync(Guid student, HttpClient client, params Guid[] guardians)
+    {
+        var current = await client.GetFromJsonAsync<JsonElement>($"/api/v1/students/{student}", Ct);
+        var response = await client.PutAsJsonAsync(
+            $"/api/v1/students/{student}/guardians",
+            new { guardians = guardians.Select(ExistingGuardianLink).ToArray(), version = current.GetProperty("version").GetUInt32() },
+            Ct);
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+    }
+
+    private async Task<int> RunCloseJobAsync()
+    {
+        await using var scope = Api.Services.CreateAsyncScope();
+        return await scope.ServiceProvider.GetRequiredService<BillingPeriodCloseJob>().RunAsync(Ct);
+    }
+
+    private static async Task<JsonElement> DashboardAsync(HttpClient client)
+    {
+        var response = await client.GetAsync(new Uri("/api/v1/dashboard", UriKind.Relative), Ct);
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        return await BodyOf(response);
+    }
+
+    private static decimal DueOf(JsonElement dashboard, string period) =>
+        Amount(dashboard.GetProperty("monthlyBilling").EnumerateArray().Single(m => m.GetProperty("period").GetString() == period).GetProperty("due"));
 
     private async Task<Guid> EnrollInNewGroupAsync(Guid student, string groupName, string fee, string startDate = "2027-01-04")
     {
@@ -302,6 +340,81 @@ public sealed class FeeRulesTests(DatabaseFixture database) : BillingTest(databa
         mail.To.ShouldBe("ayse@example.com");
         mail.TextBody.ShouldContain("₺720,00");
         mail.TextBody.ShouldNotContain("₺800,00");
+    }
+
+    [Fact]
+    public async Task A_closed_month_paid_with_a_sibling_discount_stays_paid_when_the_family_link_is_removed()
+    {
+        var family = await FamilyAsync();
+        await DefineRulesOkAsync(Rules("2027-01", 10, 15));
+        await RecordOkAsync(family.Ali, "2027-01", "720.00");
+        await RecordOkAsync(family.Veli, "2027-01", "1000.00");
+        await RecordOkAsync(family.Can, "2027-01", "510.00");
+
+        var february = AdvanceTo(new DateTimeOffset(2027, 2, 2, 9, 0, 0, TimeSpan.Zero));
+        (await RunCloseJobAsync()).ShouldBe(1);
+        (await RunCloseJobAsync()).ShouldBe(0); // idempotent
+
+        // Veli leaves Ayşe: Ali has no sibling any more (Can keeps Veli through Mehmet).
+        await ReplaceGuardiansAsync(family.VeliStudent, february, family.Mehmet);
+
+        // January is closed: Ali's 720.00 still settles it; no due, no reminder. February (open) follows today's links.
+        var dues = (await OutstandingAsync("?pageSize=100", february)).GetProperty("items").EnumerateArray()
+            .Select(d => (d.GetProperty("enrollmentId").GetGuid(), d.GetProperty("period").GetString(), Amount(d.GetProperty("fee"))))
+            .ToList();
+        dues.ShouldNotContain(d => d.Item2 == "2027-01");
+        dues.ShouldContain((family.Ali, "2027-02", 800m));
+        DueOf(await DashboardAsync(february), "2027-01").ShouldBe(720m + 1000m + 510m);
+
+        AdvanceTo(new DateTimeOffset(2027, 2, 11, 6, 0, 0, TimeSpan.Zero));
+        await RunReminderJobAsync();
+        await DeliverAsync();
+        Api.Emails.Sent.ShouldNotContain(m => m.Subject.StartsWith("Ocak 2027", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task Linking_siblings_later_does_not_discount_a_closed_month()
+    {
+        var (aliStudent, aliGuardians) = await RegisterWithGuardiansAsync("Ali", NewGuardianLink(NextPhone(), "Ayşe", "ayse@example.com"));
+        var (zeynepStudent, _) = await RegisterWithGuardiansAsync("Zeynep", NewGuardianLink(NextPhone(), "Fatma", "fatma@example.com"));
+        await EnrollInNewGroupAsync(aliStudent, "U10 Futbol", "1000.00");
+        var zeynep = await EnrollInNewGroupAsync(zeynepStudent, "U12 Futbol", "800.00");
+        await DefineRulesOkAsync(Rules("2027-01", 10, 15));
+        await RecordOkAsync(zeynep, "2027-01", "800.00");
+
+        var february = AdvanceTo(new DateTimeOffset(2027, 2, 2, 9, 0, 0, TimeSpan.Zero));
+        (await RunCloseJobAsync()).ShouldBe(1);
+        await ReplaceGuardiansAsync(zeynepStudent, february, aliGuardians[0]);
+
+        // January stays at the full fees it closed with (no hidden overpayment); February is discounted.
+        var dashboard = await DashboardAsync(february);
+        DueOf(dashboard, "2027-01").ShouldBe(1800m);
+        DueOf(dashboard, "2027-02").ShouldBe(1000m + 720m);
+        ByEnrollment(await OutstandingAsync("?period=2027-01", february)).ShouldNotContainKey(zeynep);
+    }
+
+    [Fact]
+    public async Task A_planned_version_can_be_withdrawn_but_a_started_one_cannot()
+    {
+        await DefineRulesOkAsync(Rules("2027-01"));
+        await DefineRulesOkAsync(Rules("2027-03", 20, 20));
+
+        var started = await Admin.DeleteAsync(new Uri($"{RulesUrl}/2027-01", UriKind.Relative), Ct);
+        started.StatusCode.ShouldBe(HttpStatusCode.UnprocessableEntity);
+        (await CodeOf(started)).ShouldBe("BillingRules.AlreadyStarted");
+
+        (await Admin.DeleteAsync(new Uri($"{RulesUrl}/2027-03", UriKind.Relative), Ct)).StatusCode.ShouldBe(HttpStatusCode.NoContent);
+        (await RulesListAsync()).EnumerateArray().Select(v => v.GetProperty("effectiveFrom").GetString()).ShouldBe(["2027-01"]);
+
+        foreach (var missing in new[] { "2027-03", "2027-13", "abc" })
+        {
+            var response = await Admin.DeleteAsync(new Uri($"{RulesUrl}/{missing}", UriKind.Relative), Ct);
+            response.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+            (await CodeOf(response)).ShouldBe("BillingRules.NotFound");
+        }
+
+        using var coach = CoachClient(Ayse);
+        (await coach.DeleteAsync(new Uri($"{RulesUrl}/2027-01", UriKind.Relative), Ct)).StatusCode.ShouldBe(HttpStatusCode.Forbidden);
     }
 
     private async Task<Guid> GroupOfAsync(Guid enrollment) =>

@@ -24,7 +24,18 @@ internal static class BillingRulesEndpoints
         var rules = app.MapGroup("/api/v1/settings/billing-rules").WithTags("Settings").RequireRole(Role.SchoolAdmin);
         rules.MapGet("/", ListRules).Produces<IReadOnlyList<BillingRulesDto>>();
         rules.MapPost("/", DefineRules).Produces<IReadOnlyList<BillingRulesDto>>(StatusCodes.Status201Created).ProducesProblems(400, 409, 422);
+        rules.MapDelete("/{effectiveFrom}", WithdrawRules).Produces(StatusCodes.Status204NoContent).ProducesProblems(404, 422);
         return app;
+    }
+
+    /// <summary>DEC-376: only a version that has not started (its month is after the current one) can be withdrawn.</summary>
+    private static async Task<IResult> WithdrawRules(
+        string effectiveFrom,
+        ICommandHandler<WithdrawBillingRulesCommand, Unit> handler,
+        CancellationToken cancellationToken)
+    {
+        var withdrawn = await handler.Handle(new WithdrawBillingRulesCommand(effectiveFrom), cancellationToken);
+        return withdrawn.IsSuccess ? TypedResults.NoContent() : ProblemResults.Problem(withdrawn.Error);
     }
 
     private static async Task<IResult> ListRules(IQueryHandler<ListBillingRulesQuery, IReadOnlyList<BillingRulesDto>> handler, CancellationToken cancellationToken) =>
