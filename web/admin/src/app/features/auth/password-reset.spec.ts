@@ -217,10 +217,23 @@ describe('ResetPasswordPage', () => {
     expect(alert.querySelector('a[href="/forgot-password"]')).not.toBeNull();
   });
 
+  it('rejects a password shorter than 12 characters before calling the API', () => {
+    const { fixture, root } = create('token=abc');
+    type(root, 'new', 'aaaaaaaaaaa');
+    type(root, 'confirm', 'aaaaaaaaaaa');
+    submit(root);
+    fixture.detectChanges();
+
+    backend.expectNone('/api/v1/auth/password-reset/confirm');
+    expect(root.querySelector('#new-error')?.textContent).toContain(
+      errorMessages['Auth.PasswordTooWeak'],
+    );
+  });
+
   it('shows the server field error for a weak password', async () => {
     const { fixture, root } = create('token=abc');
-    type(root, 'new', 'aaaaaaaaaa');
-    type(root, 'confirm', 'aaaaaaaaaa');
+    type(root, 'new', 'aaaaaaaaaaaa');
+    type(root, 'confirm', 'aaaaaaaaaaaa');
     submit(root);
     backend
       .expectOne('/api/v1/auth/password-reset/confirm')
