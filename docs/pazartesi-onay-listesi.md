@@ -6,6 +6,18 @@ Durum: Faz 1 işleri tamamlandı (P1-40 faz geçişi ve `v0.1.0` etiketi sahipte
 
 Karar sayısı: **33 soru** (aşağıda numaralı). Her sorunun sonundaki "Öneri", cevap verilmezse sürecek varsayılandır.
 
+## Sahip kararı (2026-11-10)
+
+Sahip bu listedeki **bütün önerileri onayladı**. Sonuç:
+
+- **Soru 1–3, 5–16, 18–28, 30, 32, 33:** "Öneri" satırındaki seçenek geçerli; davranış değişmedi. Bölüm 5'teki kararlar ve ADR-0010 `Accepted` yapıldı, DEC-103'ün grafik ifadesi DEC-112'ye göre düzeltildi (#71). Soru 1'deki hukuki teyit ve soru 10'daki hatırlatma başlangıç tarihi sahipte kalır (SMTP hazır olunca).
+- **Soru 4:** iptal penceresine gerekçeye kişisel veri yazılmaması uyarısı eklendi (#69).
+- **Soru 29:** `e2e` ruleset'e beşinci zorunlu check olarak eklendi (main'deki son çalıştırmaların hepsi yeşil).
+- **Soru 31:** şifre en az 12 karakter (DEC-369, #73); kod, testler ve politikayı anan dokümanlar güncellendi. Mevcut şifreler geçerli kalır, kural yeni şifre belirlemede uygulanır.
+- **Soru 17 (P2-F8):** öneri yoktu; sahibin ayrıntısını bekliyor, açık.
+
+Aşağıdaki metin karar anındaki hâliyle kayıt olarak bırakıldı.
+
 ## 1. Önce karar verilmesi gerekenler
 
 ### Veri saklama ve KVKK
