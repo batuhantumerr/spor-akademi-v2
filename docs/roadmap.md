@@ -27,7 +27,7 @@ Kapsamın tamamı ve maddelerin açıklamaları: [proje dokümanı, Ek G](proje-
 - [x] P1-10 US-04 Refresh ve çıkış
 - [x] P1-11 US-05 İlk giriş ve şifre değiştirme
 - [x] P1-12 US-01 Okul oluşturma
-- [x] P1-13 Angular kabuğu, giriş, ADR-0010 (ADR-0010 Proposed, sahip onayı bekliyor)
+- [x] P1-13 Angular kabuğu, giriş, ADR-0010 (Accepted, 2026-11-10)
 - [x] P1-14 OpenAPI ve Angular client
 
 ### 1.2 Okul kurulumu ve gruplar
