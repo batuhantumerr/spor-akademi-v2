@@ -33,9 +33,9 @@ Sahiple ve dokümanlarda Türkçe; kod, isimler, enum'lar, commit'ler İngilizce
 `.env` hiçbir yoldan okunmaz. `printenv`, `docker inspect`, `docker compose config`, `dotnet user-secrets list` çalıştırılmaz. Loglarda kişisel veri yok. Sadece sentetik veri.
 
 ## GitHub iş akışı
-Issue → branch (`<tür>/<issue-no>-<kısa-açıklama>`, güncel `main`'den) → küçük commit'ler (Conventional Commits, AI attribution yok) → PR (`Closes #n`) → dört check (`backend`, `frontend`, `repo-checks`, `images`) → squash merge. Rebase ve force push yok.
+Issue → branch (`<tür>/<issue-no>-<kısa-açıklama>`, güncel `main`'den) → küçük commit'ler (Conventional Commits, AI attribution yok) → PR (`Closes #n`) → beş check (`backend`, `frontend`, `repo-checks`, `images`, `e2e`; `e2e` 2026-11-10'dan beri) → squash merge. Rebase ve force push yok.
 
 ## Hafta sonu otonom çalışma istisnaları (sahibin 2026-11-06 kararı)
-- Agent, dört check yeşil ve kodu yazmamış ayrı bir agent incelemesi yapılmışsa PR'ı kendisi squash merge eder.
+- Agent, zorunlu check'ler yeşil ve kodu yazmamış ayrı bir agent incelemesi yapılmışsa PR'ı kendisi squash merge eder.
 - Paket, ADR ve DEC kararlarını agent gerekçesiyle verir, "Proposed" olarak işaretler ve [docs/pazartesi-onay-listesi.md](docs/pazartesi-onay-listesi.md)'ye ekler.
 - Faz geçişi, sürüm etiketi ve Deploy bloğu sahibe kalır.

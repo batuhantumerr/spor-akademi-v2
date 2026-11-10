@@ -536,7 +536,7 @@ Projede bir öğrenme günlüğü tutulur: her maddeden sonra kendi cümlelerinl
 
 ### GitHub ayarları
 
-- Public repo; ruleset: silme ve force push engelli, PR zorunlu (onay sayısı 0), dört zorunlu check (kaynak GitHub Actions), "up to date" zorunlu.
+- Public repo; ruleset: silme ve force push engelli, PR zorunlu (onay sayısı 0), beş zorunlu check (`backend`, `frontend`, `repo-checks`, `images`, `e2e`; kaynak GitHub Actions; `e2e` sahibin 2026-11-10 onayıyla eklendi), "up to date" zorunlu.
 - Sadece squash merge, başlık = PR başlığı, merge sonrası branch silme.
 - Secret scanning ve push protection açık; Dependabot alerts ve security updates açık.
 - Etiketler: `type:*`, `priority:*`, `module:*`, `area:*`, `type:idea`. Milestone'lar: Phase 0, Phase 1, Deploy (unscheduled).
