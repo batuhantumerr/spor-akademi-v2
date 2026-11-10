@@ -20,8 +20,12 @@ public enum ChargeAdjustment
     GroupChange,
 }
 
-/// <summary>A group's full fee for one enrollment and period, with the enrollment's student (input of <see cref="FeeRules"/>).</summary>
-public sealed record StudentCharge(DueEnrollment Enrollment, StudentId StudentId, YearMonth Period, Money ListFee);
+/// <summary>
+/// A group's full fee for one enrollment and period, with the enrollment's student (input of <see cref="FeeRules"/>).
+/// <see cref="Frozen"/> marks a charge of a closed period whose amounts are kept from its snapshot (DEC-375): its student
+/// keeps a rank ahead of every student without a frozen charge that period.
+/// </summary>
+public sealed record StudentCharge(DueEnrollment Enrollment, StudentId StudentId, YearMonth Period, Money ListFee, bool Frozen = false);
 
 /// <summary>
 /// What an enrollment owes for a period under the fee rules: <see cref="ListFee"/> is the group's fee, <see cref="Fee"/>
@@ -53,7 +57,8 @@ public sealed record ChargedDue(EffectiveCharge Charge, Money Paid, Money Remain
 /// has a fee above zero there. Overlapping enrollments are both charged.</item>
 /// <item>Sibling discount: within a family (students linked through a common guardian), the students with charges above
 /// zero in the period are ranked by their total charge descending, then the earliest start of those enrollments, then
-/// the student id. Rank 1 pays in full; rank 2 gets <see cref="BillingRuleTerms.SecondChildPercent"/> off each of their
+/// the student id. In a closed period, students with a frozen charge come first (in that order) and a student added
+/// later only takes the next rank after them, so a late entry never makes a second child pay in full (DEC-375). Rank 1 pays in full; rank 2 gets <see cref="BillingRuleTerms.SecondChildPercent"/> off each of their
 /// charges that period, rank 3 and later <see cref="BillingRuleTerms.ThirdAndLaterChildPercent"/>.</item>
 /// </list>
 /// Discounted fees are rounded to kuruş, half away from zero.
@@ -190,12 +195,12 @@ public static class FeeRules
         var ranks = new Dictionary<StudentId, int>();
         var payers = charges
             .GroupBy(c => c.StudentId)
-            .Select(s => (Student: s.Key, Total: s.Sum(c => c.ListFee.Amount), FirstStart: s.Min(c => c.Enrollment.StartDate)))
+            .Select(s => (Student: s.Key, Total: s.Sum(c => c.ListFee.Amount), FirstStart: s.Min(c => c.Enrollment.StartDate), Frozen: s.Any(c => c.Frozen)))
             .Where(p => p.Total > 0 && familyOf.ContainsKey(p.Student));
         foreach (var family in payers.GroupBy(p => familyOf[p.Student]))
         {
             var rank = 0;
-            foreach (var payer in family.OrderByDescending(p => p.Total).ThenBy(p => p.FirstStart).ThenBy(p => p.Student.Value))
+            foreach (var payer in family.OrderByDescending(p => p.Frozen).ThenByDescending(p => p.Total).ThenBy(p => p.FirstStart).ThenBy(p => p.Student.Value))
             {
                 ranks[payer.Student] = ++rank;
             }

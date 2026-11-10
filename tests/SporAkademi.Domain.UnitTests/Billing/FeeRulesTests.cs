@@ -359,6 +359,18 @@ public sealed class FeeRulesTests
     }
 
     [Fact]
+    public void A_sibling_added_to_a_closed_month_ranks_after_the_frozen_siblings()
+    {
+        var (frozen, late, alsoLate) = (NewStudent(), NewStudent(), NewStudent());
+        var frozenCharge = Charge(frozen, 1000m) with { Frozen = true };
+
+        // The late siblings have higher fees but cannot take rank 1 from the frozen child (who paid in full).
+        var result = Apply([frozenCharge, Charge(late, 1200m), Charge(alsoLate, 1500m)], Family(frozen, late, alsoLate), Rules(second: 10, third: 15));
+
+        result.Select(c => (c.StudentId, c.SiblingRank, c.Fee.Amount)).ShouldBe([(frozen, 1, 1000m), (late, 3, 1020m), (alsoLate, 2, 1350m)]);
+    }
+
+    [Fact]
     public void Arguments_are_validated()
     {
         Should.Throw<ArgumentNullException>(() => FeeRules.Apply(null!, new Dictionary<StudentId, StudentId>(), []));

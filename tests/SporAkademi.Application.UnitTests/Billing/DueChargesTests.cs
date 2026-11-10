@@ -115,10 +115,11 @@ public sealed class DueChargesTests
         var book = await Service().ForSchoolAsync(January, January, Ct);
         var veli = await Service().ForEnrollmentAsync(VeliInU12, January, Ct);
 
-        // Ali keeps the frozen 800 although today he is the second child; Veli (1000) ranks first against Ali's frozen 800.
+        // Ali keeps the frozen 800 in full; Veli (1000, entered late) takes the next rank after Ali: 10 % off, not a second full fee.
         book.Charges.Single(c => c.Enrollment.Id == AliInU10.Id).Fee.Amount.ShouldBe(800m);
-        book.Charges.Single(c => c.Enrollment.Id == VeliInU12.Id).Fee.Amount.ShouldBe(1000m);
-        veli!.Fee.Amount.ShouldBe(1000m);
+        book.Charges.Single(c => c.Enrollment.Id == VeliInU12.Id).Fee.Amount.ShouldBe(900m);
+        veli!.Fee.Amount.ShouldBe(900m);
+        veli.SiblingRank.ShouldBe(2);
         (await Service().ForEnrollmentAsync(AliInU10, January, Ct))!.Fee.Amount.ShouldBe(800m);
     }
 

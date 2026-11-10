@@ -20,8 +20,8 @@ internal sealed record ChargeBook(IReadOnlyList<EffectiveCharge> Charges, IReadO
 /// <para>
 /// Closed periods (DEC-375) are frozen: an enrollment with a <see cref="ChargeSnapshot"/> for a period owes exactly the
 /// snapshot, whatever happened to guardian links since. An enrollment without one in a closed period (enrolled
-/// retroactively after the close) is computed live, ranked against its siblings' frozen list fees, and never changes
-/// theirs. Only open months (the current one and later) follow today's links and rules.
+/// retroactively after the close) is computed live and only takes the next rank after its frozen siblings (it never
+/// pays in full ahead of a frozen sibling), and never changes their amounts. Only open months (the current one and later) follow today's links and rules.
 /// </para>
 /// <para>
 /// A fixed number of queries per call: the rules versions, the enrollments, their groups' fees and, only when a version
@@ -125,7 +125,8 @@ internal sealed class DueCharges(
                 c.Enrollment,
                 byId[c.Enrollment.Id].StudentId,
                 c.Period,
-                snapshotOf.TryGetValue((c.Enrollment.Id, c.Period), out var snapshot) ? snapshot.ListFee : c.Fee));
+                snapshotOf.TryGetValue((c.Enrollment.Id, c.Period), out var snapshot) ? snapshot.ListFee : c.Fee,
+                snapshot is not null));
         var charges = FeeRules.Apply(raw, familyOf, versions);
         return snapshotOf.Count == 0
             ? new ChargeBook(charges, byId)
