@@ -66,6 +66,7 @@ app.MapIdentityEndpoints();
 app.MapCoachEndpoints();
 app.MapSchoolEndpoints();
 app.MapDataRetentionEndpoints();
+app.MapBillingRulesEndpoints();
 app.MapOrganizationEndpoints();
 app.MapStudentEndpoints();
 app.MapDocumentEndpoints();

@@ -135,7 +135,7 @@ internal sealed class StartOnlinePaymentHandler(
     IOnlinePaymentRepository onlinePayments,
     IPaymentRepository payments,
     IEnrollmentDirectory enrollments,
-    IGroupFeeSchedule fees,
+    DueCharges dueCharges,
     ITenancyModule tenancy,
     IPaymentProviders providers,
     ICurrentUser currentUser,
@@ -192,17 +192,18 @@ internal sealed class StartOnlinePaymentHandler(
             await onlinePayments.ExpireAsync(open.Id, now, cancellationToken);
         }
 
-        var groupFees = await fees.GetFeesAsync([enrollment.GroupId], cancellationToken);
-        var fee = groupFees.TryGetValue(enrollment.GroupId, out var rates)
-            ? FeeRate.For(rates.Select(r => new FeeRate(r.EffectiveFrom, r.Amount)), period)
-            : null;
-        if (fee is null)
+        // DEC-373: the amount is what the due still owes under the fee rules (e.g. after a sibling discount).
+        var charge = await dueCharges.ForEnrollmentAsync(enrollment, period, cancellationToken);
+        if (charge is null)
         {
-            return Result.Failure<StartedOnlinePayment>(PaymentErrors.FeeNotDefined);
+            return Result.Failure<StartedOnlinePayment>(
+                DueCalculator.WasActiveIn(enrollment.StartDate, enrollment.EndDate, period)
+                    ? PaymentErrors.FeeNotDefined
+                    : PaymentErrors.EnrollmentNotActiveInPeriod);
         }
 
         var paid = await payments.RecordedTotalAsync(enrollment.Id, period, cancellationToken);
-        var remaining = fee.Amount - paid;
+        var remaining = charge.Fee.Amount - paid;
         var started = OnlinePayment.Start(
             tenant,
             new PaidEnrollment(enrollment.Id, enrollment.StudentId, enrollment.GroupId, enrollment.StartDate, enrollment.EndDate),
@@ -255,7 +256,7 @@ internal sealed partial class ApplyProviderStateHandler(
     IOnlinePaymentRepository onlinePayments,
     IPaymentRepository payments,
     IEnrollmentDirectory enrollments,
-    IGroupFeeSchedule fees,
+    DueCharges dueCharges,
     ITenancyModule tenancy,
     TimeProvider clock,
     ILogger<ApplyProviderStateHandler> logger) : ICommandHandler<ApplyProviderStateCommand, AppliedProviderState>
@@ -278,7 +279,7 @@ internal sealed partial class ApplyProviderStateHandler(
         {
             case ProviderPaymentOutcome.Succeeded when state.ProviderPaymentId is { } providerPaymentId && state.PaidAmount is { } paid:
                 // Serializes with manual payments and with ending the enrollment (DEC-184).
-                _ = await enrollments.FindLockedAsync(payment.EnrollmentId, cancellationToken);
+                var enrollment = await enrollments.FindLockedAsync(payment.EnrollmentId, cancellationToken);
                 var paidOn = await tenancy.TodayAsync(payment.TenantId, cancellationToken);
                 var succeeded = payment.Succeed(new ProviderCharge(providerPaymentId, paid, clock.GetUtcNow(), paidOn));
                 if (succeeded.IsFailure)
@@ -294,7 +295,7 @@ internal sealed partial class ApplyProviderStateHandler(
                 }
 
                 payments.Add(recorded);
-                await FlagOverpaymentAsync(payment, recorded, cancellationToken);
+                await FlagOverpaymentAsync(payment, enrollment, recorded, cancellationToken);
                 return Result.Success(new AppliedProviderState(true, payment.Status));
 
             case ProviderPaymentOutcome.Succeeded:
@@ -319,17 +320,15 @@ internal sealed partial class ApplyProviderStateHandler(
     }
 
     /// <summary>
-    /// DEC-342: a success is always credited, but when it takes the due above its fee (a late success after a cash
-    /// payment or a second paid attempt) the attempt is flagged and a warning (ids only) asks for a refund by hand.
+    /// DEC-342: a success is always credited, but when it takes the due above what it owes (a late success after a cash
+    /// payment or a second paid attempt; DEC-373: the owed fee after the fee rules) the attempt is flagged and a warning
+    /// (ids only) asks for a refund by hand.
     /// </summary>
-    private async Task FlagOverpaymentAsync(OnlinePayment payment, Payment recorded, CancellationToken cancellationToken)
+    private async Task FlagOverpaymentAsync(OnlinePayment payment, EnrollmentInfo? enrollment, Payment recorded, CancellationToken cancellationToken)
     {
         var earlier = await payments.RecordedTotalAsync(payment.EnrollmentId, payment.Period, cancellationToken);
-        var groupFees = await fees.GetFeesAsync([payment.GroupId], cancellationToken);
-        var fee = groupFees.TryGetValue(payment.GroupId, out var rates)
-            ? FeeRate.For(rates.Select(r => new FeeRate(r.EffectiveFrom, r.Amount)), payment.Period)
-            : null;
-        if (fee is not null && earlier + recorded.Amount.Amount > fee.Amount)
+        var charge = enrollment is null ? null : await dueCharges.ForEnrollmentAsync(enrollment, payment.Period, cancellationToken);
+        if (charge is not null && earlier + recorded.Amount.Amount > charge.Fee.Amount)
         {
             payment.FlagOverpaid();
             LogOverpaid(logger, payment.Id.Value, payment.EnrollmentId.Value, payment.Period.ToString(), recorded.Id.Value);

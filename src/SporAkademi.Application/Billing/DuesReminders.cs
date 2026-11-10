@@ -70,8 +70,7 @@ public interface IDuesReminderRepository
 }
 
 internal sealed class SendDuesRemindersHandler(
-    IEnrollmentDirectory enrollments,
-    IGroupFeeSchedule fees,
+    DueCharges dueCharges,
     IPaymentRepository payments,
     IStudentReminderContacts contacts,
     IDuesReminderRepository reminders,
@@ -92,26 +91,19 @@ internal sealed class SendDuesRemindersHandler(
         var schedule = settings.Schedule;
         var last = schedule.LastPeriodOn(today);
         var first = YearMonth.From(YearMonth.From(today).FirstDay.AddMonths(-settings.OverdueLookbackMonths));
-        var active = await enrollments.ListActiveBetweenAsync(null, first.FirstDay, last.LastDay, cancellationToken);
-        if (active.Count == 0)
+        var book = await dueCharges.ForSchoolAsync(first, last, cancellationToken);
+        if (book.Charges.Count == 0)
         {
             return Result.Success(0);
         }
 
-        var groupFees = await fees.GetFeesAsync([.. active.Select(e => e.GroupId).Distinct()], cancellationToken);
-        var rates = groupFees.ToDictionary(
-            g => g.Key,
-            g => (IReadOnlyList<FeeRate>)[.. g.Value.Select(f => new FeeRate(f.EffectiveFrom, f.Amount))]);
         var paid = await payments.RecordedTotalsAsync(null, first, last, cancellationToken);
-        var enrollmentOf = active.ToDictionary(e => e.Id);
-        var due = DueCalculator.Outstanding(
-                active.Select(e => new DueEnrollment(e.Id, e.GroupId, e.StartDate, e.EndDate)),
-                rates,
-                paid,
-                last,
-                first)
+        var enrollmentOf = book.Enrollments;
+        // What is owed after the fee rules (DEC-373): a discounted sibling is reminded of the discounted amount.
+        var due = FeeRules.Outstanding(book.Charges, paid)
+            .Select(d => d.Charge)
             // Never before go-live, and not for a period whose due date passed before the enrollment even started.
-            .Where(d => schedule.DueDateOf(d.Period) >= startsOn && enrollmentOf[d.EnrollmentId].StartDate <= schedule.DueDateOf(d.Period))
+            .Where(d => schedule.DueDateOf(d.Period) >= startsOn && enrollmentOf[d.Enrollment.Id].StartDate <= schedule.DueDateOf(d.Period))
             .Select(d => (Due: d, Kind: schedule.KindOn(d.Period, today)))
             .Where(d => d.Kind is not null)
             .ToList();
@@ -120,20 +112,20 @@ internal sealed class SendDuesRemindersHandler(
             return Result.Success(0);
         }
 
-        var existing = await reminders.ExistingAsync([.. due.Select(d => d.Due.EnrollmentId).Distinct()], first, last, cancellationToken);
-        var reachable = await contacts.GetAsync([.. due.Select(d => enrollmentOf[d.Due.EnrollmentId].StudentId.Value).Distinct()], today, cancellationToken);
+        var existing = await reminders.ExistingAsync([.. due.Select(d => d.Due.Enrollment.Id).Distinct()], first, last, cancellationToken);
+        var reachable = await contacts.GetAsync([.. due.Select(d => d.Due.StudentId.Value).Distinct()], today, cancellationToken);
 
         var recorded = 0;
         foreach (var (item, kind) in due)
         {
-            var student = enrollmentOf[item.EnrollmentId].StudentId;
+            var student = item.StudentId;
             // Without a recipient nothing is recorded, so a guardian e-mail added later still gets the reminder.
-            if (existing.Contains((item.EnrollmentId, item.Period, kind!.Value)) || !reachable.TryGetValue(student.Value, out var to))
+            if (existing.Contains((item.Enrollment.Id, item.Period, kind!.Value)) || !reachable.TryGetValue(student.Value, out var to))
             {
                 continue;
             }
 
-            var reminder = DuesReminder.Schedule(school, item.EnrollmentId, student, item.GroupId, item.Period, kind.Value, schedule.DueDateOf(item.Period), item.Fee);
+            var reminder = DuesReminder.Schedule(school, item.Enrollment.Id, student, item.Enrollment.GroupId, item.Period, kind.Value, schedule.DueDateOf(item.Period), item.Fee);
             reminders.Add(reminder);
             // One message per recipient (DEC-356): a retry after a failure re-sends to that recipient only.
             foreach (var recipient in to.Recipients)
@@ -158,6 +150,8 @@ internal sealed partial class SendDuesReminderEmail(
     IUnitOfWork unitOfWork,
     IDuesReminderRepository reminders,
     IPaymentRepository payments,
+    IEnrollmentDirectory enrollments,
+    DueCharges dueCharges,
     IStudentReminderContacts contacts,
     IGroupDirectory groups,
     ITenancyModule tenancy,
@@ -179,7 +173,10 @@ internal sealed partial class SendDuesReminderEmail(
             return;
         }
 
-        var remaining = reminder.Fee.Amount - await payments.RecordedTotalAsync(reminder.EnrollmentId, reminder.Period, cancellationToken);
+        // What is owed now under the fee rules (DEC-373), not the amount when the reminder was scheduled.
+        var enrollment = await enrollments.FindAsync(reminder.EnrollmentId, cancellationToken);
+        var owed = enrollment is null ? null : await dueCharges.ForEnrollmentAsync(enrollment, reminder.Period, cancellationToken);
+        var remaining = (owed?.Fee.Amount ?? 0m) - await payments.RecordedTotalAsync(reminder.EnrollmentId, reminder.Period, cancellationToken);
         var today = await tenancy.TodayAsync(school, cancellationToken);
         var contactsOfStudent = (await contacts.GetAsync([reminder.StudentId.Value], today, cancellationToken)).GetValueOrDefault(reminder.StudentId.Value);
         var recipient = contactsOfStudent?.Recipients.FirstOrDefault(r => r.Id == message.RecipientId);

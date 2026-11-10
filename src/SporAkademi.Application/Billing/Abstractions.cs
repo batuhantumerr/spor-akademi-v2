@@ -25,7 +25,12 @@ public sealed record PaymentDto(
     Guid? CancelledBy,
     DateTimeOffset? CancelledAt);
 
-/// <summary>One unpaid period of an enrollment (US-24): the group's fee, what was paid and what remains.</summary>
+/// <summary>
+/// One unpaid period of an enrollment (US-24): what is owed (<see cref="Fee"/>, after the fee rules of P2-F8), what was
+/// paid and what remains. <see cref="ListFee"/> is the group's fee and <see cref="Discount"/> the difference, with
+/// <see cref="Adjustment"/> and <see cref="DiscountPercent"/> saying why (e.g. a 10 % sibling discount), so the amount
+/// can be explained (DEC-373).
+/// </summary>
 public sealed record OutstandingDueDto(
     Guid EnrollmentId,
     Guid StudentId,
@@ -36,7 +41,11 @@ public sealed record OutstandingDueDto(
     string Period,
     MoneyDto Fee,
     MoneyDto Paid,
-    MoneyDto Remaining);
+    MoneyDto Remaining,
+    MoneyDto ListFee,
+    MoneyDto Discount,
+    ChargeAdjustment Adjustment,
+    int DiscountPercent);
 
 public sealed record PaymentFilter(StudentId? StudentId, GroupId? GroupId, YearMonth? Period, PaymentStatus? Status);
 

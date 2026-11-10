@@ -78,7 +78,7 @@ internal sealed class ListPaymentsValidator : AbstractValidator<ListPaymentsQuer
 internal sealed class RecordPaymentHandler(
     IPaymentRepository payments,
     IEnrollmentDirectory enrollments,
-    IGroupFeeSchedule fees,
+    DueCharges dueCharges,
     ITenancyModule tenancy,
     ICurrentUser currentUser,
     IOnlinePaymentRepository onlinePayments,
@@ -119,9 +119,10 @@ internal sealed class RecordPaymentHandler(
             return Result.Failure<PaymentId>(ValidationErrors.ForField("amount", Money.Invalid));
         }
 
-        var groupFees = await fees.GetFeesAsync([enrollment.GroupId], cancellationToken);
-        var feeDefined = groupFees.TryGetValue(enrollment.GroupId, out var rates)
-            && FeeRate.For(rates.Select(r => new FeeRate(r.EffectiveFrom, r.Amount)), period) is not null;
+        // DEC-373: the same source as the dues list. A charge exists when the enrollment was active and its group has a fee
+        // for the period; it may owe nothing (a full discount or a group change), and the payment is then an
+        // overpayment, which is accepted like any other (DEC-183).
+        var feeDefined = await dueCharges.ForEnrollmentAsync(enrollment, period, cancellationToken) is not null;
 
         var recorded = Payment.Record(
             tenant,

@@ -274,6 +274,71 @@ namespace SporAkademi.Infrastructure.Migrations
                         });
                 });
 
+            modelBuilder.Entity("SporAkademi.Domain.Billing.BillingRules", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid?>("CreatedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("created_by");
+
+                    b.Property<string>("EffectiveFrom")
+                        .IsRequired()
+                        .HasMaxLength(7)
+                        .HasColumnType("character varying(7)")
+                        .HasColumnName("effective_from");
+
+                    b.Property<int>("SecondChildPercent")
+                        .HasColumnType("integer")
+                        .HasColumnName("second_child_percent");
+
+                    b.Property<bool>("SingleChargeOnGroupChange")
+                        .HasColumnType("boolean")
+                        .HasColumnName("single_charge_on_group_change");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("tenant_id");
+
+                    b.Property<int>("ThirdAndLaterChildPercent")
+                        .HasColumnType("integer")
+                        .HasColumnName("third_and_later_child_percent");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<Guid?>("UpdatedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("updated_by");
+
+                    b.Property<uint>("Version")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
+
+                    b.HasKey("Id")
+                        .HasName("pk_billing_rules");
+
+                    b.HasIndex("TenantId", "EffectiveFrom")
+                        .IsUnique()
+                        .HasDatabaseName("ix_billing_rules_tenant_id_effective_from");
+
+                    b.ToTable("billing_rules", "billing", t =>
+                        {
+                            t.HasCheckConstraint("ck_billing_rules_second_child_percent", "second_child_percent BETWEEN 0 AND 100");
+
+                            t.HasCheckConstraint("ck_billing_rules_third_and_later_child_percent", "third_and_later_child_percent BETWEEN 0 AND 100");
+                        });
+                });
+
             modelBuilder.Entity("SporAkademi.Domain.Billing.DuesReminder", b =>
                 {
                     b.Property<Guid>("Id")
@@ -2083,6 +2148,16 @@ namespace SporAkademi.Infrastructure.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired()
                         .HasConstraintName("fk_sessions_group_tenant_id_group_id");
+                });
+
+            modelBuilder.Entity("SporAkademi.Domain.Billing.BillingRules", b =>
+                {
+                    b.HasOne("SporAkademi.Domain.Tenancy.School", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_billing_rules_school_tenant_id");
                 });
 
             modelBuilder.Entity("SporAkademi.Domain.Billing.DuesReminder", b =>

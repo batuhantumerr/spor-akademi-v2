@@ -2,7 +2,6 @@ using FluentValidation;
 using SporAkademi.Application.Abstractions;
 using SporAkademi.Application.Abstractions.Authentication;
 using SporAkademi.Application.Abstractions.Messaging;
-using SporAkademi.Application.Enrollments.Contracts;
 using SporAkademi.Application.Groups.Contracts;
 using SporAkademi.Application.Students.Contracts;
 using SporAkademi.Application.Tenancy.Contracts;
@@ -29,8 +28,7 @@ internal sealed class ListOutstandingDuesValidator : AbstractValidator<ListOutst
 }
 
 internal sealed class ListOutstandingDuesHandler(
-    IEnrollmentDirectory enrollments,
-    IGroupFeeSchedule fees,
+    DueCharges charges,
     IPaymentRepository payments,
     IStudentDirectory students,
     IGroupDirectory groups,
@@ -47,47 +45,41 @@ internal sealed class ListOutstandingDuesHandler(
         }
 
         // DEC-183: without a period the list covers the last DuesHorizonMonths months, so the work is bounded by the
-        // window, not by the school's whole history; every query below is limited to it.
+        // window, not by the school's whole history; every query below is limited to it. The charges cover every
+        // group (siblings rank across groups, DEC-373); the group filter applies to the result.
         var from = period ?? YearMonth.From(currentPeriod.FirstDay.AddMonths(1 - DuesHorizonMonths));
         var to = period ?? currentPeriod;
         var groupId = query.GroupId is { } id ? GroupId.From(id) : (GroupId?)null;
-        var active = await enrollments.ListActiveBetweenAsync(groupId, from.FirstDay, to.LastDay, cancellationToken);
-
-        var groupFees = await fees.GetFeesAsync([.. active.Select(e => e.GroupId).Distinct()], cancellationToken);
-        var rates = groupFees.ToDictionary(
-            g => g.Key,
-            g => (IReadOnlyList<FeeRate>)[.. g.Value.Select(f => new FeeRate(f.EffectiveFrom, f.Amount))]);
+        var book = await charges.ForSchoolAsync(from, to, cancellationToken);
         var paid = await payments.RecordedTotalsAsync(groupId, from, to, cancellationToken);
 
-        var dues = DueCalculator.Outstanding(
-                active.Select(e => new DueEnrollment(e.Id, e.GroupId, e.StartDate, e.EndDate)),
-                rates,
-                paid,
-                to,
-                from)
-            .Where(d => period is null || d.Period == period)
+        var dues = FeeRules.Outstanding(book.Charges.Where(c => groupId is null || c.Enrollment.GroupId == groupId), paid)
+            .Where(d => period is null || d.Charge.Period == period)
             .ToList();
 
-        var studentOf = active.ToDictionary(e => e.Id, e => e.StudentId.Value);
-        var studentNames = await students.GetManyAsync([.. dues.Select(d => studentOf[d.EnrollmentId]).Distinct()], cancellationToken);
-        var groupNames = await groups.GetManyAsync([.. dues.Select(d => d.GroupId.Value).Distinct()], cancellationToken);
+        var studentNames = await students.GetManyAsync([.. dues.Select(d => d.Charge.StudentId.Value).Distinct()], cancellationToken);
+        var groupNames = await groups.GetManyAsync([.. dues.Select(d => d.Charge.Enrollment.GroupId.Value).Distinct()], cancellationToken);
 
         var rows = dues
             .Select(d =>
             {
-                var studentId = studentOf[d.EnrollmentId];
-                var student = studentNames.GetValueOrDefault(studentId);
+                var charge = d.Charge;
+                var student = studentNames.GetValueOrDefault(charge.StudentId.Value);
                 return new OutstandingDueDto(
-                    d.EnrollmentId.Value,
-                    studentId,
+                    charge.Enrollment.Id.Value,
+                    charge.StudentId.Value,
                     student?.FirstName ?? string.Empty,
                     student?.LastName ?? string.Empty,
-                    d.GroupId.Value,
-                    groupNames.GetValueOrDefault(d.GroupId.Value)?.Name ?? string.Empty,
-                    d.Period.ToString(),
-                    MoneyDto.From(d.Fee),
+                    charge.Enrollment.GroupId.Value,
+                    groupNames.GetValueOrDefault(charge.Enrollment.GroupId.Value)?.Name ?? string.Empty,
+                    charge.Period.ToString(),
+                    MoneyDto.From(charge.Fee),
                     MoneyDto.From(d.Paid),
-                    MoneyDto.From(d.Remaining));
+                    MoneyDto.From(d.Remaining),
+                    MoneyDto.From(charge.ListFee),
+                    MoneyDto.From(charge.Discount),
+                    charge.Adjustment,
+                    charge.DiscountPercent);
             })
             .OrderBy(r => r.Period, StringComparer.Ordinal)
             .ThenBy(r => r.GroupName, StringComparer.Create(TurkishCulture, ignoreCase: true))

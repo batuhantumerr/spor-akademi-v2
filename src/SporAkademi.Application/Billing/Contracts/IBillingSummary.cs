@@ -12,7 +12,7 @@ public sealed record BillingSummary(
     decimal OutstandingTotal,
     IReadOnlyList<MonthlyBilling> Months);
 
-/// <summary>Read contract of the Billing module (used by the dashboard). The due rules stay in <c>DueCalculator</c>.</summary>
+/// <summary>Read contract of the Billing module (used by the dashboard). The due rules stay in <c>DueCalculator</c> and <c>FeeRules</c>.</summary>
 public interface IBillingSummary
 {
     /// <summary>
