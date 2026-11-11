@@ -1,6 +1,6 @@
 import { useSyncExternalStore } from 'react';
 import type { components } from '../api/schema.gen';
-import { ApiError, networkError, problemFromResponse, toApiError } from '../api/errors';
+import { ApiError, networkError, problemFromResponse } from '../api/errors';
 
 export type User = components['schemas']['UserSummary'];
 type SessionResponse = components['schemas']['SessionResponse'];
@@ -86,7 +86,9 @@ export class Session {
       }
     } catch (error) {
       if (this.state.status === 'loading') {
-        const offline = toApiError(error).code === networkError().code;
+        // Only doRefresh's failed send is `Network.Unavailable`; any other failure (a server error, a malformed
+        // answer, a bug) means no usable session, not "no network".
+        const offline = error instanceof ApiError && error.code === networkError().code;
         this.setState({ status: offline ? 'offline' : 'signedOut', user: null, expired: false });
       }
     }
@@ -141,8 +143,9 @@ export class Session {
     let response: Response;
     try {
       response = await send('/api/v1/auth/refresh', { headers: AJAX_HEADERS });
-    } catch (error) {
-      throw toApiError(error);
+    } catch {
+      // fetch itself rejected: the request never got an answer. The only path that means "offline".
+      throw networkError();
     }
     if (response.status === 401 || response.status === 403) {
       // Rejected while signed in: the session expired. At start-up there simply was none.
@@ -152,7 +155,7 @@ export class Session {
     if (!response.ok) {
       throw await problemFromResponse(response);
     }
-    const body = (await response.json()) as SessionResponse;
+    const body = await sessionBody(response);
     if (epoch !== this.sessionEpoch) {
       return null; // Signed out while the refresh was on the wire.
     }
@@ -185,6 +188,25 @@ export class Session {
     this.state = state;
     for (const listener of this.listeners) listener();
   }
+}
+
+/** A 200 refresh answer's body; anything that is not a session (bad JSON, no token or user) is an unexpected error. */
+async function sessionBody(response: Response): Promise<SessionResponse> {
+  let body: unknown;
+  try {
+    body = await response.json();
+  } catch {
+    throw new ApiError('Unexpected.Error', response.status);
+  }
+  const candidate = (typeof body === 'object' && body !== null ? body : {}) as Partial<SessionResponse>;
+  if (
+    typeof candidate.accessToken !== 'string' ||
+    typeof candidate.user !== 'object' ||
+    (candidate.user as unknown) === null
+  ) {
+    throw new ApiError('Unexpected.Error', response.status);
+  }
+  return candidate as SessionResponse;
 }
 
 /** Why a session must not be used in the parent app, or null when it may. */

@@ -26,10 +26,11 @@ function request(
   };
 }
 
-function response(status: number, type: string, cacheControl: string | null = null) {
+function response(status: number, type: string, cacheControl: string | null = null, redirected = false) {
   return {
     status,
     type,
+    redirected,
     headers: { get: (name: string) => (name === 'cache-control' ? cacheControl : null) },
   };
 }
@@ -102,6 +103,31 @@ describe('service worker request policy (P3-07)', () => {
     );
   });
 
+  it.each([
+    '/assets/index',
+    '/assets/index/',
+    '/assets/sub/',
+    '/assets/sub/index-Ab12.js',
+    '/assets/notes.txt',
+    '/assets/page.html',
+    '/assets/.js',
+  ])('never caches %s under /assets/, which the SPA fallback could answer with index.html', (path) => {
+    expect(classify(request(path), origin, precache)).toBe('passthrough');
+  });
+
+  it.each([
+    '/assets/index-Ab12Cd34.css',
+    '/assets/inter-latin-wght-normal-Dx4kXJAl.woff2',
+    '/assets/old.woff',
+    '/assets/logo-Ab12.svg',
+    '/assets/icon-192-thONEyK8.png',
+    '/assets/fav-Ab12.ico',
+    '/assets/app-Ab12.webmanifest',
+    '/assets/chunk-Ab12.JS',
+  ])('caches the build file type %s on first use', (path) => {
+    expect(classify(request(path), origin, precache)).toBe('asset');
+  });
+
   it('does not handle files outside the build output or with a query string', () => {
     expect(classify(request('/sw.js'), origin, precache)).toBe('passthrough');
     expect(classify(request('/robots.txt'), origin, precache)).toBe('passthrough');
@@ -119,6 +145,8 @@ describe('service worker request policy (P3-07)', () => {
 
   it('stores only complete same-origin answers the server allows to be stored', () => {
     expect(isCacheable(response(200, 'basic'))).toBe(true);
+    // A redirect target (e.g. the SPA's index.html after a redirect) is not the asset that was asked for.
+    expect(isCacheable(response(200, 'basic', null, true))).toBe(false);
     expect(isCacheable(response(200, 'basic', 'public, max-age=31536000, immutable'))).toBe(true);
     expect(isCacheable(response(200, 'basic', 'no-store'))).toBe(false);
     expect(isCacheable(response(200, 'basic', 'max-age=0, private'))).toBe(false);

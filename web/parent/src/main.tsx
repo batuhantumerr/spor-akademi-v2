@@ -8,7 +8,7 @@ import { createBrowserRouter, RouterProvider } from 'react-router';
 import { createQueryClient } from './query/query-client';
 import { session } from './auth/session';
 import { routes } from './routes';
-import { pwa } from './pwa/pwa';
+import { pwa, reloadOnceOnChunkError } from './pwa/pwa';
 import { applyTheme } from './theme/theme';
 
 applyTheme();
@@ -22,7 +22,10 @@ session.onEnd(() => {
 // One refresh call restores a session after a reload (ADR-0006); the guards wait for it.
 void session.restore();
 // P3-07: the service worker caches the app shell only (DEC-394); development builds run without it.
-if (import.meta.env.PROD) pwa.start();
+if (import.meta.env.PROD) {
+  pwa.start();
+  reloadOnceOnChunkError();
+}
 const root = document.getElementById('root');
 if (!root) throw new Error('Missing #root element.');
 

@@ -62,20 +62,27 @@ export function classify(request: RequestLike, origin: string, precache: Readonl
   // Query strings are not part of any build file name; a request with one is not a precached file.
   if (url.search !== '') return 'passthrough';
   if (precache.has(url.pathname)) return 'precached';
-  if (url.pathname.startsWith('/assets/') && url.pathname.length > '/assets/'.length) return 'asset';
+  if (url.pathname.startsWith('/assets/') && ASSET_EXTENSION.test(url.pathname)) return 'asset';
   return 'passthrough';
 }
+
+/**
+ * The file types the build writes to `/assets/`. Anything else under `/assets/` (no extension, a trailing slash)
+ * would be answered by the SPA fallback with index.html, which must never be stored under an asset URL.
+ */
+const ASSET_EXTENSION = /^\/assets\/[^/]+\.(?:js|css|woff2|woff|svg|png|ico|webmanifest)$/i;
 
 /** The parts of a `Response` the decision needs. */
 export interface ResponseLike {
   readonly status: number;
   readonly type: string;
+  readonly redirected: boolean;
   readonly headers: { get(name: string): string | null };
 }
 
-/** Only a complete, same-origin, storable answer goes into a cache. */
+/** Only a complete, same-origin, storable answer of the URL itself (not a redirect target) goes into a cache. */
 export function isCacheable(response: ResponseLike): boolean {
-  if (response.status !== 200 || response.type !== 'basic') return false;
+  if (response.status !== 200 || response.type !== 'basic' || response.redirected) return false;
   const cacheControl = (response.headers.get('cache-control') ?? '').toLowerCase();
   return !/(^|[\s,])(no-store|private)([\s,=]|$)/.test(cacheControl);
 }

@@ -5,7 +5,7 @@ import { session } from '../auth/session';
 import { text } from '../i18n/tr';
 import { renderApp } from '../test/render-app';
 import { InstallHint } from './notices';
-import { INSTALL_HINT_STORAGE_KEY, Pwa, pwa } from './pwa';
+import { CHUNK_RELOAD_STORAGE_KEY, INSTALL_HINT_STORAGE_KEY, Pwa, pwa, reloadOnceOnChunkError } from './pwa';
 
 /** A registration and container with just what Pwa uses. */
 function fakeWorker(options: { controlled: boolean; waiting?: boolean }) {
@@ -176,5 +176,49 @@ describe('install hint (P3-07)', () => {
     await app.install();
     expect(prompt).toHaveBeenCalledTimes(1);
     expect(app.getState().installable).toBe(false);
+  });
+});
+
+describe('missing lazy chunk after a deployment (P3-07)', () => {
+  function fakeWindow(storage: Pick<Storage, 'getItem' | 'setItem'>) {
+    return Object.assign(new EventTarget(), { sessionStorage: storage }) as unknown as Window;
+  }
+  const preloadError = () => new Event('vite:preloadError', { cancelable: true });
+
+  it('reloads once, then leaves a repeated failure within a minute to the error page', () => {
+    const reload = vi.fn();
+    let clock = 1_000_000;
+    const win = fakeWindow(sessionStorage);
+    reloadOnceOnChunkError(win, reload, () => clock);
+
+    const first = preloadError();
+    win.dispatchEvent(first);
+    expect(reload).toHaveBeenCalledTimes(1);
+    expect(first.defaultPrevented).toBe(true);
+    expect(sessionStorage.getItem(CHUNK_RELOAD_STORAGE_KEY)).toBe('1000000');
+
+    clock += 30_000;
+    const second = preloadError();
+    win.dispatchEvent(second);
+    expect(reload).toHaveBeenCalledTimes(1);
+    expect(second.defaultPrevented).toBe(false);
+
+    clock += 60_000;
+    win.dispatchEvent(preloadError());
+    expect(reload).toHaveBeenCalledTimes(2);
+    sessionStorage.clear();
+  });
+
+  it('never reloads without storage, so it cannot loop', () => {
+    const reload = vi.fn();
+    const blocked = () => {
+      throw new Error('blocked');
+    };
+    const win = fakeWindow({ getItem: blocked, setItem: blocked });
+    reloadOnceOnChunkError(win, reload);
+
+    win.dispatchEvent(preloadError());
+
+    expect(reload).not.toHaveBeenCalled();
   });
 });

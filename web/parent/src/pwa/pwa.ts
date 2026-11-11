@@ -152,6 +152,36 @@ export function useOnline(): boolean {
   return useSyncExternalStore(subscribeOnline, () => navigator.onLine);
 }
 
+/** When the page last reloaded itself over a missing chunk (epoch ms, this tab only). */
+export const CHUNK_RELOAD_STORAGE_KEY = 'sa-chunk-reload';
+const CHUNK_RELOAD_MIN_INTERVAL_MS = 60 * 1000;
+
+/**
+ * A lazily loaded chunk that is gone from the server (a deployment removed the old hashed files while this tab ran
+ * the old version) fails with Vite's `vite:preloadError`. The page reloads once to get the current version; a
+ * second failure within a minute is left to the error page, so a broken deployment cannot cause a reload loop.
+ * Without storage (private mode) it never reloads.
+ */
+export function reloadOnceOnChunkError(
+  win: Window = window,
+  reload: () => void = () => {
+    window.location.reload();
+  },
+  now: () => number = Date.now,
+): void {
+  win.addEventListener('vite:preloadError', (event) => {
+    try {
+      const last = Number(win.sessionStorage.getItem(CHUNK_RELOAD_STORAGE_KEY) ?? '0');
+      if (now() - last < CHUNK_RELOAD_MIN_INTERVAL_MS) return;
+      win.sessionStorage.setItem(CHUNK_RELOAD_STORAGE_KEY, String(now()));
+    } catch {
+      return;
+    }
+    event.preventDefault(); // handled: do not throw the import error
+    reload();
+  });
+}
+
 /** The install hint is dismissed for good in this browser (not personal data). */
 export const INSTALL_HINT_STORAGE_KEY = 'sa-install-hint';
 
