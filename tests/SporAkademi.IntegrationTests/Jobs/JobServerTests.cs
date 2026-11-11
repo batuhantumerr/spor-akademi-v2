@@ -65,6 +65,27 @@ public sealed class JobServerTests(DatabaseFixture database) : OutboxTest(databa
         await WaitUntilAsync(async () => (await health.CheckHealthAsync(c => c.Name == "jobs", Ct)).Status == HealthStatus.Healthy);
     }
 
+    /// <summary>Phase 2 exit criterion (P2-F5, DEC-362): the anonymization job is due every day at 05:00 in Istanbul.</summary>
+    [Fact]
+    [Trait("Roadmap", "P2-F5")]
+    public async Task The_anonymization_job_is_scheduled_daily_at_05_00_in_Istanbul()
+    {
+        using var client = Host.CreateClient();
+        var storage = Host.Services.GetRequiredService<JobStorage>();
+        await WaitUntilAsync(() => RecurringJobIds(storage).Contains(StudentAnonymizationJob.JobId));
+
+        using var connection = storage.GetConnection();
+        var job = connection.GetRecurringJobs([StudentAnonymizationJob.JobId]).ShouldHaveSingleItem();
+
+        job.Cron.ShouldBe("0 2 * * *");
+        job.TimeZoneId.ShouldBe("UTC");
+        job.NextExecution.ShouldNotBeNull();
+        var istanbul = TimeZoneInfo.FindSystemTimeZoneById("Europe/Istanbul");
+        var next = TimeZoneInfo.ConvertTime(new DateTimeOffset(DateTime.SpecifyKind(job.NextExecution.Value, DateTimeKind.Utc)), istanbul);
+        (next.Hour, next.Minute).ShouldBe((5, 0));
+        (next - TimeProvider.System.GetUtcNow()).ShouldBeLessThanOrEqualTo(TimeSpan.FromDays(1));
+    }
+
     [Fact]
     public async Task Without_a_heartbeat_readiness_is_degraded_not_unhealthy()
     {
