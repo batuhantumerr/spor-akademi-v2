@@ -305,6 +305,7 @@ Her ADR'ın bağlamı, seçenekleri, kararı ve sonuçları Ek F'de özetlenmiş
 | 0010 | UI kütüphanesi seçimi | Yazılacak (P1-13) |
 | 0011 | Production migration stratejisi (bundle + SQL incelemesi) | Accepted |
 | 0012 | Veli uygulaması teknoloji yığını ([docs/adr](adr/0012-veli-uygulamasi-teknoloji-yigini.md)) | Accepted |
+| 0013 | Okul başına alt alan adı: şimdi yapılmaz ([docs/adr](adr/0013-okul-alt-alan-adi.md)) | Accepted |
 
 ---
 
@@ -1791,7 +1792,7 @@ Her ADR için: problem, değerlendirilen seçenekler, karar ve bedeli.
 
 ### ADR-0003 — Multi-tenancy: paylaşımlı veritabanı ve `TenantId`
 
-- **Seçenekler (izolasyon):** **Paylaşımlı DB + `TenantId`** · tenant başına şema (her migration N kez) · tenant başına DB (pahalı). **(Çözümleme):** **JWT claim'i** · alt alan adı (faz 3'te değerlendirilecek) · HTTP başlığı (güvensiz).
+- **Seçenekler (izolasyon):** **Paylaşımlı DB + `TenantId`** · tenant başına şema (her migration N kez) · tenant başına DB (pahalı). **(Çözümleme):** **JWT claim'i** · alt alan adı (faz 3'te değerlendirildi, ertelendi: ADR-0013) · HTTP başlığı (güvensiz).
 - **Karar:** Beş savunma katmanı: otomatik filtre, yazma koruması, bileşik FK'ler, okul bazında benzersiz index'ler, izolasyon testleri. Başka okulun kaydı `404`.
 - **Bedeli:** Okuma izolasyonu faz 4'teki RLS'ye kadar uygulama koduna bağlı; bileşik FK yapılandırması karmaşık.
 
@@ -1972,7 +1973,7 @@ Her kullanıcı hikayesi bir **dikey dilim (vertical slice)** olarak geliştiril
 - [ ] **P3-F4** Admin dashboard'ları: devam oranları, doluluk, gelir
 - [ ] **P3-F5** Her iki istemcide çoklu dil (Türkçe ve İngilizce)
 - [ ] **P3-F6** Önemli ekranların erişilebilirlik denetimi (WCAG 2.2 AA)
-- [ ] **P3-F7** Okul başına alt alan adının değerlendirilmesi (karar ADR olarak kaydedilir)
+- [x] **P3-F7** Okul başına alt alan adının değerlendirilmesi (karar ADR olarak kaydedilir)
 
 ---
 
