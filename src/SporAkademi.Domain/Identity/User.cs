@@ -163,13 +163,26 @@ public sealed class User : AggregateRoot<UserId>
         var user = new User(EntityId.New<UserId>(), tenantId, email, unusablePasswordHash, UserRole.Parent, names.Value.First, names.Value.Last, phone)
         {
             InvitedAt = now,
+            InvitationWindowStartedAt = now,
+            InvitationsInWindow = 1,
         };
         user.Raise(new ParentInvited(user.Id, tenantId));
         return Result.Success(user);
     }
 
-    /// <summary>DEC-383: one invitation e-mail per parent account in this window; a quicker resend is refused.</summary>
+    /// <summary>DEC-383: one invitation e-mail per parent account and address in this window; a quicker resend is refused.</summary>
     public static readonly TimeSpan InvitationCooldown = TimeSpan.FromMinutes(2);
+
+    /// <summary>DEC-388: at most <see cref="MaxInvitationsPerWindow"/> invitations per account in this window, any address.</summary>
+    public static readonly TimeSpan InvitationCapWindow = TimeSpan.FromMinutes(10);
+
+    public const int MaxInvitationsPerWindow = 3;
+
+    /// <summary>Start of the current invitation cap window (DEC-388).</summary>
+    public DateTimeOffset? InvitationWindowStartedAt { get; private set; }
+
+    /// <summary>Invitations sent in the current cap window (DEC-388).</summary>
+    public int InvitationsInWindow { get; private set; }
 
     /// <summary>When the parent account was last invited (DEC-383 cooldown); null for other roles.</summary>
     public DateTimeOffset? InvitedAt { get; private set; }
@@ -194,7 +207,15 @@ public sealed class User : AggregateRoot<UserId>
             return Result.Failure(ParentAccountErrors.AlreadyActive);
         }
 
-        if (InvitedAt is { } last && now - last < InvitationCooldown)
+        // The cooldown protects one mailbox; a corrected address (a typo fix closed the account) may be invited at once.
+        if (InvitedAt is { } last && now - last < InvitationCooldown && email == Email)
+        {
+            return Result.Failure(ParentAccountErrors.InvitationTooSoon);
+        }
+
+        // The cap holds whatever the address: switching the e-mail back and forth cannot flood a mailbox (DEC-388).
+        var windowOpen = InvitationWindowStartedAt is { } start && now - start < InvitationCapWindow;
+        if (windowOpen && InvitationsInWindow >= MaxInvitationsPerWindow)
         {
             return Result.Failure(ParentAccountErrors.InvitationTooSoon);
         }
@@ -203,6 +224,15 @@ public sealed class User : AggregateRoot<UserId>
         if (names.IsFailure)
         {
             return Result.Failure(names.Error);
+        }
+
+        if (windowOpen)
+        {
+            InvitationsInWindow++;
+        }
+        else
+        {
+            (InvitationWindowStartedAt, InvitationsInWindow) = (now, 1);
         }
 
         (FirstName, LastName, Phone, Email) = (names.Value.First, names.Value.Last, phone, email);

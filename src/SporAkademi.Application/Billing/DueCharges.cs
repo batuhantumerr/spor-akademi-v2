@@ -83,7 +83,7 @@ internal sealed class DueCharges(
         }
 
         var related = await enrollments.ListOfStudentsActiveBetweenAsync(family, from.FirstDay, to.LastDay, cancellationToken);
-        var frozen = await snapshots.ListAsync(from, to, cancellationToken);
+        var frozen = await snapshots.ListOfStudentsBetweenAsync(family, from, to, cancellationToken);
         return await ChargeAsync(related, from, to, versions, familyOf, frozen, cancellationToken);
     }
 

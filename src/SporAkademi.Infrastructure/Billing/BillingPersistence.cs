@@ -115,18 +115,54 @@ internal sealed class PaymentRepository(AppDbContext db) : IPaymentRepository
         ArgumentNullException.ThrowIfNull(firstPeriod);
         ArgumentNullException.ThrowIfNull(lastPeriod);
 
-        // The window has at most a few dozen months (DEC-183), so the period list stays small.
+        var periods = PeriodsOf(firstPeriod, lastPeriod);
+
+        // Grouped and summed in the database (numeric, exact); the indexes on (tenant, group, period) serve it.
+        return await SumAsync(
+            db.Set<Payment>().AsNoTracking().Where(p => p.Status == PaymentStatus.Recorded
+                && periods.Contains(p.Period)
+                && (groupId == null || p.GroupId == groupId)),
+            cancellationToken);
+    }
+
+    public async Task<IReadOnlyDictionary<(EnrollmentId Enrollment, YearMonth Period), decimal>> RecordedTotalsOfEnrollmentsAsync(
+        IReadOnlyCollection<EnrollmentId> enrollmentIds,
+        YearMonth firstPeriod,
+        YearMonth lastPeriod,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(enrollmentIds);
+        ArgumentNullException.ThrowIfNull(firstPeriod);
+        ArgumentNullException.ThrowIfNull(lastPeriod);
+        if (enrollmentIds.Count == 0)
+        {
+            return new Dictionary<(EnrollmentId, YearMonth), decimal>();
+        }
+
+        var periods = PeriodsOf(firstPeriod, lastPeriod);
+        var ids = enrollmentIds.Distinct().ToList();
+        return await SumAsync(
+            db.Set<Payment>().AsNoTracking().Where(p => p.Status == PaymentStatus.Recorded && periods.Contains(p.Period) && ids.Contains(p.EnrollmentId)),
+            cancellationToken);
+    }
+
+    /// <summary>The window has at most a few dozen months (DEC-183), so the period list stays small.</summary>
+    private static List<YearMonth> PeriodsOf(YearMonth firstPeriod, YearMonth lastPeriod)
+    {
         var periods = new List<YearMonth>();
         for (var period = firstPeriod; period <= lastPeriod; period = period.Next())
         {
             periods.Add(period);
         }
 
-        // Grouped and summed in the database (numeric, exact); the indexes on (tenant, group, period) serve it.
-        var totals = await db.Set<Payment>().AsNoTracking()
-            .Where(p => p.Status == PaymentStatus.Recorded
-                && periods.Contains(p.Period)
-                && (groupId == null || p.GroupId == groupId))
+        return periods;
+    }
+
+    private static async Task<IReadOnlyDictionary<(EnrollmentId Enrollment, YearMonth Period), decimal>> SumAsync(
+        IQueryable<Payment> payments,
+        CancellationToken cancellationToken)
+    {
+        var totals = await payments
             .GroupBy(p => new { p.EnrollmentId, p.Period })
             .Select(g => new { g.Key.EnrollmentId, g.Key.Period, Total = g.Sum(p => p.Amount.Amount) })
             .ToListAsync(cancellationToken);

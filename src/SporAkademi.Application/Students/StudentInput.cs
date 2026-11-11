@@ -255,6 +255,14 @@ internal static class GuardianLinkResolver
     {
         var links = new List<GuardianLink>(inputs.Count);
         var createdInThisRequest = new Dictionary<PhoneNumber, GuardianId>();
+
+        // DEC-388: the guardians named by id are locked first and in id order, like unlinking locks them, so the two
+        // never wait for each other in a cycle (taking FOR SHARE again below is a no-op).
+        foreach (var id in inputs.Where(i => i.GuardianId is not null).Select(i => i.GuardianId!.Value).Distinct().Order())
+        {
+            await guardians.LockForLinkAsync(GuardianId.From(id), cancellationToken);
+        }
+
         for (var i = 0; i < inputs.Count; i++)
         {
             var input = inputs[i];

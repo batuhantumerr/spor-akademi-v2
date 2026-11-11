@@ -147,7 +147,7 @@ public sealed class ParentInvitationTests(DatabaseFixture database) : ParentTest
     }
 
     [Fact]
-    public async Task Changing_the_address_voids_a_pending_link()
+    public async Task Changing_the_address_voids_a_pending_link_and_the_corrected_address_is_invited_at_once()
     {
         var (student, guardian) = await RegisterChildAsync("Ali", "yanlis.adres@example.com");
         (await InviteAsync(guardian)).StatusCode.ShouldBe(HttpStatusCode.OK);
@@ -158,11 +158,53 @@ public sealed class ParentInvitationTests(DatabaseFixture database) : ParentTest
 
         (await ErrorCodeAsync(await AcceptAsync(mistyped))).ShouldBe("Auth.ResetTokenInvalid");
         (await StatusOfAsync(guardian)).ShouldBe("Revoked");
-        PastInvitationCooldown();
+        // No two-minute wait: the cooldown protects one mailbox, and this is another address (DEC-388).
         (await InviteAsync(guardian)).StatusCode.ShouldBe(HttpStatusCode.OK);
         await DeliverAsync();
         (await AcceptAsync(InvitationTokenFor(Email))).StatusCode.ShouldBe(HttpStatusCode.NoContent);
         (await LoginAsync(Email, ParentPassword)).StatusCode.ShouldBe(HttpStatusCode.OK);
+    }
+
+    [Fact]
+    public async Task Switching_the_address_back_and_forth_cannot_flood_a_mailbox()
+    {
+        const string Other = "diger.adres@example.com";
+        var (student, guardian) = await RegisterChildAsync("Ali", Email);
+        (await InviteAsync(guardian)).StatusCode.ShouldBe(HttpStatusCode.OK);
+        await ChangeGuardianEmailAsync(student, Other);
+        (await InviteAsync(guardian)).StatusCode.ShouldBe(HttpStatusCode.OK);
+        await ChangeGuardianEmailAsync(student, Email);
+        (await InviteAsync(guardian)).StatusCode.ShouldBe(HttpStatusCode.OK);
+        await ChangeGuardianEmailAsync(student, Other);
+
+        var capped = await InviteAsync(guardian);
+
+        capped.StatusCode.ShouldBe(HttpStatusCode.UnprocessableEntity);
+        (await CodeOf(capped)).ShouldBe("ParentAccount.InvitationTooSoon");
+        await DeliverAsync();
+        (Api.Emails.To(Email).Count + Api.Emails.To(Other).Count).ShouldBeLessThanOrEqualTo(3);
+    }
+
+    [Fact]
+    public async Task Deleting_and_recreating_guardians_cannot_flood_a_mailbox()
+    {
+        // Each round deletes the guardian (and erases its account), so the next one gets a fresh account and counter;
+        // the School Admin's own limit still stops the eleventh invitation (DEC-388).
+        for (var round = 0; round < 10; round++)
+        {
+            var (student, guardian) = await RegisterChildAsync($"Tur{round}", Email, lastName: $"Döngü{round}");
+            (await InviteAsync(guardian)).StatusCode.ShouldBe(HttpStatusCode.OK, $"round {round}");
+            var detail = await Admin.GetFromJsonAsync<System.Text.Json.JsonElement>($"/api/v1/students/{student}", Ct);
+            (await Admin.PutAsJsonAsync($"/api/v1/students/{student}/guardians", new
+            {
+                guardians = new[] { new { newGuardian = new { firstName = "Yeni", lastName = "Veli", phone = Phone(900 + round, 4), email = (string?)null }, relationship = "Father" } },
+                version = VersionOf(detail),
+            }, Ct)).StatusCode.ShouldBe(HttpStatusCode.OK);
+        }
+
+        var (_, last) = await RegisterChildAsync("Son", Email, lastName: "Döngü");
+
+        (await InviteAsync(last)).StatusCode.ShouldBe(HttpStatusCode.TooManyRequests);
     }
 
     [Fact]

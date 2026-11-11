@@ -1,6 +1,8 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
+using Microsoft.Extensions.DependencyInjection;
+using SporAkademi.Infrastructure.Jobs;
 using SporAkademi.IntegrationTests.Infrastructure;
 
 namespace SporAkademi.IntegrationTests.Parents;
@@ -121,6 +123,36 @@ public sealed class ParentApiTests(DatabaseFixture database) : ParentTest(databa
 
         var discounted = admin.EnumerateArray().Where(r => r.GetProperty("discountPercent").GetInt32() == 10).ShouldHaveSingleItem();
         AmountOf(discounted.GetProperty("fee")).ShouldBe("900.00");
+    }
+
+    [Fact]
+    public async Task Dues_of_a_closed_month_are_the_frozen_amounts_the_school_admin_sees()
+    {
+        // January closes with the sibling discount frozen (DEC-375); then the siblings are separated, so February is
+        // computed live without a discount while January keeps its snapshot.
+        using var admin = AdvanceTo(new DateTimeOffset(2027, 2, 2, 9, 0, 0, TimeSpan.Zero));
+        await using (var scope = Api.Services.CreateAsyncScope())
+        {
+            (await scope.ServiceProvider.GetRequiredService<BillingPeriodCloseJob>().RunAsync(Ct)).ShouldBe(1);
+        }
+
+        var detail = await admin.GetFromJsonAsync<JsonElement>($"/api/v1/students/{_second}", Ct);
+        (await admin.PutAsJsonAsync($"/api/v1/students/{_second}/guardians", new
+        {
+            guardians = new[] { new { newGuardian = new { firstName = "Başka", lastName = "Veli", phone = "0532 788 00 01", email = (string?)null }, relationship = "Father" } },
+            version = VersionOf(detail),
+        }, Ct)).StatusCode.ShouldBe(HttpStatusCode.OK);
+        var session = await LoginOkAsync(Email, ParentPassword);
+        using var parent = Api.CreateClient();
+        parent.Authorize(session.AccessToken);
+
+        var adminRows = (await OutstandingAsync(client: admin)).GetProperty("items").EnumerateArray()
+            .Where(r => r.GetProperty("studentId").GetGuid() == _first).Select(r => r.GetRawText()).ToList();
+        var mine = (await GetOkAsync(parent, $"/api/v1/parent/children/{_first}/dues")).EnumerateArray().Select(r => r.GetRawText()).ToList();
+
+        mine.ShouldBe(adminRows);
+        mine.Count.ShouldBe(2); // the frozen January and the live February
+        (await parent.GetAsync(new Uri($"/api/v1/parent/children/{_second}/dues", UriKind.Relative), Ct)).StatusCode.ShouldBe(HttpStatusCode.NotFound);
     }
 
     [Fact]

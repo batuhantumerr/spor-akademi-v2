@@ -17,6 +17,13 @@ public interface IChargeSnapshotRepository
     /// <summary>Every snapshot of the school from <paramref name="firstPeriod"/> to <paramref name="lastPeriod"/> (inclusive).</summary>
     Task<IReadOnlyList<ChargeSnapshot>> ListAsync(YearMonth firstPeriod, YearMonth lastPeriod, CancellationToken cancellationToken);
 
+    /// <summary>The snapshots of the given students' enrollments from <paramref name="firstPeriod"/> to <paramref name="lastPeriod"/> (one family, DEC-388).</summary>
+    Task<IReadOnlyList<ChargeSnapshot>> ListOfStudentsBetweenAsync(
+        IReadOnlyCollection<StudentId> studentIds,
+        YearMonth firstPeriod,
+        YearMonth lastPeriod,
+        CancellationToken cancellationToken);
+
     /// <summary>The snapshots of the given students' enrollments for one period.</summary>
     Task<IReadOnlyList<ChargeSnapshot>> ListOfStudentsAsync(IReadOnlyCollection<StudentId> studentIds, YearMonth period, CancellationToken cancellationToken);
 

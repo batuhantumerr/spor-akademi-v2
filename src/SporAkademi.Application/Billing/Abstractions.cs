@@ -74,6 +74,16 @@ public interface IPaymentRepository
         CancellationToken cancellationToken);
 
     /// <summary>
+    /// Like <see cref="RecordedTotalsAsync"/>, but only for the given enrollments (one family's dues, DEC-388), so the
+    /// rest of the school's payments are never read.
+    /// </summary>
+    Task<IReadOnlyDictionary<(EnrollmentId Enrollment, YearMonth Period), decimal>> RecordedTotalsOfEnrollmentsAsync(
+        IReadOnlyCollection<EnrollmentId> enrollmentIds,
+        YearMonth firstPeriod,
+        YearMonth lastPeriod,
+        CancellationToken cancellationToken);
+
+    /// <summary>
     /// Sum of <see cref="PaymentStatus.Recorded"/> payments per month of the payment date (cash basis) between
     /// <paramref name="firstDay"/> and <paramref name="lastDay"/>, inclusive; months without payments are omitted.
     /// </summary>
