@@ -9,7 +9,8 @@
 #
 # Usage: bash scripts/e2e.sh [playwright args]
 #   bash scripts/e2e.sh --project=chromium --project=mobile-chromium
-# Needs: docker compose up -d --wait, dotnet tool restore, npm ci and npx playwright install in web/admin.
+# Needs: docker compose up -d --wait, dotnet tool restore, npm ci and npx playwright install in web/admin, npm ci in
+# web/parent. Starts the compose Mailpit (mail profile) for the parent invitation e-mail.
 set -euo pipefail
 source "$(dirname "${BASH_SOURCE[0]}")/lib/env.sh"
 
@@ -75,6 +76,16 @@ export E2E_TLS_KEY="$native_dir/key.pem" E2E_TLS_CERT="$native_dir/cert.pem"
 quietly env MSYS_NO_PATHCONV=1 openssl req -x509 -newkey rsa:2048 -nodes -days 1 -subj "/CN=localhost" \
   -addext "subjectAltName=DNS:localhost,IP:127.0.0.1,IP:::1" \
   -keyout "$E2E_TLS_KEY" -out "$E2E_TLS_CERT"
+
+# P3-05: the parent flow reads its invitation e-mail from Mailpit (compose "mail" profile: loopback only, relays
+# nothing). Starting it is idempotent; a Mailpit already running for development is reused.
+echo "e2e: starting Mailpit"
+quietly docker compose --profile mail up -d --wait mailpit
+export E2E_SMTP_PORT="${MAILPIT_SMTP_HOST_PORT:-51025}"
+export E2E_MAILPIT_URL="http://127.0.0.1:${MAILPIT_UI_HOST_PORT:-58025}"
+
+echo "e2e: building the parent app (production)"
+quietly npm --prefix web/parent run build
 
 cd web/admin
 echo "e2e: building the admin app (production)"

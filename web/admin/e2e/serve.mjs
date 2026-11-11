@@ -7,18 +7,20 @@
 // creates per run: the refresh cookie is `Secure`, and WebKit does not send Secure cookies to
 // http://localhost, so a plain-HTTP server would hide the session restore from the WebKit tests.
 //
-// Usage: E2E_TLS_KEY=<pem> E2E_TLS_CERT=<pem> node e2e/serve.mjs <port> <api-origin>
+// Usage: E2E_TLS_KEY=<pem> E2E_TLS_CERT=<pem> node e2e/serve.mjs <port> <api-origin> [<build-dir>]
+// <build-dir> defaults to the admin build (dist/admin/browser); the parent app passes ../parent/dist (P3-05).
 import { createReadStream, readFileSync, statSync } from 'node:fs';
 import { request } from 'node:http';
 import { createServer } from 'node:https';
 import { extname, join, normalize, resolve, sep } from 'node:path';
 
 const [port, apiOrigin] = [Number(process.argv[2]), new URL(process.argv[3])];
+const buildDir = process.argv[4] ?? join('dist', 'admin', 'browser');
 const tls = {
   key: readFileSync(process.env.E2E_TLS_KEY),
   cert: readFileSync(process.env.E2E_TLS_CERT),
 };
-const root = resolve(import.meta.dirname, '..', 'dist', 'admin', 'browser');
+const root = resolve(import.meta.dirname, '..', buildDir);
 const types = {
   '.html': 'text/html; charset=utf-8',
   '.js': 'text/javascript; charset=utf-8',
@@ -92,4 +94,4 @@ for (const host of ['127.0.0.1', '::1']) {
     })
     .listen(port, host);
 }
-console.log(`e2e: admin app on https://localhost:${port}, API proxied to ${apiOrigin.origin}`);
+console.log(`e2e: ${root} on https://localhost:${port}, API proxied to ${apiOrigin.origin}`);
