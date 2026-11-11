@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1
 # API image (DEC-081): chiseled-extra (ICU + tzdata), non-root, digest-pinned bases.
-FROM mcr.microsoft.com/dotnet/sdk:10.0.403-noble@sha256:212fe4cb74627d5adf9817a4088906ae3edff1bd853bb27565d4b46731efe61e AS build
+FROM mcr.microsoft.com/dotnet/sdk:10.0.404-noble@sha256:fe0fd4e93bd2fbb47c883b7a6369e5c8d3db8bf01cdc5981f6ee35fbdf3ff4fb AS build
 WORKDIR /src
 COPY global.json Directory.Build.props Directory.Packages.props .editorconfig ./
 COPY src/Directory.Build.props src/
@@ -12,7 +12,7 @@ RUN dotnet restore src/SporAkademi.Api/SporAkademi.Api.csproj --locked-mode -r l
 COPY src/ src/
 RUN dotnet publish src/SporAkademi.Api/SporAkademi.Api.csproj -c Release -r linux-x64 --self-contained false --no-restore -o /app
 
-FROM mcr.microsoft.com/dotnet/aspnet:10.0.14-noble-chiseled-extra@sha256:a9298ccc39c6258ae71228479e2f3f8d2ceb6639a9927262a4b0ff7d319a0e7e
+FROM mcr.microsoft.com/dotnet/aspnet:10.0.15-noble-chiseled-extra@sha256:cae5b962bfb786606def03d250c6a645cc98839095c89e806e4bd8978a68115b
 WORKDIR /app
 COPY --from=build /app ./
 ENV ASPNETCORE_HTTP_PORTS=8080
