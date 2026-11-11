@@ -28,10 +28,7 @@ internal sealed class ListOutstandingDuesValidator : AbstractValidator<ListOutst
 }
 
 internal sealed class ListOutstandingDuesHandler(
-    DueCharges charges,
-    IPaymentRepository payments,
-    IStudentDirectory students,
-    IGroupDirectory groups,
+    OutstandingDues outstanding,
     ITenancyModule tenancy,
     ICurrentUser currentUser) : IQueryHandler<ListOutstandingDuesQuery, PagedResult<OutstandingDueDto>>
 {
@@ -45,22 +42,55 @@ internal sealed class ListOutstandingDuesHandler(
         }
 
         // DEC-183: without a period the list covers the last DuesHorizonMonths months, so the work is bounded by the
-        // window, not by the school's whole history; every query below is limited to it. The charges cover every
-        // group (siblings rank across groups, DEC-373); the group filter applies to the result.
-        var from = period ?? YearMonth.From(currentPeriod.FirstDay.AddMonths(1 - DuesHorizonMonths));
+        // window, not by the school's whole history; every query below is limited to it.
+        var from = period ?? OutstandingDues.HorizonStart(currentPeriod);
         var to = period ?? currentPeriod;
         var groupId = query.GroupId is { } id ? GroupId.From(id) : (GroupId?)null;
-        var book = await charges.ForSchoolAsync(from, to, cancellationToken);
-        var paid = await payments.RecordedTotalsAsync(groupId, from, to, cancellationToken);
+        var rows = await outstanding.ListAsync(from, to, groupId, c => groupId is null || c.Enrollment.GroupId == groupId, cancellationToken);
 
-        var dues = FeeRules.Outstanding(book.Charges.Where(c => groupId is null || c.Enrollment.GroupId == groupId), paid)
-            .Where(d => period is null || d.Charge.Period == period)
+        var page = rows.Skip(query.Page.Skip).Take(query.Page.PageSize).ToList();
+        return Result.Success(new PagedResult<OutstandingDueDto>(page, query.Page.Page, query.Page.PageSize, rows.Count));
+    }
+
+    /// <summary>How far back the unfiltered list looks (DEC-183): two years, like the default personal data retention.</summary>
+    public const int DuesHorizonMonths = OutstandingDues.HorizonMonths;
+}
+
+/// <summary>
+/// The outstanding dues rows of a window (US-24), shared by the School Admin's list and the parent's (P3-03, DEC-380),
+/// so both show the same amounts: the charges come from <see cref="DueCharges"/> for the whole school (siblings rank
+/// across groups, DEC-373) and only then is the result filtered.
+/// </summary>
+internal sealed class OutstandingDues(DueCharges charges, IPaymentRepository payments, IStudentDirectory students, IGroupDirectory groups)
+{
+    /// <summary>How far back an unfiltered list looks (DEC-183): two years, like the default personal data retention.</summary>
+    public const int HorizonMonths = 24;
+
+    public static YearMonth HorizonStart(YearMonth currentPeriod)
+    {
+        ArgumentNullException.ThrowIfNull(currentPeriod);
+        return YearMonth.From(currentPeriod.FirstDay.AddMonths(1 - HorizonMonths));
+    }
+
+    /// <param name="paymentsOfGroup">Narrows the payment totals read (an optimisation only; <paramref name="include"/> decides the rows).</param>
+    /// <param name="include">Which charges become rows.</param>
+    public async Task<List<OutstandingDueDto>> ListAsync(
+        YearMonth from,
+        YearMonth to,
+        GroupId? paymentsOfGroup,
+        Func<EffectiveCharge, bool> include,
+        CancellationToken cancellationToken)
+    {
+        var book = await charges.ForSchoolAsync(from, to, cancellationToken);
+        var paid = await payments.RecordedTotalsAsync(paymentsOfGroup, from, to, cancellationToken);
+        var dues = FeeRules.Outstanding(book.Charges.Where(include), paid)
+            .Where(d => d.Charge.Period >= from && d.Charge.Period <= to)
             .ToList();
 
         var studentNames = await students.GetManyAsync([.. dues.Select(d => d.Charge.StudentId.Value).Distinct()], cancellationToken);
         var groupNames = await groups.GetManyAsync([.. dues.Select(d => d.Charge.Enrollment.GroupId.Value).Distinct()], cancellationToken);
 
-        var rows = dues
+        return dues
             .Select(d =>
             {
                 var charge = d.Charge;
@@ -87,13 +117,7 @@ internal sealed class ListOutstandingDuesHandler(
             .ThenBy(r => r.StudentFirstName, StringComparer.Create(TurkishCulture, ignoreCase: true))
             .ThenBy(r => r.EnrollmentId)
             .ToList();
-
-        var page = rows.Skip(query.Page.Skip).Take(query.Page.PageSize).ToList();
-        return Result.Success(new PagedResult<OutstandingDueDto>(page, query.Page.Page, query.Page.PageSize, rows.Count));
     }
-
-    /// <summary>How far back the unfiltered list looks (DEC-183): two years, like the default personal data retention.</summary>
-    public const int DuesHorizonMonths = 24;
 
     private static readonly System.Globalization.CultureInfo TurkishCulture = System.Globalization.CultureInfo.GetCultureInfo("tr-TR");
 }

@@ -25,7 +25,8 @@ internal sealed class GroupDirectory(AppDbContext db) : IGroupDirectory
         var groups = await db.Set<Group>().AsNoTracking().Where(g => ids.Contains(g.Id)).ToListAsync(cancellationToken);
         return groups.ToDictionary(
             g => g.Id.Value,
-            g => new GroupInfo(g.Id.Value, g.Name, g.Status, g.BirthYearRange, g.Capacity, g.CoachId?.Value, g.ScheduleSlots, g.ArchivedOn));
+            g => new GroupInfo(
+                g.Id.Value, g.Name, g.Status, g.BirthYearRange, g.Capacity, g.CoachId?.Value, g.ScheduleSlots, g.ArchivedOn, g.SportId.Value, g.FacilityId.Value));
     }
 
     public async Task<IReadOnlyList<GroupId>> ListIdsOfSportAsync(SportId sportId, CancellationToken cancellationToken) =>

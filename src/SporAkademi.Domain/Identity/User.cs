@@ -13,6 +13,9 @@ public enum UserRole
     PlatformAdmin,
     SchoolAdmin,
     Coach,
+
+    /// <summary>A guardian of students of one school (P3-01, DEC-377); such an account is opened only by an invitation.</summary>
+    Parent,
 }
 
 public enum UserStatus
@@ -27,6 +30,9 @@ public sealed record UserDeactivated(UserId UserId, SchoolId? TenantId) : IDomai
 
 /// <summary>A new account was opened (US-01, US-08); P2-F4 sends the welcome e-mail after commit.</summary>
 public sealed record UserCreated(UserId UserId, SchoolId? TenantId) : IDomainEvent;
+
+/// <summary>A parent account was invited or invited again (P3-02, DEC-378); the invitation e-mail goes out after commit.</summary>
+public sealed record ParentInvited(UserId UserId, SchoolId TenantId) : IDomainEvent;
 
 /// <summary>
 /// An account. Not tenant-scoped (DEC-105): the Platform Admin has no school and login looks users up
@@ -123,6 +129,11 @@ public sealed class User : AggregateRoot<UserId>
             throw new ArgumentException("Only the Platform Admin has no school.", nameof(tenantId));
         }
 
+        if (role == UserRole.Parent)
+        {
+            throw new ArgumentException("A parent account is opened by an invitation (InviteParent).", nameof(role));
+        }
+
         var names = CheckNames(firstName, lastName);
         if (names.IsFailure)
         {
@@ -133,6 +144,97 @@ public sealed class User : AggregateRoot<UserId>
         user.Raise(new UserCreated(user.Id, tenantId));
         return Result.Success(user);
     }
+
+    /// <summary>
+    /// Opens a parent account for a guardian (P3-02, DEC-378). It has no usable password: <paramref name="unusablePasswordHash"/>
+    /// hashes a random secret nobody knows, so the only way in is the invitation link, which sets the password. Raises
+    /// <see cref="ParentInvited"/> instead of <see cref="UserCreated"/>, so no admin-panel welcome e-mail is sent.
+    /// </summary>
+    public static Result<User> InviteParent(SchoolId tenantId, Email email, string unusablePasswordHash, string firstName, string lastName, PhoneNumber? phone)
+    {
+        ArgumentNullException.ThrowIfNull(email);
+        ArgumentException.ThrowIfNullOrWhiteSpace(unusablePasswordHash);
+        var names = CheckNames(firstName, lastName);
+        if (names.IsFailure)
+        {
+            return Result.Failure<User>(names.Error);
+        }
+
+        var user = new User(EntityId.New<UserId>(), tenantId, email, unusablePasswordHash, UserRole.Parent, names.Value.First, names.Value.Last, phone);
+        user.Raise(new ParentInvited(user.Id, tenantId));
+        return Result.Success(user);
+    }
+
+    /// <summary>
+    /// Invites the parent again (P3-02, DEC-378): a pending invitation is resent, a closed account is reopened. Every
+    /// earlier link and session ends at once, the account is back to "invited" with a new unusable password, and the
+    /// login becomes <paramref name="email"/> (the guardian's current address). An account whose parent already set a
+    /// password is not invited again: <c>ParentAccount.AlreadyActive</c>.
+    /// </summary>
+    public Result ReinviteParent(Email email, string unusablePasswordHash, string firstName, string lastName, PhoneNumber? phone, DateTimeOffset now)
+    {
+        ArgumentNullException.ThrowIfNull(email);
+        ArgumentException.ThrowIfNullOrWhiteSpace(unusablePasswordHash);
+        if (Role != UserRole.Parent || TenantId is not { } tenant)
+        {
+            throw new InvalidOperationException("Only a parent account can be invited again.");
+        }
+
+        if (Status == UserStatus.Active && !MustChangePassword)
+        {
+            return Result.Failure(ParentAccountErrors.AlreadyActive);
+        }
+
+        var names = CheckNames(firstName, lastName);
+        if (names.IsFailure)
+        {
+            return Result.Failure(names.Error);
+        }
+
+        (FirstName, LastName, Phone, Email) = (names.Value.First, names.Value.Last, phone, email);
+        Status = UserStatus.Active;
+        PasswordHash = unusablePasswordHash;
+        MustChangePassword = true;
+        ClearFailedLogins();
+        LockoutEndsAt = null;
+        PasswordResetRequestedAt = null;
+        RevokeAllRefreshTokens(now);
+        _passwordTokens.Clear();
+        Raise(new ParentInvited(Id, tenant));
+        return Result.Success();
+    }
+
+    /// <summary>
+    /// DEC-379: the guardian this parent account belonged to was deleted (DEC-365, DEC-368), so the account's personal
+    /// data goes as well: it is closed (sessions and links end) and its name, phone and e-mail are replaced by
+    /// placeholders. The address is freed for a new account; the row stays only so ids in logs and records keep meaning.
+    /// </summary>
+    public void EraseParent(DateTimeOffset now)
+    {
+        if (Role != UserRole.Parent)
+        {
+            throw new InvalidOperationException("Only a parent account is erased with its guardian.");
+        }
+
+        if (Status == UserStatus.Active)
+        {
+            _ = Deactivate(now);
+        }
+
+        RevokeAllRefreshTokens(now);
+        _passwordTokens.Clear();
+        (FirstName, LastName, Phone) = (ErasedParentFirstName, ErasedParentLastName, null);
+        Email = Email.Create("silinmis-veli-" + Id.Value.ToString("N", System.Globalization.CultureInfo.InvariantCulture) + "@silinmis.invalid").Value;
+    }
+
+    /// <summary>The name an erased parent account gets (DEC-379).</summary>
+    public const string ErasedParentFirstName = "Silinmiş";
+
+    public const string ErasedParentLastName = "Veli";
+
+    /// <summary>When the pending invitation link expires, if the newest link of the account is an invitation (DEC-378).</summary>
+    public DateTimeOffset? InvitationExpiresAt =>
+        _passwordTokens.Find(t => t.Purpose == PasswordTokenPurpose.Invitation)?.ExpiresAt;
 
     /// <summary>Changes the editable profile (US-08: name and phone) of an active account. The e-mail is the login and does not change here.</summary>
     public Result UpdateProfile(string firstName, string lastName, PhoneNumber? phone)

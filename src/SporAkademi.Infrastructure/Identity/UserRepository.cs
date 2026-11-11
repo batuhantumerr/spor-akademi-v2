@@ -92,6 +92,18 @@ internal sealed class UserRepository(AppDbContext dbContext) : IUserRepository
         return active.Select(id => id.Value).ToHashSet();
     }
 
+    public Task<User?> GetParentAsync(SchoolId schoolId, UserId id, CancellationToken cancellationToken) =>
+        UsersWithTokens.SingleOrDefaultAsync(u => u.Id == id && u.TenantId == schoolId && u.Role == UserRole.Parent, cancellationToken);
+
+    public async Task<IReadOnlyList<User>> ListParentsAsync(SchoolId schoolId, IReadOnlyCollection<UserId> ids, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(ids);
+        var list = ids.ToList();
+        return await dbContext.Set<User>().AsNoTracking().Include(u => u.PasswordTokens)
+            .Where(u => u.TenantId == schoolId && u.Role == UserRole.Parent && list.Contains(u.Id))
+            .ToListAsync(cancellationToken);
+    }
+
     private IQueryable<User> Coaches(SchoolId schoolId) =>
         dbContext.Set<User>().AsNoTracking().Where(u => u.TenantId == schoolId && u.Role == UserRole.Coach);
 

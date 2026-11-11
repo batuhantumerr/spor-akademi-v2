@@ -4,6 +4,7 @@ using SporAkademi.Application.Abstractions.Authentication;
 using SporAkademi.Application.Abstractions.Behaviors;
 using SporAkademi.Application.Abstractions.Messaging;
 using SporAkademi.Application.Enrollments.Contracts;
+using SporAkademi.Application.Identity.Contracts;
 using SporAkademi.Application.Tenancy.Contracts;
 using SporAkademi.Domain.Groups;
 using SporAkademi.Domain.Organization;
@@ -226,12 +227,32 @@ internal sealed class ReactivateStudentHandler(IStudentRepository students) : IC
     }
 }
 
-internal sealed class GetStudentHandler(IStudentRepository students) : IQueryHandler<GetStudentQuery, StudentDto>
+internal sealed class GetStudentHandler(
+    IStudentRepository students,
+    IGuardianRepository guardians,
+    IIdentityModule identity,
+    ICurrentUser currentUser) : IQueryHandler<GetStudentQuery, StudentDto>
 {
-    public async Task<Result<StudentDto>> Handle(GetStudentQuery query, CancellationToken cancellationToken) =>
-        await students.FindDtoAsync(query.Id, cancellationToken) is { } dto
-            ? Result.Success(dto)
-            : Result.Failure<StudentDto>(StudentErrors.NotFound);
+    public async Task<Result<StudentDto>> Handle(GetStudentQuery query, CancellationToken cancellationToken)
+    {
+        if (await students.FindDtoAsync(query.Id, cancellationToken) is not { } dto)
+        {
+            return Result.Failure<StudentDto>(StudentErrors.NotFound);
+        }
+
+        if (dto.Guardians.Count == 0)
+        {
+            return Result.Success(dto);
+        }
+
+        // P3-02 (DEC-378): each guardian's parent account status, for the invitation actions on the student page.
+        var invitations = await ParentInvitations.OfAsync(
+            guardians, identity, currentUser, [.. dto.Guardians.Select(g => GuardianId.From(g.GuardianId))], cancellationToken);
+        return Result.Success(dto with
+        {
+            Guardians = [.. dto.Guardians.Select(g => g with { Invitation = invitations[GuardianId.From(g.GuardianId)] })],
+        });
+    }
 }
 
 internal sealed class SearchStudentsHandler(IStudentRepository students, IStudentGroupFilter groupFilter)

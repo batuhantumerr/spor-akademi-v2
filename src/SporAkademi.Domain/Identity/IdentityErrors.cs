@@ -25,3 +25,12 @@ public static class UserErrors
     public static readonly Error NotFound = Error.NotFound("User.NotFound", "User not found.");
     public static readonly Error AlreadyInactive = Error.BusinessRule("User.AlreadyInactive", "The user is already inactive.");
 }
+
+/// <summary>Parent accounts (P3-02, DEC-378).</summary>
+public static class ParentAccountErrors
+{
+    /// <summary>The parent already set a password; a forgotten one is reset with "Şifremi unuttum", not a new invitation.</summary>
+    public static readonly Error AlreadyActive = Error.BusinessRule("ParentAccount.AlreadyActive", "The parent account is already active.");
+
+    public static readonly Error NotInvited = Error.BusinessRule("ParentAccount.NotInvited", "The guardian has no parent account.");
+}

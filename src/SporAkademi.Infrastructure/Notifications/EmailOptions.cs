@@ -12,12 +12,17 @@ public sealed class EmailOptions
     /// <summary>The admin app's public address; e-mail links point here (e.g. <c>https://app.example.com/</c>).</summary>
     public string AppBaseUrl { get; set; } = "http://localhost:4200/";
 
+    /// <summary>
+    /// The parent app's public address (P3-02, DEC-378); a parent's links point here. Empty until the parent app is
+    /// deployed: the links then use <see cref="AppBaseUrl"/>, whose set-password page works for every account.
+    /// </summary>
+    public string? ParentAppBaseUrl { get; set; }
+
     public SmtpOptions Smtp { get; set; } = new();
 
     internal bool IsValid() =>
-        Uri.TryCreate(AppBaseUrl, UriKind.Absolute, out var app)
-        && (app.Scheme == Uri.UriSchemeHttps || app.Scheme == Uri.UriSchemeHttp)
-        && string.IsNullOrEmpty(app.Query) && string.IsNullOrEmpty(app.Fragment)
+        IsBaseAddress(AppBaseUrl)
+        && (string.IsNullOrWhiteSpace(ParentAppBaseUrl) || IsBaseAddress(ParentAppBaseUrl))
         && Domain.SharedKernel.Email.Create(FromAddress).IsSuccess
         && !string.IsNullOrWhiteSpace(FromName)
         && Smtp.Port is > 0 and <= 65535
@@ -31,8 +36,14 @@ public sealed class EmailOptions
     /// </summary>
     internal bool IsValidIn(bool isDevelopment, bool isProduction) =>
         IsValid()
-        && (!isProduction || string.IsNullOrWhiteSpace(Smtp.Host) || IsPublicHttps(AppBaseUrl))
+        && (!isProduction || string.IsNullOrWhiteSpace(Smtp.Host)
+            || (IsPublicHttps(AppBaseUrl) && (string.IsNullOrWhiteSpace(ParentAppBaseUrl) || IsPublicHttps(ParentAppBaseUrl))))
         && (isDevelopment || Smtp.Security != SmtpSecurity.None || string.IsNullOrEmpty(Smtp.UserName));
+
+    private static bool IsBaseAddress(string address) =>
+        Uri.TryCreate(address, UriKind.Absolute, out var uri)
+        && (uri.Scheme == Uri.UriSchemeHttps || uri.Scheme == Uri.UriSchemeHttp)
+        && string.IsNullOrEmpty(uri.Query) && string.IsNullOrEmpty(uri.Fragment);
 
     private static bool IsPublicHttps(string address) =>
         Uri.TryCreate(address, UriKind.Absolute, out var uri)

@@ -91,6 +91,17 @@ internal sealed class ConfirmPasswordResetHandler(
     }
 }
 
+/// <summary>P3-02: a committed parent invitation becomes the invitation e-mail message, in the same transaction (DEC-378).</summary>
+internal sealed class PublishParentInvited(IOutbox outbox) : IDomainEventConsumer<ParentInvited>
+{
+    public Task<Result> Handle(ParentInvited domainEvent, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(domainEvent);
+        outbox.Enqueue(new ParentInvitedMessage(domainEvent.UserId.Value), domainEvent.TenantId.Value);
+        return Task.FromResult(Result.Success());
+    }
+}
+
 /// <summary>P2-F4: a committed new account becomes the welcome e-mail message, in the same transaction (DEC-351).</summary>
 internal sealed class PublishAccountOpened(IOutbox outbox) : IDomainEventConsumer<UserCreated>
 {

@@ -9,6 +9,7 @@ using SporAkademi.Api.Endpoints.Enrollments;
 using SporAkademi.Api.Endpoints.Groups;
 using SporAkademi.Api.Endpoints.Identity;
 using SporAkademi.Api.Endpoints.Organization;
+using SporAkademi.Api.Endpoints.Parents;
 using SporAkademi.Api.Endpoints.Students;
 using SporAkademi.Api.Endpoints.Tenancy;
 using SporAkademi.Api.Errors;
@@ -77,6 +78,7 @@ app.MapAttendanceEndpoints();
 app.MapBillingEndpoints();
 app.MapOnlinePaymentEndpoints();
 app.MapDashboardEndpoints();
+app.MapParentEndpoints();
 app.MapJobsDashboard();
 app.MapApiDocument();
 

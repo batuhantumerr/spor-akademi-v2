@@ -5,6 +5,9 @@ public enum Role
     PlatformAdmin,
     SchoolAdmin,
     Coach,
+
+    /// <summary>P3-01 (DEC-377): sees only the students of the guardian whose account it is.</summary>
+    Parent,
 }
 
 /// <summary>The caller of the current request, from the access token. Empty for anonymous calls and background work.</summary>

@@ -40,8 +40,11 @@ internal sealed partial class PasswordLinkMailer(
             async ct =>
             {
                 var user = await users.GetByIdAsync(UserId.From(userId), ct);
-                // A welcome link is pointless once the user chose a password (e.g. with the temporary one).
-                if (user is null || (purpose == PasswordTokenPurpose.Welcome && !user.MustChangePassword))
+                // A welcome link is pointless once the user chose a password (e.g. with the temporary one); so is an
+                // invitation the parent already accepted (DEC-378).
+                if (user is null
+                    || (purpose is PasswordTokenPurpose.Welcome or PasswordTokenPurpose.Invitation && !user.MustChangePassword)
+                    || (purpose == PasswordTokenPurpose.Invitation && user.Role != UserRole.Parent))
                 {
                     return Result.Success(false);
                 }
@@ -64,9 +67,14 @@ internal sealed partial class PasswordLinkMailer(
         }
 
         var school = recipient.TenantId is { } schoolId ? await tenancy.SchoolNameAsync(schoolId, cancellationToken) : null;
-        var message = purpose == PasswordTokenPurpose.Welcome
-            ? IdentityEmails.Welcome(recipient, school, links.SetPassword(token.Token), links.ForgotPassword())
-            : IdentityEmails.PasswordReset(recipient, links.SetPassword(token.Token));
+        // DEC-378: a parent's links open the parent app; staff links the admin panel.
+        var setPassword = recipient.Role == UserRole.Parent ? links.ParentSetPassword(token.Token) : links.SetPassword(token.Token);
+        var message = purpose switch
+        {
+            PasswordTokenPurpose.Welcome => IdentityEmails.Welcome(recipient, school, setPassword, links.ForgotPassword()),
+            PasswordTokenPurpose.Invitation => IdentityEmails.ParentInvitation(recipient, school, setPassword),
+            _ => IdentityEmails.PasswordReset(recipient, setPassword),
+        };
         await emailSender.SendAsync(message, cancellationToken);
         LogSent(logger, message.Template, userId, context.MessageId);
     }
@@ -88,6 +96,17 @@ internal sealed class SendWelcomeEmail(PasswordLinkMailer mailer) : IOutboxMessa
     }
 }
 
+/// <summary>P3-02 (DEC-378): the parent invitation e-mail.</summary>
+internal sealed class SendParentInvitationEmail(PasswordLinkMailer mailer) : IOutboxMessageHandler<ParentInvitedMessage>
+{
+    public Task Handle(ParentInvitedMessage message, OutboxMessageContext context, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(message);
+        ArgumentNullException.ThrowIfNull(context);
+        return mailer.SendAsync(message.UserId, PasswordTokenPurpose.Invitation, context, cancellationToken);
+    }
+}
+
 internal sealed class SendPasswordResetEmail(PasswordLinkMailer mailer) : IOutboxMessageHandler<PasswordResetRequestedMessage>
 {
     public Task Handle(PasswordResetRequestedMessage message, OutboxMessageContext context, CancellationToken cancellationToken)
@@ -103,6 +122,21 @@ internal static class IdentityEmails
 {
     public const string WelcomeTemplate = "identity.welcome";
     public const string PasswordResetTemplate = "identity.password-reset";
+    public const string ParentInvitationTemplate = "identity.parent-invitation";
+
+    /// <summary>P3-02 (DEC-378): no child's name and no password; only the school, the login and the link.</summary>
+    public static EmailMessage ParentInvitation(User user, string? schoolName, Uri setPassword)
+    {
+        var who = schoolName is null ? "Okulunuz" : schoolName;
+        return new EmailBody($"Merhaba {user.FirstName} {user.LastName},")
+            .Paragraph($"{who} sizi Spor Akademi veli hesabına davet etti. Veli hesabıyla çocuğunuzun antrenman programını, yoklamalarını, aidat borçlarını ve duyurularını görebilir, aidatı online ödeyebilirsiniz.")
+            .Paragraph($"Giriş için kullanacağınız e-posta adresi: {user.Email.Value}")
+            .Paragraph($"Daveti kabul etmek ve şifrenizi belirlemek için aşağıdaki bağlantıyı kullanın. Bağlantı {Lifetime(PasswordTokenPurpose.Invitation)} geçerlidir ve yalnızca bir kez kullanılabilir.")
+            .Action("Daveti kabul et", setPassword)
+            .Paragraph("Bağlantının süresi dolarsa okulunuzdan daveti yeniden göndermesini isteyin.")
+            .Paragraph("Bu daveti beklemiyorsanız bu e-postayı dikkate almayın; hesap siz şifre belirlemeden kullanılamaz.")
+            .Build(ParentInvitationTemplate, user.Email.Value, "Spor Akademi veli hesabı daveti");
+    }
 
     public static EmailMessage Welcome(User user, string? schoolName, Uri setPassword, Uri forgotPassword)
     {
@@ -129,6 +163,7 @@ internal static class IdentityEmails
     {
         UserRole.SchoolAdmin => "okul yöneticisi",
         UserRole.Coach => "antrenör",
+        UserRole.Parent => "veli",
         _ => "platform yöneticisi",
     };
 
