@@ -1,4 +1,23 @@
-import { Locator, Page, expect } from '@playwright/test';
+import { BrowserContext, Locator, Page, expect } from '@playwright/test';
+
+/**
+ * Answers the app's start-up session restore (`POST /api/v1/auth/refresh`) in the browser with 401, as the API does
+ * for a browser without a refresh cookie, so a context with no session yet does not spend the per-IP refresh budget
+ * (10/min, NFR-SEC-14) that the session tests need. Returns a function that removes the route.
+ */
+export async function answerRefreshWithoutSession(
+  context: BrowserContext,
+): Promise<() => Promise<void>> {
+  const pattern = '**/api/v1/auth/refresh';
+  await context.route(pattern, (route) =>
+    route.fulfill({
+      status: 401,
+      contentType: 'application/problem+json',
+      body: JSON.stringify({ status: 401, title: 'Unauthorized' }),
+    }),
+  );
+  return () => context.unroute(pattern);
+}
 
 /**
  * Signs in through the login form and returns the access token the API issued, so a test can check

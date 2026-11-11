@@ -9,7 +9,7 @@ import {
   todayInSchool,
   unique,
 } from '../support/data';
-import { signIn, toast } from '../support/ui';
+import { answerRefreshWithoutSession, signIn, toast } from '../support/ui';
 
 /**
  * Phase 2 exit criteria (docs/faz-2-cikis-kriterleri.md):
@@ -59,10 +59,13 @@ test.beforeAll(async ({ browser }) => {
 
   context = await browser.newContext();
   page = await context.newPage();
+  // No refresh cookie yet: the start-up restore is answered in the browser (the session tests need the budget).
+  const removeRoute = await answerRefreshWithoutSession(context);
   await page.goto('/login');
   const admin = schoolAdmin();
   const session = await signIn(page, admin.email, admin.password);
   await expect(page).toHaveURL(/\/dashboard$/);
+  await removeRoute();
   api = await ApiClient.withToken(session.accessToken);
 
   sport = (await api.post<{ id: string }>('/api/v1/sports', { name: unique('Voleybol', testInfo) }))
@@ -108,6 +111,7 @@ test('a due is paid online through the sandbox provider and recorded once', asyn
   // The payer opens the shared link in a browser of their own and pays on the sandbox page.
   const payer = await browser.newContext();
   try {
+    await answerRefreshWithoutSession(payer);
     const checkout = await payer.newPage();
     await checkout.goto(link!);
     await expect(checkout.getByRole('heading', { name: 'Sandbox ödeme sayfası' })).toBeVisible();
@@ -157,14 +161,16 @@ test('a sibling discount defined under fee rules shows on the dues list', async 
     '/api/v1/settings/billing-rules',
   );
   const inPlace = versions.find((v) => v.effectiveFrom === period);
+  // Also leaves the dues page of the previous test: the menu link of the current page would not reload it.
+  await nav('Aidat kuralları');
+  await expect(page.getByRole('heading', { name: 'Aidat kuralları' })).toBeVisible();
   if (inPlace) {
     testInfo.annotations.push({
       type: 'note',
       description: `Fee rules for ${period} were defined by an earlier browser project of this run.`,
     });
+    await expect(page.getByText('Güncel', { exact: true })).toBeVisible();
   } else {
-    await nav('Aidat kuralları');
-    await expect(page.getByRole('heading', { name: 'Aidat kuralları' })).toBeVisible();
     // DEC-376: next month is suggested; this month changes this month's open dues and asks first.
     await page.getByLabel('Geçerlilik başlangıcı', { exact: true }).fill(period);
     await expect(page.getByLabel('2. kardeş indirimi (%)', { exact: true })).toHaveValue('10');
