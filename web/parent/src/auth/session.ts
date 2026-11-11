@@ -1,11 +1,12 @@
 import { useSyncExternalStore } from 'react';
 import type { components } from '../api/schema.gen';
-import { ApiError, problemFromResponse, toApiError } from '../api/errors';
+import { ApiError, networkError, problemFromResponse, toApiError } from '../api/errors';
 
 export type User = components['schemas']['UserSummary'];
 type SessionResponse = components['schemas']['SessionResponse'];
 
-export type SessionStatus = 'loading' | 'signedIn' | 'signedOut';
+/** `offline`: the start-up restore could not reach the server; nothing is known about the session yet (P3-07). */
+export type SessionStatus = 'loading' | 'signedIn' | 'signedOut' | 'offline';
 
 export interface SessionState {
   readonly status: SessionStatus;
@@ -73,18 +74,29 @@ export class Session {
     return body.user;
   }
 
-  /** Restores the session at start-up; ends in `signedIn` or `signedOut`, never throws. */
+  /**
+   * Restores the session at start-up; ends in `signedIn`, `signedOut` or, when the network is down, `offline`
+   * (the app shows "Bağlantı yok" instead of a login form that cannot work). Never throws.
+   */
   async restore(): Promise<void> {
     try {
       const token = await this.refresh();
       if (!token && this.state.status === 'loading') {
         this.setState({ status: 'signedOut', user: null, expired: false });
       }
-    } catch {
+    } catch (error) {
       if (this.state.status === 'loading') {
-        this.setState({ status: 'signedOut', user: null, expired: false });
+        const offline = toApiError(error).code === networkError().code;
+        this.setState({ status: offline ? 'offline' : 'signedOut', user: null, expired: false });
       }
     }
+  }
+
+  /** Tries the start-up restore again after it found no network (retry button, the browser's `online` event). */
+  retryRestore(): Promise<void> {
+    if (this.state.status !== 'offline') return Promise.resolve();
+    this.setState({ status: 'loading', user: null, expired: false });
+    return this.restore();
   }
 
   /**

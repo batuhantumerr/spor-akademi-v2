@@ -181,6 +181,17 @@ export const text = {
   errors: {
     unexpected: 'Beklenmeyen bir hata oluştu. Sayfayı yenileyip tekrar deneyin.',
   },
+  pwa: {
+    offlineTitle: 'Bağlantı yok',
+    offlineBody:
+      'İnternet bağlantınız yok gibi görünüyor. Bilgileriniz yalnız bağlantı varken gösterilir; bağlantı gelince sayfa kendiliğinden yenilenir.',
+    offlineBanner: 'İnternet bağlantısı yok. Gördüğünüz bilgiler güncel olmayabilir.',
+    updateReady: 'Yeni sürüm hazır.',
+    reload: 'Yenile',
+    installHint: 'Spor Akademi’yi ana ekranınıza ekleyerek bir uygulama gibi açabilirsiniz.',
+    install: 'Ana ekrana ekle',
+    dismissInstall: 'İpucunu kapat',
+  },
 } as const;
 
 /**

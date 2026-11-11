@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { NavLink, Outlet } from 'react-router';
 import { session } from '../auth/session';
 import { text } from '../i18n/tr';
+import { InstallHint } from '../pwa/notices';
 import { useTheme } from '../theme/theme';
 
 const navItems = [{ to: '/', label: text.nav.children, icon: Users, end: true }] as const;
@@ -70,6 +71,7 @@ export function AppShell() {
       </header>
 
       <main id="main" tabIndex={-1} className="mx-auto w-full max-w-3xl flex-1 px-4 pt-6 pb-24 sm:pb-10">
+        <InstallHint />
         <Outlet />
       </main>
 
