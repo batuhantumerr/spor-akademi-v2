@@ -28,6 +28,7 @@ import {
 import { AuthService } from '../core/auth/auth.service';
 import { ui } from '../core/i18n/tr';
 import { ThemeService } from '../core/theme/theme.service';
+import { MENU_NAVIGATION_STATE } from '../core/routing/menu-navigation';
 import { navigationFor } from './navigation';
 import { LOCALE } from '../core/i18n/locale';
 
@@ -131,6 +132,7 @@ const DESKTOP_QUERY = '(min-width: 64rem)';
                   <li>
                     <a
                       [routerLink]="item.path"
+                      [state]="menuNavigation"
                       routerLinkActive="!border-primary/30 bg-gradient-to-r from-primary/20 to-primary/5 !text-primary shadow-lg shadow-primary/5"
                       ariaCurrentWhenActive="page"
                       class="flex h-10 items-center gap-2.5 rounded-lg border border-transparent px-3 text-sm font-medium text-muted-foreground transition-all duration-200 hover:bg-muted/60 hover:text-foreground"
@@ -242,6 +244,8 @@ export class ShellComponent {
   protected readonly isDesktop = signal(false);
   protected readonly collapsed = signal(false);
   protected readonly mobileOpen = signal(false);
+  /** Makes a click on the open page's menu link recreate that page so its lists reload (#79). */
+  protected readonly menuNavigation = MENU_NAVIGATION_STATE;
   /** Icon-only rail: desktop with the sidebar collapsed. The mobile drawer always shows labels. */
   protected readonly rail = computed(() => this.collapsed() && this.isDesktop());
   /** Below lg a closed drawer is off-screen, so it must also leave the tab order. */

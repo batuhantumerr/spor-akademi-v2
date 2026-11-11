@@ -302,11 +302,18 @@ test('a sibling discount defined under fee rules shows on the dues list', async 
   const arranged = await arrangeDues('U12 Kardeş', ['Ada', 'Arda'], 2);
   const [first, second] = arranged.students;
 
+  // #79: the previous test left the dues page open, filtered to another group. Its menu link rebuilds the page:
+  // the filter is cleared and the group and students arranged just now are listed.
+  await expect(page).toHaveURL(/\/dues(\?|$)/);
+  await nav('Ödenmemiş borçlar');
+  await expect(page.getByLabel('Grup', { exact: true })).toHaveValue('');
+  await page.getByLabel('Grup', { exact: true }).selectOption({ label: arranged.groupName });
+  await expect(page.getByRole('row', { name: new RegExp(second.name) })).toHaveCount(1);
+
   const versions = await api!.get<{ effectiveFrom: string; secondChildPercent: number }[]>(
     '/api/v1/settings/billing-rules',
   );
   const inPlace = versions.find((v) => v.effectiveFrom === period);
-  // Also leaves the dues page of the previous test: the menu link of the current page would not reload it.
   await nav('Aidat kuralları');
   await expect(page.getByRole('heading', { name: 'Aidat kuralları' })).toBeVisible();
   if (inPlace) {
