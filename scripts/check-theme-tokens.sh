@@ -13,6 +13,17 @@ block() {
   awk '/theme-tokens:end/ { inside = 0 } inside { print } /theme-tokens:start/ { inside = 1 }' "$1"
 }
 
+# Each marker exactly once per file: a second start or a stray end would make the copied block ambiguous.
+for file in "$admin" "$parent"; do
+  for marker in theme-tokens:start theme-tokens:end; do
+    count="$(grep -c "$marker" "$file" || true)"
+    if [ "$count" != "1" ]; then
+      echo "$file must contain '$marker' exactly once (found $count)." >&2
+      exit 1
+    fi
+  done
+done
+
 admin_block="$(block "$admin")"
 parent_block="$(block "$parent")"
 
