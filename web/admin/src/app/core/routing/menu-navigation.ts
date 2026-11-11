@@ -13,6 +13,10 @@ export const MENU_NAVIGATION_STATE: Readonly<Record<string, unknown>> = Object.f
  * Reuses routes like Angular's default strategy, except that a menu navigation recreates the page component
  * (the deepest route). The shell and other parent routes stay in place, so the session and layout are kept.
  * Works together with `onSameUrlNavigation: 'reload'`, which lets a click on the current URL navigate at all.
+ *
+ * Only the click itself counts: Back/Forward restore the entry's history state, so popstate navigations are
+ * ignored. The recreated page is destroyed without `canDeactivate` guards (the route does not change); an
+ * unsaved-changes guard added later must handle this case itself.
  */
 @Injectable({ providedIn: 'root' })
 export class MenuNavigationReuseStrategy extends BaseRouteReuseStrategy {
@@ -29,6 +33,9 @@ export class MenuNavigationReuseStrategy extends BaseRouteReuseStrategy {
   }
 
   private isMenuNavigation(): boolean {
-    return this.injector.get(Router).currentNavigation()?.extras.state?.['menuNavigation'] === true;
+    const navigation = this.injector.get(Router).currentNavigation();
+    return (
+      navigation?.trigger === 'imperative' && navigation.extras.state?.['menuNavigation'] === true
+    );
   }
 }

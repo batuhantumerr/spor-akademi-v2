@@ -44,7 +44,7 @@ describe('MenuNavigationReuseStrategy', () => {
               component: TestLayout,
               children: [
                 { path: 'list', component: TestPage },
-                { path: 'other', component: TestPage },
+                { path: 'lazy', loadComponent: () => Promise.resolve(TestPage) },
               ],
             },
           ],
@@ -85,10 +85,13 @@ describe('MenuNavigationReuseStrategy', () => {
     expect(layoutsCreated).toBe(1);
   });
 
-  it('keeps the layout when the menu moves to another page', async () => {
-    await router.navigateByUrl('/other', { state: MENU_NAVIGATION_STATE });
-
+  it('recreates a lazily loaded page as well', async () => {
+    await router.navigateByUrl('/lazy');
     expect(pagesCreated).toBe(2);
+
+    await router.navigateByUrl('/lazy', { state: MENU_NAVIGATION_STATE });
+
+    expect(pagesCreated).toBe(3);
     expect(layoutsCreated).toBe(1);
   });
 });
