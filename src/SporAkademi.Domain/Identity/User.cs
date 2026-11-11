@@ -345,8 +345,23 @@ public sealed class User : AggregateRoot<UserId>
         return Result.Success(successor);
     }
 
-    /// <summary>Logout: revokes the presented token only. Unknown or already revoked tokens are ignored.</summary>
-    public void RevokeRefreshToken(string tokenHash, DateTimeOffset now) => FindToken(tokenHash)?.Revoke(now);
+    /// <summary>
+    /// Logout: ends the session of the presented token, i.e. every token of its family (a stale, already rotated token
+    /// from a race with a refresh must not leave its newer successor active). Other sessions of the user stay. Unknown
+    /// tokens are ignored; repeating it changes nothing.
+    /// </summary>
+    public void RevokeRefreshToken(string tokenHash, DateTimeOffset now)
+    {
+        if (FindToken(tokenHash) is not { } presented)
+        {
+            return;
+        }
+
+        foreach (var token in _refreshTokens.Where(t => t.FamilyId == presented.FamilyId))
+        {
+            token.Revoke(now);
+        }
+    }
 
     /// <summary>
     /// Sets the user's own password (US-05): the temporary-password flag clears, every existing session
