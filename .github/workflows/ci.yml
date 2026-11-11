@@ -110,7 +110,9 @@ jobs:
         with:
           node-version-file: web/admin/.nvmrc
           cache: npm
-          cache-dependency-path: web/admin/package-lock.json
+          cache-dependency-path: |
+            web/admin/package-lock.json
+            web/parent/package-lock.json
       - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.nuget/packages
@@ -130,6 +132,7 @@ jobs:
           } > .env
       - name: Start PostgreSQL (the compose.yaml image and init script)
         run: docker compose up -d --wait postgres
+      # scripts/e2e.sh starts the compose Mailpit (mail profile) itself for the parent invitation e-mail (P3-05).
       - name: Restore
         run: |
           dotnet tool restore
@@ -138,6 +141,7 @@ jobs:
         working-directory: web/admin
         run: |
           npm ci --no-fund
+          npm --prefix ../parent ci --no-fund
           npx playwright install --with-deps chromium firefox webkit
       - name: End-to-end tests (all browser projects)
         run: bash scripts/e2e.sh
@@ -229,13 +233,14 @@ jobs:
           for i in $(seq 1 15); do curl -fsS http://127.0.0.1:8081/ >/dev/null 2>&1 && break; sleep 1; done
           curl -fsS --max-time 10 http://127.0.0.1:8081/some/deep/link | grep -q '<app-root'
           curl -fsSI http://127.0.0.1:8081/index.html | grep -qi 'cache-control: no-cache'
+          bash scripts/check-security-headers.sh http://127.0.0.1:8081
       - name: Smoke test parent
         run: |
           docker run -d --name parent -p 127.0.0.1:8082:8080 spor-akademi-parent:ci
           for i in $(seq 1 15); do curl -fsS http://127.0.0.1:8082/ >/dev/null 2>&1 && break; sleep 1; done
           curl -fsS --max-time 10 http://127.0.0.1:8082/some/deep/link | grep -q 'id="root"'
           curl -fsSI http://127.0.0.1:8082/index.html | grep -qi 'cache-control: no-cache'
-          curl -fsSI http://127.0.0.1:8082/ | grep -qi 'referrer-policy: no-referrer'
+          bash scripts/check-security-headers.sh http://127.0.0.1:8082
       - name: Install Trivy (pinned binary + checksum)
         run: |
           curl -fsSLo trivy.tgz "https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/trivy_${TRIVY_VERSION}_Linux-64bit.tar.gz"

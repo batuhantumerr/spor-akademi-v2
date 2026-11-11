@@ -72,3 +72,10 @@ paths = [
   '''^web/admin/src/app/features/auth/password-reset\.spec\.ts$''',
 ]
 regexes = ['''^(?:Yepyeni|Baska-Bir|Baska|Birinci|Ikinci)-Sifre-2027$''']
+
+[[allowlists]]
+description = "Synthetic login password of the parent app's session unit test (P3-05; sent to a faked fetch only)"
+targetRules = ["generic-api-key"]
+condition = "AND"
+paths = ['''^web/parent/src/auth/session\.test\.ts$''']
+regexes = ['''^uzun-bir-sifre-123$''']

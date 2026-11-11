@@ -1,5 +1,7 @@
-import { Moon, Sun, Users } from 'lucide-react';
+import { LogOut, Moon, Sun, Users } from 'lucide-react';
+import { useState } from 'react';
 import { NavLink, Outlet } from 'react-router';
+import { session } from '../auth/session';
 import { text } from '../i18n/tr';
 import { useTheme } from '../theme/theme';
 
@@ -7,10 +9,12 @@ const navItems = [{ to: '/', label: text.nav.children, icon: Users, end: true }]
 
 /**
  * Mobile-first shell: sticky header with the theme toggle, content column, and a bottom tab bar on
- * phones that becomes a header nav from `sm` up. Screens (P3-06) add their items to `navItems`.
+ * phones that becomes a header nav from `sm` up. Sign-out ends the session here first, then on the server; the
+ * session guard then shows the login page.
  */
 export function AppShell() {
   const theme = useTheme();
+  const [signingOut, setSigningOut] = useState(false);
 
   return (
     <div className="flex min-h-dvh flex-col">
@@ -49,6 +53,19 @@ export function AppShell() {
           >
             {theme.dark ? <Sun aria-hidden="true" /> : <Moon aria-hidden="true" />}
           </button>
+          <button
+            type="button"
+            className="btn btn-ghost btn-icon"
+            aria-label={text.nav.logout}
+            title={text.nav.logout}
+            disabled={signingOut}
+            onClick={() => {
+              setSigningOut(true);
+              void session.logout();
+            }}
+          >
+            <LogOut aria-hidden="true" />
+          </button>
         </div>
       </header>
 
@@ -80,7 +97,7 @@ function navLinkClass({ isActive }: { isActive: boolean }): string {
 }
 
 function tabLinkClass({ isActive }: { isActive: boolean }): string {
-  return `flex min-h-14 flex-col items-center justify-center gap-0.5 text-xs font-medium ${
+  return `flex min-h-14 flex-col items-center justify-center gap-0.5 rounded-md text-xs font-medium focus-visible:ring-2 focus-visible:ring-primary/50 focus-visible:outline-none focus-visible:ring-inset ${
     isActive ? 'text-primary' : 'text-muted-foreground'
   }`;
 }
