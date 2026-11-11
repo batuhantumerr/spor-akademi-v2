@@ -72,7 +72,7 @@ public sealed class EmailTemplateTests
     }
 
     [Theory]
-    [InlineData(DuesReminderKind.Upcoming, "billing.dues-upcoming","Ocak 2027 aidatı: son ödeme tarihi yaklaşıyor")]
+    [InlineData(DuesReminderKind.Upcoming, "billing.dues-upcoming", "Ocak 2027 aidatı: son ödeme tarihi yaklaşıyor")]
     [InlineData(DuesReminderKind.Overdue, "billing.dues-overdue", "Ocak 2027 aidatı: ödeme tarihi geçti")]
     public void Fee_reminders_name_the_student_group_month_amount_and_due_date(DuesReminderKind kind, string template, string subject)
     {
