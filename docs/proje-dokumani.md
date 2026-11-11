@@ -189,6 +189,7 @@ src/
 tests/
   Domain.UnitTests, Application.UnitTests, IntegrationTests, ArchitectureTests
 web/admin/                     Angular
+web/parent/                    React (veli uygulaması, Faz 3, ADR-0012)
 ```
 
 - Bağımlılık: `Api → Application, Infrastructure`; `Infrastructure → Application`; `Application → Domain`.
@@ -263,7 +264,7 @@ Ek: başka okulun kaydı → `404`; `IgnoreQueryFilters()` sadece `Tenancy`'de; 
 
 | Ortam | Durum |
 | --- | --- |
-| Yerel | Docker Compose: PostgreSQL 18.6 alpine, Seq; API `scripts/run-api.sh`, Angular `npm start` |
+| Yerel | Docker Compose: PostgreSQL 18.6 alpine, Seq; API `scripts/run-api.sh`, Angular `npm start`, veli uygulaması `npm run dev` |
 | CI | GitHub Actions, Linux; Testcontainers ile geçici PostgreSQL |
 | Staging / Production | **Deploy bloğunda, zamanlanmamış** (DEC-094) |
 
@@ -303,6 +304,7 @@ Her ADR'ın bağlamı, seçenekleri, kararı ve sonuçları Ek F'de özetlenmiş
 | 0009 | Modüller arası iletişim, transaction içi domain event'leri | Accepted |
 | 0010 | UI kütüphanesi seçimi | Yazılacak (P1-13) |
 | 0011 | Production migration stratejisi (bundle + SQL incelemesi) | Accepted |
+| 0012 | Veli uygulaması teknoloji yığını ([docs/adr](adr/0012-veli-uygulamasi-teknoloji-yigini.md)) | Accepted |
 
 ---
 

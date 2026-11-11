@@ -22,18 +22,19 @@ Sahiple ve dokümanlarda Türkçe; kod, isimler, enum'lar, commit'ler İngilizce
 
 ## Test
 - Önce test, kırmızıyı gör. `[Trait("Story", "US-xx")]`. Shouldly (FluentAssertions yasak). DB'ye dokunan kod Testcontainers ile gerçek PostgreSQL'de.
-- "Bitti" demeden önce `dotnet test --solution SporAkademi.slnx` ve `npm test` çalıştır.
+- "Bitti" demeden önce `dotnet test --solution SporAkademi.slnx` ve değişen uygulamada (`web/admin`, `web/parent`) `npm test` çalıştır.
 
 ## Komutlar
-- `bash scripts/setup-env.sh` (bir kez), `docker compose up -d --wait`, `bash scripts/ef.sh database update`, `bash scripts/run-api.sh`, `cd web/admin && npm start`.
+- `bash scripts/setup-env.sh` (bir kez), `docker compose up -d --wait`, `bash scripts/ef.sh database update`, `bash scripts/run-api.sh`, `cd web/admin && npm start`, veli uygulaması `cd web/parent && npm run dev` (React, ADR-0012).
 - Migration: `bash scripts/ef.sh migrations add <Name>`; her zaman migrator rolüyle.
-- API sözleşmesi değişince: `UPDATE_OPENAPI=1 dotnet test --project tests/SporAkademi.IntegrationTests -- --filter-class "*OpenApiContractTests"` ve `web/admin/openapi/spor-akademi.json`'ı commit et. Angular client (`src/app/api`, commit edilmez) `npm run generate:api` ile build/test/lint/start öncesi otomatik üretilir.
+- API sözleşmesi değişince: `UPDATE_OPENAPI=1 dotnet test --project tests/SporAkademi.IntegrationTests -- --filter-class "*OpenApiContractTests"` ve `web/admin/openapi/spor-akademi.json` ile `web/parent/openapi/spor-akademi.json`'ı commit et (test ikisini de yazar ve kontrol eder). Angular client (`src/app/api`) ve veli istemcisi (`src/api/schema.gen.ts`) commit edilmez, `npm run generate:api` ile build/test/lint öncesi otomatik üretilir.
+- Tema token'ları `web/admin/src/styles.css`'te değişir, `theme-tokens` bloğu `web/parent/src/styles/tokens.css`'e kopyalanır (`bash scripts/check-theme-tokens.sh`).
 
 ## Güvenlik
 `.env` hiçbir yoldan okunmaz. `printenv`, `docker inspect`, `docker compose config`, `dotnet user-secrets list` çalıştırılmaz. Loglarda kişisel veri yok. Sadece sentetik veri.
 
 ## GitHub iş akışı
-Issue → branch (`<tür>/<issue-no>-<kısa-açıklama>`, güncel `main`'den) → küçük commit'ler (Conventional Commits, AI attribution yok) → PR (`Closes #n`) → beş check (`backend`, `frontend`, `repo-checks`, `images`, `e2e`; `e2e` 2026-11-10'dan beri) → squash merge. Rebase ve force push yok.
+Issue → branch (`<tür>/<issue-no>-<kısa-açıklama>`, güncel `main`'den) → küçük commit'ler (Conventional Commits, AI attribution yok) → PR (`Closes #n`) → beş zorunlu check (`backend`, `frontend`, `repo-checks`, `images`, `e2e`; `e2e` 2026-11-10'dan beri) ve `parent` (P3-04, ruleset'e eklenmesi sahipte) → squash merge. Rebase ve force push yok.
 
 ## Hafta sonu otonom çalışma istisnaları (sahibin 2026-11-06 kararı)
 - Agent, zorunlu check'ler yeşil ve kodu yazmamış ayrı bir agent incelemesi yapılmışsa PR'ı kendisi squash merge eder.

@@ -5,6 +5,7 @@ Sahibin isteği (2026-11-06): arayüz modern, anlaşılır, grafiklerle destekle
 ## Altyapı
 
 - Tailwind CSS v4 (`@tailwindcss/postcss`), config dosyası yok; token'lar `web/admin/src/styles.css` içinde `:root` / `.dark` + `@theme inline` ile.
+- Veli uygulaması (`web/parent`, React, ADR-0012) aynı token'ları kullanır: admin'deki `theme-tokens:start`/`theme-tokens:end` bloğu `web/parent/src/styles/tokens.css`'e birebir kopyalanır, CI'daki `scripts/check-theme-tokens.sh` sapmayı kırar (DEC-378). Token'lar yalnızca admin'de değiştirilir. Tema tercihi aynı `sa-theme` anahtarı ve `<html>` sınıflarıyla çalışır; Tailwind orada `@tailwindcss/vite` ile, ikonlar `lucide-react` ile.
 - Karanlık mod: `<html>` üzerinde `dark` / `light` sınıfı; tercih `localStorage` (`sa-theme`: `light|dark|system`), yoksa `prefers-color-scheme`. İlk boyamadan önce küçük bir inline script uygular. `html.light` / `html.dark` ayrıca `color-scheme: light|dark` verir (form kontrolleri, kaydırma çubukları).
 - Font: Inter (gövde), JetBrains Mono (sayılar, tablo başlıkları). Kök font boyutu `87.5%` (tarayıcı varsayılanı 16px iken 14px); sabit `px` verilmez, kullanıcının tarayıcı yazı boyutu ayarı korunur (NFR-USA). En küçük metin adımı `text-xs` = 12px (`--text-xs: calc(12rem / 14)`); `text-[10px]` / `text-[11px]` kullanılmaz.
 - İkonlar: lucide (`@lucide/angular` veya eşdeğeri).
