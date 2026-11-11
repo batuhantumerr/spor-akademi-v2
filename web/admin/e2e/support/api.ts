@@ -25,6 +25,14 @@ export class ApiClient {
     return new ApiClient(context, session.accessToken);
   }
 
+  /**
+   * Uses the access token of a session the test already opened (e.g. through the login form), so arranging
+   * data costs no extra login (rate limited, NFR-SEC-14). The token stays valid for 15 minutes.
+   */
+  static async withToken(accessToken: string): Promise<ApiClient> {
+    return new ApiClient(await request.newContext({ baseURL: apiUrl }), accessToken);
+  }
+
   /** Replaces a temporary password; the API answers with a fresh session, which this client keeps. */
   async changePassword(currentPassword: string, newPassword: string): Promise<void> {
     const session = await this.post<SessionResponse>(
