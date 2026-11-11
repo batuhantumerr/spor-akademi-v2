@@ -95,7 +95,7 @@ describe('payment pages', () => {
     await userEvent.click(await screen.findByRole('button', { name: text.sandbox.pay }));
 
     await vi.waitFor(() => {
-      expect(post).toHaveBeenCalledWith('/api/v1/payment-callbacks', 'tok-1');
+      expect(post).toHaveBeenCalledWith(`${window.location.origin}/api/v1/payment-callbacks`, 'tok-1');
     });
     expect(await api.calls[0]!.json()).toEqual({ token: 'tok-1', succeed: true });
   });

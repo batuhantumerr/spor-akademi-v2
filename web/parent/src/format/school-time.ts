@@ -76,6 +76,9 @@ export function nextSlot<T>(
       if (day < 0) continue;
       const start = minutesOf(slot.start);
       const end = minutesOf(slot.end);
+      // The API never returns such a slot: a weekly slot is a TimeRange whose end is after its start within one
+      // day (TimeRange.Create refuses anything else, so there are no overnight sessions). Skipped, not misread.
+      if (end <= start) continue;
       let inDays = (day - today + 7) % 7;
       if (inDays === 0 && end <= now.minutes) inDays = 7; // Today's session is over: next week.
       const key = inDays * 24 * 60 + start;

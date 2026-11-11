@@ -1,5 +1,5 @@
 import { CreditCard } from 'lucide-react';
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { errorMessage } from '../api/errors';
 import { formatMoney, formatPeriod } from '../format/format';
 import { format, text } from '../i18n/tr';
@@ -17,6 +17,17 @@ export function DuesList({ dues }: { dues: readonly Due[] }) {
   // One Idempotency-Key per due and page visit: a retry after a lost answer reuses it and gets the same attempt.
   const keys = useRef(new Map<string, string>());
   const [busy, setBusy] = useState<string | null>(null);
+
+  // Back from the checkout may restore this page from the back/forward cache with a button still busy.
+  useEffect(() => {
+    const restored = (event: PageTransitionEvent) => {
+      if (event.persisted) setBusy(null);
+    };
+    window.addEventListener('pageshow', restored);
+    return () => {
+      window.removeEventListener('pageshow', restored);
+    };
+  }, []);
   const [error, setError] = useState<{ key: string; message: string } | null>(null);
 
   if (dues.length === 0) {

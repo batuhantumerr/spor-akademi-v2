@@ -28,6 +28,11 @@ export function PaymentResultPage() {
       <p role="status" data-testid="result-message" className="text-sm">
         {text.paymentResult[status]}
       </p>
+      {status === 'Succeeded' && (
+        <p className="mt-2 text-sm text-muted-foreground" data-testid="result-note">
+          {text.paymentResult['SucceededNote']}
+        </p>
+      )}
       <Link to="/" className="btn btn-primary mt-6 w-full">
         {text.paymentResult['back']}
       </Link>

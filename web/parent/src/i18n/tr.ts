@@ -148,10 +148,14 @@ export const text = {
     decline: 'Kartı reddet',
     missingToken: 'Ödeme bağlantısı eksik veya geçersiz.',
     working: 'İşleniyor…',
+    badCallback: 'Ödeme sağlayıcısının dönüş adresi geçersiz. Ödeme tamamlanmadı.',
   },
   paymentResult: {
     title: 'Ödeme sonucu',
     Succeeded: 'Ödemeniz alındı. Teşekkür ederiz.',
+    // The page only shows the status from the redirect; the authoritative record is the payments list.
+    SucceededNote:
+      'Ödeme sağlayıcısı onayladığında ödemeler listesinde görünür ve aidatınızdan düşer; bu birkaç dakika sürebilir.',
     Failed: 'Ödeme tamamlanamadı. Kart bilgilerinizi kontrol edip aidat ekranından tekrar deneyin.',
     Pending:
       'Ödemeniz henüz sonuçlanmadı. Sonuç ödeme sağlayıcısından geldiğinde aidat ekranınızda görünecek.',

@@ -93,10 +93,13 @@ export class Session {
    * the session, so a flaky connection does not sign the parent out.
    */
   refresh(): Promise<string | null> {
-    this.refreshInFlight ??= this.doRefresh().finally(() => {
-      this.refreshInFlight = null;
+    if (this.refreshInFlight) return this.refreshInFlight;
+    const call: Promise<string | null> = this.doRefresh().finally(() => {
+      // A logout may have dropped this call and a newer refresh may have started meanwhile; keep that one.
+      if (this.refreshInFlight === call) this.refreshInFlight = null;
     });
-    return this.refreshInFlight;
+    this.refreshInFlight = call;
+    return call;
   }
 
   /** Ends the session here first (so an in-flight refresh cannot bring it back), then on the server. */

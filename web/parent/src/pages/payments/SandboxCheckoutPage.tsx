@@ -2,7 +2,7 @@ import { CreditCard } from 'lucide-react';
 import { useState } from 'react';
 import { useSearchParams } from 'react-router';
 import { api } from '../../api/client';
-import { postToCallback } from '../../parent/checkout';
+import { callbackTarget, postToCallback } from '../../parent/checkout';
 import { errorMessage, unwrap } from '../../api/errors';
 import { text } from '../../i18n/tr';
 import { Notice, PublicLayout } from '../../layout/PublicLayout';
@@ -28,7 +28,13 @@ export function SandboxCheckoutPage() {
       const result = await unwrap(
         api.POST('/api/v1/sandbox-checkout/complete', { body: { token, succeed } }),
       );
-      postToCallback(result.callbackUrl, token);
+      const callback = callbackTarget(result.callbackUrl);
+      if (!callback) {
+        setError(text.sandbox.badCallback);
+        setBusy(false);
+        return;
+      }
+      postToCallback(callback, token);
     } catch (failure) {
       setError(errorMessage(failure));
       setBusy(false);

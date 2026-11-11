@@ -16,6 +16,20 @@ export function checkoutTarget(checkoutUrl: string | null | undefined): string |
   return null;
 }
 
+/**
+ * The provider callback the sandbox page posts the token to: only a URL of this origin (the API's
+ * `/api/v1/payment-callbacks` behind the same proxy). The token must never be posted anywhere else.
+ */
+export function callbackTarget(callbackUrl: string | null | undefined): string | null {
+  if (!callbackUrl) return null;
+  try {
+    const url = new URL(callbackUrl, window.location.origin);
+    return url.origin === window.location.origin ? url.href : null;
+  } catch {
+    return null;
+  }
+}
+
 /** Navigates away to the checkout; a seam for tests. */
 export const browser = {
   assign(url: string): void {
