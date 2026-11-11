@@ -87,7 +87,9 @@ internal sealed class OutstandingDues(DueCharges charges, IPaymentRepository pay
         var book = familyOf is { } student
             ? await charges.ForFamilyAsync(student, from, to, cancellationToken)
             : await charges.ForSchoolAsync(from, to, cancellationToken);
-        var paid = await payments.RecordedTotalsAsync(paymentsOfGroup, from, to, cancellationToken);
+        var paid = familyOf is null
+            ? await payments.RecordedTotalsAsync(paymentsOfGroup, from, to, cancellationToken)
+            : await payments.RecordedTotalsOfEnrollmentsAsync([.. book.Enrollments.Keys], from, to, cancellationToken);
         var dues = FeeRules.Outstanding(book.Charges.Where(include), paid)
             .Where(d => d.Charge.Period >= from && d.Charge.Period <= to)
             .ToList();

@@ -110,6 +110,20 @@ internal sealed class ChargeSnapshotRepository(AppDbContext db) : IChargeSnapsho
         return await db.Set<ChargeSnapshot>().AsNoTracking().Where(s => periods.Contains(s.Period)).ToListAsync(cancellationToken);
     }
 
+    public async Task<IReadOnlyList<ChargeSnapshot>> ListOfStudentsBetweenAsync(
+        IReadOnlyCollection<StudentId> studentIds,
+        YearMonth firstPeriod,
+        YearMonth lastPeriod,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(studentIds);
+        var ids = studentIds.ToList();
+        var periods = Periods(firstPeriod, lastPeriod);
+        return await db.Set<ChargeSnapshot>().AsNoTracking()
+            .Where(s => ids.Contains(s.StudentId) && periods.Contains(s.Period))
+            .ToListAsync(cancellationToken);
+    }
+
     public async Task<IReadOnlyList<ChargeSnapshot>> ListOfStudentsAsync(IReadOnlyCollection<StudentId> studentIds, YearMonth period, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(studentIds);

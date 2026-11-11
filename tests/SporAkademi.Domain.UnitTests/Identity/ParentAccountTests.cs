@@ -148,6 +148,16 @@ public sealed class ParentAccountTests
     }
 
     [Fact]
+    public void A_corrected_address_is_invited_at_once()
+    {
+        var parent = Invite("yanlis@example.com");
+        parent.Deactivate(Now.AddSeconds(30)).IsSuccess.ShouldBeTrue();
+
+        parent.ReinviteParent(Email.Create("dogru@example.com").Value, "h2", "Ayşe", "Deneme", null, Now.AddSeconds(31)).IsSuccess.ShouldBeTrue();
+        parent.Email.Value.ShouldBe("dogru@example.com");
+    }
+
+    [Fact]
     public void Only_parent_accounts_are_invited_again()
     {
         var coach = UserTests.NewCoach();

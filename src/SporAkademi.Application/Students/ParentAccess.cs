@@ -152,7 +152,7 @@ internal sealed class GuardianAftercare(IGuardianRepository guardians, IIdentity
     public async Task<int> AfterUnlinkAsync(IEnumerable<GuardianId> candidates, CancellationToken cancellationToken)
     {
         var deleted = 0;
-        foreach (var id in candidates.Distinct())
+        foreach (var id in InLockOrder(candidates))
         {
             await guardians.LockForDeletionAsync(id, cancellationToken);
             if (await guardians.GetAsync(id, cancellationToken) is not { } guardian)
@@ -182,7 +182,7 @@ internal sealed class GuardianAftercare(IGuardianRepository guardians, IIdentity
     /// <summary>DEC-384: closes the parent accounts of these guardians that have no active student any more.</summary>
     public async Task AfterStudentLeftAsync(IEnumerable<GuardianId> candidates, CancellationToken cancellationToken)
     {
-        foreach (var id in candidates.Distinct())
+        foreach (var id in InLockOrder(candidates))
         {
             // The same row lock as an invitation, so a leave and an invitation never interleave (DEC-384).
             await guardians.LockForDeletionAsync(id, cancellationToken);
@@ -192,6 +192,10 @@ internal sealed class GuardianAftercare(IGuardianRepository guardians, IIdentity
             }
         }
     }
+
+    /// <summary>Guardian rows are always locked in id order, so two transactions locking several never wait in a cycle.</summary>
+    private static IEnumerable<GuardianId> InLockOrder(IEnumerable<GuardianId> candidates) =>
+        candidates.Distinct().OrderBy(id => id.Value);
 
     private async Task CloseIfNoActiveStudentAsync(Guardian guardian, CancellationToken cancellationToken)
     {

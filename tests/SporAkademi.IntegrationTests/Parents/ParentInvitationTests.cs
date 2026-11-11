@@ -147,7 +147,7 @@ public sealed class ParentInvitationTests(DatabaseFixture database) : ParentTest
     }
 
     [Fact]
-    public async Task Changing_the_address_voids_a_pending_link()
+    public async Task Changing_the_address_voids_a_pending_link_and_the_corrected_address_is_invited_at_once()
     {
         var (student, guardian) = await RegisterChildAsync("Ali", "yanlis.adres@example.com");
         (await InviteAsync(guardian)).StatusCode.ShouldBe(HttpStatusCode.OK);
@@ -158,7 +158,7 @@ public sealed class ParentInvitationTests(DatabaseFixture database) : ParentTest
 
         (await ErrorCodeAsync(await AcceptAsync(mistyped))).ShouldBe("Auth.ResetTokenInvalid");
         (await StatusOfAsync(guardian)).ShouldBe("Revoked");
-        PastInvitationCooldown();
+        // No two-minute wait: the cooldown protects one mailbox, and this is another address (DEC-388).
         (await InviteAsync(guardian)).StatusCode.ShouldBe(HttpStatusCode.OK);
         await DeliverAsync();
         (await AcceptAsync(InvitationTokenFor(Email))).StatusCode.ShouldBe(HttpStatusCode.NoContent);

@@ -194,7 +194,8 @@ public sealed class User : AggregateRoot<UserId>
             return Result.Failure(ParentAccountErrors.AlreadyActive);
         }
 
-        if (InvitedAt is { } last && now - last < InvitationCooldown)
+        // The cooldown protects one mailbox; a corrected address (a typo fix closed the account) may be invited at once.
+        if (InvitedAt is { } last && now - last < InvitationCooldown && email == Email)
         {
             return Result.Failure(ParentAccountErrors.InvitationTooSoon);
         }
