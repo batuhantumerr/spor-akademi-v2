@@ -5,20 +5,27 @@ using SporAkademi.IntegrationTests.Infrastructure;
 namespace SporAkademi.IntegrationTests.Platform;
 
 /// <summary>
-/// The Angular client is generated from web/admin/openapi/spor-akademi.json (P1-14). This test fails
-/// when the API contract changed but the committed document did not. To update it, run the tests
-/// with UPDATE_OPENAPI=1 and commit the file.
+/// The Angular client (P1-14) and the parent app's client (P3-04) are generated from committed copies of the
+/// OpenAPI document, one per app so each app builds on its own. This test fails when the API contract changed
+/// but a committed copy did not. To update both, run the tests with UPDATE_OPENAPI=1 and commit the files.
 /// </summary>
 public sealed class OpenApiContractTests(DatabaseFixture database) : IntegrationTest(database)
 {
     private static readonly JsonSerializerOptions Indented = new() { WriteIndented = true };
 
-    [Fact]
-    public async Task Committed_openapi_document_matches_the_api()
+    public static TheoryData<string> CommittedDocuments => new()
+    {
+        "web/admin/openapi/spor-akademi.json",
+        "web/parent/openapi/spor-akademi.json",
+    };
+
+    [Theory]
+    [MemberData(nameof(CommittedDocuments))]
+    public async Task Committed_openapi_document_matches_the_api(string relativePath)
     {
         var json = await Client.GetStringAsync(new Uri("/openapi/v1.json", UriKind.Relative), TestContext.Current.CancellationToken);
         var actual = JsonNode.Parse(json)!.ToJsonString(Indented).ReplaceLineEndings("\n") + "\n";
-        var path = Path.Combine(RepositoryRoot(), "web", "admin", "openapi", "spor-akademi.json");
+        var path = Path.Combine([RepositoryRoot(), .. relativePath.Split('/')]);
 
         if (Environment.GetEnvironmentVariable("UPDATE_OPENAPI") == "1")
         {
@@ -30,7 +37,7 @@ public sealed class OpenApiContractTests(DatabaseFixture database) : Integration
 
         File.Exists(path).ShouldBeTrue($"Missing {path}; run the tests with UPDATE_OPENAPI=1.");
         var committed = (await File.ReadAllTextAsync(path, TestContext.Current.CancellationToken)).ReplaceLineEndings("\n");
-        committed.ShouldBe(actual, "The API contract changed; run the tests with UPDATE_OPENAPI=1 and commit web/admin/openapi/spor-akademi.json.");
+        committed.ShouldBe(actual, $"The API contract changed; run the tests with UPDATE_OPENAPI=1 and commit {relativePath}.");
     }
 
     private static string RepositoryRoot()
