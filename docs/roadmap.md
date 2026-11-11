@@ -75,8 +75,82 @@ Kapsamın tamamı ve maddelerin açıklamaları: [proje dokümanı, Ek G](proje-
 - [x] P2-F5 Otomatik anonimleştirme işi (DEC-360 – DEC-368)
 - [x] P2-F6 Belge yükleme (S3 uyumlu; yerelde SeaweedFS, DEC-320 – DEC-326)
 - [x] P2-F7 Redis ve `HybridCache` ile cache (Valkey; DEC-310 – DEC-316)
-- [x] P2-F8 Aidat kuralları: sürümlü kardeş indirimi ve grup değişikliğinde tek aidat (DEC-370 – DEC-376, **Proposed**; geçmiş aylar her gece kapanır ve borçları dondurulur; varsayılanlar onay listesinde soru 17). Kural sürümü olmayan okulda hesap değişmez; kıst yok (DEC-017).
+- [x] P2-F8 Aidat kuralları: sürümlü kardeş indirimi ve grup değişikliğinde tek aidat (DEC-370 – DEC-376; geçmiş aylar her gece kapanır ve borçları dondurulur; varsayılanlar onay listesinde bölüm 7 ve 9). Kural sürümü olmayan okulda hesap değişmez; kıst yok (DEC-017).
 
 ### Sürüm hazırlığı
-- [x] P2-R1 Çıkış kriterlerinin otomatik testlerle doğrulanması ([faz-2-cikis-kriterleri.md](faz-2-cikis-kriterleri.md); online ödeme e2e'si, e2e API'si `Staging` + Fake, DEC-241 **Proposed**)
-- [ ] P2-R2 Faz 2 geçişi ve `v0.2.0` etiketi (sahip)
+- [x] P2-R1 Çıkış kriterlerinin otomatik testlerle doğrulanması ([faz-2-cikis-kriterleri.md](faz-2-cikis-kriterleri.md); online ödeme e2e'si, e2e API'si `Staging` + Fake, DEC-241)
+- [x] P2-R2 Faz 2 geçişi (sahip onayı 2026-11-11)
+- [ ] P2-R3 `v0.2.0` etiketi (sahip)
+
+## Faz 3 — Veli deneyimi (`v0.3.0`)
+
+Faz 2 geçişinde (2026-11-11) ayrıntılandırıldı. Sıra: önce veli hesabı ve API'si (her şey bunun üzerine kurulur), sonra veli uygulaması, gerçek zamanlı bildirimler, raporlar, dil ve erişilebilirlik.
+
+Veli yalnızca **kendi çocuklarını** görür. Bu, okul izolasyonunun yanında ikinci bir yetki sınırıdır ve her uç nokta için testle kanıtlanır.
+
+### 3.1 Veli hesapları (P3-F1)
+- [ ] P3-01 **Veli rolü.**
+  - `Parent` rolü eklenir; veli kaydı tek okul içinde bir kullanıcı hesabına bağlanır.
+  - Veli yalnızca bağlı olduğu öğrencilerin verisini görür. Acil durum kişisi, sağlık raporu ve ödeme iptal gerekçesi bunun dışındadır.
+  - Bu sınır için ayrı bir izolasyon test paketi yazılır.
+- [ ] P3-02 **Davet akışı.**
+  - Okul Admini, e-postası olan veliyi öğrenci veya veli ekranından davet eder.
+  - Veli şifresini 72 saat geçerli, tek kullanımlık bir bağlantıyla belirler (P2-F4 altyapısı).
+  - Davet yeniden gönderilebilir ve iptal edilebilir; davet durumu ekranda görünür.
+  - Veli silinir ya da son çocuğu okuldan ayrılırsa hesap kapanır.
+- [ ] P3-03 **Veli API'si** (`/api/v1/parent/...`).
+  - Çocuklarım, haftalık program, yoklama geçmişi, borçlar, ödemeler ve duyurular.
+  - Borç tutarı `DueCharges` ile hesaplanır.
+  - Veli kendi borcu için online ödeme başlatabilir. P2-F1 akışı kullanılır; idempotency ve borç başına tek açık deneme kuralı geçerlidir.
+
+### 3.2 Veli uygulaması (P3-F2, DEC-024)
+- [ ] P3-04 **`web/parent` iskeleti.**
+  - React, Vite ve TypeScript; Tailwind v4 admin ile aynı tema token'larını kullanır.
+  - TanStack Query, React Router ve OpenAPI'den üretilen istemci.
+  - CI'da `parent` job'u ve nginx imajı eklenir.
+  - Paket seçimleri bir ADR'de kayda geçer.
+- [ ] P3-05 **Oturum.** Giriş, bellekte tutulan access token ve refresh çerezi, davet kabulü, şifre sıfırlama ve çıkış.
+- [ ] P3-06 **Ekranlar** (önce mobil). Çocuklarım, program, yoklama geçmişi, borçlar ve online ödeme, ödeme geçmişi, duyurular.
+- [ ] P3-07 **PWA.**
+  - Manifest ve kurulabilirlik.
+  - Service worker yalnızca statik dosyaları önbelleğe alır; API yanıtları ve kişisel veri önbelleğe alınmaz.
+  - Çevrimdışı sayfası.
+
+### 3.3 Gerçek zamanlı (P3-F3)
+- [ ] P3-08 **SignalR.**
+  - Kimlik doğrulama JWT ile yapılır; yayın grupları okul, rol, grup ve veli bazındadır.
+  - Mesajlar commit'ten sonra outbox üzerinden yayınlanır.
+  - Anlık bildirim gönderilen durumlar:
+    - Duyuru yayımlanınca antrenöre ve veliye.
+    - Yoklama kaydedilince veliye ("bugün antrenmana katıldı" veya "katılmadı").
+    - Ödeme alınınca veliye.
+  - Valkey backplane isteğe bağlıdır.
+  - Bağlantı koptuğunda istemci yeniden bağlanır ve listeyi yeniler.
+
+### 3.4 Raporlar (P3-F4)
+- [ ] P3-09 **Okul Admini raporları.**
+  - Devam oranı: grup, branş ve antrenör bazında, aylık.
+  - Doluluk eğilimi.
+  - Gelir: tahakkuk ve tahsilat, kardeş indiriminin etkisi, geciken borçlar.
+  - Grafikler erişilebilir olur; her rapor CSV olarak dışa aktarılabilir.
+
+### 3.5 Dil, erişilebilirlik ve diğerleri
+- [ ] P3-10 **Çoklu dil (TR/EN)**, admin ve veli uygulamasında.
+  - API hata mesajları `Accept-Language` başlığına göre döner.
+  - Tarih ve para biçimleri seçilen dile uyar; varsayılan dil Türkçe.
+- [ ] P3-11 **WCAG 2.2 AA denetimi** (P3-F6).
+  - Önemli ekranların listesi çıkarılır.
+  - axe ile otomatik tarama, ardından klavye ve ekran okuyucuyla elle kontrol.
+  - Bulgular düzeltilir; rapor `docs/` altına yazılır.
+- [ ] P3-12 **Okul başına alt alan adı değerlendirmesi** (P3-F7). Sonuç bir ADR olarak kaydedilir.
+- [ ] P3-13 **Online ödeme iadesi.**
+  - Okul Admini, ödemenin tamamını sağlayıcı üzerinden iade eder ve gerekçe girer.
+  - Fazla ödeme ve peşin ödenmiş kaydın erken bitirilmesi durumlarını da kapsar (onay listesi, soru 14).
+
+### Sürüm hazırlığı
+- [ ] P3-R1 **Çıkış kriterlerinin e2e testleriyle doğrulanması.**
+  - Veli daveti kabul eder, çocuğunun yoklamasını görür ve borcunu online öder.
+  - Duyuru veliye anlık olarak ulaşır.
+  - Uygulama iki dilde de çalışır.
+  - WCAG raporunda açık kritik bulgu kalmaz.
+- [ ] P3-R2 Faz 3 geçişi ve `v0.3.0` etiketi (sahip)

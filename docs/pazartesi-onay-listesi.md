@@ -371,3 +371,33 @@ Soru 17'ye cevap olarak sahip "önerilen varsayılanlarla ilerle" dedi (2026-11-
 ## 8. Faz 2 sürüm hazırlığı (2026-11-11)
 
 1. **e2e ortamı (DEC-241).** Online ödemenin uçtan uca testi için e2e API'si `Production` yerine `Staging` ortamında, açıkça `Payments__Provider=Fake` ile çalışıyor (Fake Production'da hiç seçilemez). Kodda iki ortam arasında e2e'yi etkileyen başka fark yok; Production yapılandırma kuralları entegrasyon testlerinde kalıyor. Öneri: onayla. Alternatif: Production'da kalıp online ödeme e2e'sini ayrı bir Staging API'siyle çalıştırmak (ikinci sunucu ve porta değer bulunmadı).
+
+## 9. Faz 2 geçişi ve açık soruların cevabı (2026-11-11)
+
+Sahip **Faz 2 geçişini onayladı** (2026-11-11). Bölüm 7 ve 8'deki açık soruları spor okulu yöneticisi, antrenör ve yazılımcı gözüyle agent'ın cevaplamasını istedi. Cevaplar aşağıda; ilgili kararlar `Accepted` yapıldı. `v0.2.0` etiketi ve hukuki teyitler sahipte kalır.
+
+**Bölüm 7 (P2-F8):**
+
+1. **İndirim oranları: onay (%10 / %15).**
+   - *Yönetici:* Türkiye'deki futbol ve basketbol okullarında kardeş indirimi çoğunlukla %10–%20 arasındadır. %10 / %15 kasayı zorlamaz, veliye de anlamlı gelir.
+   - Oran okul bazında değiştirilebiliyor. Kampanya dönemleri yeni bir sürümle karşılanır.
+2. **En yüksek aidatlı kardeş tam öder: onay.**
+   - *Yönetici:* İndirimin ucuz gruba düşmesi okulun gelirini korur, yaygın uygulama da budur. Alternatif olan "en büyük çocuk tam öder" kuralında, büyük çocuk ucuz bir gruptaysa indirim pahalı gruptaki kardeşe uygulanır ve okul gereksiz gelir kaybeder.
+   - *Yazılımcı:* Sıralama deterministik; eşitlikte en erken kayıt, sonra öğrenci kimliği belirliyor. Veli itiraz ederse borç satırındaki "Kardeş indirimi %10" ipucu neyin neden uygulandığını gösteriyor.
+3. **Grup değişikliğinde o ay eski grubun aidatı: onay.**
+   - *Antrenör:* Ay ortasında üst gruba alınan çocuk çoğunlukla gelişim nedeniyle terfi eder. Veliye o ay ek fark çıkarmak yanlış mesaj verir.
+   - *Yönetici:* Kıst hesabı (DEC-017) tahsilatı karmaşıklaştırır. Ertesi ay yeni grubun aidatı başlar. Kuralı uygun bulmayan okul onu kural sürümünde kapatabilir.
+   - İki gruba aynı anda kayıtlı öğrencinin ikisini de ödemesi doğru, çünkü iki ayrı hizmet alıyor.
+4. **Kapanmış ay değişmez, bağlantı geçmişi tutulmaz: onay.**
+   - *Yönetici:* Muhasebe açısından kapanmış ay kapanmıştır. Sonradan bağlanan kardeş için geriye dönük indirim ya da borç doğmaması veliyle tartışmayı önler.
+   - *Yazılımcı:* Geçerlilik tarihli veli bağlantısı veri modelini ve bütün sorguları ağırlaştırır. Ay kapanışı aynı güvenceyi daha basit sağlıyor. İhtiyaç doğarsa Faz 4 adayıdır.
+5. **Bu ay için onaylı kural, başlamış sürümün geri alınamaması: onay.**
+   - *Yönetici:* Ay ortasında geriye dönük fiyat değişikliği velide güven kaybı yaratır. Onay penceresi yanlışlıkla yapılmasını önlüyor; hata bir sonraki ayın sürümüyle düzeltilir.
+
+**Bölüm 8:**
+
+1. **e2e ortamı Staging + Fake (DEC-241): onay.**
+   - *Yazılımcı:* Fake sağlayıcı Production'da yapılandırma doğrulamasıyla engelli ve bu entegrasyon testleriyle kanıtlı. E2e'nin dayandığı başka hiçbir davranış ortama bağlı değil (bağımsız inceleme, PR #78).
+   - İkinci bir API sunucusu e2e süresini ve karmaşıklığını artırırdı, karşılığında bir kazanç sağlamazdı.
+
+**Faz 3 için not:** soru 13'teki "Admin paylaşımlı ödeme bağlantısı", veli portalı (P3-F2) geldiğinde velinin kendi ödemesiyle tamamlanır. Admin bağlantısı, e-postası olmayan veliler için kalır.
