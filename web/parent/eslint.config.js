@@ -26,6 +26,11 @@ export default defineConfig([
     },
   },
   {
+    // Tests read requests they made themselves; a failed `!` fails the test, which is what it should do.
+    files: ['src/**/*.test.{ts,tsx}', 'src/test/**'],
+    rules: { '@typescript-eslint/no-non-null-assertion': 'off' },
+  },
+  {
     files: ['eslint.config.js'],
     extends: [eslint.configs.recommended],
     languageOptions: { globals: globals.node },

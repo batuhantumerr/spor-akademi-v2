@@ -108,7 +108,7 @@ public sealed class RefreshTokenTests
     }
 
     [Fact]
-    public void Logout_revokes_only_the_presented_token_and_is_idempotent()
+    public void Logout_revokes_only_the_presented_session_and_is_idempotent()
     {
         var (user, token) = LoggedIn();
         var otherDevice = user.CompleteLogin("other", Now).Value;
@@ -118,6 +118,22 @@ public sealed class RefreshTokenTests
 
         token.RevokedAt.ShouldBe(Now);
         otherDevice.IsActive(Now).ShouldBeTrue();
+    }
+
+    [Fact]
+    public void Logout_with_an_already_rotated_token_still_ends_its_whole_family()
+    {
+        // Two tabs share one cookie jar; if a stale token reaches logout (a race with a rotation), the session it
+        // belongs to must end too, not stay alive through its newer token.
+        var (user, _) = LoggedIn();
+        var otherDevice = user.CompleteLogin("other", Now).Value;
+        var newest = user.RotateRefreshToken("h1", "h2", Now.AddMinutes(5)).Value;
+
+        user.RevokeRefreshToken("h1", Now.AddMinutes(6));
+
+        newest.IsActive(Now.AddMinutes(6)).ShouldBeFalse();
+        user.RotateRefreshToken("h2", "h3", Now.AddMinutes(7)).Error.ShouldBe(AuthErrors.SessionExpired);
+        otherDevice.IsActive(Now.AddMinutes(7)).ShouldBeTrue();
     }
 
     [Fact]
