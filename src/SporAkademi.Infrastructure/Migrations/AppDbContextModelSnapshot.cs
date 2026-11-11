@@ -1477,6 +1477,10 @@ namespace SporAkademi.Infrastructure.Migrations
                         .HasColumnType("character varying(100)")
                         .HasColumnName("first_name");
 
+                    b.Property<DateTimeOffset?>("InvitedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("invited_at");
+
                     b.Property<string>("LastName")
                         .IsRequired()
                         .HasMaxLength(100)

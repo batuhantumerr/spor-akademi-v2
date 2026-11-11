@@ -11,6 +11,13 @@ namespace SporAkademi.Infrastructure.Migrations
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
+            migrationBuilder.AddColumn<DateTimeOffset>(
+                name: "invited_at",
+                schema: "identity",
+                table: "users",
+                type: "timestamp with time zone",
+                nullable: true);
+
             migrationBuilder.AddColumn<Guid>(
                 name: "account_user_id",
                 schema: "students",
@@ -34,6 +41,11 @@ namespace SporAkademi.Infrastructure.Migrations
                 name: "ix_guardians_account_user_id",
                 schema: "students",
                 table: "guardians");
+
+            migrationBuilder.DropColumn(
+                name: "invited_at",
+                schema: "identity",
+                table: "users");
 
             migrationBuilder.DropColumn(
                 name: "account_user_id",

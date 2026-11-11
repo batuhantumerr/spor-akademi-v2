@@ -13,7 +13,7 @@ using SporAkademi.Infrastructure.Persistence;
 namespace SporAkademi.Infrastructure.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    [Migration("20261111073546_AddParentAccounts")]
+    [Migration("20261111081944_AddParentAccounts")]
     partial class AddParentAccounts
     {
         /// <inheritdoc />
@@ -1479,6 +1479,10 @@ namespace SporAkademi.Infrastructure.Migrations
                         .HasMaxLength(100)
                         .HasColumnType("character varying(100)")
                         .HasColumnName("first_name");
+
+                    b.Property<DateTimeOffset?>("InvitedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("invited_at");
 
                     b.Property<string>("LastName")
                         .IsRequired()
