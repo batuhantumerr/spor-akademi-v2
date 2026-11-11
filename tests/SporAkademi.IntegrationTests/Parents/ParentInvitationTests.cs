@@ -186,6 +186,28 @@ public sealed class ParentInvitationTests(DatabaseFixture database) : ParentTest
     }
 
     [Fact]
+    public async Task Deleting_and_recreating_guardians_cannot_flood_a_mailbox()
+    {
+        // Each round deletes the guardian (and erases its account), so the next one gets a fresh account and counter;
+        // the School Admin's own limit still stops the eleventh invitation (DEC-388).
+        for (var round = 0; round < 10; round++)
+        {
+            var (student, guardian) = await RegisterChildAsync($"Tur{round}", Email, lastName: $"Döngü{round}");
+            (await InviteAsync(guardian)).StatusCode.ShouldBe(HttpStatusCode.OK, $"round {round}");
+            var detail = await Admin.GetFromJsonAsync<System.Text.Json.JsonElement>($"/api/v1/students/{student}", Ct);
+            (await Admin.PutAsJsonAsync($"/api/v1/students/{student}/guardians", new
+            {
+                guardians = new[] { new { newGuardian = new { firstName = "Yeni", lastName = "Veli", phone = Phone(900 + round, 4), email = (string?)null }, relationship = "Father" } },
+                version = VersionOf(detail),
+            }, Ct)).StatusCode.ShouldBe(HttpStatusCode.OK);
+        }
+
+        var (_, last) = await RegisterChildAsync("Son", Email, lastName: "Döngü");
+
+        (await InviteAsync(last)).StatusCode.ShouldBe(HttpStatusCode.TooManyRequests);
+    }
+
+    [Fact]
     public async Task Changing_or_clearing_the_address_of_an_active_account_ends_its_access()
     {
         var (student, guardian) = await RegisterChildAsync("Ali", Email);

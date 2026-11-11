@@ -43,6 +43,7 @@ builder.Services.AddJwtAuthentication();
 builder.Services.AddAuthRateLimiting();
 builder.Services.AddPaymentNotificationRateLimiting();
 builder.Services.AddParentRateLimiting();
+builder.Services.AddInvitationRateLimiting();
 builder.Services.AddJobsDashboard();
 
 builder.Services.ConfigureHttpJsonOptions(json => json.SerializerOptions.Converters.Add(new JsonStringEnumConverter()));

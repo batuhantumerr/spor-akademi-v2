@@ -1,3 +1,4 @@
+using System.Threading.RateLimiting;
 using SporAkademi.Api.Errors;
 using SporAkademi.Application.Abstractions;
 using SporAkademi.Application.Abstractions.Authentication;
@@ -36,6 +37,19 @@ internal sealed record UpdateGuardianRequest(string FirstName, string LastName, 
 /// <summary>Students and guardians (appendix D §2.7, US-13, US-15, US-16). School Admin only.</summary>
 internal static class StudentEndpoints
 {
+    /// <summary>
+    /// DEC-388: invitations per School Admin (the token's subject) in 10 minutes, across all guardians. The per-account
+    /// cap cannot see a guardian deleted and created again, or an address moved between guardians; this limit can.
+    /// </summary>
+    public const string InvitationRateLimitPolicy = "guardian-invitations";
+    public const int InvitationsPerWindow = 10;
+    public static readonly TimeSpan InvitationWindow = TimeSpan.FromMinutes(10);
+
+    public static IServiceCollection AddInvitationRateLimiting(this IServiceCollection services) =>
+        services.AddRateLimiter(options => options.AddPolicy(InvitationRateLimitPolicy, context => RateLimitPartition.GetFixedWindowLimiter(
+            context.User.FindFirst("sub")?.Value ?? context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+            _ => new FixedWindowRateLimiterOptions { PermitLimit = InvitationsPerWindow, Window = InvitationWindow, QueueLimit = 0 })));
+
     public static IEndpointRouteBuilder MapStudentEndpoints(this IEndpointRouteBuilder app)
     {
         var students = app.MapGroup("/api/v1/students").WithTags("Students").RequireRole(Role.SchoolAdmin);
@@ -54,7 +68,10 @@ internal static class StudentEndpoints
         // P3-02 (DEC-383): the guardian's parent account invitation. POST invites, or sends it again (the earlier link
         // stops working); DELETE revokes it or closes the account.
         guardians.MapGet("/{id:guid}/invitation", GetInvitation).Produces<GuardianInvitationDto>().ProducesProblems(404);
-        guardians.MapPost("/{id:guid}/invitation", Invite).Produces<GuardianInvitationDto>().ProducesProblems(404, 409, 422);
+        guardians.MapPost("/{id:guid}/invitation", Invite)
+            .RequireRateLimiting(InvitationRateLimitPolicy)
+            .Produces<GuardianInvitationDto>()
+            .ProducesProblems(404, 409, 422, 429);
         guardians.MapDelete("/{id:guid}/invitation", RevokeInvitation).Produces<GuardianInvitationDto>().ProducesProblems(404, 422);
 
         return app;
