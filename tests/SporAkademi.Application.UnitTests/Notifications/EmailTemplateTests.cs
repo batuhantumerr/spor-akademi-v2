@@ -52,6 +52,25 @@ public sealed class EmailTemplateTests
         message.TextBody.ShouldContain(Link.AbsoluteUri);
     }
 
+    [Fact]
+    [Trait("Story", "P3-02")]
+    public void The_parent_invitation_names_the_school_and_login_and_says_the_link_lives_three_days()
+    {
+        var parent = User.InviteParent(EntityId.New<SchoolId>(), Email.Create("veli@example.com").Value, "unusable", "Ayşe", "Deneme", null, DateTimeOffset.UnixEpoch).Value;
+
+        var message = IdentityEmails.ParentInvitation(parent, "Kadıköy <Spor>", Link);
+
+        message.Template.ShouldBe("identity.parent-invitation");
+        message.To.ShouldBe("veli@example.com");
+        message.Subject.ShouldBe("Spor Akademi veli hesabı daveti");
+        message.TextBody.ShouldContain("Merhaba Ayşe Deneme,");
+        message.TextBody.ShouldContain("veli@example.com");
+        message.TextBody.ShouldContain("72 saat");
+        message.TextBody.ShouldContain(Link.AbsoluteUri);
+        message.TextBody.ShouldNotContain("unusable");
+        message.HtmlBody.ShouldContain("Kadıköy &lt;Spor&gt;");
+    }
+
     [Theory]
     [InlineData(DuesReminderKind.Upcoming, "billing.dues-upcoming", "Ocak 2027 aidatı: son ödeme tarihi yaklaşıyor")]
     [InlineData(DuesReminderKind.Overdue, "billing.dues-overdue", "Ocak 2027 aidatı: ödeme tarihi geçti")]

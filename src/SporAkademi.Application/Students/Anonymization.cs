@@ -85,6 +85,7 @@ public interface IStudentAnonymizer
 internal sealed class StudentAnonymizer(
     IStudentRepository students,
     IGuardianRepository guardians,
+    GuardianAftercare aftercare,
     IAnonymizationRunRepository runs,
     ITenancyModule tenancy,
     IUnitOfWork unitOfWork,
@@ -154,7 +155,7 @@ internal sealed class StudentAnonymizer(
     public async Task<int> DeleteUnlinkedGuardiansAsync(int limit, CancellationToken cancellationToken)
     {
         var deleted = await unitOfWork.ExecuteInTransactionAsync(
-            async ct => Result.Success(await OrphanGuardians.DeleteAsync(guardians, await guardians.ListUnlinkedAsync(limit, ct), ct)),
+            async ct => Result.Success(await aftercare.AfterUnlinkAsync(await guardians.ListUnlinkedAsync(limit, ct), ct)),
             cancellationToken);
         // A conflict (a guardian linked at the same moment) leaves the rest for the next run.
         return deleted.IsSuccess ? deleted.Value : 0;
@@ -174,56 +175,30 @@ internal sealed class StudentAnonymizer(
 
 /// <summary>
 /// DEC-365: a guardian exists only for the students linked to it. When the last of them is anonymized the guardian
-/// (name, phone, e-mail, address) is deleted; a guardian a sibling still needs stays as it is.
+/// (name, phone, e-mail, address) is deleted; a guardian a sibling still needs stays as it is. Its parent account is
+/// closed with it (DEC-384).
 /// </summary>
-internal sealed class DeleteGuardiansOfAnonymizedStudent(IGuardianRepository guardians) : IDomainEventConsumer<StudentAnonymized>
+internal sealed class DeleteGuardiansOfAnonymizedStudent(GuardianAftercare aftercare) : IDomainEventConsumer<StudentAnonymized>
 {
     public async Task<Result> Handle(StudentAnonymized domainEvent, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(domainEvent);
-        await OrphanGuardians.DeleteAsync(guardians, domainEvent.FormerGuardians, cancellationToken);
+        await aftercare.AfterUnlinkAsync(domainEvent.FormerGuardians, cancellationToken);
         return Result.Success();
     }
 }
 
-/// <summary>DEC-368: a guardian removed from a student and linked to no other student is deleted with it.</summary>
-internal sealed class DeleteGuardiansUnlinkedFromStudent(IGuardianRepository guardians) : IDomainEventConsumer<StudentGuardiansUnlinked>
+/// <summary>
+/// DEC-368: a guardian removed from a student and linked to no other student is deleted with it; DEC-384: its parent
+/// account is closed, and so is the account of a guardian that keeps only students who left.
+/// </summary>
+internal sealed class DeleteGuardiansUnlinkedFromStudent(GuardianAftercare aftercare) : IDomainEventConsumer<StudentGuardiansUnlinked>
 {
     public async Task<Result> Handle(StudentGuardiansUnlinked domainEvent, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(domainEvent);
-        await OrphanGuardians.DeleteAsync(guardians, domainEvent.Removed, cancellationToken);
+        await aftercare.AfterUnlinkAsync(domainEvent.Removed, cancellationToken);
         return Result.Success();
-    }
-}
-
-internal static class OrphanGuardians
-{
-    /// <summary>
-    /// Deletes those of <paramref name="candidates"/> that no student is linked to. Each guardian row is locked
-    /// (<c>FOR UPDATE</c>) before the check, and linking takes <c>FOR SHARE</c> first (DEC-368), so a concurrent
-    /// registration either is seen here or no longer finds the guardian. Runs after the caller's links were saved.
-    /// </summary>
-    /// <returns>The number of deleted guardians.</returns>
-    public static async Task<int> DeleteAsync(IGuardianRepository guardians, IEnumerable<GuardianId> candidates, CancellationToken cancellationToken)
-    {
-        var deleted = 0;
-        foreach (var id in candidates)
-        {
-            await guardians.LockForDeletionAsync(id, cancellationToken);
-            if (await guardians.IsLinkedToAnyStudentAsync(id, cancellationToken))
-            {
-                continue;
-            }
-
-            if (await guardians.GetAsync(id, cancellationToken) is { } guardian)
-            {
-                guardians.Remove(guardian);
-                deleted++;
-            }
-        }
-
-        return deleted;
     }
 }
 

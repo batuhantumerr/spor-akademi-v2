@@ -1477,6 +1477,10 @@ namespace SporAkademi.Infrastructure.Migrations
                         .HasColumnType("character varying(100)")
                         .HasColumnName("first_name");
 
+                    b.Property<DateTimeOffset?>("InvitedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("invited_at");
+
                     b.Property<string>("LastName")
                         .IsRequired()
                         .HasMaxLength(100)
@@ -1784,6 +1788,10 @@ namespace SporAkademi.Infrastructure.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("id");
 
+                    b.Property<Guid?>("AccountUserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("account_user_id");
+
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("created_at");
@@ -1859,6 +1867,11 @@ namespace SporAkademi.Infrastructure.Migrations
 
                     b.HasAlternateKey("TenantId", "Id")
                         .HasName("ak_guardians_tenant_id_id");
+
+                    b.HasIndex("AccountUserId")
+                        .IsUnique()
+                        .HasDatabaseName("ix_guardians_account_user_id")
+                        .HasFilter("account_user_id IS NOT NULL");
 
                     b.HasIndex("TenantId", "Phone")
                         .IsUnique()

@@ -9,6 +9,7 @@ using SporAkademi.Api.Endpoints.Enrollments;
 using SporAkademi.Api.Endpoints.Groups;
 using SporAkademi.Api.Endpoints.Identity;
 using SporAkademi.Api.Endpoints.Organization;
+using SporAkademi.Api.Endpoints.Parents;
 using SporAkademi.Api.Endpoints.Students;
 using SporAkademi.Api.Endpoints.Tenancy;
 using SporAkademi.Api.Errors;
@@ -41,6 +42,7 @@ builder.Services.AddInfrastructure(builder.Configuration);
 builder.Services.AddJwtAuthentication();
 builder.Services.AddAuthRateLimiting();
 builder.Services.AddPaymentNotificationRateLimiting();
+builder.Services.AddParentRateLimiting();
 builder.Services.AddJobsDashboard();
 
 builder.Services.ConfigureHttpJsonOptions(json => json.SerializerOptions.Converters.Add(new JsonStringEnumConverter()));
@@ -55,8 +57,10 @@ app.UseMiddleware<NoStoreMiddleware>();
 app.UseMiddleware<RequestSizeLimitMiddleware>();
 app.UseExceptionHandler();
 app.UseStatusCodePages();
-app.UseRateLimiter();
+// After authentication, so a policy can partition by the signed-in user (the parent API, DEC-388); the other policies
+// partition by client IP and are unaffected.
 app.UseAuthentication();
+app.UseRateLimiter();
 app.UseMiddleware<UserLogEnrichmentMiddleware>();
 app.UseAuthorization();
 app.UseMiddleware<PasswordChangeRequiredMiddleware>();
@@ -77,6 +81,7 @@ app.MapAttendanceEndpoints();
 app.MapBillingEndpoints();
 app.MapOnlinePaymentEndpoints();
 app.MapDashboardEndpoints();
+app.MapParentEndpoints();
 app.MapJobsDashboard();
 app.MapApiDocument();
 

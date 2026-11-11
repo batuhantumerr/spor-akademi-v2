@@ -35,9 +35,10 @@ import {
   StudentEditDialog,
   StudentLeaveDialog,
 } from './student-dialogs';
+import { GuardianAccessComponent } from './guardian-access.component';
 import { StudentDocumentsComponent } from './student-documents.component';
 
-/** US-10: one student — profile, guardians, emergency contact, leave and reactivate. */
+/** US-10: one student — profile, guardians (with their parent app access, P3-02), emergency contact, leave and reactivate. */
 @Component({
   selector: 'app-student-detail-page',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -47,6 +48,7 @@ import { StudentDocumentsComponent } from './student-documents.component';
     StudentEnrollmentsComponent,
     StudentAttendanceComponent,
     StudentDocumentsComponent,
+    GuardianAccessComponent,
     LucideArrowLeft,
     LucideLogOut,
     LucidePencil,
@@ -161,6 +163,7 @@ import { StudentDocumentsComponent } from './student-documents.component';
                   @if (g.email) {
                     <p class="text-xs break-all text-muted-foreground">{{ g.email }}</p>
                   }
+                  <app-guardian-access [guardian]="g" [disabled]="busy()" (changed)="load()" />
                 </div>
                 <button
                   type="button"

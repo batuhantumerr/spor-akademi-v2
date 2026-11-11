@@ -39,6 +39,37 @@ describe('AuthService', () => {
     backend.expectOne('/api/v1/me').flush(user);
   }
 
+  describe('parent accounts (P3-01)', () => {
+    it('refuses a parent at login: the session ends, the cookie is dropped and the error says why', () => {
+      let code: string | undefined;
+      auth.login('veli@example.test', 'Veli-Sifresi-2027').subscribe({
+        error: (err: { error?: { code?: string } }) => (code = err.error?.code),
+      });
+      backend
+        .expectOne('/api/v1/auth/login')
+        .flush({ accessToken: 'parent-token', expiresIn: 900 });
+      backend.expectOne('/api/v1/me').flush({ ...user, role: 'Parent' });
+      backend.expectOne('/api/v1/auth/logout').flush(null);
+
+      expect(code).toBe('ParentAccount.UseParentApp');
+      expect(auth.token()).toBeNull();
+      expect(auth.isAuthenticated()).toBe(false);
+    });
+
+    it('does not restore a parent session from the refresh cookie', () => {
+      let restored: boolean | undefined;
+      auth.restore().subscribe((r) => (restored = r));
+      backend
+        .expectOne('/api/v1/auth/refresh')
+        .flush({ accessToken: 'parent-token', expiresIn: 900 });
+      backend.expectOne('/api/v1/me').flush({ ...user, role: 'Parent' });
+      backend.expectOne('/api/v1/auth/logout').flush(null);
+
+      expect(restored).toBe(false);
+      expect(auth.isAuthenticated()).toBe(false);
+    });
+  });
+
   describe('refresh', () => {
     it('ends the session when the refresh cookie is rejected', () => {
       restoreSession();

@@ -18,6 +18,7 @@ public static class DependencyInjection
         services.AddScoped<AccountOpening>();
         services.AddScoped<Identity.Passwords.PasswordLinkMailer>();
         services.AddScoped<Billing.DueCharges>();
+        services.AddScoped<Billing.OutstandingDues>();
         services.AddScoped<Billing.PaymentViews>();
         services.AddScoped<Billing.OnlinePaymentViews>();
         services.AddScoped<Billing.OnlineCheckout>();
@@ -31,6 +32,8 @@ public static class DependencyInjection
         services.AddScoped<IStudentGroupFilter>(sp => sp.GetRequiredService<EnrollmentModule>());
         services.AddScoped<IEnrollmentHistory>(sp => sp.GetRequiredService<EnrollmentModule>());
         services.AddScoped<Students.IStudentAnonymizer, Students.StudentAnonymizer>();
+        services.AddScoped<Students.GuardianAftercare>();
+        services.AddScoped<Billing.ParentCheckout>();
         return services.AddHandlersFrom(typeof(DependencyInjection).Assembly);
     }
 

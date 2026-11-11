@@ -2,6 +2,7 @@ using FluentValidation;
 using SporAkademi.Application.Abstractions;
 using SporAkademi.Application.Abstractions.Behaviors;
 using SporAkademi.Application.Abstractions.Messaging;
+using SporAkademi.Application.Identity.Contracts;
 using SporAkademi.Domain.SharedKernel;
 using SporAkademi.Domain.Students;
 
@@ -33,7 +34,7 @@ internal sealed class FindGuardiansByPhoneValidator : AbstractValidator<FindGuar
             .MaximumLength(StudentInputLimits.RawPhoneMaxLength).WithErrorCode("Field.TooLong");
 }
 
-internal sealed class UpdateGuardianHandler(IGuardianRepository guardians) : ICommandHandler<UpdateGuardianCommand, Unit>
+internal sealed class UpdateGuardianHandler(IGuardianRepository guardians, IIdentityModule identity) : ICommandHandler<UpdateGuardianCommand, Unit>
 {
     public async Task<Result<Unit>> Handle(UpdateGuardianCommand command, CancellationToken cancellationToken)
     {
@@ -55,8 +56,21 @@ internal sealed class UpdateGuardianHandler(IGuardianRepository guardians) : ICo
         }
 
         guardians.ExpectVersion(guardian, command.Version);
+        var previousEmail = guardian.Email;
         var updated = values.Value.UpdateOf(guardian);
-        return updated.IsSuccess ? Result.Success(Unit.Value) : Result.Failure<Unit>(updated.Error);
+        if (updated.IsFailure)
+        {
+            return Result.Failure<Unit>(updated.Error);
+        }
+
+        // DEC-384: the account (and a pending link) belongs to the address it was invited with. A changed or cleared
+        // address closes it, so a link sent to a mistyped address stops working; the admin invites the new address.
+        if (guardian.AccountUserId is { } account && guardian.Email != previousEmail)
+        {
+            await identity.CloseParentAccountAsync(guardian.TenantId, account, erasePersonalData: false, cancellationToken);
+        }
+
+        return Result.Success(Unit.Value);
     }
 }
 

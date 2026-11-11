@@ -56,6 +56,38 @@ internal sealed class DueCharges(
     }
 
     /// <summary>
+    /// The effective charges of one student's family (the student and their siblings) from <paramref name="from"/> to
+    /// <paramref name="to"/>: the same amounts <see cref="ForSchoolAsync"/> gives them, because siblings only rank among
+    /// themselves, but reading only the family's enrollments (P3-03, DEC-388: the parent's dues).
+    /// </summary>
+    public async Task<ChargeBook> ForFamilyAsync(StudentId studentId, YearMonth from, YearMonth to, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(from);
+        ArgumentNullException.ThrowIfNull(to);
+
+        var versions = await VersionsAsync(cancellationToken);
+        if (!versions.Any(v => v.EffectiveFrom <= to))
+        {
+            var own = await enrollments.ListOfStudentsActiveBetweenAsync([studentId], from.FirstDay, to.LastDay, cancellationToken);
+            return await ChargeAsync(own, from, to, versions, new Dictionary<StudentId, StudentId>(), [], cancellationToken);
+        }
+
+        var family = await siblings.GetFamilyAsync(studentId, cancellationToken);
+        var familyOf = new Dictionary<StudentId, StudentId>();
+        if (family.Count > 1)
+        {
+            foreach (var student in family)
+            {
+                familyOf[student] = family[0];
+            }
+        }
+
+        var related = await enrollments.ListOfStudentsActiveBetweenAsync(family, from.FirstDay, to.LastDay, cancellationToken);
+        var frozen = await snapshots.ListAsync(from, to, cancellationToken);
+        return await ChargeAsync(related, from, to, versions, familyOf, frozen, cancellationToken);
+    }
+
+    /// <summary>
     /// The effective charge of one enrollment in one period, or null when it owes nothing there because it was not active
     /// or its group has no fee for the period. Ranks it among its siblings' charges of that period exactly as
     /// <see cref="ForSchoolAsync"/> does.

@@ -1641,6 +1641,9 @@ API'nin döndüğü tüm hata ve uyarı kodlarının kataloğu. Kurallar:
 | `Auth.ResetTokenInvalid` | BusinessRule | Bu bağlantı geçersiz, kullanılmış veya süresi dolmuş. Yeni bir şifre belirleme bağlantısı isteyin. | P2-F4 |
 | `User.EmailTaken` | Conflict | Bu e-posta adresi zaten kullanılıyor. | US-01, US-08 |
 | `User.NotFound` | NotFound | Kullanıcı bulunamadı. | US-08 |
+| `ParentAccount.AlreadyActive` | BusinessRule | Veli hesabı zaten aktif. Şifresini unuttuysa "Şifremi unuttum" ile yenileyebilir. | P3-02 |
+| `ParentAccount.NotInvited` | BusinessRule | Bu veli henüz davet edilmedi. | P3-02 |
+| `ParentAccount.InvitationTooSoon` | BusinessRule | Bu veli az önce davet edildi; iki dakika sonra tekrar deneyin. | P3-02 |
 | `User.AlreadyInactive` | BusinessRule | Bu kullanıcı zaten pasif. | US-08 |
 
 #### Platform — `Tenancy`
@@ -1697,6 +1700,8 @@ API'nin döndüğü tüm hata ve uyarı kodlarının kataloğu. Kurallar:
 | `Student.InvalidLeaveDate` | BusinessRule | Ayrılma tarihi, aktif kayıtların başlangıç tarihinden önce olamaz. | US-15 |
 | `Guardian.NotFound` | NotFound | Veli bulunamadı. | US-13 |
 | `Guardian.PhoneTaken` | Conflict | Bu telefon numarasıyla kayıtlı başka bir veli var. | US-13 |
+| `Guardian.EmailRequired` | BusinessRule | Davet için velinin e-posta adresi gerekli. | P3-02 |
+| `Guardian.NoActiveStudent` | BusinessRule | Velinin aktif öğrencisi olmadığı için davet gönderilemez. | P3-02 |
 
 #### Belgeler — `Students` (P2-F6)
 

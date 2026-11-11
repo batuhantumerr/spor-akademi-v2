@@ -88,6 +88,12 @@ public interface IUserRepository
     Task<IReadOnlyDictionary<SchoolId, SchoolAdminSummary>> GetFirstSchoolAdminsAsync(IReadOnlyCollection<SchoolId> schoolIds, CancellationToken cancellationToken);
 
     Task<IReadOnlySet<Guid>> GetActiveCoachIdsAsync(SchoolId schoolId, IReadOnlyCollection<Guid> coachIds, CancellationToken cancellationToken);
+
+    /// <summary>A parent account of <paramref name="schoolId"/> with its tokens, tracked; other roles and schools are not found.</summary>
+    Task<User?> GetParentAsync(SchoolId schoolId, UserId id, CancellationToken cancellationToken);
+
+    /// <summary>Parent accounts of <paramref name="schoolId"/> among <paramref name="ids"/> with their set-password tokens, untracked.</summary>
+    Task<IReadOnlyList<User>> ListParentsAsync(SchoolId schoolId, IReadOnlyCollection<UserId> ids, CancellationToken cancellationToken);
 }
 
 public sealed record CoachDto(Guid Id, string FirstName, string LastName, string Email, string? Phone, UserStatus Status, uint Version);

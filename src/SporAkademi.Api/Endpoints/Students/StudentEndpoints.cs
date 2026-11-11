@@ -51,7 +51,36 @@ internal static class StudentEndpoints
         guardians.MapGet("/", FindGuardiansByPhone).Produces<PageResponse<GuardianDto>>().ProducesProblems(400);
         guardians.MapPut("/{id:guid}", UpdateGuardian).Produces<GuardianDto>().ProducesProblems(400, 404, 409);
 
+        // P3-02 (DEC-383): the guardian's parent account invitation. POST invites, or sends it again (the earlier link
+        // stops working); DELETE revokes it or closes the account.
+        guardians.MapGet("/{id:guid}/invitation", GetInvitation).Produces<GuardianInvitationDto>().ProducesProblems(404);
+        guardians.MapPost("/{id:guid}/invitation", Invite).Produces<GuardianInvitationDto>().ProducesProblems(404, 409, 422);
+        guardians.MapDelete("/{id:guid}/invitation", RevokeInvitation).Produces<GuardianInvitationDto>().ProducesProblems(404, 422);
+
         return app;
+    }
+
+    private static async Task<IResult> GetInvitation(Guid id, IQueryHandler<GetGuardianInvitationQuery, GuardianInvitationDto> reader, CancellationToken cancellationToken) =>
+        (await reader.Handle(new GetGuardianInvitationQuery(GuardianId.From(id)), cancellationToken)).OkOrProblem();
+
+    private static async Task<IResult> Invite(
+        Guid id,
+        ICommandHandler<InviteGuardianCommand, Unit> handler,
+        IQueryHandler<GetGuardianInvitationQuery, GuardianInvitationDto> reader,
+        CancellationToken cancellationToken)
+    {
+        var invited = await handler.Handle(new InviteGuardianCommand(GuardianId.From(id)), cancellationToken);
+        return invited.IsSuccess ? await GetInvitation(id, reader, cancellationToken) : ProblemResults.Problem(invited.Error);
+    }
+
+    private static async Task<IResult> RevokeInvitation(
+        Guid id,
+        ICommandHandler<RevokeGuardianInvitationCommand, Unit> handler,
+        IQueryHandler<GetGuardianInvitationQuery, GuardianInvitationDto> reader,
+        CancellationToken cancellationToken)
+    {
+        var revoked = await handler.Handle(new RevokeGuardianInvitationCommand(GuardianId.From(id)), cancellationToken);
+        return revoked.IsSuccess ? await GetInvitation(id, reader, cancellationToken) : ProblemResults.Problem(revoked.Error);
     }
 
     private static async Task<IResult> SearchStudents(

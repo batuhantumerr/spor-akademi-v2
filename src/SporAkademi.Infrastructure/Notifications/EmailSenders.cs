@@ -80,14 +80,17 @@ internal sealed class AppLinks(IOptions<EmailOptions> options) : IAppLinks
 
     public Uri ForgotPassword() => new(Base, "forgot-password");
 
-    private Uri Base
+    public Uri ParentSetPassword(string token)
     {
-        get
-        {
-            var text = options.Value.AppBaseUrl;
-            return new Uri(text.EndsWith('/') ? text : text + "/", UriKind.Absolute);
-        }
+        ArgumentException.ThrowIfNullOrEmpty(token);
+        var parentApp = options.Value.ParentAppBaseUrl;
+        var root = string.IsNullOrWhiteSpace(parentApp) ? Base : BaseOf(parentApp);
+        return new Uri(root, "reset-password#token=" + Uri.EscapeDataString(token));
     }
+
+    private Uri Base => BaseOf(options.Value.AppBaseUrl);
+
+    private static Uri BaseOf(string text) => new(text.EndsWith('/') ? text : text + "/", UriKind.Absolute);
 }
 
 internal static class EmailRegistration

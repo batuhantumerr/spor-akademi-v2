@@ -20,7 +20,8 @@ import {
   throwError,
 } from 'rxjs';
 
-export type Role = 'PlatformAdmin' | 'SchoolAdmin' | 'Coach';
+/** 'Parent' (P3-01) only ever arrives from the API; the admin panel ends such a session at once. */
+export type Role = 'PlatformAdmin' | 'SchoolAdmin' | 'Coach' | 'Parent';
 
 export interface CurrentUser {
   id: string;
@@ -201,6 +202,8 @@ export class AuthService {
 
   private loadMe(epoch: number): Observable<CurrentUser> {
     return this.http.get<CurrentUser>('/api/v1/me').pipe(
+      // P3-01: parents use the parent app; their session is ended here and the cookie dropped.
+      switchMap((user) => (user.role === 'Parent' ? this.refuseParent() : of(user))),
       tap((user) => {
         if (epoch === this.sessionEpoch) {
           this.currentUser.set(user);
@@ -213,6 +216,20 @@ export class AuthService {
         return throwError(() => error);
       }),
     );
+  }
+
+  private refuseParent(): Observable<never> {
+    this.endSession();
+    const refused = new HttpErrorResponse({
+      status: 403,
+      error: { code: 'ParentAccount.UseParentApp' },
+    });
+    return this.http
+      .post<void>('/api/v1/auth/logout', null, { headers: ajaxHeaders(), context: skipAuth() })
+      .pipe(
+        catchError(() => of(undefined)),
+        switchMap(() => throwError(() => refused)),
+      );
   }
 
   private endSession(): void {

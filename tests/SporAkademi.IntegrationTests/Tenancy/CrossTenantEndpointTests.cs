@@ -58,7 +58,14 @@ public sealed partial class CrossTenantEndpointTests(DatabaseFixture database) :
         ["POST /api/v1/platform/jobs/dashboard-session"] = "Platform Admin only; no body, starts the caller's job panel session (DEC-332)",
         ["PUT /api/v1/settings/data-retention"] = "the caller's own school; retention months and version only (DEC-361)",
         ["POST /api/v1/settings/billing-rules"] = "the caller's own school; period, percents and a flag only (DEC-370)",
+        ["POST /api/v1/parent/online-payments"] = "Parent only; another family's and another school's enrollment are probed by ParentIsolationTests (DEC-387)",
     };
+
+    /// <summary>
+    /// Parent endpoints (P3-03): school users are refused by role (403); every family and school boundary of theirs is
+    /// probed with a parent's token by <c>ParentIsolationTests</c> (DEC-387).
+    /// </summary>
+    private static bool IsParentEndpoint(string key) => key.Split(' ')[1].StartsWith("/api/v1/parent/", StringComparison.Ordinal);
 
     /// <summary>Endpoints any signed-in user may call, so they carry no role metadata.</summary>
     private static readonly string[] AnyRoleEndpoints =
@@ -230,7 +237,7 @@ public sealed partial class CrossTenantEndpointTests(DatabaseFixture database) :
     public void Every_endpoint_with_a_route_parameter_has_a_route_probe()
     {
         var covered = RouteProbes(_a, _b).Keys.Concat(PlatformEndpoints).ToHashSet(StringComparer.Ordinal);
-        var actual = Endpoints().Where(e => e.Parameters.Count > 0).Select(e => e.Key).ToHashSet(StringComparer.Ordinal);
+        var actual = Endpoints().Where(e => e.Parameters.Count > 0 && !IsParentEndpoint(e.Key)).Select(e => e.Key).ToHashSet(StringComparer.Ordinal);
 
         actual.Except(covered).ShouldBeEmpty("Add a route probe to CrossTenantEndpointTests for each new endpoint with a route parameter.");
         covered.Except(actual).ShouldBeEmpty("Remove probes of endpoints that no longer exist.");
@@ -385,7 +392,7 @@ public sealed partial class CrossTenantEndpointTests(DatabaseFixture database) :
     };
 
     private List<ApiEndpoint> RouteProbedEndpoints() =>
-        [.. Endpoints().Where(e => e.Parameters.Count > 0 && !PlatformEndpoints.Contains(e.Key))];
+        [.. Endpoints().Where(e => e.Parameters.Count > 0 && !PlatformEndpoints.Contains(e.Key) && !IsParentEndpoint(e.Key))];
 
     /// <summary>
     /// A request per endpoint that passes validation, so only the foreign route id can stop it. Bodies refer to
@@ -452,6 +459,10 @@ public sealed partial class CrossTenantEndpointTests(DatabaseFixture database) :
             ["GET /api/v1/documents/{id:guid}/link"] = (null, ""),
             ["DELETE /api/v1/documents/{id:guid}"] = (null, ""),
             ["PUT /api/v1/guardians/{id:guid}"] = (new { firstName = "Hack", lastName = "Deneme", phone = "0533 999 99 97", version = 1 }, ""),
+            // P3-02: inviting another school's guardian (and revoking or reading its invitation) is "not found".
+            ["GET /api/v1/guardians/{id:guid}/invitation"] = (null, ""),
+            ["POST /api/v1/guardians/{id:guid}/invitation"] = (null, ""),
+            ["DELETE /api/v1/guardians/{id:guid}/invitation"] = (null, ""),
             ["GET /api/v1/enrollments/{id:guid}"] = (null, ""),
             ["POST /api/v1/enrollments/{id:guid}/end"] = (new { date = "2027-01-14" }, ""),
             ["GET /api/v1/payments/{id:guid}"] = (null, ""),

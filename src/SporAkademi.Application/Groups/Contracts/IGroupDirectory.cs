@@ -12,7 +12,9 @@ public sealed record GroupInfo(
     int Capacity,
     Guid? CoachId,
     IReadOnlyList<ScheduleSlot> Slots,
-    DateOnly? ArchivedOn = null)
+    DateOnly? ArchivedOn = null,
+    Guid? SportId = null,
+    Guid? FacilityId = null)
 {
     public bool IsArchived => Status == GroupStatus.Archived;
 

@@ -112,6 +112,7 @@ public static class DependencyInjection
         services.AddDocumentStorage(configuration);
         services.AddScoped<IStudentReminderContacts, StudentReminderContacts>();
         services.AddScoped<IStudentSiblings, StudentSiblings>();
+        services.AddScoped<IParentChildren, ParentChildren>();
         services.AddScoped<IBillingRulesRepository, BillingRulesRepository>();
         services.AddScoped<IChargeSnapshotRepository, ChargeSnapshotRepository>();
         services.AddScoped<IDuesReminderRepository, DuesReminderRepository>();

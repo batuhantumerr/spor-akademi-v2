@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using SporAkademi.Application.Abstractions;
+using SporAkademi.Application.Identity.Contracts;
 using SporAkademi.Application.Students;
 using SporAkademi.Domain.SharedKernel;
 using SporAkademi.Domain.Students;
@@ -79,6 +80,8 @@ internal sealed class GuardianConfiguration : IEntityTypeConfiguration<Guardian>
         builder.Property(g => g.LastName).HasMaxLength(PersonNames.MaxLength);
         // Appendix B §4.7: one guardian per phone in a school, so siblings share it (US-13).
         builder.HasIndex(g => new { g.TenantId, g.Phone }).IsUnique();
+        // DEC-382: one guardian per parent account; it is also how a parent's children are found.
+        builder.HasIndex(g => g.AccountUserId).IsUnique().HasFilter("account_user_id IS NOT NULL");
         builder.ComplexProperty(g => g.Address, address =>
         {
             address.Property(a => a.Line).HasColumnName("address_line").HasMaxLength(Address.LineMaxLength);
@@ -159,7 +162,15 @@ internal sealed class StudentRepository(AppDbContext db) : IStudentRepository
             student is { ContactName: { } name, ContactPhone: { } phone, ContactRelationship: { } relationship }
                 ? new EmergencyContactDto(name, phone.Value, relationship)
                 : null,
-            [.. guardians.Select(g => new StudentGuardianDto(g.Id.Value, g.Relationship, g.FirstName, g.LastName, g.Phone.Value, g.Email?.Value))],
+            // The invitation status lives in the Identity module; GetStudentHandler fills it in (DEC-383).
+            [.. guardians.Select(g => new StudentGuardianDto(
+                g.Id.Value,
+                g.Relationship,
+                g.FirstName,
+                g.LastName,
+                g.Phone.Value,
+                g.Email?.Value,
+                new GuardianInvitationDto(g.Id.Value, ParentAccountStatus.NotInvited, null)))],
             student.AnonymizedAt,
             student.Version);
     }
@@ -275,6 +286,25 @@ internal sealed class GuardianRepository(AppDbContext db) : IGuardianRepository
             .Take(limit)
             .Select(g => g.Id)
             .ToListAsync(cancellationToken);
+
+    public Task<bool> HasActiveStudentAsync(GuardianId id, CancellationToken cancellationToken) =>
+        db.Set<StudentGuardian>().AnyAsync(
+            l => l.GuardianId == id && db.Set<Student>().Any(s => s.Id == l.StudentId && s.Status == StudentStatus.Active),
+            cancellationToken);
+
+    public async Task<IReadOnlyList<GuardianId>> ListOfStudentAsync(StudentId studentId, CancellationToken cancellationToken) =>
+        await db.Set<StudentGuardian>().AsNoTracking().Where(l => l.StudentId == studentId).Select(l => l.GuardianId).ToListAsync(cancellationToken);
+
+    public async Task<IReadOnlyDictionary<GuardianId, Guid>> AccountUserIdsAsync(IReadOnlyCollection<GuardianId> ids, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(ids);
+        var list = ids.Distinct().ToList();
+        var rows = await db.Set<Guardian>().AsNoTracking()
+            .Where(g => list.Contains(g.Id) && g.AccountUserId != null)
+            .Select(g => new { g.Id, g.AccountUserId })
+            .ToListAsync(cancellationToken);
+        return rows.ToDictionary(r => r.Id, r => r.AccountUserId!.Value);
+    }
 
     public void ExpectVersion(Guardian guardian, uint version)
     {

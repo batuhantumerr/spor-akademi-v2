@@ -40,8 +40,83 @@ internal sealed class AccountOpening(IUserRepository users, IPasswordHasher pass
     }
 }
 
-internal sealed class IdentityModule(IUserRepository users, AccountOpening accounts) : IIdentityModule
+internal sealed class IdentityModule(IUserRepository users, AccountOpening accounts, IPasswordHasher passwordHasher, TimeProvider timeProvider) : IIdentityModule
 {
+    public async Task<Result<Guid>> InviteParentAsync(SchoolId schoolId, Guid? existingUserId, ParentAccountDetails details, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(details);
+        var address = Email.Create(details.Email);
+        if (address.IsFailure)
+        {
+            return Result.Failure<Guid>(address.Error);
+        }
+
+        // DEC-383: the account never gets a password anyone knows; the invitation link sets the first one.
+        var unusablePassword = passwordHasher.Hash(TemporaryPassword.Generate() + TemporaryPassword.Generate());
+        if (existingUserId is not { } userId)
+        {
+            if (await users.EmailExistsAsync(address.Value, cancellationToken))
+            {
+                return Result.Failure<Guid>(UserErrors.EmailTaken);
+            }
+
+            var invited = User.InviteParent(schoolId, address.Value, unusablePassword, details.FirstName, details.LastName, details.Phone, timeProvider.GetUtcNow());
+            if (invited.IsFailure)
+            {
+                return Result.Failure<Guid>(invited.Error);
+            }
+
+            users.Add(invited.Value);
+            return Result.Success(invited.Value.Id.Value);
+        }
+
+        if (await users.GetParentAsync(schoolId, UserId.From(userId), cancellationToken) is not { } parent)
+        {
+            return Result.Failure<Guid>(UserErrors.NotFound);
+        }
+
+        if (parent.Email != address.Value && await users.EmailExistsAsync(address.Value, cancellationToken))
+        {
+            return Result.Failure<Guid>(UserErrors.EmailTaken);
+        }
+
+        var reinvited = parent.ReinviteParent(address.Value, unusablePassword, details.FirstName, details.LastName, details.Phone, timeProvider.GetUtcNow());
+        return reinvited.IsSuccess ? Result.Success(userId) : Result.Failure<Guid>(reinvited.Error);
+    }
+
+    public async Task CloseParentAccountAsync(SchoolId schoolId, Guid userId, bool erasePersonalData, CancellationToken cancellationToken)
+    {
+        if (await users.GetParentAsync(schoolId, UserId.From(userId), cancellationToken) is not { } parent)
+        {
+            return;
+        }
+
+        var now = timeProvider.GetUtcNow();
+        if (erasePersonalData)
+        {
+            parent.EraseParent(now);
+        }
+        else if (parent.Status == UserStatus.Active)
+        {
+            _ = parent.Deactivate(now);
+        }
+    }
+
+    public async Task<IReadOnlyDictionary<Guid, ParentAccountInfo>> GetParentAccountsAsync(
+        SchoolId schoolId,
+        IReadOnlyCollection<Guid> userIds,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(userIds);
+        if (userIds.Count == 0)
+        {
+            return new Dictionary<Guid, ParentAccountInfo>();
+        }
+
+        var parents = await users.ListParentsAsync(schoolId, [.. userIds.Distinct().Select(UserId.From)], cancellationToken);
+        return parents.ToDictionary(p => p.Id.Value, ParentAccounts.InfoOf);
+    }
+
     public async Task<Result<NewAccount>> CreateSchoolAdminAsync(SchoolId schoolId, string firstName, string lastName, string email, CancellationToken cancellationToken)
     {
         var opened = await accounts.OpenAsync(schoolId, UserRole.SchoolAdmin, firstName, lastName, email, null, cancellationToken);
@@ -55,4 +130,17 @@ internal sealed class IdentityModule(IUserRepository users, AccountOpening accou
 
     public Task<IReadOnlySet<Guid>> GetActiveCoachIdsAsync(SchoolId schoolId, IReadOnlyCollection<Guid> coachIds, CancellationToken cancellationToken) =>
         users.GetActiveCoachIdsAsync(schoolId, coachIds, cancellationToken);
+}
+
+internal static class ParentAccounts
+{
+    /// <summary>DEC-383: the status follows from the account; a closed account is "revoked" whatever closed it.</summary>
+    public static ParentAccountInfo InfoOf(User parent)
+    {
+        ArgumentNullException.ThrowIfNull(parent);
+        var status = parent.Status == UserStatus.Deactivated
+            ? ParentAccountStatus.Revoked
+            : parent.MustChangePassword ? ParentAccountStatus.Invited : ParentAccountStatus.Active;
+        return new ParentAccountInfo(parent.Id.Value, status, status == ParentAccountStatus.Invited ? parent.InvitationExpiresAt : null);
+    }
 }
