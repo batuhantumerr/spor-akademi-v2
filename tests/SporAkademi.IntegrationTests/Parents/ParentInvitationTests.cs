@@ -6,7 +6,7 @@ using SporAkademi.IntegrationTests.Infrastructure;
 namespace SporAkademi.IntegrationTests.Parents;
 
 /// <summary>
-/// P3-02 (DEC-382): the School Admin invites a guardian with an e-mail address; the 72-hour, single-use link sets the
+/// P3-02 (DEC-383): the School Admin invites a guardian with an e-mail address; the 72-hour, single-use link sets the
 /// parent's first password. Resending voids the earlier link; revoking closes the account; the status is visible.
 /// </summary>
 [Trait("Story", "P3-02")]

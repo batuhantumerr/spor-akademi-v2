@@ -16,7 +16,7 @@ public enum PasswordTokenPurpose
     /// <summary>A new account's welcome e-mail: the user sets a password without the temporary one.</summary>
     Welcome,
 
-    /// <summary>A parent's invitation (P3-02, DEC-382): accepting it sets the account's first password.</summary>
+    /// <summary>A parent's invitation (P3-02, DEC-383): accepting it sets the account's first password.</summary>
     Invitation,
 }
 
@@ -64,7 +64,7 @@ public sealed class PasswordToken : Entity<PasswordTokenId>
     /// <summary>
     /// DEC-352: a reset link lives 30 minutes; a welcome link 24 hours, since a new user may not read mail at once. Not
     /// longer: a mistyped address hands the account to whoever owns it until the link expires (DEC-351). A parent
-    /// invitation lives 72 hours (DEC-382): parents are not staff and may open it only at the weekend; the account it
+    /// invitation lives 72 hours (DEC-383): parents are not staff and may open it only at the weekend; the account it
     /// opens sees only that family's children, and the School Admin can revoke it at any time.
     /// </summary>
     public static TimeSpan LifetimeOf(PasswordTokenPurpose purpose) => purpose switch

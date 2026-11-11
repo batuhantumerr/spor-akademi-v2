@@ -42,7 +42,7 @@ public sealed class Guardian : AggregateRoot<GuardianId>, ITenantScoped
     public Address? Address { get; private set; }
 
     /// <summary>
-    /// The parent account (an Identity user of the same school) this guardian was invited to (P3-01, DEC-381). Set by
+    /// The parent account (an Identity user of the same school) this guardian was invited to (P3-01, DEC-382). Set by
     /// the first invitation and kept afterwards: a later invitation reopens the same account.
     /// </summary>
     public Guid? AccountUserId { get; private set; }
@@ -91,6 +91,6 @@ public static class GuardianErrors
     /// <summary>P3-02: an invitation needs the guardian's e-mail address.</summary>
     public static readonly Error EmailRequired = Error.BusinessRule("Guardian.EmailRequired", "The guardian has no e-mail address to invite.");
 
-    /// <summary>P3-02 (DEC-383): only a guardian of at least one active student gets a parent account.</summary>
+    /// <summary>P3-02 (DEC-384): only a guardian of at least one active student gets a parent account.</summary>
     public static readonly Error NoActiveStudent = Error.BusinessRule("Guardian.NoActiveStudent", "The guardian has no active student.");
 }

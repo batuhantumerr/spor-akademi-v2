@@ -58,7 +58,7 @@ internal sealed class DueCharges(
     /// <summary>
     /// The effective charges of one student's family (the student and their siblings) from <paramref name="from"/> to
     /// <paramref name="to"/>: the same amounts <see cref="ForSchoolAsync"/> gives them, because siblings only rank among
-    /// themselves, but reading only the family's enrollments (P3-03, DEC-387: the parent's dues).
+    /// themselves, but reading only the family's enrollments (P3-03, DEC-388: the parent's dues).
     /// </summary>
     public async Task<ChargeBook> ForFamilyAsync(StudentId studentId, YearMonth from, YearMonth to, CancellationToken cancellationToken)
     {

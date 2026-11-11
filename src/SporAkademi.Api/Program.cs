@@ -57,7 +57,7 @@ app.UseMiddleware<NoStoreMiddleware>();
 app.UseMiddleware<RequestSizeLimitMiddleware>();
 app.UseExceptionHandler();
 app.UseStatusCodePages();
-// After authentication, so a policy can partition by the signed-in user (the parent API, DEC-387); the other policies
+// After authentication, so a policy can partition by the signed-in user (the parent API, DEC-388); the other policies
 // partition by client IP and are unaffected.
 app.UseAuthentication();
 app.UseRateLimiter();

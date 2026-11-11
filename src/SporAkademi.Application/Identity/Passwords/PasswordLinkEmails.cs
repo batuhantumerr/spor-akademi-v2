@@ -41,7 +41,7 @@ internal sealed partial class PasswordLinkMailer(
             {
                 var user = await users.GetByIdAsync(UserId.From(userId), ct);
                 // A welcome link is pointless once the user chose a password (e.g. with the temporary one); so is an
-                // invitation the parent already accepted (DEC-382).
+                // invitation the parent already accepted (DEC-383).
                 if (user is null
                     || (purpose is PasswordTokenPurpose.Welcome or PasswordTokenPurpose.Invitation && !user.MustChangePassword)
                     || (purpose == PasswordTokenPurpose.Invitation && user.Role != UserRole.Parent))
@@ -67,7 +67,7 @@ internal sealed partial class PasswordLinkMailer(
         }
 
         var school = recipient.TenantId is { } schoolId ? await tenancy.SchoolNameAsync(schoolId, cancellationToken) : null;
-        // DEC-382: a parent's links open the parent app; staff links the admin panel.
+        // DEC-383: a parent's links open the parent app; staff links the admin panel.
         var setPassword = recipient.Role == UserRole.Parent ? links.ParentSetPassword(token.Token) : links.SetPassword(token.Token);
         var message = purpose switch
         {
@@ -96,7 +96,7 @@ internal sealed class SendWelcomeEmail(PasswordLinkMailer mailer) : IOutboxMessa
     }
 }
 
-/// <summary>P3-02 (DEC-382): the parent invitation e-mail.</summary>
+/// <summary>P3-02 (DEC-383): the parent invitation e-mail.</summary>
 internal sealed class SendParentInvitationEmail(PasswordLinkMailer mailer) : IOutboxMessageHandler<ParentInvitedMessage>
 {
     public Task Handle(ParentInvitedMessage message, OutboxMessageContext context, CancellationToken cancellationToken)
@@ -124,7 +124,7 @@ internal static class IdentityEmails
     public const string PasswordResetTemplate = "identity.password-reset";
     public const string ParentInvitationTemplate = "identity.parent-invitation";
 
-    /// <summary>P3-02 (DEC-382): no child's name and no password; only the school, the login and the link.</summary>
+    /// <summary>P3-02 (DEC-383): no child's name and no password; only the school, the login and the link.</summary>
     public static EmailMessage ParentInvitation(User user, string? schoolName, Uri setPassword)
     {
         var who = schoolName is null ? "Okulunuz" : schoolName;

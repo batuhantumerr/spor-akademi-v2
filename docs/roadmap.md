@@ -89,16 +89,16 @@ Faz 2 geçişinde (2026-11-11) ayrıntılandırıldı. Sıra: önce veli hesabı
 Veli yalnızca **kendi çocuklarını** görür. Bu, okul izolasyonunun yanında ikinci bir yetki sınırıdır ve her uç nokta için testle kanıtlanır.
 
 ### 3.1 Veli hesapları (P3-F1)
-- [x] P3-01 **Veli rolü.** (DEC-381, DEC-386)
+- [x] P3-01 **Veli rolü.** (DEC-382, DEC-387)
   - `Parent` rolü eklenir; veli kaydı tek okul içinde bir kullanıcı hesabına bağlanır.
   - Veli yalnızca bağlı olduğu öğrencilerin verisini görür. Acil durum kişisi, sağlık raporu ve ödeme iptal gerekçesi bunun dışındadır.
   - Bu sınır için ayrı bir izolasyon test paketi yazılır.
-- [x] P3-02 **Davet akışı.** (DEC-382, DEC-383; davet öğrenci ayrıntısındaki veli satırından)
+- [x] P3-02 **Davet akışı.** (DEC-383, DEC-384; davet öğrenci ayrıntısındaki veli satırından)
   - Okul Admini, e-postası olan veliyi öğrenci veya veli ekranından davet eder.
   - Veli şifresini 72 saat geçerli, tek kullanımlık bir bağlantıyla belirler (P2-F4 altyapısı).
   - Davet yeniden gönderilebilir ve iptal edilebilir; davet durumu ekranda görünür.
   - Veli silinir ya da son çocuğu okuldan ayrılırsa hesap kapanır.
-- [x] P3-03 **Veli API'si** (`/api/v1/parent/...`; DEC-384, DEC-385, DEC-387).
+- [x] P3-03 **Veli API'si** (`/api/v1/parent/...`; DEC-385, DEC-386, DEC-388).
   - Çocuklarım, haftalık program, yoklama geçmişi, borçlar, ödemeler ve duyurular.
   - Borç tutarı `DueCharges` ile hesaplanır.
   - Veli kendi borcu için online ödeme başlatabilir. P2-F1 akışı kullanılır; idempotency ve borç başına tek açık deneme kuralı geçerlidir.

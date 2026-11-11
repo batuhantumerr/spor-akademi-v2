@@ -6,7 +6,7 @@ using SporAkademi.IntegrationTests.Infrastructure;
 namespace SporAkademi.IntegrationTests.Parents;
 
 /// <summary>
-/// P3-03 (DEC-384, DEC-385): what a signed-in parent reads about their children and how they pay a due online. The
+/// P3-03 (DEC-385, DEC-386): what a signed-in parent reads about their children and how they pay a due online. The
 /// test clock's today is Thursday 2027-01-14 (15:00 in Istanbul), so a 10:00 session of today was held.
 /// </summary>
 [Trait("Story", "P3-03")]

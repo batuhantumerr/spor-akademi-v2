@@ -176,7 +176,7 @@ internal sealed class StudentAnonymizer(
 /// <summary>
 /// DEC-365: a guardian exists only for the students linked to it. When the last of them is anonymized the guardian
 /// (name, phone, e-mail, address) is deleted; a guardian a sibling still needs stays as it is. Its parent account is
-/// closed with it (DEC-383).
+/// closed with it (DEC-384).
 /// </summary>
 internal sealed class DeleteGuardiansOfAnonymizedStudent(GuardianAftercare aftercare) : IDomainEventConsumer<StudentAnonymized>
 {
@@ -189,7 +189,7 @@ internal sealed class DeleteGuardiansOfAnonymizedStudent(GuardianAftercare after
 }
 
 /// <summary>
-/// DEC-368: a guardian removed from a student and linked to no other student is deleted with it; DEC-383: its parent
+/// DEC-368: a guardian removed from a student and linked to no other student is deleted with it; DEC-384: its parent
 /// account is closed, and so is the account of a guardian that keeps only students who left.
 /// </summary>
 internal sealed class DeleteGuardiansUnlinkedFromStudent(GuardianAftercare aftercare) : IDomainEventConsumer<StudentGuardiansUnlinked>

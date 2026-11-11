@@ -51,7 +51,7 @@ internal sealed class IdentityModule(IUserRepository users, AccountOpening accou
             return Result.Failure<Guid>(address.Error);
         }
 
-        // DEC-382: the account never gets a password anyone knows; the invitation link sets the first one.
+        // DEC-383: the account never gets a password anyone knows; the invitation link sets the first one.
         var unusablePassword = passwordHasher.Hash(TemporaryPassword.Generate() + TemporaryPassword.Generate());
         if (existingUserId is not { } userId)
         {
@@ -134,7 +134,7 @@ internal sealed class IdentityModule(IUserRepository users, AccountOpening accou
 
 internal static class ParentAccounts
 {
-    /// <summary>DEC-382: the status follows from the account; a closed account is "revoked" whatever closed it.</summary>
+    /// <summary>DEC-383: the status follows from the account; a closed account is "revoked" whatever closed it.</summary>
     public static ParentAccountInfo InfoOf(User parent)
     {
         ArgumentNullException.ThrowIfNull(parent);

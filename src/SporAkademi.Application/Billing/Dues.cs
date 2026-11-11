@@ -58,7 +58,7 @@ internal sealed class ListOutstandingDuesHandler(
 }
 
 /// <summary>
-/// The outstanding dues rows of a window (US-24), shared by the School Admin's list and the parent's (P3-03, DEC-384),
+/// The outstanding dues rows of a window (US-24), shared by the School Admin's list and the parent's (P3-03, DEC-385),
 /// so both show the same amounts: the charges come from <see cref="DueCharges"/> for the whole school (siblings rank
 /// across groups, DEC-373) and only then is the result filtered.
 /// </summary>
@@ -83,7 +83,7 @@ internal sealed class OutstandingDues(DueCharges charges, IPaymentRepository pay
         CancellationToken cancellationToken,
         StudentId? familyOf = null)
     {
-        // A single family's rows need only its own charges: the same amounts, without reading the whole school (DEC-387).
+        // A single family's rows need only its own charges: the same amounts, without reading the whole school (DEC-388).
         var book = familyOf is { } student
             ? await charges.ForFamilyAsync(student, from, to, cancellationToken)
             : await charges.ForSchoolAsync(from, to, cancellationToken);

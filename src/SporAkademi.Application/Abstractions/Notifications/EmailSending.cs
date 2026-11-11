@@ -37,7 +37,7 @@ public interface IAppLinks
     Uri ForgotPassword();
 
     /// <summary>
-    /// P3-02 (DEC-382): the same "Yeni şifre belirle" page of the parent app (<c>Email:ParentAppBaseUrl</c>); until the
+    /// P3-02 (DEC-383): the same "Yeni şifre belirle" page of the parent app (<c>Email:ParentAppBaseUrl</c>); until the
     /// parent app is configured, the admin app's page, which works for every account.
     /// </summary>
     Uri ParentSetPassword(string token);

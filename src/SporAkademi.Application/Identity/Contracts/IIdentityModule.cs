@@ -9,7 +9,7 @@ public sealed record NewAccount(Guid UserId, string TemporaryPassword);
 
 public sealed record SchoolAdminSummary(Guid Id, string FirstName, string LastName, string Email, UserStatus Status);
 
-/// <summary>Where a guardian's parent account stands (P3-02, DEC-382), as the School Admin sees it.</summary>
+/// <summary>Where a guardian's parent account stands (P3-02, DEC-383), as the School Admin sees it.</summary>
 public enum ParentAccountStatus
 {
     /// <summary>"Davet edilmedi": the guardian has no account.</summary>
@@ -21,7 +21,7 @@ public enum ParentAccountStatus
     /// <summary>"Aktif": the parent set a password and can sign in.</summary>
     Active,
 
-    /// <summary>"İptal": revoked by the School Admin, or closed because the guardian has no active student (DEC-383).</summary>
+    /// <summary>"İptal": revoked by the School Admin, or closed because the guardian has no active student (DEC-384).</summary>
     Revoked,
 }
 
@@ -51,7 +51,7 @@ public interface IIdentityModule
     Task<IReadOnlySet<Guid>> GetActiveCoachIdsAsync(SchoolId schoolId, IReadOnlyCollection<Guid> coachIds, CancellationToken cancellationToken);
 
     /// <summary>
-    /// P3-02 (DEC-382): invites a guardian to a parent account of <paramref name="schoolId"/>, joining the caller's
+    /// P3-02 (DEC-383): invites a guardian to a parent account of <paramref name="schoolId"/>, joining the caller's
     /// transaction. Without <paramref name="existingUserId"/> a new account is opened; with it the account is invited
     /// again (a pending invitation is resent, a revoked or closed one reopened; every earlier link stops working at
     /// once). The invitation e-mail goes out after commit. Fails with <c>User.EmailTaken</c> when another account uses
@@ -61,7 +61,7 @@ public interface IIdentityModule
     Task<Result<Guid>> InviteParentAsync(SchoolId schoolId, Guid? existingUserId, ParentAccountDetails details, CancellationToken cancellationToken);
 
     /// <summary>
-    /// P3-02 (DEC-383): closes a parent account of <paramref name="schoolId"/> inside the caller's transaction: it is
+    /// P3-02 (DEC-384): closes a parent account of <paramref name="schoolId"/> inside the caller's transaction: it is
     /// deactivated, its sessions (refresh tokens) are revoked and a pending link stops working. An account that is
     /// already closed is left closed; an unknown id or another role or school is ignored. With
     /// <paramref name="erasePersonalData"/> (the guardian itself was deleted) the account's name, phone and e-mail are

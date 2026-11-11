@@ -13,7 +13,7 @@ public sealed class EmailOptions
     public string AppBaseUrl { get; set; } = "http://localhost:4200/";
 
     /// <summary>
-    /// The parent app's public address (P3-02, DEC-382); a parent's links point here. Empty until the parent app is
+    /// The parent app's public address (P3-02, DEC-383); a parent's links point here. Empty until the parent app is
     /// deployed: the links then use <see cref="AppBaseUrl"/>, whose set-password page works for every account.
     /// </summary>
     public string? ParentAppBaseUrl { get; set; }

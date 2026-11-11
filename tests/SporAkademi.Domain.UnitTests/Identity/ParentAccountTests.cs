@@ -4,7 +4,7 @@ using SporAkademi.Domain.Tenancy;
 
 namespace SporAkademi.Domain.UnitTests.Identity;
 
-/// <summary>P3-02 (DEC-382): a parent account is opened by an invitation and has no usable password until it is accepted.</summary>
+/// <summary>P3-02 (DEC-383): a parent account is opened by an invitation and has no usable password until it is accepted.</summary>
 [Trait("Story", "P3-02")]
 public sealed class ParentAccountTests
 {

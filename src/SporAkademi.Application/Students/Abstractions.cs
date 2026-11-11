@@ -8,7 +8,7 @@ public sealed record EmergencyContactDto(string Name, string Phone, string Relat
 
 public sealed record GuardianAddressDto(string Line, string District, string City);
 
-/// <param name="Invitation">The guardian's parent account (P3-02, DEC-382); "not invited" until the first invitation.</param>
+/// <param name="Invitation">The guardian's parent account (P3-02, DEC-383); "not invited" until the first invitation.</param>
 public sealed record StudentGuardianDto(
     Guid GuardianId,
     GuardianRelationship Relationship,
@@ -139,13 +139,13 @@ public interface IGuardianRepository
 
     void ExpectVersion(Guardian guardian, uint version);
 
-    /// <summary>DEC-383: whether an active (hence not anonymized) student of the school is linked to the guardian.</summary>
+    /// <summary>DEC-384: whether an active (hence not anonymized) student of the school is linked to the guardian.</summary>
     Task<bool> HasActiveStudentAsync(GuardianId id, CancellationToken cancellationToken);
 
     /// <summary>The guardians linked to the student (saved links).</summary>
     Task<IReadOnlyList<GuardianId>> ListOfStudentAsync(StudentId studentId, CancellationToken cancellationToken);
 
-    /// <summary>The parent account of each of <paramref name="ids"/> that has one (DEC-381).</summary>
+    /// <summary>The parent account of each of <paramref name="ids"/> that has one (DEC-382).</summary>
     Task<IReadOnlyDictionary<GuardianId, Guid>> AccountUserIdsAsync(IReadOnlyCollection<GuardianId> ids, CancellationToken cancellationToken);
 
     Task<GuardianDto?> FindDtoAsync(GuardianId id, CancellationToken cancellationToken);

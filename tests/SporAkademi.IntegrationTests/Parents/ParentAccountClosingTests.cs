@@ -9,7 +9,7 @@ using SporAkademi.IntegrationTests.Infrastructure;
 namespace SporAkademi.IntegrationTests.Parents;
 
 /// <summary>
-/// P3-02 (DEC-383): a parent account never outlives its reason. When the guardian's last active child leaves, or the
+/// P3-02 (DEC-384): a parent account never outlives its reason. When the guardian's last active child leaves, or the
 /// guardian is deleted (unlinked from its last student, or with an anonymized student), the account is closed in the
 /// same transaction and its sessions end; a deleted guardian's account also loses its personal data.
 /// </summary>

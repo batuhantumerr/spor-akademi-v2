@@ -8,7 +8,7 @@ using SporAkademi.Infrastructure.Persistence;
 namespace SporAkademi.Infrastructure.Students;
 
 /// <summary>
-/// DEC-381: the signed-in parent's children, in one query: guardian (by its account) → links → active students, and
+/// DEC-382: the signed-in parent's children, in one query: guardian (by its account) → links → active students, and
 /// only while the account itself is active (users are not tenant-filtered, so its school is stated). The tenant filter
 /// applies to guardians, links and students, so another school's rows never match either.
 /// </summary>
@@ -48,7 +48,7 @@ internal sealed class ParentChildren(AppDbContext db, ICurrentUser currentUser) 
                      && student.AnonymizedAt == null
                      && db.Set<User>().Any(u => u.Id == account && u.TenantId == school && u.Role == UserRole.Parent && u.Status == UserStatus.Active
                          // Not a re-invited account still waiting for its new password: a token issued before the
-                         // revocation must not see the children again (DEC-383).
+                         // revocation must not see the children again (DEC-384).
                          && !u.MustChangePassword)
                select new Child { Student = student, Relationship = link.Relationship };
     }
