@@ -76,3 +76,7 @@ Kapsamın tamamı ve maddelerin açıklamaları: [proje dokümanı, Ek G](proje-
 - [x] P2-F6 Belge yükleme (S3 uyumlu; yerelde SeaweedFS, DEC-320 – DEC-326)
 - [x] P2-F7 Redis ve `HybridCache` ile cache (Valkey; DEC-310 – DEC-316)
 - [x] P2-F8 Aidat kuralları: sürümlü kardeş indirimi ve grup değişikliğinde tek aidat (DEC-370 – DEC-376, **Proposed**; geçmiş aylar her gece kapanır ve borçları dondurulur; varsayılanlar onay listesinde soru 17). Kural sürümü olmayan okulda hesap değişmez; kıst yok (DEC-017).
+
+### Sürüm hazırlığı
+- [x] P2-R1 Çıkış kriterlerinin otomatik testlerle doğrulanması ([faz-2-cikis-kriterleri.md](faz-2-cikis-kriterleri.md); online ödeme e2e'si, e2e API'si `Staging` + Fake, DEC-241 **Proposed**)
+- [ ] P2-R2 Faz 2 geçişi ve `v0.2.0` etiketi (sahip)

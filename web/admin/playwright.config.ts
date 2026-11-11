@@ -6,7 +6,8 @@ import { apiUrl, appPort, appUrl } from './e2e/support/urls';
  * End-to-end tests (P1-36, DEC-240) against a real API and PostgreSQL. Run them through
  * `bash scripts/e2e.sh`, which prepares a throwaway database and exports the E2E_* settings below.
  *
- * - Desktop Chromium, Firefox and WebKit run the School Admin flows (NFR-CMP-01).
+ * - Desktop Chromium, Firefox and WebKit run the School Admin flows (NFR-CMP-01), including the
+ *   online dues payment through the Fake sandbox provider (Phase 2 exit criterion, DEC-241).
  * - Phone-sized Chromium and WebKit run the coach attendance flow (NFR-USA-01, NFR-PRF-03).
  * - One worker, no retries: login and refresh are rate limited per client IP (10/min, NFR-SEC-14),
  *   and every browser reaches the API through the same local proxy address (e2e/serve.mjs).
@@ -92,7 +93,10 @@ export default defineConfig({
       stdout: 'ignore',
       stderr: 'pipe',
       env: {
-        ASPNETCORE_ENVIRONMENT: 'Production',
+        // Staging, not Production: the Fake payment provider (DEC-347) never runs in Production, and the online
+        // payment flow (P2-F1) needs it. Staging runs the same code paths otherwise (DEC-241).
+        ASPNETCORE_ENVIRONMENT: 'Staging',
+        Payments__Provider: 'Fake',
         ASPNETCORE_URLS: apiUrl,
         ConnectionStrings__App: process.env['E2E_API_CONNECTION']!,
         Jwt__SigningKey: process.env['E2E_JWT_SIGNING_KEY']!,

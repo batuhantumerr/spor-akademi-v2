@@ -65,6 +65,53 @@ public sealed class OnlinePaymentWebhookTests(DatabaseFixture database) : Online
         (await OutstandingAsync()).GetProperty("totalCount").GetInt32().ShouldBe(0);
     }
 
+    /// <summary>
+    /// Phase 2 exit criterion: the database fails while the payment is being written, so the delivery answers 500 and
+    /// leaves nothing behind (no notification, no payment, the attempt still pending). The provider's retry credits the
+    /// due once and a further duplicate changes nothing.
+    /// </summary>
+    [Fact]
+    public async Task A_webhook_that_fails_while_writing_the_payment_is_rolled_back_and_its_retry_credits_once()
+    {
+        var (id, token) = await PaidButNotAppliedAsync();
+        var (body, headers) = FakeWebhook(token);
+
+        await ExecuteAsMigratorAsync("""
+            CREATE FUNCTION billing.test_fail_payment_insert() RETURNS trigger LANGUAGE plpgsql AS
+            $$ BEGIN RAISE EXCEPTION 'simulated database failure'; END $$;
+            CREATE TRIGGER test_fail_payment_insert BEFORE INSERT ON billing.payments
+            FOR EACH ROW EXECUTE FUNCTION billing.test_fail_payment_insert();
+            """);
+        HttpResponseMessage failed;
+        try
+        {
+            failed = await WebhookAsync(body, headers);
+        }
+        finally
+        {
+            await ExecuteAsMigratorAsync("""
+                DROP TRIGGER test_fail_payment_insert ON billing.payments;
+                DROP FUNCTION billing.test_fail_payment_insert();
+                """);
+        }
+
+        failed.StatusCode.ShouldBe(HttpStatusCode.InternalServerError);
+        (await OnlinePaymentAsync(id)).GetProperty("status").GetString().ShouldBe("Pending");
+        (await CountAsync("SELECT count(*) FROM billing.payment_notifications")).ShouldBe(0);
+        (await CountAsync("SELECT count(*) FROM billing.payments")).ShouldBe(0);
+
+        var retried = await WebhookAsync(body, headers);
+        retried.StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await BodyOf(retried)).GetProperty("outcome").GetString().ShouldBe("Applied");
+        var duplicate = await WebhookAsync(body, headers);
+        (await BodyOf(duplicate)).GetProperty("outcome").GetString().ShouldBe("Unchanged");
+
+        (await OnlinePaymentAsync(id)).GetProperty("status").GetString().ShouldBe("Succeeded");
+        (await OnlinePaymentsRecordedAsync()).ShouldBe(1);
+        (await CountAsync("SELECT count(*) FROM billing.payment_notifications")).ShouldBe(1);
+        (await OutstandingAsync()).GetProperty("totalCount").GetInt32().ShouldBe(0);
+    }
+
     [Fact]
     public async Task Concurrent_webhooks_and_browser_returns_credit_the_due_exactly_once()
     {

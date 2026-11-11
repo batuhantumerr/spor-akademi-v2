@@ -75,6 +75,15 @@ public abstract class OnlinePaymentTest(DatabaseFixture database) : BillingTest(
         return (long)(await command.ExecuteScalarAsync(Ct))!;
     }
 
+    /// <summary>Runs DDL or data fixes as the migrator, the owner of the schemas (no tenant filter).</summary>
+    protected async Task ExecuteAsMigratorAsync(string sql)
+    {
+        await using var connection = new NpgsqlConnection(Database.MigratorConnectionString);
+        await connection.OpenAsync(Ct);
+        await using var command = new NpgsqlCommand(sql, connection);
+        await command.ExecuteNonQueryAsync(Ct);
+    }
+
     protected Task<long> OnlinePaymentsRecordedAsync() =>
         CountAsync("SELECT count(*) FROM billing.payments WHERE method = 'Online'");
 }
