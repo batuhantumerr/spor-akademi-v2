@@ -240,7 +240,21 @@ jobs:
           for i in $(seq 1 15); do curl -fsS http://127.0.0.1:8082/ >/dev/null 2>&1 && break; sleep 1; done
           curl -fsS --max-time 10 http://127.0.0.1:8082/some/deep/link | grep -q 'id="root"'
           curl -fsSI http://127.0.0.1:8082/index.html | grep -qi 'cache-control: no-cache'
-          bash scripts/check-security-headers.sh http://127.0.0.1:8082
+          bash scripts/check-security-headers.sh http://127.0.0.1:8082 /sw.js /manifest.webmanifest
+          # P3-07 (DEC-394): the worker and the manifest are revalidated on every visit and served with their types;
+          # the page links the manifest; the icons are hashed build output; no API path is ever precached.
+          sw=$(curl -fsSI --max-time 10 http://127.0.0.1:8082/sw.js | tr -d '\r' | tr '[:upper:]' '[:lower:]')
+          grep -qx 'cache-control: no-cache' <<<"$sw"
+          grep -qx 'content-type: text/javascript' <<<"$sw"
+          manifest=$(curl -fsSI --max-time 10 http://127.0.0.1:8082/manifest.webmanifest | tr -d '\r' | tr '[:upper:]' '[:lower:]')
+          grep -qx 'cache-control: no-cache' <<<"$manifest"
+          grep -qx 'content-type: application/manifest+json' <<<"$manifest"
+          curl -fsS --max-time 10 http://127.0.0.1:8082/ | grep -q '<link rel="manifest" href="/manifest.webmanifest">'
+          icon=$(curl -fsS --max-time 10 http://127.0.0.1:8082/manifest.webmanifest | grep -oP '"src": "\K/assets/icon-maskable-512-[^"]+\.png')
+          curl -fsSI --max-time 10 "http://127.0.0.1:8082$icon" | tr -d '\r' | grep -qix 'content-type: image/png'
+          precache=$(curl -fsS --max-time 10 http://127.0.0.1:8082/sw.js | grep -oP '"files":\[[^]]*\]')
+          grep -q '"/index.html"' <<<"$precache"
+          if grep -qiE '"/(api|health)' <<<"$precache"; then echo "An API path is precached: $precache"; exit 1; fi
       - name: Install Trivy (pinned binary + checksum)
         run: |
           curl -fsSLo trivy.tgz "https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/trivy_${TRIVY_VERSION}_Linux-64bit.tar.gz"
