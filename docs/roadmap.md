@@ -109,8 +109,8 @@ Veli yalnızca **kendi çocuklarını** görür. Bu, okul izolasyonunun yanında
   - TanStack Query, React Router ve OpenAPI'den üretilen istemci.
   - CI'da `parent` job'u ve nginx imajı eklenir.
   - Paket seçimleri bir ADR'de kayda geçer.
-- [ ] P3-05 **Oturum.** Giriş, bellekte tutulan access token ve refresh çerezi, davet kabulü, şifre sıfırlama ve çıkış.
-- [ ] P3-06 **Ekranlar** (önce mobil). Çocuklarım, program, yoklama geçmişi, borçlar ve online ödeme, ödeme geçmişi, duyurular.
+- [x] P3-05 **Oturum.** Giriş, bellekte tutulan access token ve refresh çerezi, davet kabulü, şifre sıfırlama ve çıkış. (DEC-389, DEC-390)
+- [x] P3-06 **Ekranlar** (önce mobil). Çocuklarım, program, yoklama geçmişi, borçlar ve online ödeme, ödeme geçmişi, duyurular. (DEC-391 – DEC-393)
 - [ ] P3-07 **PWA.**
   - Manifest ve kurulabilirlik.
   - Service worker yalnızca statik dosyaları önbelleğe alır; API yanıtları ve kişisel veri önbelleğe alınmaz.

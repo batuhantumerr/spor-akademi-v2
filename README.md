@@ -36,9 +36,9 @@ npm start                          # http://localhost:4200 (/api proxy'si API'ye
 - Loglar (Seq): http://127.0.0.1:5341
 - İş paneli (Hangfire, sadece Platform Admin): admin uygulamasında Platform Admin olarak giriş yapın, menüden **İş paneli** → **Paneli yeni sekmede aç**. Panel http://localhost:4200/jobs adresinde açılır (`/jobs` proxy'si API'ye gider). **Panel şimdilik sadece bu yerel dev proxy'siyle çalışır:** üretimdeki admin imajının nginx'i `/jobs`'u API'ye yönlendirmez, bu Deploy bloğunda reverse proxy'de yapılacak; doğrudan adrese gitmek `401` verir, çünkü panel sadece bu düğmenin aldığı 15 dakikalık çerezle açılır. Development'ta işlemler (yeniden dene, sil, şimdi çalıştır) açıktır, diğer ortamlarda panel salt okunurdur (`Jobs__Dashboard__ReadOnly`). Hangfire sunucusu API içinde çalışır; kapatmak için `Jobs__ServerEnabled=false` (DEC-330 – DEC-333).
 
-### Veli uygulaması (P3-04)
+### Veli uygulaması (P3-04 – P3-06)
 
-İskelet; oturum ve ekranlar P3-05/06'da gelir.
+Veliler davet e-postasındaki bağlantıyla (`/reset-password#token=…`) şifrelerini belirler, sonra giriş yapar: Çocuklarım, çocuk ayrıntısı (aidatlar ve online ödeme, haftalık program, yoklama, ödemeler, duyurular). Yerelde bir veli hesabı için Okul Admini olarak öğrencinin velisini davet edin; e-posta Mailpit'e düşer (aşağıdaki E-posta bölümü, `mail` profili). Bağlantıların veli uygulamasına gitmesi için API'yi `Email__ParentAppBaseUrl=http://localhost:4201/` ile başlatın; yoksa bağlantı admin uygulamasının aynı sayfasına gider. Fake ödeme sağlayıcısının sandbox sayfası ve ödeme sonucu sayfası veli uygulamasında da vardır (`/sandbox-odeme`, `/odeme-sonucu`).
 
 ```bash
 cd web/parent
@@ -133,13 +133,14 @@ dotnet test --solution SporAkademi.slnx   # Docker gerekir (Testcontainers)
 ```bash
 docker compose up -d --wait                          # PostgreSQL
 cd web/admin && npm ci && npx playwright install     # bir kez (tarayıcılar)
+npm --prefix ../parent ci                            # veli uygulaması da build edilir
 cd ../.. && bash scripts/e2e.sh                       # tüm projeler
 bash scripts/e2e.sh --project=chromium --project=mobile-chromium   # sadece Chromium
 ```
 
 - Her çalıştırma compose PostgreSQL'inde ayrı bir `spor_akademi_e2e` veritabanını silip yeniden kurar ve migration'ları migrator rolüyle uygular; geliştirme veritabanına (`spor_akademi`) ve çalışan dev API'ye/arayüze dokunmaz. Okul, Okul Admini ve antrenörler çalıştırmaya özel üretilen şifrelerle API üzerinden oluşturulur; hiçbir şifre diske yazılmaz.
 - Playwright API'yi `http://127.0.0.1:5180`'de, admin'in production build'ini `https://localhost:4300`'de (çalıştırmaya özel self-signed sertifika, `/api` proxy'si `e2e/serve.mjs`) başlatır ve sonunda kapatır. Bu iki port boş olmalı.
-- Projeler: masaüstü `chromium`, `firefox`, `webkit` (Okul Admini akışları) ve telefon boyutunda `mobile-chromium` (360 px), `mobile-webkit` (antrenör yoklaması, süre loglanır). Ziyaret edilen ana sayfalarda axe çalışır; `serious`/`critical` bulgular testi kırar.
+- Projeler: masaüstü `chromium`, `firefox`, `webkit` (Okul Admini akışları) ve telefon boyutunda `mobile-chromium` (360 px), `mobile-webkit` (antrenör yoklaması, süre loglanır); veli uygulamasında 360 px Chromium'da `parent-mobile-chromium` (davet e-postası → şifre → giriş → çocuk, yoklama, aidat → Fake sandbox ile online ödeme). Betik davet e-postası için compose'un Mailpit'ini (`mail` profili) kendisi başlatır ve veli uygulamasını `https://localhost:4301`'de sunar. Ziyaret edilen ana sayfalarda axe çalışır; `serious`/`critical` bulgular testi kırar.
 - Rapor: `web/admin/playwright-report` (`npx playwright show-report`); hata olursa trace'ler `web/admin/test-results`'ta.
 - Git worktree'den çalıştırırken `.env` ana checkout'taysa: `SPOR_AKADEMI_ENV_FILE=/yol/.env bash scripts/e2e.sh`.
 - CI'da `e2e` işi aynı betiği geçici bir `.env` ile çalıştırır; zorunlu check değildir (DEC-240).
