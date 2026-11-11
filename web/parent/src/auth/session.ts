@@ -1,11 +1,12 @@
 import { useSyncExternalStore } from 'react';
 import type { components } from '../api/schema.gen';
-import { ApiError, problemFromResponse, toApiError } from '../api/errors';
+import { ApiError, networkError, problemFromResponse } from '../api/errors';
 
 export type User = components['schemas']['UserSummary'];
 type SessionResponse = components['schemas']['SessionResponse'];
 
-export type SessionStatus = 'loading' | 'signedIn' | 'signedOut';
+/** `offline`: the start-up restore could not reach the server; nothing is known about the session yet (P3-07). */
+export type SessionStatus = 'loading' | 'signedIn' | 'signedOut' | 'offline';
 
 export interface SessionState {
   readonly status: SessionStatus;
@@ -73,18 +74,31 @@ export class Session {
     return body.user;
   }
 
-  /** Restores the session at start-up; ends in `signedIn` or `signedOut`, never throws. */
+  /**
+   * Restores the session at start-up; ends in `signedIn`, `signedOut` or, when the network is down, `offline`
+   * (the app shows "Bağlantı yok" instead of a login form that cannot work). Never throws.
+   */
   async restore(): Promise<void> {
     try {
       const token = await this.refresh();
       if (!token && this.state.status === 'loading') {
         this.setState({ status: 'signedOut', user: null, expired: false });
       }
-    } catch {
+    } catch (error) {
       if (this.state.status === 'loading') {
-        this.setState({ status: 'signedOut', user: null, expired: false });
+        // Only doRefresh's failed send is `Network.Unavailable`; any other failure (a server error, a malformed
+        // answer, a bug) means no usable session, not "no network".
+        const offline = error instanceof ApiError && error.code === networkError().code;
+        this.setState({ status: offline ? 'offline' : 'signedOut', user: null, expired: false });
       }
     }
+  }
+
+  /** Tries the start-up restore again after it found no network (retry button, the browser's `online` event). */
+  retryRestore(): Promise<void> {
+    if (this.state.status !== 'offline') return Promise.resolve();
+    this.setState({ status: 'loading', user: null, expired: false });
+    return this.restore();
   }
 
   /**
@@ -129,8 +143,9 @@ export class Session {
     let response: Response;
     try {
       response = await send('/api/v1/auth/refresh', { headers: AJAX_HEADERS });
-    } catch (error) {
-      throw toApiError(error);
+    } catch {
+      // fetch itself rejected: the request never got an answer. The only path that means "offline".
+      throw networkError();
     }
     if (response.status === 401 || response.status === 403) {
       // Rejected while signed in: the session expired. At start-up there simply was none.
@@ -140,7 +155,7 @@ export class Session {
     if (!response.ok) {
       throw await problemFromResponse(response);
     }
-    const body = (await response.json()) as SessionResponse;
+    const body = await sessionBody(response);
     if (epoch !== this.sessionEpoch) {
       return null; // Signed out while the refresh was on the wire.
     }
@@ -173,6 +188,25 @@ export class Session {
     this.state = state;
     for (const listener of this.listeners) listener();
   }
+}
+
+/** A 200 refresh answer's body; anything that is not a session (bad JSON, no token or user) is an unexpected error. */
+async function sessionBody(response: Response): Promise<SessionResponse> {
+  let body: unknown;
+  try {
+    body = await response.json();
+  } catch {
+    throw new ApiError('Unexpected.Error', response.status);
+  }
+  const candidate = (typeof body === 'object' && body !== null ? body : {}) as Partial<SessionResponse>;
+  if (
+    typeof candidate.accessToken !== 'string' ||
+    typeof candidate.user !== 'object' ||
+    (candidate.user as unknown) === null
+  ) {
+    throw new ApiError('Unexpected.Error', response.status);
+  }
+  return candidate as SessionResponse;
 }
 
 /** Why a session must not be used in the parent app, or null when it may. */

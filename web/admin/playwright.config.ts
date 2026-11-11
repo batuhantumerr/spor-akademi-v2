@@ -89,7 +89,14 @@ export default defineConfig({
     {
       name: 'parent-mobile-chromium',
       testMatch: parentSpecs,
-      use: { ...devices['Pixel 5'], viewport: { width: 360, height: 780 }, baseURL: parentUrl },
+      use: {
+        ...devices['Pixel 5'],
+        viewport: { width: 360, height: 780 },
+        baseURL: parentUrl,
+        // P3-07: Chromium refuses to register a service worker from a self-signed certificate even with
+        // ignoreHTTPSErrors; the browser-wide flag lets the parent app's worker run against the per-run certificate.
+        launchOptions: { args: ['--ignore-certificate-errors'] },
+      },
     },
   ],
   webServer: [

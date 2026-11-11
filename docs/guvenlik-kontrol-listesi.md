@@ -101,6 +101,7 @@ Sadece bu uygulamaya uygulanabilen maddeler listelenir (dosya yükleme, SOAP, Gr
 | Madde | Durum | Kanıt / not |
 | --- | --- | --- |
 | 8.2.1 Hassas veriler önbelleğe alınmaz | ✅ | `/api` yanıtlarında `Cache-Control: no-store` (`AuthHardeningTests.Api_responses_are_never_cached`). |
+| 8.2.1 Veli uygulamasının service worker'ı kişisel veri önbelleğe almaz (P3-07) | ✅ | Worker yalnız build çıktısını (uygulama kabuğu, hash'li dosyalar, manifest, ikonlar) önbelleğe alır; `/api/*` (kimlik doğrulama dahil), `/health*`, GET dışı, başka origin'li, `Authorization`/`Range` başlıklı isteklere hiç cevap vermez ve saklamaz (`web/parent/sw/policy.test.ts`). CI `images` işi precache listesinde `/api`/`/health` olmadığını, e2e (`parent-mobile-chromium`) oturum sonrası önbelleklerde hiçbir API yolu olmadığını ve çevrimdışı yenilemede çocuğun verisinin görünmediğini doğrular (DEC-394, DEC-395). |
 | 8.3.1 Hassas veri URL'de taşınmaz | 🟡 | Öğrenci araması isim/telefon parçasını sorgu dizesinde taşır (`?search=`); proxy erişim loglarında görünebilir. Fikirler 7. |
 | 8.3.4 Kişisel veri envanteri | ⛔ | NFR-PRV-01 envanteri henüz yok; Fikirler 8. |
 

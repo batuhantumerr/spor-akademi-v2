@@ -72,8 +72,64 @@ describe('session', () => {
     expect(session.getState()).toEqual({ status: 'signedOut', user: null, expired: false });
   });
 
-  it('ends up signed out when the network is down at start-up', async () => {
-    fakeApi({ 'POST /api/v1/auth/refresh': () => Promise.reject(new TypeError('offline')) });
+  it('ends up offline, not signed out, when the network is down at start-up (P3-07)', async () => {
+    const api = fakeApi({ 'POST /api/v1/auth/refresh': () => Promise.reject(new TypeError('offline')) });
+    const session = new Session();
+
+    await session.restore();
+
+    expect(session.getState()).toEqual({ status: 'offline', user: null, expired: false });
+
+    // Back online: one more try restores the session; a second retry does nothing.
+    api.on('POST /api/v1/auth/refresh', () => json(sessionResponse(parentUser(), 'access-9')));
+    const retry = session.retryRestore();
+    expect(session.getState().status).toBe('loading');
+    await retry;
+    await session.retryRestore();
+
+    expect(session.getState().status).toBe('signedIn');
+    expect(session.token()).toBe('access-9');
+    expect(api.callsTo('POST /api/v1/auth/refresh')).toHaveLength(2);
+  });
+
+  it.each([
+    ['no user', () => json({ accessToken: 'access-1', expiresIn: 900 })],
+    ['a null user', () => json({ accessToken: 'access-1', expiresIn: 900, user: null })],
+    ['no token', () => json({ expiresIn: 900, user: parentUser() })],
+    [
+      'not JSON',
+      () => new Response('<html></html>', { status: 200, headers: { 'Content-Type': 'text/html' } }),
+    ],
+    ['JSON null', () => json(null)],
+  ])('ends up signed out, not offline, when the refresh answer has %s', async (_case, handler) => {
+    fakeApi({ 'POST /api/v1/auth/refresh': handler });
+    const session = new Session();
+
+    await session.restore();
+
+    expect(session.getState()).toEqual({ status: 'signedOut', user: null, expired: false });
+    expect(session.token()).toBeNull();
+  });
+
+  it('ends up signed out, not offline, when something other than the send throws a TypeError', async () => {
+    // A 200 whose body cannot be read as a session must not be mistaken for a network failure.
+    fakeApi({
+      'POST /api/v1/auth/refresh': () =>
+        ({
+          ok: true,
+          status: 200,
+          json: () => Promise.reject(new TypeError('body stream already read')),
+        }) as unknown as Response,
+    });
+    const session = new Session();
+
+    await session.restore();
+
+    expect(session.getState().status).toBe('signedOut');
+  });
+
+  it('ends up signed out when the server fails at start-up', async () => {
+    fakeApi({ 'POST /api/v1/auth/refresh': () => problem(503, 'Unexpected.Error') });
     const session = new Session();
 
     await session.restore();
