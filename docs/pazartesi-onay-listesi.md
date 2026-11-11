@@ -382,11 +382,11 @@ Sahip **Faz 2 geçişini onayladı** (2026-11-11). Bölüm 7 ve 8'deki açık so
    - *Yönetici:* Türkiye'deki futbol ve basketbol okullarında kardeş indirimi çoğunlukla %10–%20 arasındadır. %10 / %15 kasayı zorlamaz, veliye de anlamlı gelir.
    - Oran okul bazında değiştirilebiliyor. Kampanya dönemleri yeni bir sürümle karşılanır.
 2. **En yüksek aidatlı kardeş tam öder: onay.**
-   - *Yönetici:* İndirimin ucuz gruba düşmesi okulun gelirini korur, yaygın uygulama da budur. "Büyük çocuk tam öder" kuralı, büyüğün ucuz bir gruba geçtiği ayda indirimi pahalı gruba kaydırır.
+   - *Yönetici:* İndirimin ucuz gruba düşmesi okulun gelirini korur, yaygın uygulama da budur. Alternatif olan "en büyük çocuk tam öder" kuralında, büyük çocuk ucuz bir gruptaysa indirim pahalı gruptaki kardeşe uygulanır ve okul gereksiz gelir kaybeder.
    - *Yazılımcı:* Sıralama deterministik; eşitlikte en erken kayıt, sonra öğrenci kimliği belirliyor. Veli itiraz ederse borç satırındaki "Kardeş indirimi %10" ipucu neyin neden uygulandığını gösteriyor.
 3. **Grup değişikliğinde o ay eski grubun aidatı: onay.**
    - *Antrenör:* Ay ortasında üst gruba alınan çocuk çoğunlukla gelişim nedeniyle terfi eder. Veliye o ay ek fark çıkarmak yanlış mesaj verir.
-   - *Yönetici:* Kıst hesabı (DEC-017) tahsilatı karmaşıklaştırır. Ertesi ay yeni grubun aidatı başlar.
+   - *Yönetici:* Kıst hesabı (DEC-017) tahsilatı karmaşıklaştırır. Ertesi ay yeni grubun aidatı başlar. Kuralı uygun bulmayan okul onu kural sürümünde kapatabilir.
    - İki gruba aynı anda kayıtlı öğrencinin ikisini de ödemesi doğru, çünkü iki ayrı hizmet alıyor.
 4. **Kapanmış ay değişmez, bağlantı geçmişi tutulmaz: onay.**
    - *Yönetici:* Muhasebe açısından kapanmış ay kapanmıştır. Sonradan bağlanan kardeş için geriye dönük indirim ya da borç doğmaması veliyle tartışmayı önler.
