@@ -104,7 +104,7 @@ Veli yalnızca **kendi çocuklarını** görür. Bu, okul izolasyonunun yanında
   - Veli kendi borcu için online ödeme başlatabilir. P2-F1 akışı kullanılır; idempotency ve borç başına tek açık deneme kuralı geçerlidir.
 
 ### 3.2 Veli uygulaması (P3-F2, DEC-024)
-- [ ] P3-04 **`web/parent` iskeleti.**
+- [x] P3-04 **`web/parent` iskeleti.** (ADR-0012, DEC-377 – DEC-380)
   - React, Vite ve TypeScript; Tailwind v4 admin ile aynı tema token'larını kullanır.
   - TanStack Query, React Router ve OpenAPI'den üretilen istemci.
   - CI'da `parent` job'u ve nginx imajı eklenir.
