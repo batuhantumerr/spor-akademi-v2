@@ -1477,6 +1477,14 @@ namespace SporAkademi.Infrastructure.Migrations
                         .HasColumnType("character varying(100)")
                         .HasColumnName("first_name");
 
+                    b.Property<DateTimeOffset?>("InvitationWindowStartedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("invitation_window_started_at");
+
+                    b.Property<int>("InvitationsInWindow")
+                        .HasColumnType("integer")
+                        .HasColumnName("invitations_in_window");
+
                     b.Property<DateTimeOffset?>("InvitedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("invited_at");

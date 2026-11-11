@@ -148,6 +148,22 @@ public sealed class ParentAccountTests
     }
 
     [Fact]
+    public void Alternating_addresses_cannot_get_past_three_invitations_in_ten_minutes()
+    {
+        var a = Email.Create("a@example.com").Value;
+        var b = Email.Create("b@example.com").Value;
+        var parent = User.InviteParent(School, a, "h", "Ayşe", "Deneme", null, Now).Value;
+
+        parent.ReinviteParent(b, "h", "Ayşe", "Deneme", null, Now.AddSeconds(10)).IsSuccess.ShouldBeTrue();
+        parent.ReinviteParent(a, "h", "Ayşe", "Deneme", null, Now.AddSeconds(20)).IsSuccess.ShouldBeTrue();
+        parent.ReinviteParent(b, "h", "Ayşe", "Deneme", null, Now.AddSeconds(30)).Error.ShouldBe(ParentAccountErrors.InvitationTooSoon);
+        parent.ReinviteParent(b, "h", "Ayşe", "Deneme", null, Now.AddMinutes(9)).Error.ShouldBe(ParentAccountErrors.InvitationTooSoon);
+
+        // A new window opens ten minutes after the first invitation.
+        parent.ReinviteParent(b, "h", "Ayşe", "Deneme", null, Now.AddMinutes(10)).IsSuccess.ShouldBeTrue();
+    }
+
+    [Fact]
     public void A_corrected_address_is_invited_at_once()
     {
         var parent = Invite("yanlis@example.com");

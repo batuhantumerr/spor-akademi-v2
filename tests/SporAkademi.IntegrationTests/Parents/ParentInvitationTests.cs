@@ -166,6 +166,26 @@ public sealed class ParentInvitationTests(DatabaseFixture database) : ParentTest
     }
 
     [Fact]
+    public async Task Switching_the_address_back_and_forth_cannot_flood_a_mailbox()
+    {
+        const string Other = "diger.adres@example.com";
+        var (student, guardian) = await RegisterChildAsync("Ali", Email);
+        (await InviteAsync(guardian)).StatusCode.ShouldBe(HttpStatusCode.OK);
+        await ChangeGuardianEmailAsync(student, Other);
+        (await InviteAsync(guardian)).StatusCode.ShouldBe(HttpStatusCode.OK);
+        await ChangeGuardianEmailAsync(student, Email);
+        (await InviteAsync(guardian)).StatusCode.ShouldBe(HttpStatusCode.OK);
+        await ChangeGuardianEmailAsync(student, Other);
+
+        var capped = await InviteAsync(guardian);
+
+        capped.StatusCode.ShouldBe(HttpStatusCode.UnprocessableEntity);
+        (await CodeOf(capped)).ShouldBe("ParentAccount.InvitationTooSoon");
+        await DeliverAsync();
+        (Api.Emails.To(Email).Count + Api.Emails.To(Other).Count).ShouldBeLessThanOrEqualTo(3);
+    }
+
+    [Fact]
     public async Task Changing_or_clearing_the_address_of_an_active_account_ends_its_access()
     {
         var (student, guardian) = await RegisterChildAsync("Ali", Email);
