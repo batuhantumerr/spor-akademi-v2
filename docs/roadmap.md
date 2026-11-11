@@ -89,22 +89,22 @@ Faz 2 geçişinde (2026-11-11) ayrıntılandırıldı. Sıra: önce veli hesabı
 Veli yalnızca **kendi çocuklarını** görür. Bu, okul izolasyonunun yanında ikinci bir yetki sınırıdır ve her uç nokta için testle kanıtlanır.
 
 ### 3.1 Veli hesapları (P3-F1)
-- [x] P3-01 **Veli rolü.** (DEC-377, DEC-382)
+- [x] P3-01 **Veli rolü.** (DEC-381, DEC-386)
   - `Parent` rolü eklenir; veli kaydı tek okul içinde bir kullanıcı hesabına bağlanır.
   - Veli yalnızca bağlı olduğu öğrencilerin verisini görür. Acil durum kişisi, sağlık raporu ve ödeme iptal gerekçesi bunun dışındadır.
   - Bu sınır için ayrı bir izolasyon test paketi yazılır.
-- [x] P3-02 **Davet akışı.** (DEC-378, DEC-379; davet öğrenci ayrıntısındaki veli satırından)
+- [x] P3-02 **Davet akışı.** (DEC-382, DEC-383; davet öğrenci ayrıntısındaki veli satırından)
   - Okul Admini, e-postası olan veliyi öğrenci veya veli ekranından davet eder.
   - Veli şifresini 72 saat geçerli, tek kullanımlık bir bağlantıyla belirler (P2-F4 altyapısı).
   - Davet yeniden gönderilebilir ve iptal edilebilir; davet durumu ekranda görünür.
   - Veli silinir ya da son çocuğu okuldan ayrılırsa hesap kapanır.
-- [x] P3-03 **Veli API'si** (`/api/v1/parent/...`; DEC-380, DEC-381).
+- [x] P3-03 **Veli API'si** (`/api/v1/parent/...`; DEC-384, DEC-385, DEC-387).
   - Çocuklarım, haftalık program, yoklama geçmişi, borçlar, ödemeler ve duyurular.
   - Borç tutarı `DueCharges` ile hesaplanır.
   - Veli kendi borcu için online ödeme başlatabilir. P2-F1 akışı kullanılır; idempotency ve borç başına tek açık deneme kuralı geçerlidir.
 
 ### 3.2 Veli uygulaması (P3-F2, DEC-024)
-- [ ] P3-04 **`web/parent` iskeleti.**
+- [x] P3-04 **`web/parent` iskeleti.** (ADR-0012, DEC-377 – DEC-380)
   - React, Vite ve TypeScript; Tailwind v4 admin ile aynı tema token'larını kullanır.
   - TanStack Query, React Router ve OpenAPI'den üretilen istemci.
   - CI'da `parent` job'u ve nginx imajı eklenir.

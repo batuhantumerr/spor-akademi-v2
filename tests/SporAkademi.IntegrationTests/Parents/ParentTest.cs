@@ -83,7 +83,7 @@ public abstract class ParentTest(DatabaseFixture database) : BillingTest(databas
         response.StatusCode.ShouldBe(HttpStatusCode.OK, await response.Content.ReadAsStringAsync(Ct));
     }
 
-    /// <summary>Moves past the invitation cooldown (DEC-378) without expiring the test tokens.</summary>
+    /// <summary>Moves past the invitation cooldown (DEC-382) without expiring the test tokens.</summary>
     protected void PastInvitationCooldown() => Api.Clock.Advance(TimeSpan.FromMinutes(2));
 
     protected Task<HttpResponseMessage> RevokeAsync(Guid guardian, HttpClient? client = null) =>

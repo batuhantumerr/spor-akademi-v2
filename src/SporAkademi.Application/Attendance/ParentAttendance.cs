@@ -9,7 +9,7 @@ using SporAkademi.Domain.Students;
 namespace SporAkademi.Application.Attendance;
 
 /// <summary>
-/// P3-03: the attendance history of one of the caller's children (DEC-380), the same rows and summary the School Admin
+/// P3-03: the attendance history of one of the caller's children (DEC-384), the same rows and summary the School Admin
 /// sees. Without dates it covers the last <see cref="DefaultDays"/> days up to today in the school's time zone; at
 /// most a year per request.
 /// </summary>

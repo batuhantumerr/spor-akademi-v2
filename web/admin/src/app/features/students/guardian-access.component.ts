@@ -23,7 +23,7 @@ import { ConfirmService } from '../../shared/ui/confirm-dialog.component';
 import { ToastService } from '../../shared/ui/toast.service';
 
 /**
- * P3-02 (DEC-378): one guardian's parent account on the student page — its status (Davet edilmedi / Davet gönderildi /
+ * P3-02 (DEC-382): one guardian's parent account on the student page — its status (Davet edilmedi / Davet gönderildi /
  * Aktif / İptal) and the invite, resend and revoke actions. The API re-checks every rule; this only offers what fits.
  */
 @Component({

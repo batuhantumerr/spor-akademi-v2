@@ -3,13 +3,14 @@
 Spor okulları için çok kiracılı (multi-tenant) yönetim platformu: okullar, branşlar, tesisler, gruplar, öğrenciler, kayıtlar, yoklama ve aidat.
 
 - Backend: .NET 10, ASP.NET Core, EF Core, PostgreSQL 18
-- Admin arayüzü: Angular 22, Tailwind CSS, ApexCharts
+- Admin arayüzü: Angular 22, Tailwind CSS, Apache ECharts
+- Veli uygulaması (Faz 3): React 19, Vite, TanStack Query, Tailwind CSS ([ADR-0012](docs/adr/0012-veli-uygulamasi-teknoloji-yigini.md))
 - Mimari: Clean Architecture katmanlarıyla modüler monolit ([proje dokümanı](docs/proje-dokumani.md))
 
 ## Gereksinimler
 
 - .NET SDK 10.0.401+ (`global.json`)
-- Node.js 26 (`web/admin/.nvmrc`)
+- Node.js 26 (`web/admin/.nvmrc`, `web/parent/.nvmrc`)
 - Docker (Compose v2)
 - Bash (Windows'ta Git Bash) ve `openssl`
 
@@ -34,6 +35,18 @@ npm start                          # http://localhost:4200 (/api proxy'si API'ye
 - Sağlık kontrolleri: `/health/live`, `/health/ready` (belge deposuna ulaşılamazsa `ready` 200 ama `Degraded` döner, DEC-326)
 - Loglar (Seq): http://127.0.0.1:5341
 - İş paneli (Hangfire, sadece Platform Admin): admin uygulamasında Platform Admin olarak giriş yapın, menüden **İş paneli** → **Paneli yeni sekmede aç**. Panel http://localhost:4200/jobs adresinde açılır (`/jobs` proxy'si API'ye gider). **Panel şimdilik sadece bu yerel dev proxy'siyle çalışır:** üretimdeki admin imajının nginx'i `/jobs`'u API'ye yönlendirmez, bu Deploy bloğunda reverse proxy'de yapılacak; doğrudan adrese gitmek `401` verir, çünkü panel sadece bu düğmenin aldığı 15 dakikalık çerezle açılır. Development'ta işlemler (yeniden dene, sil, şimdi çalıştır) açıktır, diğer ortamlarda panel salt okunurdur (`Jobs__Dashboard__ReadOnly`). Hangfire sunucusu API içinde çalışır; kapatmak için `Jobs__ServerEnabled=false` (DEC-330 – DEC-333).
+
+### Veli uygulaması (P3-04)
+
+İskelet; oturum ve ekranlar P3-05/06'da gelir.
+
+```bash
+cd web/parent
+npm ci
+npm run dev                        # http://localhost:4201 (/api ve /health proxy'si API'ye gider, vite.config.ts)
+```
+
+İki uygulama da istemcisini commit edilen OpenAPI belgesinden (`openapi/spor-akademi.json`) çalıştırma/build/test öncesi otomatik üretir. Tema token'ları admin'den kopyalanır; `bash scripts/check-theme-tokens.sh` sapmayı yakalar (DEC-378).
 
 ### Cache (P2-F7)
 
@@ -111,7 +124,8 @@ bash scripts/seed-demo.sh   # migration'lardan sonra, API çalışmıyorken de o
 
 ```bash
 dotnet test --solution SporAkademi.slnx   # Docker gerekir (Testcontainers)
-cd web/admin && npm test
+(cd web/admin && npm test)
+(cd web/parent && npm test)        # ayrıca: npm run lint, npm run typecheck, npm run format:check
 ```
 
 ### Uçtan uca testler (Playwright, P1-36)

@@ -9,13 +9,13 @@ using SporAkademi.Domain.Students;
 
 namespace SporAkademi.Application.Students;
 
-/// <summary>A guardian's parent account as the School Admin sees it (P3-02, DEC-378).</summary>
+/// <summary>A guardian's parent account as the School Admin sees it (P3-02, DEC-382).</summary>
 /// <param name="InvitationExpiresAt">When the pending invitation link expires; null until the e-mail is sent, and when no link is pending.</param>
 public sealed record GuardianInvitationDto(Guid GuardianId, ParentAccountStatus Status, DateTimeOffset? InvitationExpiresAt);
 
 /// <summary>
 /// P3-02: invites the guardian to a parent account, or sends the invitation again. A pending invitation's earlier link
-/// stops working at once; a revoked or closed account is reopened (DEC-378).
+/// stops working at once; a revoked or closed account is reopened (DEC-382).
 /// </summary>
 public sealed record InviteGuardianCommand(GuardianId Id) : ICommand<Unit>;
 
@@ -24,10 +24,10 @@ public sealed record RevokeGuardianInvitationCommand(GuardianId Id) : ICommand<U
 
 public sealed record GetGuardianInvitationQuery(GuardianId Id) : IQuery<GuardianInvitationDto>;
 
-/// <summary>P3-03: the signed-in parent's children (DEC-380).</summary>
+/// <summary>P3-03: the signed-in parent's children (DEC-384).</summary>
 public sealed record ListMyChildrenQuery : IQuery<IReadOnlyList<ParentChildDto>>;
 
-/// <summary>A child as the parent app shows it (DEC-380): no emergency contact, documents or other guardians.</summary>
+/// <summary>A child as the parent app shows it (DEC-384): no emergency contact, documents or other guardians.</summary>
 public sealed record ParentChildDto(Guid Id, string FirstName, string LastName, DateOnly? BirthDate, Gender Gender, GuardianRelationship Relationship);
 
 internal sealed class InviteGuardianHandler(
@@ -37,7 +37,7 @@ internal sealed class InviteGuardianHandler(
 {
     public async Task<Result<Unit>> Handle(InviteGuardianCommand command, CancellationToken cancellationToken)
     {
-        // DEC-379: the same row lock as deleting an unlinked guardian, so an invitation and the guardian's deletion (or a
+        // DEC-383: the same row lock as deleting an unlinked guardian, so an invitation and the guardian's deletion (or a
         // second invitation) never interleave; the guardian is read after the lock, so it is the committed state.
         await guardians.LockForDeletionAsync(command.Id, cancellationToken);
         var guardian = await guardians.GetAsync(command.Id, cancellationToken);
@@ -135,7 +135,7 @@ internal static class ParentInvitations
 }
 
 /// <summary>
-/// DEC-365, DEC-368, DEC-379: what happens to guardians after their student links changed. A guardian no student is
+/// DEC-365, DEC-368, DEC-383: what happens to guardians after their student links changed. A guardian no student is
 /// linked to any more is deleted; a parent account whose guardian was deleted, or whose guardian has no active student
 /// left, is closed. Runs inside the transaction of the change (domain event consumers), so the account can never
 /// outlive the reason it existed for. Uses the guardian's school, never the caller's: the anonymization job runs it too.
@@ -166,7 +166,7 @@ internal sealed class GuardianAftercare(IGuardianRepository guardians, IIdentity
                 continue;
             }
 
-            // The guardian's personal data goes, so the account's copy of it goes too (DEC-379).
+            // The guardian's personal data goes, so the account's copy of it goes too (DEC-383).
             if (guardian.AccountUserId is { } account)
             {
                 await identity.CloseParentAccountAsync(guardian.TenantId, account, erasePersonalData: true, cancellationToken);
@@ -179,12 +179,12 @@ internal sealed class GuardianAftercare(IGuardianRepository guardians, IIdentity
         return deleted;
     }
 
-    /// <summary>DEC-379: closes the parent accounts of these guardians that have no active student any more.</summary>
+    /// <summary>DEC-383: closes the parent accounts of these guardians that have no active student any more.</summary>
     public async Task AfterStudentLeftAsync(IEnumerable<GuardianId> candidates, CancellationToken cancellationToken)
     {
         foreach (var id in candidates.Distinct())
         {
-            // The same row lock as an invitation, so a leave and an invitation never interleave (DEC-379).
+            // The same row lock as an invitation, so a leave and an invitation never interleave (DEC-383).
             await guardians.LockForDeletionAsync(id, cancellationToken);
             if (await guardians.GetAsync(id, cancellationToken) is { } guardian)
             {
@@ -202,7 +202,7 @@ internal sealed class GuardianAftercare(IGuardianRepository guardians, IIdentity
     }
 }
 
-/// <summary>DEC-379: when a student leaves, a guardian with no other active student loses parent access.</summary>
+/// <summary>DEC-383: when a student leaves, a guardian with no other active student loses parent access.</summary>
 internal sealed class CloseParentAccountsWhenStudentLeaves(IGuardianRepository guardians, GuardianAftercare aftercare)
     : IDomainEventConsumer<StudentLeft>
 {

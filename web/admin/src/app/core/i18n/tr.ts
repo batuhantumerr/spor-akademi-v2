@@ -41,6 +41,7 @@ export const errorMessages: Readonly<Record<string, string>> = {
   'ParentAccount.AlreadyActive':
     'Veli hesabı zaten aktif. Şifresini unuttuysa giriş ekranındaki "Şifremi unuttum" ile yenileyebilir.',
   'ParentAccount.NotInvited': 'Bu veli henüz davet edilmedi.',
+  'ParentAccount.InvitationTooSoon': 'Bu veli az önce davet edildi; iki dakika sonra tekrar deneyin.',
   'ParentAccount.UseParentApp':
     'Bu panel okul yöneticileri ve antrenörler içindir. Veli hesabınızla veli uygulamasından giriş yapın.',
   'Guardian.EmailRequired':

@@ -19,13 +19,13 @@ namespace SporAkademi.Api.Endpoints.Parents;
 internal sealed record StartChildOnlinePaymentRequest(Guid EnrollmentId, string Period);
 
 /// <summary>
-/// The parent API (P3-03, DEC-380, DEC-381): the signed-in parent's children and, per child, the weekly program,
+/// The parent API (P3-03, DEC-384, DEC-385): the signed-in parent's children and, per child, the weekly program,
 /// attendance, dues, payments and announcements, and the online payment of a due. Parent role only. A student who is not
-/// the caller's child answers <c>404 Student.NotFound</c> exactly like another school's (DEC-377).
+/// the caller's child answers <c>404 Student.NotFound</c> exactly like another school's (DEC-381).
 /// </summary>
 internal static class ParentEndpoints
 {
-    /// <summary>DEC-384: requests per parent account (the token's subject) and minute, over all parent endpoints.</summary>
+    /// <summary>DEC-387: requests per parent account (the token's subject) and minute, over all parent endpoints.</summary>
     public const string RateLimitPolicy = "parent";
     public const int PermitsPerMinute = 60;
 
@@ -97,7 +97,7 @@ internal static class ParentEndpoints
     }
 
     /// <summary>
-    /// DEC-381, like the School Admin's start (DEC-341): requires an <c>Idempotency-Key</c>; the first request answers 201,
+    /// DEC-385, like the School Admin's start (DEC-341): requires an <c>Idempotency-Key</c>; the first request answers 201,
     /// a repeat (same key and body) 200 with <c>Idempotent-Replayed: true</c> and the same attempt.
     /// </summary>
     private static async Task<IResult> StartOnlinePayment(

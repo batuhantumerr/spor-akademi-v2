@@ -245,7 +245,7 @@ internal sealed class GetStudentHandler(
             return Result.Success(dto);
         }
 
-        // P3-02 (DEC-378): each guardian's parent account status, for the invitation actions on the student page.
+        // P3-02 (DEC-382): each guardian's parent account status, for the invitation actions on the student page.
         var invitations = await ParentInvitations.OfAsync(
             guardians, identity, currentUser, [.. dto.Guardians.Select(g => GuardianId.From(g.GuardianId))], cancellationToken);
         return Result.Success(dto with

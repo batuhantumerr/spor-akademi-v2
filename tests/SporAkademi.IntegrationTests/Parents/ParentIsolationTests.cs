@@ -11,7 +11,7 @@ using SporAkademi.IntegrationTests.Infrastructure;
 namespace SporAkademi.IntegrationTests.Parents;
 
 /// <summary>
-/// P3-01 (DEC-377, DEC-382): the parent boundary, the second authorization boundary after the school (P1-35). A signed-in
+/// P3-01 (DEC-381, DEC-386): the parent boundary, the second authorization boundary after the school (P1-35). A signed-in
 /// parent calls every parent endpoint with another family's ids, of the same school and of another school, and must get
 /// the owning module's "not found"; nothing may change; the parent's own lists may hold no other family's data; and
 /// every School Admin or coach endpoint refuses a parent (403). Like the school suite, the endpoints come from the
@@ -202,7 +202,7 @@ public sealed partial class ParentIsolationTests(DatabaseFixture database) : Par
             "GET /api/v1/parent/children/{id:guid}/announcements",
             "POST /api/v1/parent/online-payments",
             "GET /api/v1/parent/online-payments/{id:guid}",
-        ], ignoreOrder: true, "A new parent endpoint needs a probe in this suite (DEC-382).");
+        ], ignoreOrder: true, "A new parent endpoint needs a probe in this suite (DEC-386).");
     }
 
     /// <summary>The URL with <paramref name="family"/>'s id and the "not found" its module answers.</summary>
@@ -306,7 +306,7 @@ public sealed partial class ParentIsolationTests(DatabaseFixture database) : Par
             GuardianPhone.TrimStart('+'),
         ];
 
-        /// <summary>What even the family's own parent views leave out (DEC-380): the emergency contact and the guardian ids.</summary>
+        /// <summary>What even the family's own parent views leave out (DEC-384): the emergency contact and the guardian ids.</summary>
         public IEnumerable<string> PrivateMarkers => [EmergencyPhone.TrimStart('+'), "Acil Kişi", Guardian.ToString()];
     }
 }

@@ -17,7 +17,7 @@ public sealed record AccountOpenedMessage(Guid UserId) : IOutboxMessage;
 public sealed record PasswordResetRequestedMessage(Guid UserId) : IOutboxMessage;
 
 /// <summary>
-/// A guardian was invited (or invited again) to a parent account (P3-02, DEC-378): the invitation e-mail with a 72-hour
+/// A guardian was invited (or invited again) to a parent account (P3-02, DEC-382): the invitation e-mail with a 72-hour
 /// set-password link goes out. Like the reset, the token is created when the e-mail is sent.
 /// </summary>
 [OutboxMessage("identity.parent-invited.v1")]

@@ -80,7 +80,7 @@ internal sealed class GuardianConfiguration : IEntityTypeConfiguration<Guardian>
         builder.Property(g => g.LastName).HasMaxLength(PersonNames.MaxLength);
         // Appendix B §4.7: one guardian per phone in a school, so siblings share it (US-13).
         builder.HasIndex(g => new { g.TenantId, g.Phone }).IsUnique();
-        // DEC-377: one guardian per parent account; it is also how a parent's children are found.
+        // DEC-381: one guardian per parent account; it is also how a parent's children are found.
         builder.HasIndex(g => g.AccountUserId).IsUnique().HasFilter("account_user_id IS NOT NULL");
         builder.ComplexProperty(g => g.Address, address =>
         {
@@ -162,7 +162,7 @@ internal sealed class StudentRepository(AppDbContext db) : IStudentRepository
             student is { ContactName: { } name, ContactPhone: { } phone, ContactRelationship: { } relationship }
                 ? new EmergencyContactDto(name, phone.Value, relationship)
                 : null,
-            // The invitation status lives in the Identity module; GetStudentHandler fills it in (DEC-378).
+            // The invitation status lives in the Identity module; GetStudentHandler fills it in (DEC-382).
             [.. guardians.Select(g => new StudentGuardianDto(
                 g.Id.Value,
                 g.Relationship,

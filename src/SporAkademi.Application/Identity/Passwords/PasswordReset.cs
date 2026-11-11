@@ -91,7 +91,7 @@ internal sealed class ConfirmPasswordResetHandler(
     }
 }
 
-/// <summary>P3-02: a committed parent invitation becomes the invitation e-mail message, in the same transaction (DEC-378).</summary>
+/// <summary>P3-02: a committed parent invitation becomes the invitation e-mail message, in the same transaction (DEC-382).</summary>
 internal sealed class PublishParentInvited(IOutbox outbox) : IDomainEventConsumer<ParentInvited>
 {
     public Task<Result> Handle(ParentInvited domainEvent, CancellationToken cancellationToken)

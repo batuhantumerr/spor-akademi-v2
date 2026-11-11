@@ -13,7 +13,7 @@ using SporAkademi.Domain.Students;
 namespace SporAkademi.Application.Billing;
 
 /// <summary>
-/// A payment as the parent sees it (P3-03, DEC-380): recorded payments only. Cancelled entries were bookkeeping
+/// A payment as the parent sees it (P3-03, DEC-384): recorded payments only. Cancelled entries were bookkeeping
 /// mistakes; who cancelled them and why stays with the school (DEC-007).
 /// </summary>
 public sealed record ParentPaymentDto(
@@ -26,7 +26,7 @@ public sealed record ParentPaymentDto(
     PaymentMethod Method,
     DateOnly PaidOn);
 
-/// <summary>An online payment attempt of the parent's own child (P3-03, DEC-381): where it stands and the checkout link.</summary>
+/// <summary>An online payment attempt of the parent's own child (P3-03, DEC-385): where it stands and the checkout link.</summary>
 public sealed record ParentOnlinePaymentDto(
     Guid Id,
     Guid EnrollmentId,
@@ -117,7 +117,7 @@ internal sealed class GetChildOnlinePaymentHandler(IParentChildren children, IOn
 }
 
 /// <summary>
-/// P3-03 (DEC-381): a parent starts the online payment of their own child's due through the School Admin's flow
+/// P3-03 (DEC-385): a parent starts the online payment of their own child's due through the School Admin's flow
 /// (<see cref="OnlineCheckout"/>: Idempotency-Key, one open attempt per due, the amount from <see cref="DueCharges"/>).
 /// An enrollment of a student who is not the caller's child is "not found", before anything is written.
 /// </summary>

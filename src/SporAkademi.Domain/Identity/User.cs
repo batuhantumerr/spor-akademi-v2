@@ -14,7 +14,7 @@ public enum UserRole
     SchoolAdmin,
     Coach,
 
-    /// <summary>A guardian of students of one school (P3-01, DEC-377); such an account is opened only by an invitation.</summary>
+    /// <summary>A guardian of students of one school (P3-01, DEC-381); such an account is opened only by an invitation.</summary>
     Parent,
 }
 
@@ -31,7 +31,7 @@ public sealed record UserDeactivated(UserId UserId, SchoolId? TenantId) : IDomai
 /// <summary>A new account was opened (US-01, US-08); P2-F4 sends the welcome e-mail after commit.</summary>
 public sealed record UserCreated(UserId UserId, SchoolId? TenantId) : IDomainEvent;
 
-/// <summary>A parent account was invited or invited again (P3-02, DEC-378); the invitation e-mail goes out after commit.</summary>
+/// <summary>A parent account was invited or invited again (P3-02, DEC-382); the invitation e-mail goes out after commit.</summary>
 public sealed record ParentInvited(UserId UserId, SchoolId TenantId) : IDomainEvent;
 
 /// <summary>
@@ -146,7 +146,7 @@ public sealed class User : AggregateRoot<UserId>
     }
 
     /// <summary>
-    /// Opens a parent account for a guardian (P3-02, DEC-378). It has no usable password: <paramref name="unusablePasswordHash"/>
+    /// Opens a parent account for a guardian (P3-02, DEC-382). It has no usable password: <paramref name="unusablePasswordHash"/>
     /// hashes a random secret nobody knows, so the only way in is the invitation link, which sets the password. Raises
     /// <see cref="ParentInvited"/> instead of <see cref="UserCreated"/>, so no admin-panel welcome e-mail is sent.
     /// </summary>
@@ -168,14 +168,14 @@ public sealed class User : AggregateRoot<UserId>
         return Result.Success(user);
     }
 
-    /// <summary>DEC-378: one invitation e-mail per parent account in this window; a quicker resend is refused.</summary>
+    /// <summary>DEC-382: one invitation e-mail per parent account in this window; a quicker resend is refused.</summary>
     public static readonly TimeSpan InvitationCooldown = TimeSpan.FromMinutes(2);
 
-    /// <summary>When the parent account was last invited (DEC-378 cooldown); null for other roles.</summary>
+    /// <summary>When the parent account was last invited (DEC-382 cooldown); null for other roles.</summary>
     public DateTimeOffset? InvitedAt { get; private set; }
 
     /// <summary>
-    /// Invites the parent again (P3-02, DEC-378): a pending invitation is resent, a closed account is reopened. Every
+    /// Invites the parent again (P3-02, DEC-382): a pending invitation is resent, a closed account is reopened. Every
     /// earlier link and session ends at once, the account is back to "invited" with a new unusable password, and the
     /// login becomes <paramref name="email"/> (the guardian's current address). An account whose parent already set a
     /// password is not invited again: <c>ParentAccount.AlreadyActive</c>.
@@ -220,7 +220,7 @@ public sealed class User : AggregateRoot<UserId>
     }
 
     /// <summary>
-    /// DEC-379: the guardian this parent account belonged to was deleted (DEC-365, DEC-368), so the account's personal
+    /// DEC-383: the guardian this parent account belonged to was deleted (DEC-365, DEC-368), so the account's personal
     /// data goes as well: it is closed (sessions and links end) and its name, phone and e-mail are replaced by
     /// placeholders. The address is freed for a new account; the row stays only so ids in logs and records keep meaning.
     /// </summary>
@@ -242,12 +242,12 @@ public sealed class User : AggregateRoot<UserId>
         Email = Email.Create("silinmis-veli-" + Id.Value.ToString("N", System.Globalization.CultureInfo.InvariantCulture) + "@silinmis.invalid").Value;
     }
 
-    /// <summary>The name an erased parent account gets (DEC-379).</summary>
+    /// <summary>The name an erased parent account gets (DEC-383).</summary>
     public const string ErasedParentFirstName = "Silinmiş";
 
     public const string ErasedParentLastName = "Veli";
 
-    /// <summary>When the pending invitation link expires, if the newest link of the account is an invitation (DEC-378).</summary>
+    /// <summary>When the pending invitation link expires, if the newest link of the account is an invitation (DEC-382).</summary>
     public DateTimeOffset? InvitationExpiresAt =>
         _passwordTokens.Find(t => t.Purpose == PasswordTokenPurpose.Invitation)?.ExpiresAt;
 

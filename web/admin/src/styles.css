@@ -1,6 +1,7 @@
 @import 'tailwindcss';
 
 /* Theme tokens: see docs/ui-tema.md. Dark mode is a class on <html>. */
+/* theme-tokens:start (web/parent/src/styles/tokens.css is a copy; CI fails on drift: scripts/check-theme-tokens.sh) */
 @custom-variant dark (&:is(.dark *));
 
 :root {
@@ -114,6 +115,7 @@
   --text-xs: calc(12rem / 14);
   --text-xs--line-height: calc(16 / 12);
 }
+/* theme-tokens:end */
 
 @layer base {
   html {

@@ -6,7 +6,7 @@ public enum Role
     SchoolAdmin,
     Coach,
 
-    /// <summary>P3-01 (DEC-377): sees only the students of the guardian whose account it is.</summary>
+    /// <summary>P3-01 (DEC-381): sees only the students of the guardian whose account it is.</summary>
     Parent,
 }
 

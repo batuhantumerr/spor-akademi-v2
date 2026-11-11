@@ -11,12 +11,12 @@ using SporAkademi.Domain.Students;
 
 namespace SporAkademi.Application.Announcements;
 
-/// <summary>An announcement as the parent sees it (P3-03, DEC-380): without the author's user id.</summary>
+/// <summary>An announcement as the parent sees it (P3-03, DEC-384): without the author's user id.</summary>
 public sealed record ParentAnnouncementDto(Guid Id, Guid GroupId, string GroupName, string Title, string Body, DateTimeOffset PublishedAt);
 
 /// <summary>
 /// P3-03: the announcements of the groups the caller's child is enrolled in today (active groups only), newest first.
-/// The whole history of those groups is shown, as the group's coach sees it (DEC-380).
+/// The whole history of those groups is shown, as the group's coach sees it (DEC-384).
 /// </summary>
 public sealed record ListChildAnnouncementsQuery(StudentId StudentId, PageRequest Page) : IQuery<PagedResult<ParentAnnouncementDto>>;
 

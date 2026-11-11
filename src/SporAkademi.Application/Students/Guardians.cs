@@ -63,7 +63,7 @@ internal sealed class UpdateGuardianHandler(IGuardianRepository guardians, IIden
             return Result.Failure<Unit>(updated.Error);
         }
 
-        // DEC-379: the account (and a pending link) belongs to the address it was invited with. A changed or cleared
+        // DEC-383: the account (and a pending link) belongs to the address it was invited with. A changed or cleared
         // address closes it, so a link sent to a mistyped address stops working; the admin invites the new address.
         if (guardian.AccountUserId is { } account && guardian.Email != previousEmail)
         {

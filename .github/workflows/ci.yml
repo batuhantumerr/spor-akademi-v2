@@ -72,6 +72,30 @@ jobs:
       - name: Audit (high and critical fail the build, DEC-080)
         run: npm audit --audit-level=high
 
+  # P3-04: parent app (React + Vite). Not a required check yet: adding it to the ruleset is the owner's call.
+  parent:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: web/parent
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: web/parent/.nvmrc
+          cache: npm
+          cache-dependency-path: web/parent/package-lock.json
+      - run: npm ci --no-fund
+      - run: npm run generate:api
+      - run: npm run lint
+      - run: npm run format:check
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+      - name: Audit (high and critical fail the build, DEC-080)
+        run: npm audit --audit-level=high
+
   # P1-36, DEC-240: Playwright end-to-end suite against the real API and PostgreSQL. Not a required
   # check (yet): adding it to the ruleset is the owner's call (docs/pazartesi-onay-listesi.md).
   e2e:
@@ -146,6 +170,8 @@ jobs:
           if git grep -n -i -E '"(mediatr|automapper|fluentassertions)[".]|Include="(MediatR|AutoMapper|FluentAssertions)' -- '*.csproj' '*.props' '**/packages.lock.json'; then
             echo "Forbidden package referenced."; exit 1
           fi
+      - name: Theme tokens are the same in admin and parent (P3-04)
+        run: bash scripts/check-theme-tokens.sh
       - name: Secret scan (gitleaks, pinned binary + checksum, DEC-200)
         run: |
           curl -fsSLo gitleaks.tgz "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
@@ -169,6 +195,7 @@ jobs:
           docker build -f docker/api/Dockerfile -t spor-akademi-api:ci .
           docker build -f docker/migrator/Dockerfile -t spor-akademi-migrator:ci .
           docker build -f docker/admin/Dockerfile -t spor-akademi-admin:ci .
+          docker build -f docker/parent/Dockerfile -t spor-akademi-parent:ci .
       - name: Smoke test migrator and API against a fresh database
         run: |
           set -euo pipefail
@@ -202,6 +229,13 @@ jobs:
           for i in $(seq 1 15); do curl -fsS http://127.0.0.1:8081/ >/dev/null 2>&1 && break; sleep 1; done
           curl -fsS --max-time 10 http://127.0.0.1:8081/some/deep/link | grep -q '<app-root'
           curl -fsSI http://127.0.0.1:8081/index.html | grep -qi 'cache-control: no-cache'
+      - name: Smoke test parent
+        run: |
+          docker run -d --name parent -p 127.0.0.1:8082:8080 spor-akademi-parent:ci
+          for i in $(seq 1 15); do curl -fsS http://127.0.0.1:8082/ >/dev/null 2>&1 && break; sleep 1; done
+          curl -fsS --max-time 10 http://127.0.0.1:8082/some/deep/link | grep -q 'id="root"'
+          curl -fsSI http://127.0.0.1:8082/index.html | grep -qi 'cache-control: no-cache'
+          curl -fsSI http://127.0.0.1:8082/ | grep -qi 'referrer-policy: no-referrer'
       - name: Install Trivy (pinned binary + checksum)
         run: |
           curl -fsSLo trivy.tgz "https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/trivy_${TRIVY_VERSION}_Linux-64bit.tar.gz"
@@ -209,12 +243,12 @@ jobs:
           tar -xzf trivy.tgz trivy && sudo mv trivy /usr/local/bin/trivy
       - name: Scan images (high/critical fail, DEC-080)
         run: |
-          for img in api migrator admin; do
+          for img in api migrator admin parent; do
             trivy image --quiet --severity HIGH,CRITICAL --ignore-unfixed --exit-code 1 "spor-akademi-$img:ci"
           done
       - name: Save tested images
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        run: docker save spor-akademi-api:ci spor-akademi-migrator:ci spor-akademi-admin:ci | gzip > images.tar.gz
+        run: docker save spor-akademi-api:ci spor-akademi-migrator:ci spor-akademi-admin:ci spor-akademi-parent:ci | gzip > images.tar.gz
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         with:
@@ -224,7 +258,7 @@ jobs:
 
   publish:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    needs: [backend, frontend, repo-checks, images]
+    needs: [backend, frontend, parent, repo-checks, images]
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
@@ -242,7 +276,7 @@ jobs:
           gunzip -c images.tar.gz | docker load
           echo "$GH_TOKEN" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
           owner=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
-          for img in api migrator admin; do
+          for img in api migrator admin parent; do
             target="ghcr.io/$owner/spor-akademi-v2-$img:${{ github.sha }}"
             docker tag "spor-akademi-$img:ci" "$target"
             docker push "$target"

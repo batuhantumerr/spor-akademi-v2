@@ -4,7 +4,7 @@ using SporAkademi.Domain.Tenancy;
 
 namespace SporAkademi.Domain.UnitTests.Students;
 
-/// <summary>P3-01 (DEC-377): a guardian is linked to at most one parent account, and keeps it.</summary>
+/// <summary>P3-01 (DEC-381): a guardian is linked to at most one parent account, and keeps it.</summary>
 [Trait("Story", "P3-01")]
 public sealed class GuardianAccountTests
 {

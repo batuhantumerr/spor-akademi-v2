@@ -51,7 +51,7 @@ internal static class StudentEndpoints
         guardians.MapGet("/", FindGuardiansByPhone).Produces<PageResponse<GuardianDto>>().ProducesProblems(400);
         guardians.MapPut("/{id:guid}", UpdateGuardian).Produces<GuardianDto>().ProducesProblems(400, 404, 409);
 
-        // P3-02 (DEC-378): the guardian's parent account invitation. POST invites, or sends it again (the earlier link
+        // P3-02 (DEC-382): the guardian's parent account invitation. POST invites, or sends it again (the earlier link
         // stops working); DELETE revokes it or closes the account.
         guardians.MapGet("/{id:guid}/invitation", GetInvitation).Produces<GuardianInvitationDto>().ProducesProblems(404);
         guardians.MapPost("/{id:guid}/invitation", Invite).Produces<GuardianInvitationDto>().ProducesProblems(404, 409, 422);

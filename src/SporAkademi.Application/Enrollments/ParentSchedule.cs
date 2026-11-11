@@ -15,7 +15,7 @@ namespace SporAkademi.Application.Enrollments;
 public sealed record ChildScheduleSlotDto(DayOfWeek Day, string Start, string End);
 
 /// <summary>
-/// A group the child trains in (P3-03, DEC-380): where, with whom and when. The coach's name only, never contact data.
+/// A group the child trains in (P3-03, DEC-384): where, with whom and when. The coach's name only, never contact data.
 /// </summary>
 public sealed record ChildGroupDto(
     Guid EnrollmentId,
