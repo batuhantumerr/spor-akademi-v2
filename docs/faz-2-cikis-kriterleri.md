@@ -6,7 +6,7 @@ Faz 2 (`v0.2.0`, P2-F1 – P2-F8) çıkış kriterlerinin ([proje dokümanı §5
 
 | Katman | Test |
 |---|---|
-| e2e | `web/admin/e2e/admin/online-payment.e2e.ts` › *a due is paid online through the sandbox provider and recorded once*: Okul Admini ödenmemiş borçlar listesinden online ödeme başlatır; ödeyen, paylaşılan bağlantıyı oturumsuz ayrı bir tarayıcıda açar, Fake sağlayıcının sandbox sayfasında öder ve sonuç sayfasına düşer. Ödeme listesinde tek satır (yöntem Online), online ödeme "Ödendi", borç listesi boş; API'den okunan ödemeler tam olarak bir `Online`/`Recorded` kayıt. |
+| e2e | `web/admin/e2e/admin/school-admin.e2e.ts` › *a due is paid online through the sandbox provider and recorded once*: Okul Admini ödenmemiş borçlar listesinden online ödeme başlatır; ödeyen, paylaşılan bağlantıyı oturumsuz ayrı bir tarayıcıda açar, Fake sağlayıcının sandbox sayfasında öder ve sonuç sayfasına düşer. Ödeme listesinde tek satır (yöntem Online), online ödeme "Ödendi", borç listesi boş; API'den okunan ödemeler tam olarak bir `Online`/`Recorded` kayıt. |
 | Entegrasyon | `OnlinePaymentTests.A_due_is_paid_end_to_end_through_the_sandbox_provider` (başlat → sandbox → tarayıcı dönüşü → 303 → ödeme kaydı → borç kapanır) |
 
 Veli portalı Faz 3'te geldiği için "veli", Okul Admininin paylaştığı bağlantıyı açan oturumsuz kişidir (DEC-348). e2e API'si bu yüzden `Staging` + Fake sağlayıcıyla çalışır (DEC-241). Gerçek iyzico sandbox'ına karşı deneme anahtar gerektirdiği için açık kalır (roadmap P2-F1).
@@ -41,4 +41,4 @@ Zamanlamanın Hangfire tarafından tetiklenmesi Hangfire'ın sorumluluğudur; te
 
 ## Ek: P2-F8 aidat kuralları
 
-`online-payment.e2e.ts` › *a sibling discount defined under fee rules shows on the dues list*: Ayarlar → Aidat kuralları'ndan bu ay için kural tanımlanır (onay penceresiyle); aynı veliye bağlı iki öğrenciden ikincisinin borç satırında liste fiyatı üstü çizili ve "Kardeş indirimi %10" ipucu görünür. Hesaplamanın kendisi `FeeRulesTests`'te.
+`school-admin.e2e.ts` › *a sibling discount defined under fee rules shows on the dues list*: Ayarlar → Aidat kuralları'ndan bu ay için kural tanımlanır (onay penceresiyle); aynı veliye bağlı iki öğrenciden ikincisinin borç satırında liste fiyatı üstü çizili ve "Kardeş indirimi %10" ipucu görünür. Hesaplamanın kendisi `FeeRulesTests`'te.
