@@ -71,4 +71,41 @@
   .card {
     @apply rounded-xl border border-border bg-card text-card-foreground;
   }
+
+  /* 16px text on phones: iOS zooms into smaller inputs on focus. */
+  .input {
+    @apply h-10 w-full rounded-md border border-border bg-card/50 px-3 text-[length:calc(16rem/14)] text-foreground transition-colors placeholder:text-muted-foreground focus-visible:border-primary focus-visible:ring-[3px] focus-visible:ring-primary/20 focus-visible:outline-none aria-invalid:border-destructive sm:text-sm;
+  }
+
+  .field-label {
+    @apply mb-1.5 block text-sm font-medium text-foreground;
+  }
+
+  .field-error {
+    @apply mt-1.5 text-xs text-destructive;
+  }
+
+  .badge {
+    @apply inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold;
+  }
+
+  .badge-success {
+    @apply border-success/30 bg-success/10 text-success;
+  }
+
+  .badge-warning {
+    @apply border-warning/30 bg-warning/10 text-warning;
+  }
+
+  .badge-danger {
+    @apply border-destructive/30 bg-destructive/10 text-destructive;
+  }
+
+  .badge-info {
+    @apply border-info/30 bg-info/10 text-info;
+  }
+
+  .badge-muted {
+    @apply border-border bg-card/50 text-muted-foreground;
+  }
 }

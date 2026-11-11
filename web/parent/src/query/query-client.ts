@@ -1,4 +1,5 @@
 import { QueryClient } from '@tanstack/react-query';
+import { toApiError } from '../api/errors';
 
 /**
  * Server state lives in TanStack Query. Parents mostly read; a short stale time avoids refetch storms on
@@ -9,7 +10,11 @@ export function createQueryClient(): QueryClient {
     defaultOptions: {
       queries: {
         staleTime: 30_000,
-        retry: 1,
+        // Only a lost connection or a server error is worth one more try; 4xx answers will not change.
+        retry: (failures, error) => {
+          const { status } = toApiError(error);
+          return failures < 1 && (status === 0 || status >= 500);
+        },
         refetchOnWindowFocus: true,
       },
       mutations: {
