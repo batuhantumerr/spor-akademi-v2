@@ -1,0 +1,116 @@
+/* Theme tokens shared with web/admin (docs/ui-tema.md). Do not edit here: change web/admin/src/styles.css, then copy the block. */
+/* theme-tokens:start (copy of web/admin/src/styles.css; CI fails on drift: scripts/check-theme-tokens.sh) */
+@custom-variant dark (&:is(.dark *));
+
+:root {
+  /* 87.5% of the browser default (16px -> 14px) so the user's font-size setting still scales the UI. */
+  --font-size: 87.5%;
+  --radius: 0.25rem;
+
+  --background: #f8fafc;
+  --foreground: #0f172a;
+  --card: #ffffff;
+  --card-foreground: #0f172a;
+  --popover: #ffffff;
+  --popover-foreground: #0f172a;
+  --primary: #1d4ed8;
+  --primary-foreground: #ffffff;
+  --secondary: #f1f5f9;
+  --secondary-foreground: #475569;
+  --muted: #f1f5f9;
+  --muted-foreground: #5b6b80;
+  --accent: #1d4ed8;
+  --accent-foreground: #ffffff;
+  --destructive: #c81e2b;
+  --destructive-foreground: #ffffff;
+  --border: #e2e8f0;
+  --input: #ffffff;
+  --ring: #2563eb;
+  --success: #13733a;
+  --warning: #a34c06;
+  --info: #1d4ed8;
+  --chart-1: #2563eb;
+  --chart-2: #d97706;
+  --chart-3: #16a34a;
+  --chart-4: #7c3aed;
+  --chart-5: #dc2626;
+  --sidebar: #ffffff;
+  --sidebar-foreground: #475569;
+}
+
+.dark {
+  --background: #121620;
+  --foreground: #edf2f7;
+  --card: #1a202c;
+  --card-foreground: #edf2f7;
+  --popover: #1a202c;
+  --popover-foreground: #edf2f7;
+  --primary: #60a5fa;
+  --primary-foreground: #121620;
+  --secondary: #1e2736;
+  --secondary-foreground: #a0aec0;
+  --muted: #1e2736;
+  --muted-foreground: #a0aec0;
+  --accent: #60a5fa;
+  --accent-foreground: #121620;
+  --destructive: #f87171;
+  --destructive-foreground: #121620;
+  --border: #2d3748;
+  --input: #1a202c;
+  --ring: #60a5fa;
+  --success: #4ade80;
+  --warning: #f39c12;
+  --info: #60a5fa;
+  --chart-1: #60a5fa;
+  --chart-2: #ffb703;
+  --chart-3: #4ade80;
+  --chart-4: #a78bfa;
+  --chart-5: #e63946;
+  --sidebar: #0d1117;
+  --sidebar-foreground: #a0aec0;
+}
+
+@theme inline {
+  --font-sans: 'Inter Variable', 'Inter', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono Variable', 'JetBrains Mono', ui-monospace, monospace;
+
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-info: var(--info);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+
+  --radius-sm: calc(var(--radius) - 2px);
+  --radius-md: var(--radius);
+  --radius-lg: calc(var(--radius) + 2px);
+  --radius-xl: calc(var(--radius) + 4px);
+
+  /* Smallest text step is 12px at the default root size (Tailwind's 0.75rem would be 10.5px). */
+  --text-xs: calc(12rem / 14);
+  --text-xs--line-height: calc(16 / 12);
+}
+/* theme-tokens:end */

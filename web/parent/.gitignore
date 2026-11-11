@@ -1,0 +1,16 @@
+# Build output
+/dist
+/coverage
+
+# Node
+/node_modules
+npm-debug.log
+
+# Editors and OS
+.idea/
+.vscode/*
+.DS_Store
+Thumbs.db
+
+# Generated from openapi/spor-akademi.json (npm run generate:api)
+/src/api/schema.gen.ts

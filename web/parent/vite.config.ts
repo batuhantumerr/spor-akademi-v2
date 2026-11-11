@@ -1,0 +1,34 @@
+/// <reference types="vitest/config" />
+import tailwindcss from '@tailwindcss/vite';
+import react from '@vitejs/plugin-react';
+import { defineConfig } from 'vite';
+
+// Same-origin dev proxy to the local API (scripts/run-api.sh), like web/admin/proxy.conf.json: the refresh
+// cookie is SameSite=Strict and CORS is off, so the browser must see a single origin.
+const api = { target: 'http://127.0.0.1:5080', changeOrigin: false, secure: false };
+
+export default defineConfig({
+  plugins: [react(), tailwindcss()],
+  server: {
+    port: 4201,
+    strictPort: true,
+    proxy: {
+      '/api': api,
+      '/health': api,
+    },
+  },
+  preview: {
+    port: 4201,
+    strictPort: true,
+  },
+  build: {
+    outDir: 'dist',
+    sourcemap: false,
+  },
+  test: {
+    environment: 'jsdom',
+    setupFiles: ['./src/test/setup.ts'],
+    include: ['src/**/*.test.{ts,tsx}'],
+    restoreMocks: true,
+  },
+});

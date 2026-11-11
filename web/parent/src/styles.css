@@ -1,0 +1,74 @@
+@import 'tailwindcss';
+/* Shared tokens (copy of web/admin's block, drift-checked in CI). Dark mode is a class on <html>. */
+@import './styles/tokens.css';
+
+/* Base and component classes follow web/admin/src/styles.css (docs/ui-tema.md); only what the parent app uses. */
+@layer base {
+  html {
+    font-size: var(--font-size);
+  }
+
+  html.light {
+    color-scheme: light;
+  }
+
+  html.dark {
+    color-scheme: dark;
+  }
+
+  * {
+    @apply border-border outline-ring/50;
+  }
+
+  body {
+    @apply bg-background text-foreground font-sans antialiased;
+  }
+
+  h1 {
+    @apply text-2xl font-semibold tracking-tight;
+  }
+
+  h2 {
+    @apply text-xl font-semibold;
+  }
+
+  h3 {
+    @apply text-lg font-medium;
+  }
+
+  label,
+  button {
+    @apply text-sm font-medium;
+  }
+}
+
+@layer components {
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 rounded-md text-sm font-semibold whitespace-nowrap transition-all duration-200 select-none focus-visible:ring-2 focus-visible:ring-primary/50 focus-visible:outline-none active:scale-95 disabled:pointer-events-none disabled:opacity-40 [&_svg]:size-4;
+    @apply h-10 px-5;
+  }
+
+  .btn-primary {
+    @apply bg-primary text-primary-foreground shadow-lg shadow-primary/10 hover:bg-primary/90;
+  }
+
+  .btn-secondary {
+    @apply border border-border bg-card text-foreground hover:bg-muted;
+  }
+
+  .btn-ghost {
+    @apply text-muted-foreground hover:bg-primary/10 hover:text-primary;
+  }
+
+  .btn-sm {
+    @apply h-9 px-3 text-xs;
+  }
+
+  .btn-icon {
+    @apply size-10 px-0 pointer-coarse:size-11;
+  }
+
+  .card {
+    @apply rounded-xl border border-border bg-card text-card-foreground;
+  }
+}
