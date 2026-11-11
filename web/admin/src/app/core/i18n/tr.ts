@@ -38,6 +38,14 @@ export const errorMessages: Readonly<Record<string, string>> = {
   'User.EmailTaken': 'Bu e-posta adresi zaten kullanılıyor.',
   'User.NotFound': 'Kullanıcı bulunamadı.',
   'User.AlreadyInactive': 'Bu kullanıcı zaten pasif.',
+  'ParentAccount.AlreadyActive':
+    'Veli hesabı zaten aktif. Şifresini unuttuysa giriş ekranındaki "Şifremi unuttum" ile yenileyebilir.',
+  'ParentAccount.NotInvited': 'Bu veli henüz davet edilmedi.',
+  'ParentAccount.UseParentApp':
+    'Bu panel okul yöneticileri ve antrenörler içindir. Veli hesabınızla veli uygulamasından giriş yapın.',
+  'Guardian.EmailRequired':
+    'Davet için velinin e-posta adresi gerekli. Önce veli bilgilerine e-posta ekleyin.',
+  'Guardian.NoActiveStudent': 'Velinin aktif öğrencisi olmadığı için davet gönderilemez.',
   'School.SlugTaken': 'Bu kısa ad başka bir okul tarafından kullanılıyor.',
   'School.InvalidTimeZone': 'Geçerli bir saat dilimi seçin.',
   'School.NotFound': 'Okul bulunamadı.',
@@ -356,6 +364,32 @@ export const ui = {
     anonymizedBadge: 'Anonimleştirildi',
     anonymizedNote:
       'Bu öğrencinin kişisel verileri saklama süresi dolduğu için {date} tarihinde anonimleştirildi. Kayıt, yoklama ve ödeme geçmişi isimsiz olarak saklanır; kayıt artık değiştirilemez.',
+  },
+  parentAccess: {
+    statuses: {
+      NotInvited: 'Davet edilmedi',
+      Invited: 'Davet gönderildi',
+      Active: 'Aktif',
+      Revoked: 'İptal',
+    },
+    invite: 'Veli uygulamasına davet et',
+    reinvite: 'Yeniden davet et',
+    resend: 'Daveti yeniden gönder',
+    revoke: 'Daveti iptal et',
+    close: 'Erişimi kapat',
+    needsEmail: 'Davet için velinin e-posta adresi gerekli.',
+    sending: 'E-posta gönderiliyor',
+    validUntil: 'Bağlantı {date} tarihine kadar geçerli',
+    expired: 'Bağlantının süresi doldu; yeniden gönderebilirsiniz.',
+    sent: 'Davet {email} adresine gönderildi.',
+    resent: 'Davet yeniden gönderildi; önceki bağlantı artık çalışmaz.',
+    revokeTitle: 'Davet iptal edilsin mi?',
+    revokeText: '{name} için gönderilen bağlantı artık çalışmaz.',
+    revoked: 'Davet iptal edildi.',
+    closeTitle: 'Veli erişimi kapatılsın mı?',
+    closeText:
+      '{name} veli uygulamasına artık giriş yapamaz; açık oturumları hemen kapanır. Daha sonra yeniden davet edebilirsiniz.',
+    closed: 'Veli erişimi kapatıldı.',
   },
   documents: {
     title: 'Belgeler',

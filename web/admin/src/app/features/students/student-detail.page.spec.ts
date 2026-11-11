@@ -31,6 +31,7 @@ const student: StudentDto = {
       lastName: 'Yılmaz',
       phone: '+905321234567',
       email: null,
+      invitation: { guardianId: 'gd1', status: 'NotInvited', invitationExpiresAt: null },
     },
   ],
   version: 4,
