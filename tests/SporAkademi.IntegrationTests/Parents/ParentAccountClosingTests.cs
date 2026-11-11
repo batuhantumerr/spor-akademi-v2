@@ -48,6 +48,7 @@ public sealed class ParentAccountClosingTests(DatabaseFixture database) : Parent
         (await Admin.PostAsync(new Uri($"/api/v1/students/{student}/reactivate", UriKind.Relative), null, Ct)).StatusCode.ShouldBe(HttpStatusCode.OK);
 
         (await StatusOfAsync(guardian)).ShouldBe("Revoked");
+        PastInvitationCooldown();
         (await InviteAsync(guardian)).StatusCode.ShouldBe(HttpStatusCode.OK);
         (await StatusOfAsync(guardian)).ShouldBe("Invited");
     }

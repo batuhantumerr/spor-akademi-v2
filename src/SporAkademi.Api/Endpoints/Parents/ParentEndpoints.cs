@@ -1,3 +1,4 @@
+using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.Mvc;
 using SporAkademi.Api.Endpoints.Billing;
 using SporAkademi.Api.Errors;
@@ -24,9 +25,18 @@ internal sealed record StartChildOnlinePaymentRequest(Guid EnrollmentId, string 
 /// </summary>
 internal static class ParentEndpoints
 {
+    /// <summary>DEC-384: requests per parent account (the token's subject) and minute, over all parent endpoints.</summary>
+    public const string RateLimitPolicy = "parent";
+    public const int PermitsPerMinute = 60;
+
+    public static IServiceCollection AddParentRateLimiting(this IServiceCollection services) =>
+        services.AddRateLimiter(options => options.AddPolicy(RateLimitPolicy, context => RateLimitPartition.GetFixedWindowLimiter(
+            context.User.FindFirst("sub")?.Value ?? context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+            _ => new FixedWindowRateLimiterOptions { PermitLimit = PermitsPerMinute, Window = TimeSpan.FromMinutes(1), QueueLimit = 0 })));
+
     public static IEndpointRouteBuilder MapParentEndpoints(this IEndpointRouteBuilder app)
     {
-        var parent = app.MapGroup("/api/v1/parent").WithTags("Parent").RequireRole(Role.Parent);
+        var parent = app.MapGroup("/api/v1/parent").WithTags("Parent").RequireRole(Role.Parent).RequireRateLimiting(RateLimitPolicy);
         parent.MapGet("/children", ListChildren).Produces<IReadOnlyList<ParentChildDto>>().ProducesProblems();
         parent.MapGet("/children/{id:guid}/schedule", GetSchedule).Produces<IReadOnlyList<ChildGroupDto>>().ProducesProblems(404);
         parent.MapGet("/children/{id:guid}/attendance", GetAttendance).Produces<StudentAttendanceDto>().ProducesProblems(400, 404);

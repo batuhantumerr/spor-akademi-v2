@@ -56,7 +56,7 @@ public sealed class EmailTemplateTests
     [Trait("Story", "P3-02")]
     public void The_parent_invitation_names_the_school_and_login_and_says_the_link_lives_three_days()
     {
-        var parent = User.InviteParent(EntityId.New<SchoolId>(), Email.Create("veli@example.com").Value, "unusable", "Ayşe", "Deneme", null).Value;
+        var parent = User.InviteParent(EntityId.New<SchoolId>(), Email.Create("veli@example.com").Value, "unusable", "Ayşe", "Deneme", null, DateTimeOffset.UnixEpoch).Value;
 
         var message = IdentityEmails.ParentInvitation(parent, "Kadıköy <Spor>", Link);
 

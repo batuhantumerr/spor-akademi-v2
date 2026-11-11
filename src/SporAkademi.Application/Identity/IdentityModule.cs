@@ -60,7 +60,7 @@ internal sealed class IdentityModule(IUserRepository users, AccountOpening accou
                 return Result.Failure<Guid>(UserErrors.EmailTaken);
             }
 
-            var invited = User.InviteParent(schoolId, address.Value, unusablePassword, details.FirstName, details.LastName, details.Phone);
+            var invited = User.InviteParent(schoolId, address.Value, unusablePassword, details.FirstName, details.LastName, details.Phone, timeProvider.GetUtcNow());
             if (invited.IsFailure)
             {
                 return Result.Failure<Guid>(invited.Error);
@@ -70,8 +70,11 @@ internal sealed class IdentityModule(IUserRepository users, AccountOpening accou
             return Result.Success(invited.Value.Id.Value);
         }
 
-        var parent = await users.GetParentAsync(schoolId, UserId.From(userId), cancellationToken)
-            ?? throw new InvalidOperationException("A guardian's parent account must exist in its school.");
+        if (await users.GetParentAsync(schoolId, UserId.From(userId), cancellationToken) is not { } parent)
+        {
+            return Result.Failure<Guid>(UserErrors.NotFound);
+        }
+
         if (parent.Email != address.Value && await users.EmailExistsAsync(address.Value, cancellationToken))
         {
             return Result.Failure<Guid>(UserErrors.EmailTaken);

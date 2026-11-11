@@ -42,6 +42,7 @@ builder.Services.AddInfrastructure(builder.Configuration);
 builder.Services.AddJwtAuthentication();
 builder.Services.AddAuthRateLimiting();
 builder.Services.AddPaymentNotificationRateLimiting();
+builder.Services.AddParentRateLimiting();
 builder.Services.AddJobsDashboard();
 
 builder.Services.ConfigureHttpJsonOptions(json => json.SerializerOptions.Converters.Add(new JsonStringEnumConverter()));
@@ -56,8 +57,10 @@ app.UseMiddleware<NoStoreMiddleware>();
 app.UseMiddleware<RequestSizeLimitMiddleware>();
 app.UseExceptionHandler();
 app.UseStatusCodePages();
-app.UseRateLimiter();
+// After authentication, so a policy can partition by the signed-in user (the parent API, DEC-384); the other policies
+// partition by client IP and are unaffected.
 app.UseAuthentication();
+app.UseRateLimiter();
 app.UseMiddleware<UserLogEnrichmentMiddleware>();
 app.UseAuthorization();
 app.UseMiddleware<PasswordChangeRequiredMiddleware>();

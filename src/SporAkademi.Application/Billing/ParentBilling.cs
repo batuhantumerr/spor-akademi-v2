@@ -77,7 +77,7 @@ internal sealed class ListChildDuesHandler(
 
         var currentPeriod = YearMonth.From(await tenancy.TodayAsync(currentUser.RequireTenant(), cancellationToken));
         var rows = await outstanding.ListAsync(
-            OutstandingDues.HorizonStart(currentPeriod), currentPeriod, null, c => c.StudentId == query.StudentId, cancellationToken);
+            OutstandingDues.HorizonStart(currentPeriod), currentPeriod, null, c => c.StudentId == query.StudentId, cancellationToken, familyOf: query.StudentId);
         return Result.Success<IReadOnlyList<OutstandingDueDto>>(rows);
     }
 }

@@ -8,6 +8,7 @@ using SporAkademi.Application.Tenancy.Contracts;
 using SporAkademi.Domain.Billing;
 using SporAkademi.Domain.Groups;
 using SporAkademi.Domain.SharedKernel;
+using SporAkademi.Domain.Students;
 
 namespace SporAkademi.Application.Billing;
 
@@ -79,9 +80,13 @@ internal sealed class OutstandingDues(DueCharges charges, IPaymentRepository pay
         YearMonth to,
         GroupId? paymentsOfGroup,
         Func<EffectiveCharge, bool> include,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        StudentId? familyOf = null)
     {
-        var book = await charges.ForSchoolAsync(from, to, cancellationToken);
+        // A single family's rows need only its own charges: the same amounts, without reading the whole school (DEC-384).
+        var book = familyOf is { } student
+            ? await charges.ForFamilyAsync(student, from, to, cancellationToken)
+            : await charges.ForSchoolAsync(from, to, cancellationToken);
         var paid = await payments.RecordedTotalsAsync(paymentsOfGroup, from, to, cancellationToken);
         var dues = FeeRules.Outstanding(book.Charges.Where(include), paid)
             .Where(d => d.Charge.Period >= from && d.Charge.Period <= to)

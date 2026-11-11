@@ -32,5 +32,8 @@ public static class ParentAccountErrors
     /// <summary>The parent already set a password; a forgotten one is reset with "Şifremi unuttum", not a new invitation.</summary>
     public static readonly Error AlreadyActive = Error.BusinessRule("ParentAccount.AlreadyActive", "The parent account is already active.");
 
-    public static readonly Error NotInvited = Error.BusinessRule("ParentAccount.NotInvited", "The guardian has no parent account.");
+    /// <summary>DEC-378: another invitation within <see cref="User.InvitationCooldown"/>; against mail bombing a mailbox.</summary>
+    public static readonly Error InvitationTooSoon = Error.BusinessRule("ParentAccount.InvitationTooSoon", "The guardian was invited moments ago; try again in two minutes.");
+
+    public static readonly Error NotInvited =Error.BusinessRule("ParentAccount.NotInvited", "The guardian has no parent account.");
 }

@@ -46,7 +46,10 @@ internal sealed class ParentChildren(AppDbContext db, ICurrentUser currentUser) 
                where guardian.AccountUserId == userId
                      && student.Status == StudentStatus.Active
                      && student.AnonymizedAt == null
-                     && db.Set<User>().Any(u => u.Id == account && u.TenantId == school && u.Role == UserRole.Parent && u.Status == UserStatus.Active)
+                     && db.Set<User>().Any(u => u.Id == account && u.TenantId == school && u.Role == UserRole.Parent && u.Status == UserStatus.Active
+                         // Not a re-invited account still waiting for its new password: a token issued before the
+                         // revocation must not see the children again (DEC-379).
+                         && !u.MustChangePassword)
                select new Child { Student = student, Relationship = link.Relationship };
     }
 

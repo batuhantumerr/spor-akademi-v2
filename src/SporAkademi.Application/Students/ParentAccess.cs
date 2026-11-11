@@ -184,6 +184,8 @@ internal sealed class GuardianAftercare(IGuardianRepository guardians, IIdentity
     {
         foreach (var id in candidates.Distinct())
         {
+            // The same row lock as an invitation, so a leave and an invitation never interleave (DEC-379).
+            await guardians.LockForDeletionAsync(id, cancellationToken);
             if (await guardians.GetAsync(id, cancellationToken) is { } guardian)
             {
                 await CloseIfNoActiveStudentAsync(guardian, cancellationToken);

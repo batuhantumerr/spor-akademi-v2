@@ -150,7 +150,7 @@ public sealed class User : AggregateRoot<UserId>
     /// hashes a random secret nobody knows, so the only way in is the invitation link, which sets the password. Raises
     /// <see cref="ParentInvited"/> instead of <see cref="UserCreated"/>, so no admin-panel welcome e-mail is sent.
     /// </summary>
-    public static Result<User> InviteParent(SchoolId tenantId, Email email, string unusablePasswordHash, string firstName, string lastName, PhoneNumber? phone)
+    public static Result<User> InviteParent(SchoolId tenantId, Email email, string unusablePasswordHash, string firstName, string lastName, PhoneNumber? phone, DateTimeOffset now)
     {
         ArgumentNullException.ThrowIfNull(email);
         ArgumentException.ThrowIfNullOrWhiteSpace(unusablePasswordHash);
@@ -160,10 +160,19 @@ public sealed class User : AggregateRoot<UserId>
             return Result.Failure<User>(names.Error);
         }
 
-        var user = new User(EntityId.New<UserId>(), tenantId, email, unusablePasswordHash, UserRole.Parent, names.Value.First, names.Value.Last, phone);
+        var user = new User(EntityId.New<UserId>(), tenantId, email, unusablePasswordHash, UserRole.Parent, names.Value.First, names.Value.Last, phone)
+        {
+            InvitedAt = now,
+        };
         user.Raise(new ParentInvited(user.Id, tenantId));
         return Result.Success(user);
     }
+
+    /// <summary>DEC-378: one invitation e-mail per parent account in this window; a quicker resend is refused.</summary>
+    public static readonly TimeSpan InvitationCooldown = TimeSpan.FromMinutes(2);
+
+    /// <summary>When the parent account was last invited (DEC-378 cooldown); null for other roles.</summary>
+    public DateTimeOffset? InvitedAt { get; private set; }
 
     /// <summary>
     /// Invites the parent again (P3-02, DEC-378): a pending invitation is resent, a closed account is reopened. Every
@@ -185,6 +194,11 @@ public sealed class User : AggregateRoot<UserId>
             return Result.Failure(ParentAccountErrors.AlreadyActive);
         }
 
+        if (InvitedAt is { } last && now - last < InvitationCooldown)
+        {
+            return Result.Failure(ParentAccountErrors.InvitationTooSoon);
+        }
+
         var names = CheckNames(firstName, lastName);
         if (names.IsFailure)
         {
@@ -192,6 +206,7 @@ public sealed class User : AggregateRoot<UserId>
         }
 
         (FirstName, LastName, Phone, Email) = (names.Value.First, names.Value.Last, phone, email);
+        InvitedAt = now;
         Status = UserStatus.Active;
         PasswordHash = unusablePasswordHash;
         MustChangePassword = true;

@@ -66,6 +66,26 @@ public abstract class ParentTest(DatabaseFixture database) : BillingTest(databas
     protected Task<HttpResponseMessage> InviteAsync(Guid guardian, HttpClient? client = null) =>
         (client ?? Admin).PostAsync(new Uri($"/api/v1/guardians/{guardian}/invitation", UriKind.Relative), null, Ct);
 
+    /// <summary>Changes (or clears) the guardian's e-mail address through the School Admin's guardian edit.</summary>
+    protected async Task ChangeGuardianEmailAsync(Guid student, string? email)
+    {
+        var detail = await Admin.GetFromJsonAsync<JsonElement>($"/api/v1/students/{student}", Ct);
+        var phone = detail.GetProperty("guardians")[0].GetProperty("phone").GetString()!;
+        var found = (await Admin.GetFromJsonAsync<JsonElement>($"/api/v1/guardians?phone={Uri.EscapeDataString(phone)}", Ct)).GetProperty("items")[0];
+        var response = await Admin.PutAsJsonAsync($"/api/v1/guardians/{IdOf(found)}", new
+        {
+            firstName = found.GetProperty("firstName").GetString(),
+            lastName = found.GetProperty("lastName").GetString(),
+            phone,
+            email,
+            version = VersionOf(found),
+        }, Ct);
+        response.StatusCode.ShouldBe(HttpStatusCode.OK, await response.Content.ReadAsStringAsync(Ct));
+    }
+
+    /// <summary>Moves past the invitation cooldown (DEC-378) without expiring the test tokens.</summary>
+    protected void PastInvitationCooldown() => Api.Clock.Advance(TimeSpan.FromMinutes(2));
+
     protected Task<HttpResponseMessage> RevokeAsync(Guid guardian, HttpClient? client = null) =>
         (client ?? Admin).DeleteAsync(new Uri($"/api/v1/guardians/{guardian}/invitation", UriKind.Relative), Ct);
 

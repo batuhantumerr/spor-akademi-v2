@@ -65,6 +65,7 @@ public sealed class ParentInvitationTests(DatabaseFixture database) : ParentTest
         (await InviteAsync(guardian)).StatusCode.ShouldBe(HttpStatusCode.OK);
         await DeliverAsync();
         var first = InvitationTokenFor(Email);
+        PastInvitationCooldown();
 
         (await InviteAsync(guardian)).StatusCode.ShouldBe(HttpStatusCode.OK);
 
@@ -88,6 +89,7 @@ public sealed class ParentInvitationTests(DatabaseFixture database) : ParentTest
         revoked.StatusCode.ShouldBe(HttpStatusCode.OK);
         (await BodyOf(revoked)).GetProperty("status").GetString().ShouldBe("Revoked");
         (await ErrorCodeAsync(await AcceptAsync(link))).ShouldBe("Auth.ResetTokenInvalid");
+        PastInvitationCooldown();
 
         (await InviteAsync(guardian)).StatusCode.ShouldBe(HttpStatusCode.OK);
         (await StatusOfAsync(guardian)).ShouldBe("Invited");
@@ -112,6 +114,94 @@ public sealed class ParentInvitationTests(DatabaseFixture database) : ParentTest
         (await GetOkAsync(parent, "/api/v1/parent/children")).GetArrayLength().ShouldBe(0);
         (await parent.GetAsync(new Uri($"/api/v1/parent/children/{student}/dues", UriKind.Relative), Ct)).StatusCode.ShouldBe(HttpStatusCode.NotFound);
         parent.Dispose();
+    }
+
+    [Fact]
+    public async Task A_re_invited_account_does_not_bring_back_an_access_token_from_before_the_revocation()
+    {
+        var (student, guardian) = await RegisterChildAsync("Ali", Email);
+        var (parent, _) = await SignedInParentAsync(guardian, Email);
+        (await RevokeAsync(guardian)).StatusCode.ShouldBe(HttpStatusCode.OK);
+        PastInvitationCooldown();
+
+        (await InviteAsync(guardian)).StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        // The account is active again but waits for a new password: the old token still sees nothing.
+        (await GetOkAsync(parent, "/api/v1/parent/children")).GetArrayLength().ShouldBe(0);
+        (await parent.GetAsync(new Uri($"/api/v1/parent/children/{student}/schedule", UriKind.Relative), Ct)).StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        parent.Dispose();
+    }
+
+    [Fact]
+    public async Task Another_invitation_within_two_minutes_is_refused()
+    {
+        var (_, guardian) = await RegisterChildAsync("Ali", Email);
+        (await InviteAsync(guardian)).StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        var again = await InviteAsync(guardian);
+
+        again.StatusCode.ShouldBe(HttpStatusCode.UnprocessableEntity);
+        (await CodeOf(again)).ShouldBe("ParentAccount.InvitationTooSoon");
+        await DeliverAsync();
+        Api.Emails.To(Email).Count.ShouldBe(1);
+    }
+
+    [Fact]
+    public async Task Changing_the_address_voids_a_pending_link()
+    {
+        var (student, guardian) = await RegisterChildAsync("Ali", "yanlis.adres@example.com");
+        (await InviteAsync(guardian)).StatusCode.ShouldBe(HttpStatusCode.OK);
+        await DeliverAsync();
+        var mistyped = InvitationTokenFor("yanlis.adres@example.com");
+
+        await ChangeGuardianEmailAsync(student, Email);
+
+        (await ErrorCodeAsync(await AcceptAsync(mistyped))).ShouldBe("Auth.ResetTokenInvalid");
+        (await StatusOfAsync(guardian)).ShouldBe("Revoked");
+        PastInvitationCooldown();
+        (await InviteAsync(guardian)).StatusCode.ShouldBe(HttpStatusCode.OK);
+        await DeliverAsync();
+        (await AcceptAsync(InvitationTokenFor(Email))).StatusCode.ShouldBe(HttpStatusCode.NoContent);
+        (await LoginAsync(Email, ParentPassword)).StatusCode.ShouldBe(HttpStatusCode.OK);
+    }
+
+    [Fact]
+    public async Task Changing_or_clearing_the_address_of_an_active_account_ends_its_access()
+    {
+        var (student, guardian) = await RegisterChildAsync("Ali", Email);
+        var (parent, session) = await SignedInParentAsync(guardian, Email);
+
+        await ChangeGuardianEmailAsync(student, email: null);
+
+        (await StatusOfAsync(guardian)).ShouldBe("Revoked");
+        (await RefreshAsync(session.RefreshToken)).StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
+        (await GetOkAsync(parent, "/api/v1/parent/children")).GetArrayLength().ShouldBe(0);
+        parent.Dispose();
+    }
+
+    [Fact]
+    public async Task Saving_the_guardian_with_the_same_address_keeps_the_account()
+    {
+        var (student, guardian) = await RegisterChildAsync("Ali", Email);
+        using var _ = (await SignedInParentAsync(guardian, Email)).Client;
+
+        await ChangeGuardianEmailAsync(student, Email.ToUpperInvariant());
+
+        (await StatusOfAsync(guardian)).ShouldBe("Active");
+    }
+
+    [Fact]
+    public async Task The_parent_api_is_rate_limited_per_account()
+    {
+        var (_, guardian) = await RegisterChildAsync("Ali", Email);
+        using var parent = (await SignedInParentAsync(guardian, Email)).Client;
+
+        for (var i = 0; i < 60; i++)
+        {
+            (await parent.GetAsync(new Uri("/api/v1/parent/children", UriKind.Relative), Ct)).StatusCode.ShouldBe(HttpStatusCode.OK);
+        }
+
+        (await parent.GetAsync(new Uri("/api/v1/parent/children", UriKind.Relative), Ct)).StatusCode.ShouldBe(HttpStatusCode.TooManyRequests);
     }
 
     [Fact]

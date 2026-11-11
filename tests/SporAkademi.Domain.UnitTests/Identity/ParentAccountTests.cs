@@ -12,7 +12,7 @@ public sealed class ParentAccountTests
     private static readonly SchoolId School = SchoolId.From(Guid.CreateVersion7());
 
     private static User Invite(string email = "veli@example.com") =>
-        User.InviteParent(School, Email.Create(email).Value, "unusable-hash", "Ayşe", "Deneme", null).Value;
+        User.InviteParent(School, Email.Create(email).Value, "unusable-hash", "Ayşe", "Deneme", null, Now).Value;
 
     [Fact]
     public void An_invited_parent_belongs_to_the_school_and_must_set_a_password_first()
@@ -120,7 +120,7 @@ public sealed class ParentAccountTests
     [Trait("Story", "P3-01")]
     public void Erasing_a_parent_closes_it_and_replaces_its_personal_data()
     {
-        var parent = User.InviteParent(School, Email.Create("veli@example.com").Value, "unusable-hash", "Ayşe", "Deneme", PhoneNumber.Create("0532 111 22 33").Value).Value;
+        var parent = User.InviteParent(School, Email.Create("veli@example.com").Value, "unusable-hash", "Ayşe", "Deneme", PhoneNumber.Create("0532 111 22 33").Value, Now).Value;
         parent.IssuePasswordToken("davet", PasswordTokenPurpose.Invitation, Now);
         parent.SetPasswordWithToken("davet", "own-hash", Now);
         var session = parent.CompleteLogin("r1", Now).Value;
@@ -135,6 +135,16 @@ public sealed class ParentAccountTests
         parent.Email.Value.ShouldNotContain("veli@example.com");
         parent.Email.Value.ShouldEndWith("@silinmis.invalid");
         Should.Throw<InvalidOperationException>(() => UserTests.NewCoach().EraseParent(Now));
+    }
+
+    [Fact]
+    public void A_new_invitation_within_two_minutes_is_refused()
+    {
+        var parent = Invite();
+
+        parent.ReinviteParent(parent.Email, "h2", "Ayşe", "Deneme", null, Now.AddSeconds(119)).Error.ShouldBe(ParentAccountErrors.InvitationTooSoon);
+        parent.ReinviteParent(parent.Email, "h2", "Ayşe", "Deneme", null, Now.AddMinutes(2)).IsSuccess.ShouldBeTrue();
+        parent.InvitedAt.ShouldBe(Now.AddMinutes(2));
     }
 
     [Fact]

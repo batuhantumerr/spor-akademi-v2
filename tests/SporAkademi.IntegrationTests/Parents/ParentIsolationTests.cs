@@ -74,12 +74,12 @@ public sealed partial class ParentIsolationTests(DatabaseFixture database) : Par
             foreach (var endpoint in ParentEndpoints().Where(e => e.Parameters.Count > 0))
             {
                 var (url, code) = Probe(endpoint, foreign);
-                failures.AddRange(await ExpectAsync(endpoint.Method, url, null, 404, code));
+                failures.AddRange(await ExpectAsync(_parent, endpoint.Method, url, null, 404, code));
             }
 
             // The one write: starting an online payment for another family's due.
             failures.AddRange(await ExpectAsync(
-                "POST", "/api/v1/parent/online-payments", new { enrollmentId = foreign.Enrollment, period = "2027-01" }, 404, "Enrollment.NotFound", "sizma-veli-0001"));
+                _parent, "POST", "/api/v1/parent/online-payments", new { enrollmentId = foreign.Enrollment, period = "2027-01" }, 404, "Enrollment.NotFound", "sizma-veli-0001"));
         }
 
         failures.ShouldBeEmpty();
@@ -94,7 +94,7 @@ public sealed partial class ParentIsolationTests(DatabaseFixture database) : Par
         foreach (var endpoint in ParentEndpoints().Where(e => e.Method == "GET" && e.Parameters.Count > 0))
         {
             var (url, _) = Probe(endpoint, _own);
-            failures.AddRange(await ExpectAsync("GET", url, null, 200, null));
+            failures.AddRange(await ExpectAsync(_parent, "GET", url, null, 200, null));
         }
 
         failures.ShouldBeEmpty();
@@ -133,9 +133,52 @@ public sealed partial class ParentIsolationTests(DatabaseFixture database) : Par
                 "effectiveFrom" => "2027-06",
                 _ => _neighbour.Student.ToString(),
             });
-            failures.AddRange(await ExpectAsync(endpoint.Method, url, null, 403, null));
+            failures.AddRange(await ExpectAsync(_parent, endpoint.Method, url, null, 403, null));
         }
 
+        failures.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public void A_parent_reaches_no_signed_in_endpoint_without_a_role_except_the_pinned_ones()
+    {
+        // Endpoints that only require a signed-in user are open to parents too; each one is reviewed here.
+        Endpoints().Where(e => !e.IsAnonymous && e.Roles.Count == 0).Select(e => e.Key).ShouldBe(
+        [
+            "GET /api/v1/me",
+            "POST /api/v1/auth/change-password",
+        ], ignoreOrder: true, "A new signed-in endpoint without a role is open to parents: give it a role or review and pin it here.");
+    }
+
+    [Fact]
+    public async Task A_guardian_sharing_one_child_sees_only_that_child_not_the_other_guardians_children()
+    {
+        // Guardian A is linked to child 1 only; guardian B to children 1 and 2 (e.g. separated parents).
+        var group = IdOf(await GroupAsync("U12 Futbol"));
+        await DefineFeeOkAsync(group, "2027-01", "900.00");
+        var (child2, guardianB) = await RegisterChildAsync("İkinci", "b.veli@example.com", lastName: "Paylaşım");
+        var (child1, guardianA) = await RegisterChildAsync("Birinci", "a.veli@example.com", lastName: "Paylaşım");
+        var detail = await Admin.GetFromJsonAsync<JsonElement>($"/api/v1/students/{child1}", Ct);
+        (await Admin.PutAsJsonAsync($"/api/v1/students/{child1}/guardians", new
+        {
+            guardians = new[] { new { guardianId = guardianA, relationship = "Mother" }, new { guardianId = guardianB, relationship = "Father" } },
+            version = VersionOf(detail),
+        }, Ct)).StatusCode.ShouldBe(HttpStatusCode.OK);
+        var enrollment2 = IdOf(await EnrollOkAsync(child2, group, "2027-01-04"));
+        var online2 = IdOf(await StartOnlineOkAsync(enrollment2));
+        using var parentA = (await SignedInParentAsync(guardianA, "a.veli@example.com")).Client;
+
+        IdsIn(await GetOkAsync(parentA, "/api/v1/parent/children")).ShouldBe([child1]);
+        var failures = new List<string>();
+        foreach (var endpoint in ParentEndpoints().Where(e => e.Parameters.Count > 0))
+        {
+            var foreign = new Family(child2, guardianB, enrollment2, Guid.Empty, online2, "İkinci", "b.veli@example.com", "", "");
+            var (url, code) = Probe(endpoint, foreign);
+            failures.AddRange(await ExpectAsync(parentA, endpoint.Method, url, null, 404, code));
+        }
+
+        failures.AddRange(await ExpectAsync(
+            parentA, "POST", "/api/v1/parent/online-payments", new { enrollmentId = enrollment2, period = "2027-01" }, 404, "Enrollment.NotFound", "paylasim-veli-0001"));
         failures.ShouldBeEmpty();
     }
 
@@ -173,7 +216,7 @@ public sealed partial class ParentIsolationTests(DatabaseFixture database) : Par
         return (url, onlinePayment ? "OnlinePayment.NotFound" : "Student.NotFound");
     }
 
-    private async Task<IEnumerable<string>> ExpectAsync(string method, string url, object? body, int status, string? code, string? idempotencyKey = null)
+    private static async Task<IEnumerable<string>> ExpectAsync(HttpClient client, string method, string url, object? body, int status, string? code, string? idempotencyKey = null)
     {
         using var request = new HttpRequestMessage(new HttpMethod(method), new Uri(url, UriKind.Relative));
         if (body is not null)
@@ -186,7 +229,7 @@ public sealed partial class ParentIsolationTests(DatabaseFixture database) : Par
             request.Headers.Add("Idempotency-Key", idempotencyKey);
         }
 
-        var response = await _parent.SendAsync(request, Ct);
+        var response = await client.SendAsync(request, Ct);
         var text = await response.Content.ReadAsStringAsync(Ct);
         string? actual = null;
         if (text.TrimStart().StartsWith('{'))
