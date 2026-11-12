@@ -14,10 +14,13 @@ import {
   defer,
   finalize,
   map,
+  from,
   of,
+  race,
   retry,
   shareReplay,
   switchMap,
+  take,
   tap,
   throwError,
   timer,
@@ -49,6 +52,9 @@ export const REFRESH_LOCK = 'sa-refresh';
 /** Pause before the single startup restore retry (DEC-447). */
 export const RESTORE_RETRY_DELAY_MS = 500;
 
+/** Longest a login waits for a still-running startup restore call to settle (DEC-447). */
+export const LOGIN_RESTORE_WAIT_MS = 15000;
+
 /** Marks requests that must not get a bearer token or trigger a refresh retry. */
 export const SKIP_AUTH = new HttpContextToken<boolean>(() => false);
 
@@ -70,6 +76,8 @@ export class AuthService {
    * that started under an older epoch are dropped, so a slow refresh cannot revive a session.
    */
   private sessionEpoch = 0;
+  /** Settles when the startup restore (and its refresh call) has finished; null when none is running. */
+  private bootRestore: Promise<void> | null = null;
 
   readonly user = this.currentUser.asReadonly();
   readonly isAuthenticated = computed(() => this.currentUser() !== null);
@@ -85,26 +93,52 @@ export class AuthService {
     return this.sessionEpoch;
   }
 
+  /**
+   * Signs in. A startup restore still running (DEC-447) is abandoned first: the epoch moves on, so its late
+   * result (another person's session on a shared computer) is dropped, and the login request waits until that
+   * refresh call has settled, so the login's cookie is the last one the browser stores.
+   */
   login(email: string, password: string): Observable<CurrentUser> {
-    return this.http
-      .post<TokenResponse>('/api/v1/auth/login', { email, password }, { context: skipAuth() })
-      .pipe(
-        tap((response) => this.accessToken.set(response.accessToken)),
-        switchMap(() => this.loadMe(this.sessionEpoch)),
+    return defer(() => {
+      this.endSession();
+      const epoch = this.sessionEpoch;
+      const pending = this.bootRestore;
+      // A refresh call that never answers must not block signing in forever.
+      const settled = pending
+        ? race(from(pending), timer(LOGIN_RESTORE_WAIT_MS)).pipe(take(1))
+        : of(undefined);
+      return settled.pipe(
+        switchMap(() =>
+          this.http.post<TokenResponse>(
+            '/api/v1/auth/login',
+            { email, password },
+            { context: skipAuth() },
+          ),
+        ),
+        tap((response) => {
+          if (epoch === this.sessionEpoch) {
+            this.accessToken.set(response.accessToken);
+          }
+        }),
+        switchMap(() => this.loadMe(epoch)),
       );
+    });
   }
 
   /**
    * Restores the session at startup; resolves to false when there is no valid refresh cookie. Only a rejected
-   * cookie (401/403) means "no session": a conflict (409, e.g. another tab rotating the same cookie), rate limit
-   * (429), server error or network failure is retried once after a short pause, since the cookie is most likely
-   * still valid (DEC-447). If the retry fails too, the app starts signed out as before.
+   * cookie (401/403) means "no session": a conflict (409, e.g. another tab rotating the same cookie), server
+   * error or network failure is retried once after a short pause, since the cookie is most likely still valid
+   * (DEC-447). If the retry fails too, or a 429 arrives, the app starts signed out as before. Resolves to false
+   * as well when a login or logout started meanwhile (its result is stale).
    */
   restore(): Observable<boolean> {
     return defer(() => {
       const epoch = this.sessionEpoch;
       return this.refresh().pipe(
-        switchMap((token) => (token ? this.loadMe(epoch).pipe(map(() => true)) : of(false))),
+        switchMap((token) =>
+          token ? this.loadMe(epoch).pipe(map(() => epoch === this.sessionEpoch)) : of(false),
+        ),
         retry({
           count: 1,
           delay: (error: unknown) =>
@@ -123,24 +157,38 @@ export class AuthService {
   /**
    * Startup restore for the app initializer: the app waits at most `waitMs`, then starts signed out, but the
    * refresh call is never cancelled (DEC-447). Aborting it could drop the rotated cookie the server already
-   * committed. If the restore succeeds after the wait, the user is taken from the login page to where they
-   * were heading.
+   * committed. If the restore succeeds after the wait and nobody has started a login meanwhile, the user is
+   * taken from the login page to where they were heading. A login started meanwhile waits for the call and
+   * drops its result (see {@link login}).
    */
   restoreAtBoot(waitMs: number): Promise<boolean> {
     return new Promise<boolean>((resolve) => {
       let late = false;
+      let settle!: () => void;
+      const settled = new Promise<void>((done) => (settle = done));
+      this.bootRestore = settled;
       const wait = setTimeout(() => {
         late = true;
         resolve(false);
       }, waitMs);
-      this.restore().subscribe((restored) => {
-        clearTimeout(wait);
-        if (!late) {
-          resolve(restored);
-        } else if (restored) {
-          this.leaveLoginPage();
-        }
-      });
+      this.restore()
+        .pipe(
+          finalize(() => {
+            if (this.bootRestore === settled) {
+              this.bootRestore = null;
+            }
+            settle();
+          }),
+        )
+        .subscribe((restored) => {
+          clearTimeout(wait);
+          if (!late) {
+            resolve(restored);
+          } else if (restored) {
+            // restore() only reports true while its epoch is current, i.e. no login or logout happened since.
+            this.leaveLoginPage();
+          }
+        });
     });
   }
 
@@ -258,7 +306,10 @@ export class AuthService {
   private loadMe(epoch: number): Observable<CurrentUser> {
     return this.http.get<CurrentUser>('/api/v1/me').pipe(
       // P3-01: parents use the parent app; their session is ended here and the cookie dropped.
-      switchMap((user) => (user.role === 'Parent' ? this.refuseParent() : of(user))),
+      // A stale result (a login or logout happened meanwhile) is ignored: logging it out could end the newer session.
+      switchMap((user) =>
+        user.role === 'Parent' && epoch === this.sessionEpoch ? this.refuseParent() : of(user),
+      ),
       tap((user) => {
         if (epoch === this.sessionEpoch) {
           this.currentUser.set(user);
@@ -359,11 +410,14 @@ function endsSession(error: unknown): boolean {
   return error instanceof HttpErrorResponse && (error.status === 401 || error.status === 403);
 }
 
-/** Failures worth one more startup attempt: network, conflict, rate limit and server errors (DEC-447). */
+/**
+ * Failures worth one more startup attempt: network, conflict and server errors (DEC-447). A rate limit (429) is
+ * not retried: a fixed short pause would most likely hit the same limit.
+ */
 function isTransient(error: unknown): boolean {
   return (
     error instanceof HttpErrorResponse &&
-    (error.status === 0 || error.status === 409 || error.status === 429 || error.status >= 500)
+    (error.status === 0 || error.status === 409 || error.status >= 500)
   );
 }
 

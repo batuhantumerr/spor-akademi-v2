@@ -3,7 +3,13 @@ import { HttpTestingController, provideHttpClientTesting } from '@angular/common
 import { TestBed } from '@angular/core/testing';
 import { Router, provideRouter } from '@angular/router';
 
-import { AuthService, CurrentUser, REFRESH_LOCK, RESTORE_RETRY_DELAY_MS } from './auth.service';
+import {
+  AuthService,
+  CurrentUser,
+  LOGIN_RESTORE_WAIT_MS,
+  REFRESH_LOCK,
+  RESTORE_RETRY_DELAY_MS,
+} from './auth.service';
 
 const user: CurrentUser = {
   id: 'u1',
@@ -167,7 +173,7 @@ describe('AuthService', () => {
       }
     }
 
-    it.each([0, 409, 429, 500, 503])('retries once after status %s and restores', (status) => {
+    it.each([0, 409, 500, 503])('retries once after status %s and restores', (status) => {
       let restored: boolean | undefined;
       auth.restore().subscribe((value) => (restored = value));
       fail(status);
@@ -183,10 +189,10 @@ describe('AuthService', () => {
       expect(auth.isAuthenticated()).toBe(true);
     });
 
-    it('does not retry a rejected cookie', () => {
+    it.each([401, 429])('does not retry status %s', (status) => {
       let restored: boolean | undefined;
       auth.restore().subscribe((value) => (restored = value));
-      fail(401);
+      fail(status);
 
       vi.advanceTimersByTime(RESTORE_RETRY_DELAY_MS * 4);
       backend.expectNone('/api/v1/auth/refresh');
@@ -244,6 +250,86 @@ describe('AuthService', () => {
 
       expect(auth.isAuthenticated()).toBe(true);
       expect(navigate).toHaveBeenCalledWith('/students');
+    });
+
+    describe('login while the startup restore is still running (shared computer)', () => {
+      const other: CurrentUser = { ...user, id: 'u2', email: 'other@example.test' };
+
+      async function lateBoot(): Promise<ReturnType<HttpTestingController['expectOne']>> {
+        const boot = auth.restoreAtBoot(5000);
+        const refresh = backend.expectOne('/api/v1/auth/refresh');
+        vi.advanceTimersByTime(5000);
+        expect(await boot).toBe(false);
+        return refresh;
+      }
+
+      it('waits for the pending refresh, drops its result and signs in the new user', async () => {
+        const refresh = await lateBoot();
+        let signedIn: CurrentUser | undefined;
+        auth.login('other@example.test', 'Diger-Sifre-2027').subscribe((u) => (signedIn = u));
+
+        // The login request waits until the old refresh call has settled.
+        backend.expectNone('/api/v1/auth/login');
+        refresh.flush({ accessToken: 'token-of-first-user', expiresIn: 900 });
+        await vi.advanceTimersByTimeAsync(0);
+        backend.expectNone('/api/v1/me');
+        backend.expectOne('/api/v1/auth/login').flush({ accessToken: 'token-b', expiresIn: 900 });
+        backend.expectOne('/api/v1/me').flush(other);
+
+        expect(signedIn?.id).toBe('u2');
+        expect(auth.user()?.id).toBe('u2');
+        expect(auth.token()).toBe('token-b');
+      });
+
+      it('does not log out the new session when the late restore turns out to be a parent', async () => {
+        const restoring = auth.restoreAtBoot(5000);
+        backend
+          .expectOne('/api/v1/auth/refresh')
+          .flush({ accessToken: 'parent-token', expiresIn: 900 });
+        const parentMe = backend.expectOne('/api/v1/me');
+        vi.advanceTimersByTime(5000);
+        expect(await restoring).toBe(false);
+
+        auth.login('other@example.test', 'Diger-Sifre-2027').subscribe();
+        parentMe.flush({ ...user, role: 'Parent' });
+        await vi.advanceTimersByTimeAsync(0);
+
+        backend.expectNone('/api/v1/auth/logout');
+        backend.expectOne('/api/v1/auth/login').flush({ accessToken: 'token-b', expiresIn: 900 });
+        backend.expectOne('/api/v1/me').flush(other);
+        expect(auth.user()?.id).toBe('u2');
+      });
+
+      it('does not leave the login page for a late restore once a login started', async () => {
+        vi.useRealTimers();
+        const router = TestBed.inject(Router);
+        await router.navigateByUrl('/login?returnUrl=%2Fstudents');
+        const navigate = vi.spyOn(router, 'navigateByUrl').mockResolvedValue(true);
+        vi.useFakeTimers();
+
+        const refresh = await lateBoot();
+        auth.login('other@example.test', 'Diger-Sifre-2027').subscribe();
+        refresh.flush({ accessToken: 'token-of-first-user', expiresIn: 900 });
+        await vi.advanceTimersByTimeAsync(0);
+        backend
+          .expectOne('/api/v1/auth/login')
+          .flush(null, { status: 401, statusText: 'Unauthorized' });
+
+        expect(navigate).not.toHaveBeenCalled();
+        expect(auth.isAuthenticated()).toBe(false);
+      });
+
+      it('stops waiting for a refresh call that never answers', async () => {
+        await lateBoot();
+        auth.login('other@example.test', 'Diger-Sifre-2027').subscribe();
+
+        await vi.advanceTimersByTimeAsync(LOGIN_RESTORE_WAIT_MS);
+
+        backend.expectOne('/api/v1/auth/login').flush({ accessToken: 'token-b', expiresIn: 900 });
+        backend.expectOne('/api/v1/me').flush(other);
+        expect(auth.user()?.id).toBe('u2');
+        backend.match('/api/v1/auth/refresh');
+      });
     });
 
     it('resolves with the restore result when it arrives in time', async () => {
