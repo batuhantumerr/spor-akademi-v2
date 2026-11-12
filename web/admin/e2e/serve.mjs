@@ -1,7 +1,7 @@
 // Serves the production build (dist/admin/browser) for the e2e suite the way the deployment does:
-// static files with an index.html fallback for client routes (docker/admin/nginx.conf), and /api and
-// /health proxied to the API on the same origin (ADR-0006: no CORS). No file watching or live reload,
-// so nothing can restart under a running test. Node built-ins only.
+// static files with an index.html fallback for client routes (docker/admin/nginx.conf), and /api, /health and
+// /hubs (SignalR, with the WebSocket upgrade, P3-08) proxied to the API on the same origin (ADR-0006: no
+// CORS). No file watching or live reload, so nothing can restart under a running test. Node built-ins only.
 //
 // HTTPS, like production (NFR-SEC-02), with the throwaway self-signed certificate scripts/e2e.sh
 // creates per run: the refresh cookie is `Secure`, and WebKit does not send Secure cookies to
@@ -11,6 +11,7 @@
 // <build-dir> defaults to the admin build (dist/admin/browser); the parent app passes ../parent/dist (P3-05).
 import { createReadStream, readFileSync, statSync } from 'node:fs';
 import { request } from 'node:http';
+import { connect } from 'node:net';
 import { createServer } from 'node:https';
 import { extname, join, normalize, resolve, sep } from 'node:path';
 
@@ -54,6 +55,39 @@ function proxy(req, res) {
   req.pipe(upstream);
 }
 
+const isApiPath = (path) =>
+  path === '/api' ||
+  path.startsWith('/api/') ||
+  path.startsWith('/health/') ||
+  path === '/hubs' ||
+  path.startsWith('/hubs/');
+
+// P3-08: the hub's WebSocket. The upgrade request is replayed to the API as it came and the two sockets are joined.
+function upgrade(req, socket, head) {
+  let path;
+  try {
+    path = new URL(req.url ?? '/', 'http://localhost').pathname;
+  } catch {
+    socket.destroy();
+    return;
+  }
+  if (path !== '/hubs' && !path.startsWith('/hubs/')) {
+    socket.destroy();
+    return;
+  }
+  const upstream = connect(Number(apiOrigin.port), apiOrigin.hostname, () => {
+    const headers = Object.entries({ ...req.headers, host: apiOrigin.host })
+      .map(([name, value]) => `${name}: ${Array.isArray(value) ? value.join(', ') : value}`)
+      .join('\r\n');
+    upstream.write(`${req.method} ${req.url} HTTP/1.1\r\n${headers}\r\n\r\n`);
+    if (head?.length) upstream.write(head);
+    upstream.pipe(socket);
+    socket.pipe(upstream);
+  });
+  upstream.on('error', () => socket.destroy());
+  socket.on('error', () => upstream.destroy());
+}
+
 function file(path) {
   const full = normalize(join(root, path));
   if (!full.startsWith(root + sep)) {
@@ -74,7 +108,7 @@ function handle(req, res) {
     res.writeHead(400).end(); // malformed percent-encoding
     return;
   }
-  if (path === '/api' || path.startsWith('/api/') || path.startsWith('/health/')) {
+  if (isApiPath(path)) {
     proxy(req, res);
     return;
   }
@@ -88,6 +122,7 @@ function handle(req, res) {
 // on an external interface.
 for (const host of ['127.0.0.1', '::1']) {
   createServer(tls, handle)
+    .on('upgrade', upgrade)
     .on('error', (error) => {
       // A machine without IPv6 loopback still serves on 127.0.0.1; any other failure is fatal.
       const noIpv6 = error.code === 'EADDRNOTAVAIL' || error.code === 'EAFNOSUPPORT';

@@ -25,10 +25,15 @@ export interface RequestLike {
   readonly headers: { has(name: string): boolean };
 }
 
-/** Paths that belong to the server, never to the app: the API (including /api/v1/auth) and health checks. */
+/**
+ * Paths that belong to the server, never to the app: the API (including /api/v1/auth), health checks and the
+ * SignalR hubs (P3-08: negotiate, long polling and server-sent events under /hubs/notifications).
+ */
+const SERVER_ROOTS = ['/api', '/health', '/hubs'] as const;
+
 export function isServerPath(pathname: string): boolean {
   const path = pathname.toLowerCase();
-  return path === '/api' || path.startsWith('/api/') || path === '/health' || path.startsWith('/health/');
+  return SERVER_ROOTS.some((root) => path === root || path.startsWith(`${root}/`));
 }
 
 /** A client route of the SPA: not a server path and its last segment has no file extension. */

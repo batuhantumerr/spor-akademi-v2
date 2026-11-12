@@ -10,6 +10,9 @@ public readonly record struct AnnouncementId(Guid Value) : IEntityId<Announcemen
     public static AnnouncementId From(Guid value) => new(value);
 }
 
+/// <summary>An announcement was published (P3-08: the group's coach and parents are told after commit).</summary>
+public sealed record AnnouncementPublished(SchoolId TenantId, AnnouncementId AnnouncementId, GroupId GroupId) : IDomainEvent;
+
 /// <summary>
 /// A message from the school to a group's coach (US-25, appendix B 4.11). Plain text, never edited.
 /// The author and time are domain data (<see cref="AuthorId"/>, <see cref="PublishedAt"/>), separate from
@@ -74,7 +77,9 @@ public sealed class Announcement : AggregateRoot<AnnouncementId>, ITenantScoped
             return Result.Failure<Announcement>(cleanBody.Error);
         }
 
-        return Result.Success(new Announcement(EntityId.New<AnnouncementId>(), tenantId, groupId, authorId, cleanTitle.Value, cleanBody.Value, now));
+        var announcement = new Announcement(EntityId.New<AnnouncementId>(), tenantId, groupId, authorId, cleanTitle.Value, cleanBody.Value, now);
+        announcement.Raise(new AnnouncementPublished(tenantId, announcement.Id, groupId));
+        return Result.Success(announcement);
     }
 
     /// <summary>The stored title: whitespace runs collapsed to single spaces; required, at most <see cref="TitleMaxLength"/> after that.</summary>

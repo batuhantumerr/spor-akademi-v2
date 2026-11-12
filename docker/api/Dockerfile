@@ -12,7 +12,8 @@ RUN dotnet restore src/SporAkademi.Api/SporAkademi.Api.csproj --locked-mode -r l
 COPY src/ src/
 RUN dotnet publish src/SporAkademi.Api/SporAkademi.Api.csproj -c Release -r linux-x64 --self-contained false --no-restore -o /app
 
-FROM mcr.microsoft.com/dotnet/aspnet:10.0.14-noble-chiseled-extra@sha256:a9298ccc39c6258ae71228479e2f3f8d2ceb6639a9927262a4b0ff7d319a0e7e
+# P3-08 (DEC-401): 10.0.15 fixes CVE-2026-114147 (GHSA-wr8v-9x5q-ggcm, ASP.NET Core DoS) in the shared framework that now serves SignalR.
+FROM mcr.microsoft.com/dotnet/aspnet:10.0.15-noble-chiseled-extra@sha256:cae5b962bfb786606def03d250c6a645cc98839095c89e806e4bd8978a68115b
 WORKDIR /app
 COPY --from=build /app ./
 ENV ASPNETCORE_HTTP_PORTS=8080

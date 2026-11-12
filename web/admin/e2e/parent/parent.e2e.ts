@@ -31,6 +31,7 @@ interface Arranged {
   guardianEmail: string;
   announcement: string;
   enrollmentId: string;
+  groupId: string;
 }
 
 let arranged: Arranged;
@@ -129,6 +130,7 @@ test.beforeAll(async () => {
     guardianEmail,
     announcement,
     enrollmentId: enrollment.id,
+    groupId: group.id,
   };
 });
 
@@ -217,6 +219,18 @@ test('an invited parent sets a password, signs in, sees the child and pays the d
       .filter((p) => p.enrollmentId === arranged.enrollmentId)
       .map((p) => [p.method, p.amount.amount]),
   ).toEqual([['Online', fee]]);
+
+  // P3-08: an announcement published now reaches the open app live (SignalR, after the outbox delivers it): a
+  // polite notice, and the child's announcement list reloads by itself.
+  const live = unique('Canlı duyuru', testInfo);
+  await admin!.post(`/api/v1/groups/${arranged.groupId}/announcements`, {
+    title: live,
+    body: 'Anlık.',
+  });
+  await expect(page.getByText('Yeni duyuru yayımlandı')).toBeVisible({
+    timeout: 30_000,
+  });
+  await expect(page.getByRole('region', { name: 'Duyurular' }).getByText(live)).toBeVisible();
 
   // P3-07 (DEC-394): installable, and the service worker caches the app shell only. Offline, a reload still opens
   // the app (from the cache), which says "Bağlantı yok" and shows none of the family's data: no API answer was

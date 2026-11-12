@@ -45,6 +45,12 @@ describe('service worker request policy (P3-07)', () => {
     '/api',
     '/health/ready',
     '/health',
+    '/hubs',
+    '/hubs/',
+    '/hubs/notifications',
+    '/hubs/notifications/negotiate',
+    '/hubs/notifications?id=abc',
+    '/HUBS/Notifications',
   ])('never handles the server path %s, not even as a navigation', (path) => {
     expect(classify(request(path), origin, precache)).toBe('passthrough');
     expect(classify(request(path, { mode: 'navigate' }), origin, precache)).toBe('passthrough');
@@ -140,6 +146,8 @@ describe('service worker request policy (P3-07)', () => {
     expect(isAppRoute('/cocuk/abc')).toBe(true);
     expect(isAppRoute('/favicon.ico')).toBe(false);
     expect(isAppRoute('/api/v1/parent/children')).toBe(false);
+    expect(isAppRoute('/hubs/notifications')).toBe(false);
+    expect(isAppRoute('/hubsx')).toBe(true);
     expect(isAppRoute('/healthz')).toBe(true);
   });
 

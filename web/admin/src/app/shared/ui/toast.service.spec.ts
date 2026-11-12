@@ -42,6 +42,14 @@ describe('ToastService', () => {
     expect(toasts.toasts().length).toBe(0);
   });
 
+  it('shows a notice once while it is visible and dismisses it after its duration', () => {
+    toasts.info('Yeni duyuru yayımlandı');
+    toasts.info('Yeni duyuru yayımlandı');
+    expect(toasts.toasts().length).toBe(1);
+    vi.advanceTimersByTime(TOAST_DURATION_MS.info);
+    expect(toasts.toasts().length).toBe(0);
+  });
+
   it('clears the timer when dismissed by hand', () => {
     toasts.success('Kaydedildi');
     const id = toasts.toasts()[0].id;
@@ -56,6 +64,7 @@ describe('ToastsComponent', () => {
     const service = TestBed.inject(ToastService);
     service.success('Branş eklendi.');
     service.error('Sunucuya ulaşılamıyor.');
+    service.info('Yeni duyuru yayımlandı');
     await fixture.whenStable();
 
     const root = fixture.nativeElement as HTMLElement;
@@ -63,6 +72,11 @@ describe('ToastsComponent', () => {
     expect(status.length).toBe(1);
     expect(status[0].textContent).toContain('Branş eklendi.');
     expect(status[0].querySelector('[role]')).toBeNull();
+    expect(status[0].getAttribute('aria-live')).toBe('polite');
+    expect(status[0].querySelector('[data-kind="info"]')?.textContent).toContain(
+      'Yeni duyuru yayımlandı',
+    );
+    expect(document.activeElement).toBe(document.body);
     const alerts = root.querySelectorAll('[role="alert"]');
     expect(alerts.length).toBe(1);
     expect(alerts[0].textContent).toContain('Sunucuya ulaşılamıyor.');
