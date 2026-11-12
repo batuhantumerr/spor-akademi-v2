@@ -1,9 +1,9 @@
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
-import { provideRouter } from '@angular/router';
+import { Router, provideRouter } from '@angular/router';
 
-import { AuthService, CurrentUser, REFRESH_LOCK } from './auth.service';
+import { AuthService, CurrentUser, REFRESH_LOCK, RESTORE_RETRY_DELAY_MS } from './auth.service';
 
 const user: CurrentUser = {
   id: 'u1',
@@ -151,6 +151,107 @@ describe('AuthService', () => {
       stale.flush({ accessToken: 'late-token', expiresIn: 900 });
       requests[0].flush({ accessToken: 'fresh-token', expiresIn: 900 });
       expect(auth.token()).toBe('fresh-token');
+    });
+  });
+
+  describe('startup restore (DEC-447)', () => {
+    beforeEach(() => vi.useFakeTimers());
+    afterEach(() => vi.useRealTimers());
+
+    function fail(status: number): void {
+      const request = backend.expectOne('/api/v1/auth/refresh');
+      if (status === 0) {
+        request.error(new ProgressEvent('error'));
+      } else {
+        request.flush(null, { status, statusText: 'Error' });
+      }
+    }
+
+    it.each([0, 409, 429, 500, 503])('retries once after status %s and restores', (status) => {
+      let restored: boolean | undefined;
+      auth.restore().subscribe((value) => (restored = value));
+      fail(status);
+
+      backend.expectNone('/api/v1/auth/refresh');
+      expect(restored).toBeUndefined();
+      vi.advanceTimersByTime(RESTORE_RETRY_DELAY_MS);
+      backend.expectOne('/api/v1/auth/refresh').flush({ accessToken: 'retried', expiresIn: 900 });
+      backend.expectOne('/api/v1/me').flush(user);
+
+      expect(restored).toBe(true);
+      expect(auth.token()).toBe('retried');
+      expect(auth.isAuthenticated()).toBe(true);
+    });
+
+    it('does not retry a rejected cookie', () => {
+      let restored: boolean | undefined;
+      auth.restore().subscribe((value) => (restored = value));
+      fail(401);
+
+      vi.advanceTimersByTime(RESTORE_RETRY_DELAY_MS * 4);
+      backend.expectNone('/api/v1/auth/refresh');
+      expect(restored).toBe(false);
+    });
+
+    it('gives up after one retry', () => {
+      let restored: boolean | undefined;
+      auth.restore().subscribe((value) => (restored = value));
+      fail(503);
+      vi.advanceTimersByTime(RESTORE_RETRY_DELAY_MS);
+      fail(503);
+
+      vi.advanceTimersByTime(RESTORE_RETRY_DELAY_MS * 4);
+      backend.expectNone('/api/v1/auth/refresh');
+      expect(restored).toBe(false);
+      expect(auth.isAuthenticated()).toBe(false);
+    });
+
+    it('does not retry after logout', () => {
+      let restored: boolean | undefined;
+      auth.restore().subscribe((value) => (restored = value));
+      fail(503);
+      auth.logout().subscribe();
+      backend.expectOne('/api/v1/auth/logout').flush(null);
+
+      vi.advanceTimersByTime(RESTORE_RETRY_DELAY_MS * 4);
+      backend.expectNone('/api/v1/auth/refresh');
+      expect(restored).toBe(false);
+    });
+
+    it('starts signed out after the wait without cancelling the refresh call', async () => {
+      const boot = auth.restoreAtBoot(5000);
+      const refresh = backend.expectOne('/api/v1/auth/refresh');
+
+      vi.advanceTimersByTime(5000);
+
+      expect(await boot).toBe(false);
+      expect(refresh.cancelled).toBe(false);
+    });
+
+    it('takes the user from the login page to the return URL when the late restore succeeds', async () => {
+      vi.useRealTimers();
+      const router = TestBed.inject(Router);
+      await router.navigateByUrl('/login?returnUrl=%2Fstudents');
+      const navigate = vi.spyOn(router, 'navigateByUrl').mockResolvedValue(true);
+      vi.useFakeTimers();
+
+      const boot = auth.restoreAtBoot(5000);
+      const refresh = backend.expectOne('/api/v1/auth/refresh');
+      vi.advanceTimersByTime(5000);
+      expect(await boot).toBe(false);
+      refresh.flush({ accessToken: 'late', expiresIn: 900 });
+      backend.expectOne('/api/v1/me').flush(user);
+
+      expect(auth.isAuthenticated()).toBe(true);
+      expect(navigate).toHaveBeenCalledWith('/students');
+    });
+
+    it('resolves with the restore result when it arrives in time', async () => {
+      const boot = auth.restoreAtBoot(5000);
+      backend.expectOne('/api/v1/auth/refresh').flush({ accessToken: 'fast', expiresIn: 900 });
+      backend.expectOne('/api/v1/me').flush(user);
+
+      expect(await boot).toBe(true);
     });
   });
 

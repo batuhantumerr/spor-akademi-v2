@@ -15,10 +15,12 @@ import {
   finalize,
   map,
   of,
+  retry,
   shareReplay,
   switchMap,
   tap,
   throwError,
+  timer,
 } from 'rxjs';
 
 /** 'Parent' (P3-01) only ever arrives from the API; the admin panel ends such a session at once. */
@@ -43,6 +45,9 @@ interface TokenResponse {
 
 /** Web Lock that serializes refresh calls across the tabs of this origin. */
 export const REFRESH_LOCK = 'sa-refresh';
+
+/** Pause before the single startup restore retry (DEC-447). */
+export const RESTORE_RETRY_DELAY_MS = 500;
 
 /** Marks requests that must not get a bearer token or trigger a refresh retry. */
 export const SKIP_AUTH = new HttpContextToken<boolean>(() => false);
@@ -89,14 +94,53 @@ export class AuthService {
       );
   }
 
-  /** Restores the session at startup; resolves to false when there is no valid refresh cookie. */
+  /**
+   * Restores the session at startup; resolves to false when there is no valid refresh cookie. Only a rejected
+   * cookie (401/403) means "no session": a conflict (409, e.g. another tab rotating the same cookie), rate limit
+   * (429), server error or network failure is retried once after a short pause, since the cookie is most likely
+   * still valid (DEC-447). If the retry fails too, the app starts signed out as before.
+   */
   restore(): Observable<boolean> {
     return defer(() => {
       const epoch = this.sessionEpoch;
       return this.refresh().pipe(
         switchMap((token) => (token ? this.loadMe(epoch).pipe(map(() => true)) : of(false))),
+        retry({
+          count: 1,
+          delay: (error: unknown) =>
+            isTransient(error)
+              ? timer(RESTORE_RETRY_DELAY_MS).pipe(
+                  // A logout during the pause wins: no second attempt.
+                  switchMap(() => (epoch === this.sessionEpoch ? of(0) : throwError(() => error))),
+                )
+              : throwError(() => error),
+        }),
         catchError(() => of(false)),
       );
+    });
+  }
+
+  /**
+   * Startup restore for the app initializer: the app waits at most `waitMs`, then starts signed out, but the
+   * refresh call is never cancelled (DEC-447). Aborting it could drop the rotated cookie the server already
+   * committed. If the restore succeeds after the wait, the user is taken from the login page to where they
+   * were heading.
+   */
+  restoreAtBoot(waitMs: number): Promise<boolean> {
+    return new Promise<boolean>((resolve) => {
+      let late = false;
+      const wait = setTimeout(() => {
+        late = true;
+        resolve(false);
+      }, waitMs);
+      this.restore().subscribe((restored) => {
+        clearTimeout(wait);
+        if (!late) {
+          resolve(restored);
+        } else if (restored) {
+          this.leaveLoginPage();
+        }
+      });
     });
   }
 
@@ -229,6 +273,22 @@ export class AuthService {
     );
   }
 
+  /** A late startup restore signed the user in while the login page was already showing. */
+  private leaveLoginPage(): void {
+    const tree = this.router.parseUrl(this.router.url);
+    const path = tree.root.children['primary']?.segments.map((s) => s.path).join('/') ?? '';
+    if (path !== 'login') {
+      return;
+    }
+    const returnUrl = tree.queryParamMap.get('returnUrl');
+    const target = this.mustChangePassword()
+      ? '/change-password'
+      : returnUrl?.startsWith('/') && !returnUrl.startsWith('//')
+        ? returnUrl
+        : this.homeFor(this.role());
+    void this.router.navigateByUrl(target);
+  }
+
   private refuseParent(): Observable<never> {
     this.endSession();
     const refused = new HttpErrorResponse({
@@ -297,6 +357,14 @@ function underRefreshLock<T>(source: Observable<T>, stale: () => boolean): Obser
 /** Only an explicit rejection of the refresh cookie ends the session. */
 function endsSession(error: unknown): boolean {
   return error instanceof HttpErrorResponse && (error.status === 401 || error.status === 403);
+}
+
+/** Failures worth one more startup attempt: network, conflict, rate limit and server errors (DEC-447). */
+function isTransient(error: unknown): boolean {
+  return (
+    error instanceof HttpErrorResponse &&
+    (error.status === 0 || error.status === 409 || error.status === 429 || error.status >= 500)
+  );
 }
 
 function skipAuth(): HttpContext {
