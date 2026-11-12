@@ -117,7 +117,7 @@ Veli yalnızca **kendi çocuklarını** görür. Bu, okul izolasyonunun yanında
   - Çevrimdışı sayfası.
 
 ### 3.3 Gerçek zamanlı (P3-F3)
-- [x] P3-08 **SignalR.** (DEC-396 – DEC-404)
+- [x] P3-08 **SignalR.** (DEC-396 – DEC-405)
   - Kimlik doğrulama JWT ile yapılır; yayın grupları okul, rol, grup ve veli bazındadır.
   - Mesajlar commit'ten sonra outbox üzerinden yayınlanır.
   - Anlık bildirim gönderilen durumlar:

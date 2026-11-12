@@ -56,10 +56,11 @@ Sadece bu uygulamaya uygulanabilen maddeler listelenir (SOAP, GraphQL, OAuth/OID
 ### V3 Oturum yönetimi
 | Madde | Durum | Kanıt / not |
 | --- | --- | --- |
-| 3.1.1 Oturum token'ı URL'de yok | 🟡 | Access token `Authorization` başlığında, refresh token cookie'de. **İstisna (P3-08, DEC-399):** tarayıcı WebSocket'i başlık taşıyamadığı için SignalR token'ı `access_token` sorgu parametresinde gönderir; API bunu yalnız `/hubs/notifications` yolunda ve `Authorization` başlığı yokken kabul eder (`/api`'de yok sayılır, `RealtimeNotificationTests`), Serilog'da her olayda maskelenir (`AccessTokenRedaction`, `LogPrivacyTests.The_hub_access_token_*`). Token 15 dakikalıktır. Açık nokta: Deploy bloğunda Caddy erişim logundan `access_token` silinmeli. |
+| 3.1.1 Oturum token'ı URL'de yok | 🟡 | Access token `Authorization` başlığında, refresh token cookie'de. **İstisna (P3-08, DEC-399):** tarayıcı WebSocket'i başlık taşıyamadığı için SignalR token'ı `access_token` sorgu parametresinde gönderir; API bunu yalnız `/hubs/notifications` yolunda ve `Authorization` başlığı yokken kabul eder (`/api`'de yok sayılır, `RealtimeNotificationTests`), Serilog'da her olayda maskelenir, URL-kodlu biçimi ve SignalR bağlantı token'ı (`?id=`) dahil (`AccessTokenRedaction`, `LogPrivacyTests.The_hub_access_token_*`, `Hub_secrets_are_masked_in_any_text`; DEC-405). Token 15 dakikalıktır. Açık nokta: Deploy bloğunda Caddy erişim logundan `access_token` silinmeli. |
 | 3.2.1 – 3.2.3 Yeni token girişte, ≥ 64 bit entropi, güvenli saklama | ✅ | Refresh token 256 bit CSPRNG, DB'de SHA-256 hash (`Credentials.cs`, `LoginTests`). |
 | 3.3.1 Çıkışta oturum biter | ✅ | `SessionTests.Logout_*`, `AuthHardeningTests.Logout_clears_the_cookie_even_when_revoking_fails`. |
 | 3.3.2 Mutlak süre | ✅ | 30 gün (`SessionTests`). |
+| Çok sekmede refresh ve açık sekmenin oturumu (P3-08) | ✅ | Sekmelerin refresh'i `navigator.locks` (`sa-refresh`) ile sıraya girer, aynı anda refresh yeniden kullanım tespitiyle bütün oturumları kapatmaz; gizli sekme realtime için refresh etmez. Açık sekme oturumu mutlak 30 güne kadar uzatabilir (bilinçli kabul, DEC-405). |
 | 3.4.1 – 3.4.3 Cookie `Secure`, `HttpOnly`, `SameSite` | ✅ | `LoginTests.Valid_credentials_*`. |
 | 3.5.2 – 3.5.3 Token imza/süre doğrulaması | ✅ | HS256, issuer/audience/lifetime, tutarsız rol/tenant reddi (`JwtSetup.cs`, `ErrorHandlingTests.Invalid_tokens_are_rejected`). |
 | 3.7.1 Hassas işlemde yeniden doğrulama | ✅ | Şifre değişimi mevcut şifreyi ister. |

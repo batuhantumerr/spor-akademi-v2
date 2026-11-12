@@ -15,7 +15,7 @@ required=(
   "content-security-policy: frame-ancestors 'none'"
 )
 
-for path in /hubs /hubs/notifications /hubs/notifications/negotiate /api /api/v1/me; do
+for path in /hubs /hubs/notifications /hubs/notifications/negotiate /HUBS/Notifications /api /api/v1/me /API/v1/me; do
   headers="$(curl -sSI --max-time 10 "$base$path" | tr -d '\r' | tr '[:upper:]' '[:lower:]')"
   if ! grep -qE '^http/[0-9.]+ 404' <<<"$headers"; then
     echo "$base$path is not 404: $(head -1 <<<"$headers")" >&2
