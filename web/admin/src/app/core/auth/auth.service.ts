@@ -88,7 +88,7 @@ export class AuthService {
     return this.accessToken();
   }
 
-  /** Identifies the current session; changes on logout and expiry. */
+  /** Identifies the current session; changes on login, logout and expiry. */
   epoch(): number {
     return this.sessionEpoch;
   }
@@ -201,6 +201,10 @@ export class AuthService {
    * the previous one already rotated, instead of two tabs presenting the same refresh token at once
    * (reuse detection would end the session on every device). A tab whose session ended while it
    * waited for the lock skips the call.
+   *
+   * While a user is signed in, the new token's `sub` must be that user's id; otherwise the session is expired
+   * (sent to /login?expired=1) instead of mixing two identities. This is only a consistency check, the
+   * signature is not verified client-side.
    */
   refresh(): Observable<string | null> {
     if (this.refreshInFlight) {
@@ -218,6 +222,21 @@ export class AuthService {
       map((response) => {
         if (!response || epoch !== this.sessionEpoch) {
           return null; // Logged out while the refresh was in flight.
+        }
+        const signedIn = this.currentUser();
+        if (signedIn && !sameSubject(response.accessToken, signedIn.id)) {
+          // The cookie belongs to someone else (e.g. a very late startup refresh of another person on a shared
+          // computer stored its cookie after this login, DEC-447): never continue with a mismatched identity, and
+          // revoke that cookie's family so a reload or another tab cannot silently restore the other person.
+          this.http
+            .post<void>('/api/v1/auth/logout', null, {
+              headers: ajaxHeaders(),
+              context: skipAuth(),
+            })
+            .pipe(catchError(() => of(undefined)))
+            .subscribe();
+          this.expireSession();
+          return null;
         }
         this.accessToken.set(response.accessToken);
         return response.accessToken;
@@ -403,6 +422,25 @@ function underRefreshLock<T>(source: Observable<T>, stale: () => boolean): Obser
       inner?.unsubscribe();
     };
   });
+}
+
+/**
+ * Whether the JWT's `sub` claim is `userId`. The payload is only decoded, not verified: this is a client-side
+ * consistency check. A token that cannot be decoded does not match (fail closed).
+ */
+export function sameSubject(token: string, userId: string): boolean {
+  try {
+    const payload = token.split('.')[1];
+    if (!payload) {
+      return false;
+    }
+    const base64 = payload.replace(/-/g, '+').replace(/_/g, '/');
+    const padded = base64.padEnd(Math.ceil(base64.length / 4) * 4, '=');
+    const sub = (JSON.parse(atob(padded)) as { sub?: unknown }).sub;
+    return typeof sub === 'string' && sub.toLowerCase() === userId.toLowerCase();
+  } catch {
+    return false;
+  }
 }
 
 /** Only an explicit rejection of the refresh cookie ends the session. */

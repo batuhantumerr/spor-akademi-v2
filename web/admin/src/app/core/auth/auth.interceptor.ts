@@ -34,10 +34,16 @@ export const authInterceptor: HttpInterceptorFn = (original, next) => {
     return next(request);
   }
 
+  // Captured when the request is sent: a 401 for a request of an older session (e.g. the startup restore's /me
+  // while a login waits) must not refresh, retry with the new session's token or expire the new session.
+  const sentEpoch = auth.epoch();
   const sentToken = auth.token();
   return next(withToken(request, sentToken)).pipe(
     catchError((error: unknown) => {
       if (!(error instanceof HttpErrorResponse) || error.status !== 401 || !isExpiredToken(error)) {
+        return throwError(() => error);
+      }
+      if (auth.epoch() !== sentEpoch) {
         return throwError(() => error);
       }
       const current = auth.token();
@@ -45,12 +51,11 @@ export const authInterceptor: HttpInterceptorFn = (original, next) => {
         // Another request refreshed while this one was on the wire.
         return next(withToken(request, current));
       }
-      const epoch = auth.epoch();
       return auth.refresh().pipe(
         switchMap((token) => {
           if (!token) {
-            // Skip the redirect when the user already logged out meanwhile.
-            if (auth.epoch() === epoch) {
+            // Skip the redirect when the user already logged out (or the refresh expired the session) meanwhile.
+            if (auth.epoch() === sentEpoch) {
               auth.expireSession();
             }
             return throwError(() => error);

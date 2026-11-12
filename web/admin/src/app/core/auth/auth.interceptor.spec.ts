@@ -12,6 +12,12 @@ import { setLanguage } from '../i18n/language';
 import { authInterceptor } from './auth.interceptor';
 import { AuthService } from './auth.service';
 
+/** A synthetic, unsigned JWT whose payload carries `sub`; the client only decodes it. */
+function jwt(sub: string): string {
+  const payload = btoa(JSON.stringify({ sub })).replace(/=+$/, '');
+  return `eyJhbGciOiJub25lIn0.${payload}.sig`;
+}
+
 describe('authInterceptor', () => {
   let http: HttpClient;
   let backend: HttpTestingController;
@@ -151,6 +157,79 @@ describe('authInterceptor', () => {
     expect(auth.token()).toBeNull();
     expect(navigate).toHaveBeenCalledTimes(1);
     expect(navigate).toHaveBeenCalledWith(['/login']);
+  });
+
+  describe('401 of a request sent under an older session epoch', () => {
+    it('neither refreshes nor expires the login that started meanwhile', () => {
+      signIn('old-token');
+      const navigate = vi.spyOn(router, 'navigate');
+      let error: HttpErrorResponse | undefined;
+      // E.g. the startup restore's /me, still on the wire while somebody signs in.
+      http.get('/api/v1/sports').subscribe({ error: (e: HttpErrorResponse) => (error = e) });
+      const stale = backend.expectOne('/api/v1/sports');
+
+      auth.login('b@example.test', 'Sentetik-Sifre-2027').subscribe();
+      backend.expectOne('/api/v1/auth/login').flush({ accessToken: jwt('u2'), expiresIn: 900 });
+      const me = backend.expectOne('/api/v1/me');
+      expect(me.request.headers.get('Authorization')).toBe(`Bearer ${jwt('u2')}`);
+
+      stale.flush(null, { status: 401, statusText: 'Unauthorized' });
+      backend.expectNone('/api/v1/auth/refresh');
+      backend.expectNone('/api/v1/sports'); // no retry with the new session's token
+      expect(error?.status).toBe(401);
+
+      me.flush({
+        id: 'u2',
+        email: 'b@example.test',
+        firstName: 'Deniz',
+        lastName: 'Kaya',
+        role: 'SchoolAdmin',
+        tenantId: 't1',
+        mustChangePassword: false,
+      });
+      expect(auth.user()?.id).toBe('u2');
+      expect(auth.token()).toBe(jwt('u2'));
+      expect(navigate).not.toHaveBeenCalled();
+    });
+
+    it('still refreshes a 401 of the current epoch', () => {
+      signIn('old-token');
+      http.get('/api/v1/sports').subscribe({ error: () => undefined });
+      backend.expectOne('/api/v1/sports').flush(null, { status: 401, statusText: 'Unauthorized' });
+      backend.expectOne('/api/v1/auth/refresh').flush({ accessToken: 'new-token', expiresIn: 900 });
+      backend.expectOne('/api/v1/sports').flush({ items: [] });
+    });
+  });
+
+  it('expires the session once and does not retry when the refreshed token belongs to another user', async () => {
+    await router.navigateByUrl('/sports');
+    auth.login('a@example.test', 'Sentetik-Sifre-2027').subscribe();
+    backend.expectOne('/api/v1/auth/login').flush({ accessToken: jwt('u1'), expiresIn: 900 });
+    backend.expectOne('/api/v1/me').flush({
+      id: 'u1',
+      email: 'a@example.test',
+      firstName: 'Ayşe',
+      lastName: 'Yılmaz',
+      role: 'SchoolAdmin',
+      tenantId: 't1',
+      mustChangePassword: false,
+    });
+    const navigate = vi.spyOn(router, 'navigate');
+    let error: HttpErrorResponse | undefined;
+    http.get('/api/v1/sports').subscribe({ error: (e: HttpErrorResponse) => (error = e) });
+
+    backend.expectOne('/api/v1/sports').flush(null, { status: 401, statusText: 'Unauthorized' });
+    backend.expectOne('/api/v1/auth/refresh').flush({ accessToken: jwt('u9'), expiresIn: 900 });
+    backend.expectOne('/api/v1/auth/logout').flush(null);
+
+    backend.expectNone('/api/v1/sports');
+    expect(error?.status).toBe(401);
+    expect(auth.token()).toBeNull();
+    expect(auth.isAuthenticated()).toBe(false);
+    expect(navigate).toHaveBeenCalledTimes(1);
+    expect(navigate).toHaveBeenCalledWith(['/login'], {
+      queryParams: { expired: 1, returnUrl: '/sports' },
+    });
   });
 
   it('does not refresh on coded business 401s', () => {
