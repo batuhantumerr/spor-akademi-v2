@@ -20,6 +20,12 @@ public enum AttendanceStatus
     Excused,
 }
 
+/// <summary>
+/// A save set or changed students' statuses (P3-08: each child's parents are told after commit). Only students whose
+/// status really changed are listed; saving the same statuses again raises nothing.
+/// </summary>
+public sealed record AttendanceRecorded(SchoolId TenantId, SessionId SessionId, GroupId GroupId, DateOnly Date, IReadOnlyList<AttendanceMark> Marks) : IDomainEvent;
+
 /// <summary>One student's status in a save request.</summary>
 public sealed record AttendanceMark(StudentId StudentId, AttendanceStatus Status);
 
@@ -144,18 +150,26 @@ public sealed class Session : AggregateRoot<SessionId>, ITenantScoped
             return allowed;
         }
 
+        var recorded = new List<AttendanceMark>();
         foreach (var mark in marks)
         {
             var record = _records.Find(r => r.StudentId == mark.StudentId);
             if (record is null)
             {
                 _records.Add(new AttendanceRecord(TenantId, Id, mark.StudentId, mark.Status, recorder.UserId, at));
+                recorded.Add(mark);
             }
             else if (record.Status != mark.Status)
             {
                 _changes.Add(new AttendanceChange(TenantId, Id, mark.StudentId, record.Status, mark.Status, recorder.UserId, at));
                 record.Change(mark.Status, recorder.UserId, at);
+                recorded.Add(mark);
             }
+        }
+
+        if (recorded.Count > 0)
+        {
+            Raise(new AttendanceRecorded(TenantId, Id, GroupId, Date, recorded));
         }
 
         return Result.Success();

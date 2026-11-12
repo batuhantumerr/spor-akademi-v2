@@ -100,4 +100,13 @@ public sealed class PaymentTests
         NewPayment().Cancel(new string('x', Payment.CancelReasonMaxLength + 1), EntityId.New<UserId>(), Now)
             .Error.ShouldBe(CommonErrors.FieldTooLong);
     }
+
+    [Fact]
+    [Trait("Story", "P3-08")]
+    public void Recording_raises_payment_recorded_with_ids_only()
+    {
+        var payment = NewPayment();
+
+        payment.DomainEvents.ShouldBe([new PaymentRecorded(payment.TenantId, payment.Id, payment.StudentId, payment.GroupId)]);
+    }
 }

@@ -38,7 +38,12 @@ internal static class JwtSetup
             .Configure<IOptions<JwtOptions>, TimeProvider>((bearer, jwt, timeProvider) =>
             {
                 bearer.MapInboundClaims = false;
-                bearer.Events = new JwtBearerEvents { OnTokenValidated = RejectTokensWithoutValidRoleAndTenant };
+                bearer.Events = new JwtBearerEvents
+                {
+                    OnTokenValidated = RejectTokensWithoutValidRoleAndTenant,
+                    // P3-08: the WebSocket of the hub carries the token in the query (DEC-399).
+                    OnMessageReceived = Realtime.RealtimeSetup.ReadHubTokenFromQuery,
+                };
                 bearer.TokenValidationParameters = new TokenValidationParameters
                 {
                     ValidIssuer = JwtOptions.Issuer,

@@ -47,6 +47,26 @@ public sealed class NotificationRulesTests
         offenders.ShouldBeEmpty();
     }
 
+    /// <summary>
+    /// P3-08 (DEC-396): realtime notices leave only after commit too. Only outbox handlers in
+    /// <c>SporAkademi.Application.Realtime</c> may push them; a request handler or domain event consumer never does.
+    /// </summary>
+    [Fact]
+    [Trait("Story", "P3-08")]
+    public void Only_outbox_handlers_push_realtime_notices()
+    {
+        const string notifier = "SporAkademi.Application.Abstractions.Realtime.IRealtimeNotifier";
+        var users = Types.InAssembly(Assemblies.Application)
+            .That().HaveDependencyOn(notifier)
+            .And().DoNotResideInNamespace("SporAkademi.Application.Abstractions.Realtime")
+            .GetTypes()
+            .ToList();
+
+        users.ShouldNotBeEmpty();
+        users.ShouldAllBe(t => t.Namespace == "SporAkademi.Application.Realtime"
+            && t.GetInterfaces().Any(i => i.IsGenericType && i.GetGenericTypeDefinition().Name == "IOutboxMessageHandler`1"));
+    }
+
     [Fact]
     public void Only_the_notifications_namespace_uses_mailkit()
     {
