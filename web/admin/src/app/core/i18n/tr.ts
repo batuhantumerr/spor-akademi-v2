@@ -1118,6 +1118,7 @@ export const ui = {
     bodyHint: 'Düz metin; satır sonları korunur.',
     counter: '{count} / {max} karakter',
     published: 'Duyuru yayımlandı.',
+    newPublished: 'Yeni duyuru yayımlandı',
     empty: 'Bu grupta henüz duyuru yok.',
     emptyCoach: 'Henüz duyuru yok.',
     archivedGroup: 'Arşivlenmiş gruplarda duyuru yayımlanamaz.',

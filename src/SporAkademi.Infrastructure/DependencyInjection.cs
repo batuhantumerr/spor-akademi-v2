@@ -114,6 +114,9 @@ public static class DependencyInjection
         services.AddScoped<IStudentReminderContacts, StudentReminderContacts>();
         services.AddScoped<IStudentSiblings, StudentSiblings>();
         services.AddScoped<IParentChildren, ParentChildren>();
+        services.AddScoped<IStudentParentAccounts, StudentParentAccounts>();
+        // P3-08: the API registers its SignalR notifier first; other hosts notify nobody.
+        services.TryAddSingleton<Application.Abstractions.Realtime.IRealtimeNotifier, NoRealtimeNotifier>();
         services.AddScoped<IBillingRulesRepository, BillingRulesRepository>();
         services.AddScoped<IChargeSnapshotRepository, ChargeSnapshotRepository>();
         services.AddScoped<IDuesReminderRepository, DuesReminderRepository>();

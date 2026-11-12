@@ -43,7 +43,7 @@ Veliler davet e-postasındaki bağlantıyla (`/reset-password#token=…`) şifre
 ```bash
 cd web/parent
 npm ci
-npm run dev                        # http://localhost:4201 (/api ve /health proxy'si API'ye gider, vite.config.ts)
+npm run dev                        # http://localhost:4201 (/api, /health ve /hubs proxy'si API'ye gider, vite.config.ts)
 ```
 
 **PWA (P3-07):** service worker yalnız production build'de kaydolur ve tarayıcılar onu yalnız güvenli bağlamda (HTTPS veya `localhost`) çalıştırır; `npm run dev` worker'sız çalışır. Yerelde denemek için:
@@ -54,6 +54,8 @@ npm run build && npm run preview   # http://localhost:4201 (localhost güvenli b
 ```
 
 Tarayıcının geliştirici araçlarında Application → Service workers / Cache storage / Manifest bölümleri kontrol edilir; Network → Offline ile sayfa yenilenince "Bağlantı yok" ekranı görünmelidir. Önbellekte yalnız `sa-parent-<sürüm>` adlı tek önbellek ve build dosyaları olmalı, hiçbir `/api` yolu olmamalı. Oturumlu bir deneme için API ile birlikte `docker build -f docker/parent/Dockerfile` imajı veya e2e ortamı kullanılır. Eski bir worker'ı kaldırmak: Application → Service workers → Unregister ve Clear site data (DEC-394, DEC-395).
+
+**Gerçek zamanlı bildirimler (P3-08):** iki uygulama da girişten sonra API'nin SignalR hub'ına (`/hubs/notifications`) bağlanır. Dev proxy'leri (`web/admin/proxy.conf.json`, `web/parent/vite.config.ts`) `/hubs`'ı WebSocket'le (`ws: true`) API'ye yollar. Bildirimler outbox teslim edilince gider: `scripts/run-api.sh` ile Hangfire varsayılan olarak 10 saniyede bir teslim eder, yani bir duyuru veya yoklama birkaç saniye içinde görünür. Denemek için bir sekmede veli (veya antrenör) olarak giriş yapın, başka sekmede Okul Admini olarak o grubun duyurusunu yayımlayın ya da yoklamasını kaydedin. Valkey çalışıyorsa (`cache` profili) aynı bağlantı dizesi SignalR backplane'i olarak da kullanılır. Üretimde reverse proxy `/hubs`'ı WebSocket upgrade'iyle API'ye yönlendirmeli ve erişim logundan `access_token` sorgu parametresini silmelidir (Deploy bloğu, DEC-399, DEC-402).
 
 İki uygulama da istemcisini commit edilen OpenAPI belgesinden (`openapi/spor-akademi.json`) çalıştırma/build/test öncesi otomatik üretir. Tema token'ları admin'den kopyalanır; `bash scripts/check-theme-tokens.sh` sapmayı yakalar (DEC-378).
 

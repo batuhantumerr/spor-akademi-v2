@@ -299,18 +299,75 @@ public sealed class LogPrivacyTests(DatabaseFixture database) : IdentityTest(dat
     }
 
     /// <summary>
+    /// P3-08 (DEC-399): the hub's WebSocket carries the access token in the query. Even with ASP.NET Core's request logs
+    /// and the SignalR categories turned on by configuration, no event may contain the token; the request itself must
+    /// be logged (with the value redacted), otherwise the test proves nothing.
+    /// </summary>
+    [Fact]
+    [Trait("Story", "P3-08")]
+    public async Task The_hub_access_token_in_the_query_is_never_logged()
+    {
+        var sink = new CollectingSink();
+        using var api = CollectingApi(sink, configuration: new Dictionary<string, string?>
+        {
+            ["Serilog:MinimumLevel:Override:Microsoft.AspNetCore.Hosting.Diagnostics"] = "Verbose",
+            ["Serilog:MinimumLevel:Override:Microsoft.AspNetCore.SignalR"] = "Verbose",
+            ["Serilog:MinimumLevel:Override:Microsoft.AspNetCore.Http.Connections"] = "Verbose",
+            ["Serilog:MinimumLevel:Override:Microsoft.AspNetCore.Authentication"] = "Verbose",
+        });
+        using var client = api.CreateClient(new WebApplicationFactoryClientOptions { HandleCookies = false });
+        var ct = TestContext.Current.CancellationToken;
+        var school = await TestSchools.CreateAsync(Api, "gizlilik-hub");
+        var token = TestTokens.Create(Guid.CreateVersion7(), "Parent", school.Value, Api.Clock.GetUtcNow());
+        var expired = TestTokens.Create(Guid.CreateVersion7(), "Parent", school.Value, Api.Clock.GetUtcNow().AddHours(-1));
+
+        var negotiated = await client.PostAsync(new Uri($"/hubs/notifications/negotiate?negotiateVersion=1&access_token={token}", UriKind.Relative), null, ct);
+        negotiated.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var connectionToken = (await negotiated.Content.ReadFromJsonAsync<JsonElement>(ct)).GetProperty("connectionToken").GetString()!;
+        // The first long-polling request answers at once; it runs through authentication and the hub with the query token.
+        (await client.GetAsync(new Uri($"/hubs/notifications?id={connectionToken}&access_token={token}", UriKind.Relative), ct)).StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await client.PostAsync(new Uri($"/hubs/notifications/negotiate?negotiateVersion=1&access_token={expired}", UriKind.Relative), null, ct))
+            .StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
+        // The token URL-encoded inside another parameter (e.g. a return address) is masked too.
+        var encoded = Uri.EscapeDataString($"/hubs/notifications?id={connectionToken}&access_token={token}");
+        (await client.GetAsync(new Uri($"/api/v1/me?next={encoded}", UriKind.Relative), ct)).StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
+
+        var events = sink.Rendered();
+        events.ShouldContain(e => e.Contains("Request starting", StringComparison.Ordinal) && e.Contains("/hubs/notifications", StringComparison.Ordinal));
+        events.ShouldContain(e => e.Contains("id=[REDACTED]", StringComparison.Ordinal));
+        events.ShouldContain(e => e.Contains("access_token%3D[REDACTED]", StringComparison.OrdinalIgnoreCase));
+        events.ShouldContain(e => e.Contains("access_token=[REDACTED]", StringComparison.Ordinal));
+        string[] forbidden = [token, expired, token.Split('.')[1], token.Split('.')[2], expired.Split('.')[2], connectionToken];
+        ShouldNotContainAny(events, forbidden);
+    }
+
+    [Theory]
+    [Trait("Story", "P3-08")]
+    [InlineData("/hubs/notifications?id=abc123&access_token=eyJ.x.y", "/hubs/notifications?id=[REDACTED]&access_token=[REDACTED]")]
+    [InlineData("GET /hubs/notifications/negotiate?negotiateVersion=1&ACCESS_TOKEN=eyJ.x.y HTTP/1.1", "GET /hubs/notifications/negotiate?negotiateVersion=1&ACCESS_TOKEN=[REDACTED] HTTP/1.1")]
+    [InlineData("next=%2Fhubs%3Fid%3Dabc%26access_token%3DeyJ.x.y&page=2", "next=%2Fhubs%3Fid%3D[REDACTED]%26access_token%3D[REDACTED]&page=2")]
+    [InlineData("groupId=7&studentid=8", "groupId=7&studentid=8")]
+    public void Hub_secrets_are_masked_in_any_text(string text, string expected) =>
+        SporAkademi.Api.Observability.AccessTokenRedaction.RedactText(text).ShouldBe(expected);
+
+    /// <summary>
     /// The API with every configurable log level at its most verbose, including the categories the API pins in code
     /// (ASP.NET Core request logging, EF Core commands), and a sink that collects every event.
     /// </summary>
-    private WebApplicationFactory<Program> CollectingApi(CollectingSink sink, Action<IServiceCollection>? services = null) =>
+    private WebApplicationFactory<Program> CollectingApi(
+        CollectingSink sink,
+        Action<IServiceCollection>? services = null,
+        IReadOnlyDictionary<string, string?>? configuration = null) =>
         Api.WithWebHostBuilder(builder =>
         {
-            builder.ConfigureAppConfiguration(config => config.AddInMemoryCollection(new Dictionary<string, string?>
-            {
-                ["Serilog:MinimumLevel:Default"] = "Verbose",
-                ["Serilog:MinimumLevel:Override:Microsoft.AspNetCore"] = "Verbose",
-                ["Serilog:MinimumLevel:Override:Microsoft.EntityFrameworkCore"] = "Verbose",
-            }));
+            builder.ConfigureAppConfiguration(config => config
+                .AddInMemoryCollection(new Dictionary<string, string?>
+                {
+                    ["Serilog:MinimumLevel:Default"] = "Verbose",
+                    ["Serilog:MinimumLevel:Override:Microsoft.AspNetCore"] = "Verbose",
+                    ["Serilog:MinimumLevel:Override:Microsoft.EntityFrameworkCore"] = "Verbose",
+                })
+                .AddInMemoryCollection(configuration ?? new Dictionary<string, string?>()));
             builder.ConfigureTestServices(collection =>
             {
                 collection.AddSingleton<ILogEventSink>(sink);

@@ -234,6 +234,7 @@ jobs:
           curl -fsS --max-time 10 http://127.0.0.1:8081/some/deep/link | grep -q '<app-root'
           curl -fsSI http://127.0.0.1:8081/index.html | grep -qi 'cache-control: no-cache'
           bash scripts/check-security-headers.sh http://127.0.0.1:8081
+          bash scripts/check-api-paths.sh http://127.0.0.1:8081
       - name: Smoke test parent
         run: |
           docker run -d --name parent -p 127.0.0.1:8082:8080 spor-akademi-parent:ci
@@ -241,6 +242,7 @@ jobs:
           curl -fsS --max-time 10 http://127.0.0.1:8082/some/deep/link | grep -q 'id="root"'
           curl -fsSI http://127.0.0.1:8082/index.html | grep -qi 'cache-control: no-cache'
           bash scripts/check-security-headers.sh http://127.0.0.1:8082 /sw.js /manifest.webmanifest
+          bash scripts/check-api-paths.sh http://127.0.0.1:8082
           # P3-07 (DEC-394): the worker and the manifest are revalidated on every visit and served with their types;
           # the page links the manifest; the icons are hashed build output; no API path is ever precached.
           sw=$(curl -fsSI --max-time 10 http://127.0.0.1:8082/sw.js | tr -d '\r' | tr '[:upper:]' '[:lower:]')
@@ -254,7 +256,7 @@ jobs:
           curl -fsSI --max-time 10 "http://127.0.0.1:8082$icon" | tr -d '\r' | grep -qix 'content-type: image/png'
           precache=$(curl -fsS --max-time 10 http://127.0.0.1:8082/sw.js | grep -oP '"files":\[[^]]*\]')
           grep -q '"/index.html"' <<<"$precache"
-          if grep -qiE '"/(api|health)' <<<"$precache"; then echo "An API path is precached: $precache"; exit 1; fi
+          if grep -qiE '"/(api|health|hubs)' <<<"$precache"; then echo "An API path is precached: $precache"; exit 1; fi
       - name: Install Trivy (pinned binary + checksum)
         run: |
           curl -fsSLo trivy.tgz "https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/trivy_${TRIVY_VERSION}_Linux-64bit.tar.gz"

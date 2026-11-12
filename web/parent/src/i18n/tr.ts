@@ -192,6 +192,25 @@ export const text = {
     install: 'Ana ekrana ekle',
     dismissInstall: 'İpucunu kapat',
   },
+  // P3-08: real-time notices. Names come from the app's own children list, never from the hub's payload.
+  realtime: {
+    yourChild: 'Çocuğunuz',
+    announcement: 'Yeni duyuru yayımlandı',
+    payment: '{name} için ödeme alındı',
+    attendanceUpdated: '{name} için yoklama güncellendi',
+    attendanceToday: {
+      Present: '{name} bugün antrenmana katıldı',
+      Absent: '{name} bugün antrenmana katılmadı',
+      Late: '{name} bugün antrenmana geç geldi',
+      Excused: '{name} bugün antrenmanda izinli',
+    },
+    attendanceOnDate: {
+      Present: '{name}, {date} antrenmanına katıldı',
+      Absent: '{name}, {date} antrenmanına katılmadı',
+      Late: '{name}, {date} antrenmanına geç geldi',
+      Excused: '{name}, {date} antrenmanında izinli',
+    },
+  },
 } as const;
 
 /**

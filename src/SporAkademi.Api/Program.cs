@@ -17,6 +17,7 @@ using SporAkademi.Api.Errors;
 using SporAkademi.Api.Jobs;
 using SporAkademi.Api.Observability;
 using SporAkademi.Api.OpenApi;
+using SporAkademi.Api.Realtime;
 using SporAkademi.Application;
 using SporAkademi.Application.Abstractions.Authentication;
 using SporAkademi.Infrastructure;
@@ -38,6 +39,7 @@ builder.AddStructuredLogging();
 builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<ICurrentUser, HttpCurrentUser>(); // before AddInfrastructure, which only adds a fallback
+builder.Services.AddRealtime(); // P3-08; also before AddInfrastructure (its notifier is the fallback's replacement)
 builder.Services.AddApplication();
 builder.Services.AddInfrastructure(builder.Configuration);
 builder.Services.AddJwtAuthentication();
@@ -86,6 +88,7 @@ app.MapOnlinePaymentEndpoints();
 app.MapDashboardEndpoints();
 app.MapReportEndpoints();
 app.MapParentEndpoints();
+app.MapRealtime();
 app.MapJobsDashboard();
 app.MapApiDocument();
 
