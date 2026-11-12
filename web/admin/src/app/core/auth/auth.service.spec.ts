@@ -9,7 +9,17 @@ import {
   LOGIN_RESTORE_WAIT_MS,
   REFRESH_LOCK,
   RESTORE_RETRY_DELAY_MS,
+  sameSubject,
 } from './auth.service';
+
+/** A synthetic, unsigned JWT whose payload carries `sub`; the client only decodes it. */
+function jwt(sub: string): string {
+  const payload = btoa(JSON.stringify({ sub, role: 'SchoolAdmin' }))
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=+$/, '');
+  return `eyJhbGciOiJub25lIn0.${payload}.sig`;
+}
 
 const user: CurrentUser = {
   id: 'u1',
@@ -112,6 +122,64 @@ describe('AuthService', () => {
       auth.refresh().subscribe((t) => tokens.push(t));
       backend.expectOne('/api/v1/auth/refresh').flush({ accessToken: 'shared', expiresIn: 900 });
       expect(tokens).toEqual(['shared', 'shared']);
+    });
+  });
+
+  describe('identity check after refresh', () => {
+    it('keeps the session when the new token belongs to the signed-in user', () => {
+      restoreSession();
+      const navigate = vi.spyOn(TestBed.inject(Router), 'navigate');
+      let result: string | null | undefined;
+      auth.refresh().subscribe((token) => (result = token));
+      backend.expectOne('/api/v1/auth/refresh').flush({ accessToken: jwt('U1'), expiresIn: 900 });
+
+      expect(result).toBe(jwt('U1'));
+      expect(auth.token()).toBe(jwt('U1'));
+      expect(auth.user()?.id).toBe('u1');
+      expect(navigate).not.toHaveBeenCalled();
+    });
+
+    it.each([
+      ['for another user', jwt('u2')],
+      ['undecodable', 'not-a-jwt'],
+    ])(
+      'expires the session when the new token is %s (late cookie of a startup refresh)',
+      (_label, token) => {
+        restoreSession();
+        const navigate = vi.spyOn(TestBed.inject(Router), 'navigate');
+        const epoch = auth.epoch();
+        let result: string | null | undefined;
+        auth.refresh().subscribe((t) => (result = t));
+        backend.expectOne('/api/v1/auth/refresh').flush({ accessToken: token, expiresIn: 900 });
+
+        expect(result).toBeNull();
+        expect(auth.token()).toBeNull();
+        expect(auth.isAuthenticated()).toBe(false);
+        expect(auth.epoch()).not.toBe(epoch);
+        expect(navigate).toHaveBeenCalledWith(['/login'], {
+          queryParams: { expired: 1, returnUrl: undefined },
+        });
+      },
+    );
+
+    it('does not check the subject while nobody is signed in (startup restore)', () => {
+      let restored: boolean | undefined;
+      auth.restore().subscribe((r) => (restored = r));
+      backend.expectOne('/api/v1/auth/refresh').flush({ accessToken: jwt('u1'), expiresIn: 900 });
+      backend.expectOne('/api/v1/me').flush(user);
+
+      expect(restored).toBe(true);
+      expect(auth.token()).toBe(jwt('u1'));
+    });
+
+    it('decodes base64url payloads and compares ids case-insensitively', () => {
+      const id = '0199a8f2-3c4d-7e5f-8a9b-0c1d2e3f4a5b';
+      expect(sameSubject(jwt(id.toUpperCase()), id)).toBe(true);
+      // '?>' encodes to base64 '/' and '+', i.e. '_' and '-' in base64url.
+      expect(jwt('??>>')).toMatch(/[-_]/);
+      expect(sameSubject(jwt('??>>'), '??>>')).toBe(true);
+      expect(sameSubject('a.%%%.c', id)).toBe(false);
+      expect(sameSubject('', id)).toBe(false);
     });
   });
 
