@@ -22,6 +22,9 @@ public enum CacheArea
 
     /// <summary>The School Admin dashboard; any write of the school invalidates it.</summary>
     Dashboard,
+
+    /// <summary>The School Admin reports (P3-09, DEC-410); like the dashboard, any write of the school invalidates them.</summary>
+    Reports,
 }
 
 /// <summary>
@@ -88,6 +91,7 @@ public sealed partial class TenantCacheKey
         CacheArea.Sports => "sports",
         CacheArea.Facilities => "facilities",
         CacheArea.Dashboard => "dashboard",
+        CacheArea.Reports => "reports",
         _ => throw new ArgumentOutOfRangeException(nameof(area), area, "Unknown cache area."),
     };
 
