@@ -1,5 +1,5 @@
 import { DocumentType } from '../../api/models';
-import { LOCALE } from '../../core/i18n/locale';
+import { locale } from '../../core/i18n/locale';
 
 /**
  * Client-side mirror of the API's document rules (DocumentRules, DEC-322). Only a convenience for a quick
@@ -87,7 +87,7 @@ export async function checkFile(type: DocumentType, file: File): Promise<string 
 export function formatSize(bytes: number | string): string {
   const value = Number(bytes);
   const format = (n: number) =>
-    new Intl.NumberFormat(LOCALE, { maximumFractionDigits: 1 }).format(n);
+    new Intl.NumberFormat(locale(), { maximumFractionDigits: 1 }).format(n);
   if (value >= 1024 * 1024) {
     return `${format(value / (1024 * 1024))} MB`;
   }

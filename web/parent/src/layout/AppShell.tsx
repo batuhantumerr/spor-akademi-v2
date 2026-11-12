@@ -5,9 +5,11 @@ import { session } from '../auth/session';
 import { text } from '../i18n/tr';
 import { InstallHint } from '../pwa/notices';
 import { ToastRegion } from '../realtime/ToastRegion';
+import { LanguageSwitcher } from '../ui/LanguageSwitcher';
 import { useTheme } from '../theme/theme';
 
-const navItems = [{ to: '/', label: text.nav.children, icon: Users, end: true }] as const;
+// Labels are dictionary keys, read at render time, so they follow a language switch (P3-10).
+const navItems = [{ to: '/', label: 'children', icon: Users, end: true }] as const;
 
 /**
  * Mobile-first shell: sticky header with the theme toggle, content column, and a bottom tab bar on
@@ -39,16 +41,17 @@ export function AppShell() {
               {navItems.map((item) => (
                 <li key={item.to}>
                   <NavLink to={item.to} end={item.end} className={navLinkClass}>
-                    {item.label}
+                    {text.nav[item.label]}
                   </NavLink>
                 </li>
               ))}
             </ul>
           </nav>
 
+          <LanguageSwitcher className="ml-auto sm:ml-0" />
           <button
             type="button"
-            className="btn btn-ghost btn-icon ml-auto sm:ml-0"
+            className="btn btn-ghost btn-icon"
             aria-label={text.theme.toggle}
             title={theme.dark ? text.theme.light : text.theme.dark}
             onClick={theme.toggle}
@@ -85,7 +88,7 @@ export function AppShell() {
             <li key={item.to} className="flex-1">
               <NavLink to={item.to} end={item.end} className={tabLinkClass}>
                 <item.icon aria-hidden="true" className="size-5" />
-                <span>{item.label}</span>
+                <span>{text.nav[item.label]}</span>
               </NavLink>
             </li>
           ))}

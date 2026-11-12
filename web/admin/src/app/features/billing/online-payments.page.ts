@@ -7,7 +7,7 @@ import { firstValueFrom } from 'rxjs';
 import { Api } from '../../api/api';
 import { apiV1OnlinePaymentsGet, apiV1PaymentsIdGet } from '../../api/functions';
 import { MoneyDto, OnlinePaymentDto, OnlinePaymentStatus } from '../../api/models';
-import { LOCALE } from '../../core/i18n/locale';
+import { perLocale } from '../../core/i18n/locale';
 import { errorMessages, interpolate, ui } from '../../core/i18n/tr';
 import { displayMoney } from '../../core/money/money';
 import { PagedList } from '../../shared/data/paged-list';
@@ -27,10 +27,13 @@ import { checkRefundAtProvider } from './refund-check';
 
 type StatusFilter = OnlinePaymentStatus | '';
 
-const dateTimeFormatter = new Intl.DateTimeFormat(LOCALE, {
-  dateStyle: 'short',
-  timeStyle: 'short',
-});
+const dateTimeFormatter = perLocale(
+  (l) =>
+    new Intl.DateTimeFormat(l, {
+      dateStyle: 'short',
+      timeStyle: 'short',
+    }),
+);
 
 /** Lifecycle order (DEC-342). */
 const STATUSES: OnlinePaymentStatus[] = ['Created', 'Pending', 'Succeeded', 'Failed', 'Expired'];
@@ -284,7 +287,7 @@ export class OnlinePaymentsPage {
   }
 
   protected dateTime(iso: string): string {
-    return dateTimeFormatter.format(new Date(iso));
+    return dateTimeFormatter().format(new Date(iso));
   }
 
   protected expires(iso: string): string {

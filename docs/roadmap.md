@@ -135,7 +135,7 @@ Veli yalnızca **kendi çocuklarını** görür. Bu, okul izolasyonunun yanında
   - Grafikler erişilebilir olur; her rapor CSV olarak dışa aktarılabilir.
 
 ### 3.5 Dil, erişilebilirlik ve diğerleri
-- [ ] P3-10 **Çoklu dil (TR/EN)**, admin ve veli uygulamasında.
+- [x] P3-10 **Çoklu dil (TR/EN)**, admin ve veli uygulamasında. (DEC-426 – DEC-431)
   - API hata mesajları `Accept-Language` başlığına göre döner.
   - Tarih ve para biçimleri seçilen dile uyar; varsayılan dil Türkçe.
 - [ ] P3-11 **WCAG 2.2 AA denetimi** (P3-F6).

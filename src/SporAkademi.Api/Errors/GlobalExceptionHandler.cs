@@ -32,7 +32,6 @@ internal sealed partial class GlobalExceptionHandler(
         var problem = new ProblemDetails
         {
             Status = status,
-            Title = code,
             Type = $"https://httpstatuses.io/{status}",
         };
         problem.Extensions["code"] = code;

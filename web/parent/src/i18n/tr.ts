@@ -1,9 +1,12 @@
+import { enErrorMessages, enText } from './en';
+import { localized } from './localized';
+
 /**
- * All user-facing Turkish text of the parent app lives here, so P3-10 can add an English dictionary
- * without touching components. Keep keys stable; components read `text.<area>.<key>`.
- * Placeholders such as `{name}` are filled with `format()`.
+ * All user-facing Turkish text of the parent app lives here; en.ts has the English text with exactly the same keys
+ * (P3-10, DEC-426). Components read `text.<area>.<key>`, which follows the active language. Placeholders such as
+ * `{name}` are filled with `format()`.
  */
-export const text = {
+const trText = {
   app: {
     name: 'Spor Akademi',
     tagline: 'Veli',
@@ -17,6 +20,9 @@ export const text = {
     toggle: 'Temayı değiştir',
     light: 'Açık temaya geç',
     dark: 'Koyu temaya geç',
+  },
+  language: {
+    change: 'Dili değiştir',
   },
   nav: {
     children: 'Çocuklarım',
@@ -220,7 +226,7 @@ export const text = {
  * Turkish messages for the API's stable error codes (appendix E) the parent app can meet, plus the app's own
  * codes (`ParentApp.*`, `Network.*`). Unknown codes fall back to `Unexpected.Error`.
  */
-export const errorMessages: Readonly<Record<string, string>> = {
+const trErrorMessages = {
   'Validation.Failed': 'Formda düzeltilmesi gereken alanlar var.',
   'Request.TooManyRequests': 'Çok fazla deneme yapıldı. Lütfen biraz bekleyip tekrar deneyin.',
   'Resource.NotFound': 'Aradığınız kayıt bulunamadı.',
@@ -257,7 +263,31 @@ export const errorMessages: Readonly<Record<string, string>> = {
     'Bu uygulama velilere özeldir. Okul yöneticileri ve antrenörler yönetim panelinden giriş yapar.',
   'ParentApp.PasswordSetupRequired':
     'Devam etmek için e-postanızdaki davet bağlantısıyla şifrenizi belirleyin. Bağlantının süresi dolduysa okulunuzdan yeni bir davet isteyin.',
-};
+} satisfies Record<string, string>;
+
+/** The shape of a language: the Turkish text with every literal widened to string (key parity at compile time). */
+type Widen<T> = T extends string
+  ? string
+  : T extends readonly (infer U)[]
+    ? readonly Widen<U>[]
+    : { readonly [K in keyof T]: Widen<T[K]> };
+export type ParentText = Widen<typeof trText>;
+export type ErrorMessageText = Record<keyof typeof trErrorMessages, string>;
+
+/** UI text in the active language (DEC-426). */
+export const text: ParentText = localized<ParentText>({ tr: trText, en: enText });
+
+/** Messages for the API's error codes in the active language; unknown codes are `undefined`. */
+export const errorMessages: Readonly<Record<string, string>> = localized<Record<string, string>>({
+  tr: trErrorMessages,
+  en: enErrorMessages,
+});
+
+/** The raw dictionaries, for the key-parity tests. */
+export const dictionaries = {
+  tr: { text: trText, errors: trErrorMessages },
+  en: { text: enText, errors: enErrorMessages },
+} as const;
 
 /** Fills `{name}` placeholders; unknown placeholders stay as they are. */
 export type FormatArgs = Readonly<Record<string, string | number | null | undefined>>;

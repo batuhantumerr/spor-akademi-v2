@@ -18,6 +18,22 @@
           pref === 'dark' || (pref === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
         document.documentElement.classList.add(dark ? 'dark' : 'light');
       })();
+      // P3-10: the stored or browser language before first paint (same rule as src/i18n/language.ts).
+      (function () {
+        var lang = null;
+        try {
+          lang = localStorage.getItem('sa-language');
+        } catch (e) {}
+        if (lang !== 'tr' && lang !== 'en') {
+          var first = (
+            (navigator.languages && navigator.languages[0]) ||
+            navigator.language ||
+            ''
+          ).toLowerCase();
+          lang = first === 'en' || first.indexOf('en-') === 0 ? 'en' : 'tr';
+        }
+        document.documentElement.lang = lang;
+      })();
     </script>
     <style>
       html.light,
