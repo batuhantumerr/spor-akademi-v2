@@ -91,6 +91,7 @@ const DIMENSIONS: Dimension[] = ['group', 'sport', 'coach'];
 @Component({
   selector: 'app-reports-page',
   changeDetection: ChangeDetectionStrategy.OnPush,
+  // The tabs swap colours without a transition: a half-faded tab would fail the contrast check (and helps nobody).
   imports: [
     DashboardChartComponent,
     LucideDownload,
@@ -123,9 +124,12 @@ const DIMENSIONS: Dimension[] = ['group', 'sport', 'coach'];
             [attr.aria-selected]="tab() === t"
             [attr.aria-controls]="'report-panel'"
             [attr.tabindex]="tab() === t ? 0 : -1"
-            class="btn btn-sm"
-            [class.btn-primary]="tab() === t"
-            [class.btn-ghost]="tab() !== t"
+            class="inline-flex h-9 items-center rounded-md px-3 text-xs font-semibold focus-visible:ring-2 focus-visible:ring-primary/50 focus-visible:outline-none"
+            [class]="
+              tab() === t
+                ? 'bg-primary text-primary-foreground'
+                : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+            "
             (click)="selectTab(t)"
             (keydown)="tabKey($event, t)"
           >

@@ -368,11 +368,11 @@ test('the reports page shows occupancy and revenue and downloads the revenue rep
   const download = page.waitForEvent('download');
   await page.getByTestId('report-download').click();
   const file = await download;
-  expect(file.suggestedFilename()).toMatch(/^gelir-raporu_d{4}-d{2}_d{4}-d{2}.csv$/);
+  expect(file.suggestedFilename()).toMatch(/^gelir-raporu_\d{4}-\d{2}_\d{4}-\d{2}\.csv$/);
   const bytes = await readFile(await file.path());
   // UTF-8 with a byte order mark (Excel in Turkish), semicolon separated, Turkish headers (DEC-411).
   expect([...bytes.subarray(0, 3)]).toEqual([0xef, 0xbb, 0xbf]);
-  expect(bytes.subarray(3).toString('utf8')).toMatch(/^Ay;Liste tutarı (TL);/);
+  expect(bytes.subarray(3).toString('utf8')).toMatch(/^Ay;Liste tutarı \(TL\);/);
 });
 
 test('signs out; the refresh cookie is gone and a reload stays signed out', async () => {
