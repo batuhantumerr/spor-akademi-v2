@@ -106,7 +106,7 @@ function navLinkClass({ isActive }: { isActive: boolean }): string {
 }
 
 function tabLinkClass({ isActive }: { isActive: boolean }): string {
-  return `flex min-h-14 flex-col items-center justify-center gap-0.5 rounded-md text-xs font-medium focus-visible:ring-2 focus-visible:ring-primary/50 focus-visible:outline-none focus-visible:ring-inset ${
+  return `flex min-h-14 flex-col items-center justify-center gap-0.5 rounded-md text-xs font-medium focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none focus-visible:ring-inset ${
     isActive ? 'text-primary' : 'text-muted-foreground'
   }`;
 }

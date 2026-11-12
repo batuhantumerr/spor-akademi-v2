@@ -34,7 +34,7 @@ import { LanguageSwitcherComponent } from '../../shared/ui/language-switcher.com
     LanguageSwitcherComponent,
   ],
   template: `
-    <div class="grid min-h-dvh lg:grid-cols-2">
+    <main class="grid min-h-dvh lg:grid-cols-2">
       <section
         class="relative hidden overflow-hidden bg-gradient-to-br from-primary to-blue-900 p-12 text-white lg:flex lg:flex-col lg:justify-between"
       >
@@ -173,7 +173,7 @@ import { LanguageSwitcherComponent } from '../../shared/ui/language-switcher.com
           </form>
         </div>
       </section>
-    </div>
+    </main>
   `,
 })
 export class LoginPage {

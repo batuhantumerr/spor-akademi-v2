@@ -203,7 +203,7 @@ interface Kpi {
                     <div class="flex items-baseline justify-between gap-3 text-sm">
                       <a
                         [routerLink]="['/groups', group.id]"
-                        class="min-w-0 truncate font-medium hover:text-primary hover:underline"
+                        class="min-w-0 font-medium break-words hover:text-primary hover:underline"
                         >{{ group.name }}</a
                       >
                       <span class="shrink-0 font-mono text-xs text-muted-foreground">

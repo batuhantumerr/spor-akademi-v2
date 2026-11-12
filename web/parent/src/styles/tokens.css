@@ -25,6 +25,8 @@
   --destructive-foreground: #ffffff;
   --border: #e2e8f0;
   --input: #ffffff;
+  /* Form control borders: 3:1 against card and background (WCAG 1.4.11, DEC-440). */
+  --control-border: #7c8799;
   --ring: #2563eb;
   --success: #13733a;
   --warning: #a34c06;
@@ -57,6 +59,7 @@
   --destructive-foreground: #121620;
   --border: #2d3748;
   --input: #1a202c;
+  --control-border: #64748b;
   --ring: #60a5fa;
   --success: #4ade80;
   --warning: #f39c12;
@@ -92,6 +95,7 @@
   --color-destructive-foreground: var(--destructive-foreground);
   --color-border: var(--border);
   --color-input: var(--input);
+  --color-control-border: var(--control-border);
   --color-ring: var(--ring);
   --color-success: var(--success);
   --color-warning: var(--warning);

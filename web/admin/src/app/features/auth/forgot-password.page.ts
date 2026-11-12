@@ -8,6 +8,7 @@ import { apiV1AuthPasswordResetRequestPost } from '../../api/functions';
 import { problemMessage, toProblem } from '../../core/api/problem';
 import { errorMessages, ui } from '../../core/i18n/tr';
 import { focusFirstInvalid } from '../../shared/forms/focus-first-invalid';
+import { LanguageSwitcherComponent } from '../../shared/ui/language-switcher.component';
 
 /**
  * P2-F4 "Şifremi unuttum" (DEC-353). The API answers the same for every address, so the page always shows the same
@@ -16,9 +17,18 @@ import { focusFirstInvalid } from '../../shared/forms/focus-first-invalid';
 @Component({
   selector: 'app-forgot-password-page',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [ReactiveFormsModule, RouterLink, LucideCircleAlert, LucideMail, LucideMailCheck],
+  imports: [
+    LanguageSwitcherComponent,
+    ReactiveFormsModule,
+    RouterLink,
+    LucideCircleAlert,
+    LucideMail,
+    LucideMailCheck,
+  ],
   template: `
-    <div class="flex min-h-dvh items-center justify-center bg-background p-6">
+    <main class="relative flex min-h-dvh items-center justify-center bg-background p-6">
+      <!-- The language can be changed on every page reached from an e-mail link or a first sign-in (DEC-439). -->
+      <div class="absolute top-4 right-4"><app-language-switcher /></div>
       <div class="card w-full max-w-md p-6 shadow-sm sm:p-8">
         <div class="mb-6 flex items-center gap-3">
           <div
@@ -79,7 +89,7 @@ import { focusFirstInvalid } from '../../shared/forms/focus-first-invalid';
           }}</a>
         </p>
       </div>
-    </div>
+    </main>
   `,
 })
 export class ForgotPasswordPage {

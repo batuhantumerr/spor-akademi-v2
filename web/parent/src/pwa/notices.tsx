@@ -2,6 +2,8 @@ import { Download, RefreshCw, WifiOff, X } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { Outlet } from 'react-router';
 import { session } from '../auth/session';
+import { RouteAnnouncer } from '../layout/RouteAnnouncer';
+import { useTheme } from '../theme/theme';
 import { text } from '../i18n/tr';
 import { dismissInstallHint, installHintDismissed, pwa, useOnline, usePwa } from './pwa';
 
@@ -10,11 +12,14 @@ import { dismissInstallHint, installHintDismissed, pwa, useOnline, usePwa } from
  * content, never animate, and screen readers hear them once (`role="status"`).
  */
 export function RootLayout() {
+  // Follows the system theme on every page, also those without a theme button (the offline state; P3-11).
+  useTheme();
   return (
     <>
       <ConnectionBanner />
       <UpdateBanner />
       <Outlet />
+      <RouteAnnouncer />
     </>
   );
 }

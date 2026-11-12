@@ -81,7 +81,7 @@ export const MAX_GUARDIANS = 4;
             @for (item of summary(); track item.target + item.message) {
               <li>
                 <a
-                  class="underline underline-offset-2"
+                  class="inline-block py-1 underline underline-offset-2"
                   [href]="'#' + item.target"
                   (click)="$event.preventDefault(); focusTarget(item.target)"
                   >{{ item.label }}: {{ item.message }}</a
