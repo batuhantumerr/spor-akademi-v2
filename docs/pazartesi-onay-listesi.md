@@ -39,6 +39,7 @@ Aşağıdaki metin karar anındaki hâliyle kayıt olarak bırakıldı.
 ### Ödeme (P2-F1)
 13. **Admin paylaşımlı ödeme bağlantısı (DEC-348).** Veli portalı (Faz 3) gelene kadar Okul Admini ödeme bağlantısını paylaşıyor; bu asgari akış yeterli mi? Öneri: evet, Faz 3'e kadar.
 14. **Fazla ödeme ve iade (DEC-342, DEC-346).** İade P2-F1 kapsamı dışı; geç gelen başarının yol açtığı fazla ödeme "Fazla ödeme" olarak işaretlenir ve loglanır, iade elle yapılır; online ödeme buradan iptal edilemez. İade akışı ne zaman ve nasıl istenir? Ayrıca peşin ödemeli kaydın erken bitirilmesi (DEC-184; güvenlik listesi, Fikirler 11) için iade veya uyarı istenir mi? Öneri: elle iade bu fazda yeterli, akış Faz 3'te.
+    - **Faz 3 notu (2026-11-12, P3-13):** iade akışı yapıldı; ayrıntı [bölüm 10](#10-p3-13-online-ödeme-iadesi-2026-11-12).
 15. **iyzico'ya giden ödeyen verisi (DEC-345; KVKK).** iyzico alıcı ve adres alanlarını zorunlu tutuyor; şimdilik sabit sandbox yer tutucuları gidiyor, öğrenci veya veli verisi hiç gitmiyor. Canlıdan önce hangi verinin gideceği kararlaştırılmalı. Öneri: veli portalıyla birlikte karar verilsin, o zamana kadar yer tutucu.
 16. **Resmi iyzico paketi yerine `HttpClient` (DEC-345).** Resmi `iyzipay-dotnet` (MIT) eklenmedi; adaptör `HttpClient` ve dokümandaki IYZWSv2 imzasını kullanıyor (tedarik zinciri yüzeyi küçük). Onaylıyor musunuz? Öneri: evet.
 
@@ -402,3 +403,14 @@ Sahip **Faz 2 geçişini onayladı** (2026-11-11). Bölüm 7 ve 8'deki açık so
    - İkinci bir API sunucusu e2e süresini ve karmaşıklığını artırırdı, karşılığında bir kazanç sağlamazdı.
 
 **Faz 3 için not:** soru 13'teki "Admin paylaşımlı ödeme bağlantısı", veli portalı (P3-F2) geldiğinde velinin kendi ödemesiyle tamamlanır. Admin bağlantısı, e-postası olmayan veliler için kalır.
+
+## 10. P3-13 online ödeme iadesi (2026-11-12)
+
+Soru 14'ün Faz 3 adımı. Sahip kararları agent'a bıraktı (futbol okulu yöneticisi ve para işleyen yazılımcı gözüyle); kararlar DEC-416 – DEC-425, `Accepted (agent, sahip yetkisiyle 2026-11-12)`. Sahibin bakması iyi olacak noktalar:
+
+1. **Yalnız tam iade, yalnız online ödeme (DEC-416).** Kısmi iade yok; nakit ve havale elle iade edilip kaydı iptal edilir.
+   - *Yönetici:* veliler iadeyi ay bazında ister; fazla ödeme de bir denemenin tamamıdır.
+2. **İade edilen ödeme borçtan düşer (DEC-420).** Kayıt o ay hâlâ aktifse borç yeniden açılır. Fazla ödemenin iadesinde borç ödenmiş kalır. Erken bitirilmiş peşin ödemede borç oluşmaz.
+3. **Kapanmış ayın ödemesi de iade edilebilir (DEC-421).** Donmuş borç değişmez, borç yeniden açık görünür. Yasaklamak okulu sistem dışı iadeye iterdi.
+4. **Erken bitirmede uyarı, otomatik iade yok (DEC-422).** Kayıt bitirme penceresi peşin ödenmiş ayları listeler; iade kararı okulda kalır.
+5. **Açık konu (DEC-418, DEC-424):** iyzico iadesi gerçek sandbox'ta denenmedi (anahtar yok). Sonucu kaybolan bir iadenin yeniden gönderiminde iyzico'nun "zaten iade edildi" hata kodu henüz başarıya eşlenmiyor. Gerçek sandbox denemesinde DEC-345'teki imza konusuyla birlikte doğrulanmalı.
