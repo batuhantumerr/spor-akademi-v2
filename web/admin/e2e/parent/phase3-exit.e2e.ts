@@ -164,9 +164,15 @@ test('phase 3 exit: invitation, attendance, online payment, live announcement, t
     await expectNoSeriousA11yViolations(admin, testInfo, 'admin-payments');
     await nav(admin, 'Ödenmemiş borçlar');
     await admin.getByLabel('Grup', { exact: true }).selectOption({ label: arranged.groupName });
+    // Other projects' groups share the school, so assert on this child's row rather than the empty state.
     await expect(
-      admin.getByText('Bu filtrelerde ödenmemiş borç yok.', { exact: true }),
+      admin
+        .getByRole('table', { name: 'Ödenmemiş borç listesi' })
+        .or(admin.getByText('Bu filtrelerde ödenmemiş borç yok.', { exact: true })),
     ).toBeVisible();
+    await expect(
+      admin.getByRole('row', { name: new RegExp(arranged.childName) }),
+    ).toHaveCount(0);
     const recorded = await api.get<{
       items: { enrollmentId: string; method: string; status: string; amount: { amount: string } }[];
     }>(`/api/v1/payments?groupId=${arranged.groupId}&pageSize=100`);
