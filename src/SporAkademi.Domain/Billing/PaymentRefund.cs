@@ -127,6 +127,13 @@ public sealed class PaymentRefund : AggregateRoot<PaymentRefundId>, ITenantScope
     public DateTimeOffset? CompletedAt { get; private set; }
 
     /// <summary>
+    /// A pending request the provider could not settle on its own (DEC-418): a retry was refused and the provider's
+    /// payment detail does not show the money returned. The reconciliation job leaves it alone; a School Admin checks it
+    /// at the provider ("Sağlayıcıda kontrol et").
+    /// </summary>
+    public bool NeedsReview { get; private set; }
+
+    /// <summary>
     /// Requests the full refund of an online payment. The payment must still count toward its due
     /// (<see cref="PaymentStatus.Recorded"/>) and be the one the succeeded online payment recorded.
     /// </summary>
@@ -218,12 +225,26 @@ public sealed class PaymentRefund : AggregateRoot<PaymentRefundId>, ITenantScope
 
         payment.MarkRefunded();
         Status = PaymentRefundStatus.Succeeded;
+        NeedsReview = false;
         ProviderRefundId = providerRefundId.Length > OnlinePayment.ProviderReferenceMaxLength
             ? providerRefundId[..OnlinePayment.ProviderReferenceMaxLength]
             : providerRefundId;
         CompletedAt = now;
         Raise(new PaymentRefunded(TenantId, Id, PaymentId, payment.StudentId, payment.GroupId));
         return Result.Success(true);
+    }
+
+    /// <summary>A retried refund was refused and the provider does not show the money returned: a person must look (DEC-418).</summary>
+    /// <returns><c>true</c> when the state changed.</returns>
+    public bool MarkForReview()
+    {
+        if (Status != PaymentRefundStatus.Pending || NeedsReview)
+        {
+            return false;
+        }
+
+        NeedsReview = true;
+        return true;
     }
 
     /// <summary>The provider refused the refund (a definite answer, not an outage). A success is never undone.</summary>
@@ -237,6 +258,7 @@ public sealed class PaymentRefund : AggregateRoot<PaymentRefundId>, ITenantScope
         }
 
         Status = PaymentRefundStatus.Failed;
+        NeedsReview = false;
         FailureCode = failureCode.Length > FailureCodeMaxLength ? failureCode[..FailureCodeMaxLength] : failureCode;
         CompletedAt = now;
         return true;

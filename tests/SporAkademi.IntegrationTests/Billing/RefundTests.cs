@@ -76,11 +76,11 @@ public sealed class RefundTests(DatabaseFixture database) : OnlinePaymentTest(da
         kept.GetProperty("refund").GetProperty("failureCode").GetString().ShouldBe("FakeRefundDeclined");
         (await OutstandingAsync()).GetProperty("totalCount").GetInt32().ShouldBe(0);
 
-        // The replay of the declined request reports it as it stands; a new request (new key) is the retry.
+        // DEC-419: the replay of the declined request answers by its own status; a new request (new key) is the retry.
         var replay = await RefundAsync(payment, Reason, "iade-red-1");
-        replay.StatusCode.ShouldBe(HttpStatusCode.OK);
+        replay.StatusCode.ShouldBe(HttpStatusCode.UnprocessableEntity);
         replay.Headers.GetValues("Idempotent-Replayed").ShouldBe(["true"]);
-        (await BodyOf(replay)).GetProperty("refund").GetProperty("status").GetString().ShouldBe("Failed");
+        (await CodeOf(replay)).ShouldBe("Refund.ProviderDeclined");
 
         (await RefundOkAsync(payment)).GetProperty("status").GetString().ShouldBe("Refunded");
         (await RefundRowsAsync("Failed")).ShouldBe(1);
@@ -107,7 +107,9 @@ public sealed class RefundTests(DatabaseFixture database) : OnlinePaymentTest(da
         second.StatusCode.ShouldBe(HttpStatusCode.Conflict);
         (await CodeOf(second)).ShouldBe("Refund.InProgress");
         var calls = Fake.RefundCalls;
-        (await RefundAsync(payment, Reason, "iade-belirsiz-1")).StatusCode.ShouldBe(HttpStatusCode.OK);
+        var pendingReplay = await RefundAsync(payment, Reason, "iade-belirsiz-1");
+        pendingReplay.StatusCode.ShouldBe(HttpStatusCode.Accepted);
+        (await BodyOf(pendingReplay)).GetProperty("refund").GetProperty("status").GetString().ShouldBe("Pending");
         Fake.RefundCalls.ShouldBe(calls); // a replay never calls the provider
 
         (await RunReconcileJobAsync()).ShouldBe(0); // too recent
@@ -179,8 +181,9 @@ public sealed class RefundTests(DatabaseFixture database) : OnlinePaymentTest(da
 
         var responses = await Task.WhenAll(Enumerable.Range(1, 6).Select(_ => RefundAsync(payment, Reason, "ayni-anahtar-iade")));
 
-        responses.ShouldAllBe(r => r.StatusCode == HttpStatusCode.OK);
-        responses.Count(r => !r.Headers.Contains("Idempotent-Replayed")).ShouldBe(1);
+        // A replay answers by the request's status at that moment: refunded (200) or still at the provider (202).
+        responses.ShouldAllBe(r => r.StatusCode == HttpStatusCode.OK || r.StatusCode == HttpStatusCode.Accepted);
+        responses.Single(r => !r.Headers.Contains("Idempotent-Replayed")).StatusCode.ShouldBe(HttpStatusCode.OK);
         (await CountAsync("SELECT count(*) FROM billing.payment_refunds")).ShouldBe(1);
     }
 
@@ -194,6 +197,9 @@ public sealed class RefundTests(DatabaseFixture database) : OnlinePaymentTest(da
         (await CompleteSandboxAsync(TokenOf(started))).StatusCode.ShouldBe(HttpStatusCode.OK);
         var overpaid = await OnlinePaymentAsync(IdOf(started), later);
         overpaid.GetProperty("overpaid").GetBoolean().ShouldBeTrue();
+        // DEC-420: the payment itself says, live from the due, by how much the due is over-covered.
+        var onlinePayment = await PaymentAsync(overpaid.GetProperty("paymentId").GetGuid(), later);
+        AmountOf(onlinePayment.GetProperty("overpaidBy")).ShouldBe("1000.00");
 
         await RefundOkAsync(overpaid.GetProperty("paymentId").GetGuid(), "Fazla ödeme iadesi", later);
 
@@ -266,5 +272,150 @@ public sealed class RefundTests(DatabaseFixture database) : OnlinePaymentTest(da
         await Should.ThrowAsync<Npgsql.PostgresException>(() => ExecuteAsMigratorAsync("DELETE FROM billing.payment_refunds"));
         await Should.ThrowAsync<Npgsql.PostgresException>(() => ExecuteAsMigratorAsync($"UPDATE billing.payments SET status = 'Recorded' WHERE id = '{payment}'"));
         await Should.ThrowAsync<Npgsql.PostgresException>(() => ExecuteAsMigratorAsync($"UPDATE billing.payments SET status = 'Refunded' WHERE id = '{cash}'"));
+        // A request can only start pending and untried.
+        await Should.ThrowAsync<Npgsql.PostgresException>(() => ExecuteAsMigratorAsync(
+            "INSERT INTO billing.payment_refunds SELECT (r).* FROM (SELECT r FROM billing.payment_refunds r LIMIT 1) x"));
+    }
+
+    [Fact]
+    public async Task A_refund_whose_answer_was_lost_is_found_refunded_by_the_payment_detail()
+    {
+        var (_, _, enrollment) = await EnrolledAsync();
+        var (_, payment) = await PayOnlineAsync(enrollment);
+        var (calls, checks) = (Fake.RefundCalls, Fake.RefundChecks);
+        Fake.LoseNextRefundAnswers(1);
+
+        // The provider returned the money, but its answer never arrived.
+        (await RefundAsync(payment, Reason, "kayip-cevap-1")).StatusCode.ShouldBe(HttpStatusCode.Accepted);
+        (await PaymentAsync(payment)).GetProperty("refund").GetProperty("attempts").GetInt32().ShouldBe(1);
+
+        // DEC-418: the re-send is refused as "already refunded"; the payment detail shows the money back.
+        Api.Clock.Advance(TimeSpan.FromMinutes(11));
+        (await RunReconcileJobAsync()).ShouldBe(1);
+
+        var refunded = await PaymentAsync(payment);
+        refunded.GetProperty("status").GetString().ShouldBe("Refunded");
+        refunded.GetProperty("refund").GetProperty("status").GetString().ShouldBe("Succeeded");
+        refunded.GetProperty("refund").GetProperty("attempts").GetInt32().ShouldBe(2);
+        Fake.RefundCalls.ShouldBe(calls + 2);
+        Fake.RefundChecks.ShouldBe(checks + 1);
+    }
+
+    [Fact]
+    public async Task A_refused_retry_without_the_money_back_waits_for_review_and_the_admin_check_settles_it()
+    {
+        var (_, _, enrollment) = await EnrolledAsync();
+        var (_, payment) = await PayOnlineAsync(enrollment);
+        Fake.FailNextCalls(1);
+        (await RefundAsync(payment, Reason, "inceleme-1")).StatusCode.ShouldBe(HttpStatusCode.Accepted);
+
+        // The retry is refused and the detail shows nothing returned: not trusted as final, a person looks (DEC-418).
+        Fake.DeclineNextRefunds(1);
+        Api.Clock.Advance(TimeSpan.FromMinutes(11));
+        (await RunReconcileJobAsync()).ShouldBe(0);
+        var review = (await PaymentAsync(payment)).GetProperty("refund");
+        review.GetProperty("status").GetString().ShouldBe("Pending");
+        review.GetProperty("needsReview").GetBoolean().ShouldBeTrue();
+        var calls = Fake.RefundCalls;
+        Api.Clock.Advance(TimeSpan.FromMinutes(11));
+        (await RunReconcileJobAsync()).ShouldBe(0);
+        Fake.RefundCalls.ShouldBe(calls); // the job leaves it alone
+
+        // DEC-418: "Sağlayıcıda kontrol et": the provider shows the money not returned, so the request fails.
+        using var admin = Api.SchoolAdminClient(School);
+        var checkedResponse = await admin.PostAsync(new Uri($"/api/v1/payments/{payment}/refund/check", UriKind.Relative), null, Ct);
+        checkedResponse.StatusCode.ShouldBe(HttpStatusCode.UnprocessableEntity);
+        (await CodeOf(checkedResponse)).ShouldBe("Refund.ProviderDeclined");
+        var failed = (await PaymentAsync(payment, admin)).GetProperty("refund");
+        failed.GetProperty("status").GetString().ShouldBe("Failed");
+        failed.GetProperty("failureCode").GetString().ShouldBe("NotRefundedAtProvider");
+        (await RefundOkAsync(payment, client: admin)).GetProperty("status").GetString().ShouldBe("Refunded");
+    }
+
+    [Fact]
+    public async Task The_admin_check_finds_a_lost_refund_after_a_quiet_minute()
+    {
+        var (_, _, enrollment) = await EnrolledAsync();
+        var (_, payment) = await PayOnlineAsync(enrollment);
+        Fake.LoseNextRefundAnswers(1);
+        (await RefundAsync(payment, Reason, "kontrol-1")).StatusCode.ShouldBe(HttpStatusCode.Accepted);
+
+        var tooSoon = await Admin.PostAsync(new Uri($"/api/v1/payments/{payment}/refund/check", UriKind.Relative), null, Ct);
+        tooSoon.StatusCode.ShouldBe(HttpStatusCode.Conflict);
+        (await CodeOf(tooSoon)).ShouldBe("Refund.InProgress");
+
+        using var later = AdvanceTo(Api.Clock.GetUtcNow().AddMinutes(2));
+        var found = await later.PostAsync(new Uri($"/api/v1/payments/{payment}/refund/check", UriKind.Relative), null, Ct);
+        found.StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await BodyOf(found)).GetProperty("status").GetString().ShouldBe("Refunded");
+
+        var nothingPending = await later.PostAsync(new Uri($"/api/v1/payments/{payment}/refund/check", UriKind.Relative), null, Ct);
+        nothingPending.StatusCode.ShouldBe(HttpStatusCode.UnprocessableEntity);
+        (await CodeOf(nothingPending)).ShouldBe("Refund.NotPending");
+    }
+
+    [Fact]
+    public async Task Overlapping_reconciliation_runs_call_the_provider_once_per_refund()
+    {
+        var (_, _, enrollment) = await EnrolledAsync();
+        var (_, payment) = await PayOnlineAsync(enrollment);
+        Fake.FailNextCalls(1);
+        (await RefundAsync(payment, Reason, "cakisan-1")).StatusCode.ShouldBe(HttpStatusCode.Accepted);
+        Api.Clock.Advance(TimeSpan.FromMinutes(11));
+        var calls = Fake.RefundCalls;
+
+        // DEC-419: two runs (e.g. two API instances) reach the same pending refund; only one claims the attempt.
+        var runs = await Task.WhenAll(Enumerable.Range(0, 4).Select(_ => InScopeAsync(scope => scope.GetRequiredService<SporAkademi.Application.Billing.ITenantWorkScope>()
+            .RunAsync(School.Value, services => services.GetRequiredService<SporAkademi.Application.Billing.PaymentRefundReconciliation>()
+                .ReconcileAsync(TimeSpan.FromMinutes(10), Ct)))));
+
+        runs.Sum().ShouldBe(1);
+        Fake.RefundCalls.ShouldBe(calls + 1);
+        (await PaymentAsync(payment)).GetProperty("status").GetString().ShouldBe("Refunded");
+    }
+
+    [Fact]
+    public async Task Overlapping_reconciliation_jobs_run_once()
+    {
+        // DEC-419: the job holds a session advisory lock; a second run while it is held does nothing.
+        await using var connection = new Npgsql.NpgsqlConnection(Database.MigratorConnectionString);
+        await connection.OpenAsync(Ct);
+        await using (var take = new Npgsql.NpgsqlCommand("SELECT pg_advisory_lock(5999166636069703235)", connection))
+        {
+            await take.ExecuteNonQueryAsync(Ct);
+        }
+
+        var (_, _, enrollment) = await EnrolledAsync();
+        var (_, payment) = await PayOnlineAsync(enrollment);
+        Fake.FailNextCalls(1);
+        (await RefundAsync(payment, Reason, "kilitli-1")).StatusCode.ShouldBe(HttpStatusCode.Accepted);
+        Api.Clock.Advance(TimeSpan.FromMinutes(11));
+
+        (await RunReconcileJobAsync()).ShouldBe(0);
+        (await PaymentAsync(payment)).GetProperty("status").GetString().ShouldBe("Recorded");
+
+        await using (var release = new Npgsql.NpgsqlCommand("SELECT pg_advisory_unlock(5999166636069703235)", connection))
+        {
+            await release.ExecuteNonQueryAsync(Ct);
+        }
+
+        (await RunReconcileJobAsync()).ShouldBe(1);
+    }
+
+    [Fact]
+    public async Task The_fake_provider_refunds_a_charge_once_like_iyzico()
+    {
+        var (_, _, enrollment) = await EnrolledAsync();
+        var (online, _) = await PayOnlineAsync(enrollment);
+        var charge = "fp-" + online.ToString("N")[..16];
+        var request = new SporAkademi.Application.Billing.RefundRequest(Guid.CreateVersion7(), charge, SporAkademi.Domain.SharedKernel.Money.Try(1000m));
+
+        (await Fake.RefundAsync(request, Ct)).Outcome.ShouldBe(SporAkademi.Application.Billing.ProviderRefundOutcome.Refunded);
+        // DEC-418: a second refund of the payment, even with the same refund id, is refused as already refunded.
+        var again = await Fake.RefundAsync(request, Ct);
+        again.Outcome.ShouldBe(SporAkademi.Application.Billing.ProviderRefundOutcome.Verify);
+        again.FailureCode.ShouldBe("FakeAlreadyRefunded");
+        (await Fake.RefundAsync(request with { RefundId = Guid.CreateVersion7() }, Ct)).Outcome.ShouldBe(SporAkademi.Application.Billing.ProviderRefundOutcome.Verify);
+        (await Fake.CheckRefundAsync(request, Ct)).Refunded.ShouldBeTrue();
     }
 }

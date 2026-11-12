@@ -179,13 +179,23 @@ internal sealed partial class RefreshTokenCleanupJob(
 /// </summary>
 internal sealed partial class OnlinePaymentReconcileJob(
     TenantJobRunner runner,
+    IServiceScopeFactory scopeFactory,
     IPaymentProviders providers,
     IOptions<PaymentOptions> payments,
     ILogger<OnlinePaymentReconcileJob> logger)
 {
     public const string JobId = "billing-online-payment-reconcile";
 
-    /// <returns>The number of attempts that changed.</returns>
+    /// <summary>Advisory lock key of a run ("SARECONC" as bytes, DEC-419).</summary>
+    internal const long RunLockKey = 0x5341_5245_434F_4E43;
+
+    private const string TryLockSql = "SELECT pg_try_advisory_lock(5999166636069703235)";
+
+    /// <summary>
+    /// DEC-419: single-flight like the outbox run: a run first takes a session-level advisory lock without waiting; when
+    /// another run (in any API instance) holds it, this one does nothing. Each refund send is also claimed on its own.
+    /// </summary>
+    /// <returns>The number of attempts that changed; 0 when another run is in progress.</returns>
     [AutomaticRetry(Attempts = 0)]
     [JobDisplayName("Billing: reconcile open online payments")]
     public async Task<int> RunAsync(CancellationToken cancellationToken)
@@ -195,6 +205,36 @@ internal sealed partial class OnlinePaymentReconcileJob(
             return 0;
         }
 
+        await using var scope = scopeFactory.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        await db.Database.OpenConnectionAsync(cancellationToken);
+        try
+        {
+            await using var command = db.Database.GetDbConnection().CreateCommand();
+            command.CommandText = TryLockSql;
+            if (await command.ExecuteScalarAsync(cancellationToken) is not true)
+            {
+                LogSkipped(logger);
+                return 0;
+            }
+
+            try
+            {
+                return await ReconcileSchoolsAsync(cancellationToken);
+            }
+            finally
+            {
+                await db.Database.ExecuteSqlAsync($"SELECT pg_advisory_unlock({RunLockKey})", CancellationToken.None);
+            }
+        }
+        finally
+        {
+            await db.Database.CloseConnectionAsync();
+        }
+    }
+
+    private async Task<int> ReconcileSchoolsAsync(CancellationToken cancellationToken)
+    {
         var changed = 0;
         await runner.ForEachSchoolAsync(
             JobId,
@@ -212,6 +252,9 @@ internal sealed partial class OnlinePaymentReconcileJob(
 
         return changed;
     }
+
+    [LoggerMessage(Level = LogLevel.Debug, Message = "Online payment reconciliation skipped: another run is in progress")]
+    private static partial void LogSkipped(ILogger logger);
 
     [LoggerMessage(Level = LogLevel.Information, Message = "Reconciled {Count} online payments")]
     private static partial void LogReconciled(ILogger logger, int count);

@@ -21,6 +21,7 @@ internal sealed class IyzicoPaymentProvider(IHttpClientFactory httpClients, IOpt
     public const string InitializePath = "/payment/iyzipos/checkoutform/initialize/auth/ecom";
     public const string RetrievePath = "/payment/iyzipos/checkoutform/auth/ecom/detail";
     public const string RefundPath = "/v2/payment/refund";
+    public const string RefundStatusPath = "/v2/reporting/payment/details";
 
     /// <summary>iyzico requires the refund requester's IP; a fixed placeholder, never a user's address (KVKK).</summary>
     public const string RefundRequesterIp = "127.0.0.1";
@@ -155,7 +156,10 @@ internal sealed class IyzicoPaymentProvider(IHttpClientFactory httpClients, IOpt
 
         if (!IsSuccess(root))
         {
-            return ProviderRefundResult.Declined(ErrorCode(root, "RefundDeclined"));
+            // DEC-418: iyzico refuses a second refund of a payment ("already refunded", "exceeds the refundable amount")
+            // with the same failure shape as a real refusal, and its codes are not verified against the sandbox yet; the
+            // payment detail decides every refusal.
+            return ProviderRefundResult.Verify(ErrorCode(root, "RefundDeclined"));
         }
 
         var echoed = IyzicoProtocol.Text(root, "conversationId");
@@ -170,19 +174,50 @@ internal sealed class IyzicoPaymentProvider(IHttpClientFactory httpClients, IOpt
         return ProviderRefundResult.Refunded(reference ?? $"iyzico-refund-{request.RefundId:N}");
     }
 
+    /// <summary>
+    /// DEC-418: the payment's refund status from iyzico's reporting API (<c>GET /v2/reporting/payment/details?paymentId=</c>,
+    /// signed over the path with its query and an empty body): <c>paymentRefundStatus=TOTAL_REFUNDED</c> means the money is
+    /// back, <c>NOT_REFUNDED</c> that it is not. Anything else (partial refund, unreadable or failed answer) is not
+    /// conclusive and throws, so the request stays pending for a person to check.
+    /// </summary>
+    public async Task<ProviderRefundCheck> CheckRefundAsync(RefundRequest request, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        var path = RefundStatusPath + "?paymentId=" + Uri.EscapeDataString(request.ProviderPaymentId);
+        using var response = await SendAsync(HttpMethod.Get, path, string.Empty, cancellationToken);
+        var root = response.RootElement;
+        if (!IsSuccess(root) || !root.TryGetProperty("payments", out var list) || list.ValueKind != JsonValueKind.Array)
+        {
+            throw new PaymentProviderException(ErrorCode(root, "UnreadableRefundStatus"));
+        }
+
+        var payment = list.EnumerateArray().FirstOrDefault(p => IyzicoProtocol.Text(p, "paymentId") == request.ProviderPaymentId);
+        return (payment.ValueKind == JsonValueKind.Object ? IyzicoProtocol.Text(payment, "paymentRefundStatus") : string.Empty) switch
+        {
+            "TOTAL_REFUNDED" => new ProviderRefundCheck(true, $"iyzico-refund-{request.RefundId:N}"),
+            "NOT_REFUNDED" => new ProviderRefundCheck(false, null),
+            _ => throw new PaymentProviderException("InconclusiveRefundStatus"),
+        };
+    }
+
     public ProviderNotification? VerifyNotification(string body, IReadOnlyDictionary<string, string> headers) =>
         Settings.SecretKey is { Length: > 0 } secret && IyzicoProtocol.VerifyWebhook(secret, body, headers) is { } webhook
             ? new ProviderNotification(webhook.Token, webhook.EventKey)
             : null;
 
-    private async Task<JsonDocument> PostAsync(string path, object payload, CancellationToken cancellationToken)
+    private Task<JsonDocument> PostAsync(string path, object payload, CancellationToken cancellationToken) =>
+        SendAsync(HttpMethod.Post, path, JsonSerializer.Serialize(payload, Json), cancellationToken);
+
+    /// <summary>A signed call; for a <c>GET</c> the signed path includes the query and the body is empty.</summary>
+    private async Task<JsonDocument> SendAsync(HttpMethod method, string path, string body, CancellationToken cancellationToken)
     {
-        var body = JsonSerializer.Serialize(payload, Json);
         var randomKey = Convert.ToHexStringLower(RandomNumberGenerator.GetBytes(12));
-        using var request = new HttpRequestMessage(HttpMethod.Post, new Uri(new Uri(Settings.BaseUrl), path))
+        using var request = new HttpRequestMessage(method, new Uri(new Uri(Settings.BaseUrl), path));
+        if (method != HttpMethod.Get)
         {
-            Content = new StringContent(body, Encoding.UTF8, "application/json"),
-        };
+            request.Content = new StringContent(body, Encoding.UTF8, "application/json");
+        }
+
         request.Headers.TryAddWithoutValidation("Authorization", IyzicoProtocol.Authorization(Settings.ApiKey!, Settings.SecretKey!, randomKey, path, body));
         request.Headers.Add(IyzicoProtocol.RandomHeader, randomKey);
         request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));

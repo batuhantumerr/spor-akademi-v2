@@ -9,7 +9,8 @@ namespace SporAkademi.Application.Billing;
 
 /// <summary>
 /// A payment for the School Admin (appendix D §2.10); cancelled ones stay visible with who, when and why. An online
-/// payment carries its online attempt and its latest refund request (P3-13), if any.
+/// payment carries its online attempt and its latest refund request (P3-13), if any; a recorded online payment of a due
+/// whose recorded payments exceed what it owes carries the excess (<c>OverpaidBy</c>, live, DEC-420).
 /// </summary>
 public sealed record PaymentDto(
     Guid Id,
@@ -28,7 +29,8 @@ public sealed record PaymentDto(
     Guid? CancelledBy,
     DateTimeOffset? CancelledAt,
     Guid? OnlinePaymentId,
-    PaymentRefundDto? Refund);
+    PaymentRefundDto? Refund,
+    MoneyDto? OverpaidBy);
 
 /// <summary>
 /// One unpaid period of an enrollment (US-24): what is owed (<see cref="Fee"/>, after the fee rules of P2-F8), what was

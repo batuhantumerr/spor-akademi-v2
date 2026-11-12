@@ -24,7 +24,8 @@ public sealed record PaymentRefundDto(
     DateTimeOffset RequestedAt,
     DateTimeOffset? CompletedAt,
     string? FailureCode,
-    int Attempts);
+    int Attempts,
+    bool NeedsReview);
 
 /// <summary>Refund requests of the current school (tenant filter applies). There is deliberately no delete.</summary>
 public interface IPaymentRefundRepository
@@ -42,8 +43,24 @@ public interface IPaymentRefundRepository
     /// <summary>The newest request of each payment that has one.</summary>
     Task<IReadOnlyDictionary<PaymentId, PaymentRefund>> LatestOfPaymentsAsync(IReadOnlyCollection<PaymentId> paymentIds, CancellationToken cancellationToken);
 
-    /// <summary>Pending requests whose last provider call (or the request) is before <paramref name="before"/>, oldest first.</summary>
+    /// <summary>
+    /// Pending requests not marked for review whose last provider call (or the request) is before <paramref name="before"/>,
+    /// oldest first.
+    /// </summary>
     Task<IReadOnlyList<PaymentRefund>> ListPendingSinceBeforeAsync(DateTimeOffset before, int max, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Claims the next provider call of a pending request (DEC-419): one conditional <c>UPDATE</c>, committed at once,
+    /// that counts the attempt only if nobody else did since it was read (<paramref name="expectedAttempts"/>) and, when
+    /// <paramref name="lastAttemptBefore"/> is given, the last call (or the request) is older than it.
+    /// </summary>
+    /// <returns><c>true</c> when this caller may call the provider.</returns>
+    Task<bool> TryClaimAttemptAsync(
+        PaymentRefundId id,
+        int expectedAttempts,
+        DateTimeOffset now,
+        DateTimeOffset? lastAttemptBefore,
+        CancellationToken cancellationToken);
 
     void Add(PaymentRefund refund);
 }
@@ -54,11 +71,17 @@ public sealed record RequestRefundCommand(PaymentId PaymentId, string? Reason, s
 /// <param name="Replayed">An earlier request with the same key and body created it; nothing new was requested.</param>
 public sealed record RequestedRefund(PaymentRefundId Id, bool Replayed);
 
-/// <summary>
-/// The provider's answer to a refund request: <paramref name="Result"/> is <c>null</c> when the outcome is unknown (the
-/// call only counts as an attempt and the request stays pending).
-/// </summary>
-public sealed record ApplyRefundResultCommand(PaymentRefundId Id, ProviderRefundResult? Result) : ICommand<PaymentRefundStatus>;
+/// <summary>How a provider answer settles a pending request (DEC-417, DEC-418).</summary>
+public enum RefundResolution
+{
+    Succeeded,
+    Failed,
+    NeedsReview,
+}
+
+/// <summary>Stores a settled provider answer of a refund request (the attempt was counted when it was claimed).</summary>
+public sealed record ApplyRefundResultCommand(PaymentRefundId Id, RefundResolution Resolution, string? ProviderRefundId, string? FailureCode)
+    : ICommand<PaymentRefundStatus>;
 
 /// <summary>Where a refund ended up after the request (and, unless replayed, the provider call).</summary>
 public sealed record RefundOutcome(PaymentRefundId RefundId, PaymentId PaymentId, PaymentRefundStatus Status, bool Replayed);
@@ -165,9 +188,9 @@ internal sealed class RequestRefundHandler(
 }
 
 /// <summary>
-/// The refund state machine's single entry for provider answers (DEC-417). A success marks the payment
-/// <see cref="PaymentStatus.Refunded"/> in the same transaction (and is a no-op when repeated); a refusal is final; an
-/// unknown outcome only counts the attempt. Under the enrollment lock and the rows' <c>xmin</c>.
+/// The refund state machine's single entry for settled provider answers (DEC-417, DEC-418). A success marks the payment
+/// <see cref="PaymentStatus.Refunded"/> in the same transaction (and is a no-op when repeated); a refusal is final; a
+/// request the provider could not settle is marked for review. Under the enrollment lock and the rows' <c>xmin</c>.
 /// </summary>
 internal sealed class ApplyRefundResultHandler(
     IPaymentRefundRepository refunds,
@@ -185,14 +208,12 @@ internal sealed class ApplyRefundResultHandler(
 
         await enrollments.FindLockedAsync(refund.EnrollmentId, cancellationToken);
         refund = await refunds.GetAsync(command.Id, cancellationToken);
-        var payment = await payments.GetAsync(refund!.PaymentId, cancellationToken);
         var now = clock.GetUtcNow();
-        refund.RecordAttempt(now);
-
-        switch (command.Result)
+        switch (command.Resolution)
         {
-            case { Succeeded: true, ProviderRefundId: { } providerRefundId }:
-                var succeeded = refund.Succeed(payment!, providerRefundId, now);
+            case RefundResolution.Succeeded:
+                var payment = await payments.GetAsync(refund!.PaymentId, cancellationToken);
+                var succeeded = refund.Succeed(payment!, command.ProviderRefundId ?? $"refund-{refund.Id.Value:N}", now);
                 if (succeeded.IsFailure)
                 {
                     return Result.Failure<PaymentRefundStatus>(succeeded.Error);
@@ -200,8 +221,12 @@ internal sealed class ApplyRefundResultHandler(
 
                 break;
 
-            case { Succeeded: false } declined:
-                refund.Fail(declined.FailureCode ?? "ProviderDeclined", now);
+            case RefundResolution.Failed:
+                refund!.Fail(command.FailureCode ?? "ProviderDeclined", now);
+                break;
+
+            default:
+                refund!.MarkForReview();
                 break;
         }
 
@@ -210,17 +235,27 @@ internal sealed class ApplyRefundResultHandler(
 }
 
 /// <summary>
-/// Refunding an online payment (P3-13, DEC-418): the request is committed first, then the provider is called outside any
-/// database transaction or lock, then its answer is stored. When the outcome is unknown the request stays pending and
-/// <see cref="PaymentRefundReconciliation"/> asks again later; a replay of the same key never calls the provider.
+/// Refunding an online payment (P3-13, DEC-418, DEC-419). The request is committed first. Every provider call
+/// is then claimed with a conditional update committed on its own (so a crash or a lost answer still leaves the attempt
+/// counted, and two callers never call the provider for the same request at once), the provider is called outside any
+/// transaction or lock, and a settled answer is stored. A refusal of a request that was tried before is not trusted:
+/// the money may already be back (its first answer was lost), so the provider's payment detail decides.
 /// </summary>
 public sealed partial class PaymentRefunds(
     ICommandHandler<RequestRefundCommand, RequestedRefund> request,
     ICommandHandler<ApplyRefundResultCommand, PaymentRefundStatus> apply,
     IPaymentRefundRepository refunds,
+    IPaymentRepository payments,
     IPaymentProviders providers,
+    TimeProvider clock,
     ILogger<PaymentRefunds> logger)
 {
+    /// <summary>A School Admin's provider check (DEC-418) waits this long after the last call, so it never races one.</summary>
+    public static readonly TimeSpan CheckQuietPeriod = TimeSpan.FromMinutes(1);
+
+    /// <summary>The failure code of a request a School Admin checked and the provider shows as not refunded.</summary>
+    public const string NotRefundedAtProvider = "NotRefundedAtProvider";
+
     public async Task<Result<RefundOutcome>> RefundAsync(Guid paymentId, string? reason, string? idempotencyKey, CancellationToken cancellationToken)
     {
         var command = new RequestRefundCommand(PaymentId.From(paymentId), reason, idempotencyKey);
@@ -242,25 +277,68 @@ public sealed partial class PaymentRefunds(
             return Result.Failure<RefundOutcome>(PaymentRefundErrors.NotFound);
         }
 
-        var status = requested.Value.Replayed ? refund.Status : await SendAsync(refund, CancellationToken.None);
+        var status = requested.Value.Replayed ? refund.Status : await SendAsync(refund, lastAttemptBefore: null, CancellationToken.None);
         return Result.Success(new RefundOutcome(refund.Id, refund.PaymentId, status, requested.Value.Replayed));
     }
 
-    /// <summary>Asks the provider to refund a pending request and stores a definite answer; returns where it stands.</summary>
-    internal async Task<PaymentRefundStatus> SendAsync(PaymentRefund refund, CancellationToken cancellationToken)
+    /// <summary>
+    /// "Sağlayıcıda kontrol et" (DEC-418): a School Admin settles the payment's pending refund from the provider's payment
+    /// detail. The money is back: refunded. It is not: the request fails (a new request is the retry). The provider cannot
+    /// answer: it stays pending.
+    /// </summary>
+    public async Task<Result<RefundOutcome>> CheckAsync(Guid paymentId, CancellationToken cancellationToken)
     {
-        if (refund.Status != PaymentRefundStatus.Pending)
+        var id = PaymentId.From(paymentId);
+        if (await payments.FindAsync(id, cancellationToken) is null)
+        {
+            return Result.Failure<RefundOutcome>(PaymentErrors.NotFound);
+        }
+
+        if (await refunds.FindActiveAsync(id, cancellationToken) is not { Status: PaymentRefundStatus.Pending } refund)
+        {
+            return Result.Failure<RefundOutcome>(PaymentRefundErrors.NotPending);
+        }
+
+        if (ActiveProviderOf(refund) is not { } provider)
+        {
+            return Result.Failure<RefundOutcome>(OnlinePaymentErrors.Disabled);
+        }
+
+        var now = clock.GetUtcNow();
+        if (!await refunds.TryClaimAttemptAsync(refund.Id, refund.Attempts, now, now - CheckQuietPeriod, CancellationToken.None))
+        {
+            return Result.Failure<RefundOutcome>(PaymentRefundErrors.InProgress);
+        }
+
+        var status = await VerifyAsync(refund, provider, RefundResolution.Failed, NotRefundedAtProvider);
+        return Result.Success(new RefundOutcome(refund.Id, refund.PaymentId, status, Replayed: false));
+    }
+
+    /// <summary>
+    /// Asks the provider to refund a pending request and stores a settled answer; returns where it stands. Nothing is sent
+    /// when another caller claimed the attempt first (or, with <paramref name="lastAttemptBefore"/>, when the last call is
+    /// too recent).
+    /// </summary>
+    internal async Task<PaymentRefundStatus> SendAsync(PaymentRefund refund, DateTimeOffset? lastAttemptBefore, CancellationToken cancellationToken)
+    {
+        if (refund.Status != PaymentRefundStatus.Pending || refund.NeedsReview)
         {
             return refund.Status;
         }
 
-        if (providers.Active is not { } provider || !string.Equals(provider.Name, refund.Provider, StringComparison.Ordinal))
+        if (ActiveProviderOf(refund) is not { } provider)
         {
             LogProviderMissing(logger, refund.Id.Value, refund.Provider);
             return PaymentRefundStatus.Pending;
         }
 
-        ProviderRefundResult? result;
+        if (!await refunds.TryClaimAttemptAsync(refund.Id, refund.Attempts, clock.GetUtcNow(), lastAttemptBefore, CancellationToken.None))
+        {
+            return (await refunds.FindAsync(refund.Id, CancellationToken.None))?.Status ?? PaymentRefundStatus.Pending;
+        }
+
+        var retry = refund.Attempts > 0;
+        ProviderRefundResult result;
         try
         {
             result = await provider.RefundAsync(new RefundRequest(refund.Id.Value, refund.ProviderPaymentId, refund.Amount), cancellationToken);
@@ -268,10 +346,52 @@ public sealed partial class PaymentRefunds(
         catch (PaymentProviderException exception)
         {
             LogRefundUnknown(logger, refund.Id.Value, provider.Name, exception.Message);
-            result = null;
+            return PaymentRefundStatus.Pending;
         }
 
-        var applied = await apply.Handle(new ApplyRefundResultCommand(refund.Id, result), CancellationToken.None);
+        return result.Outcome switch
+        {
+            ProviderRefundOutcome.Refunded => await ApplyAsync(refund, provider, RefundResolution.Succeeded, result.ProviderRefundId, null),
+            ProviderRefundOutcome.Declined when !retry => await ApplyAsync(refund, provider, RefundResolution.Failed, null, result.FailureCode),
+            // A refusal that may mean "already refunded", or any refusal of a retry: the first answer may have been lost.
+            _ => await VerifyAsync(refund, provider, retry ? RefundResolution.NeedsReview : RefundResolution.Failed, result.FailureCode),
+        };
+    }
+
+    private async Task<PaymentRefundStatus> VerifyAsync(PaymentRefund refund, IPaymentProvider provider, RefundResolution whenNotRefunded, string? failureCode)
+    {
+        ProviderRefundCheck check;
+        try
+        {
+            check = await provider.CheckRefundAsync(new RefundRequest(refund.Id.Value, refund.ProviderPaymentId, refund.Amount), CancellationToken.None);
+        }
+        catch (PaymentProviderException exception)
+        {
+            LogCheckFailed(logger, refund.Id.Value, provider.Name, exception.Message);
+            return PaymentRefundStatus.Pending;
+        }
+
+        if (check.Refunded)
+        {
+            return await ApplyAsync(refund, provider, RefundResolution.Succeeded, check.ProviderRefundId, null);
+        }
+
+        if (whenNotRefunded == RefundResolution.NeedsReview)
+        {
+            LogNeedsReview(logger, refund.Id.Value, provider.Name, failureCode);
+        }
+
+        return await ApplyAsync(refund, provider, whenNotRefunded, null, failureCode ?? NotRefundedAtProvider);
+    }
+
+    private async Task<PaymentRefundStatus> ApplyAsync(
+        PaymentRefund refund,
+        IPaymentProvider provider,
+        RefundResolution resolution,
+        string? providerRefundId,
+        string? failureCode)
+    {
+        var applied = await apply.Handle(new ApplyRefundResultCommand(refund.Id, resolution, providerRefundId, failureCode), CancellationToken.None);
         if (applied.IsFailure)
         {
             // A concurrent answer (xmin) or a final state won; the stored state is the truth.
@@ -279,9 +399,12 @@ public sealed partial class PaymentRefunds(
             return (await refunds.FindAsync(refund.Id, CancellationToken.None))?.Status ?? PaymentRefundStatus.Pending;
         }
 
-        LogRefundResult(logger, refund.Id.Value, provider.Name, applied.Value, result?.FailureCode);
+        LogRefundResult(logger, refund.Id.Value, provider.Name, resolution, failureCode);
         return applied.Value;
     }
+
+    private IPaymentProvider? ActiveProviderOf(PaymentRefund refund) =>
+        providers.Active is { } provider && string.Equals(provider.Name, refund.Provider, StringComparison.Ordinal) ? provider : null;
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "Refund {RefundId} waits: its provider {Provider} is not configured")]
     private static partial void LogProviderMissing(ILogger logger, Guid refundId, string provider);
@@ -289,17 +412,23 @@ public sealed partial class PaymentRefunds(
     [LoggerMessage(Level = LogLevel.Warning, Message = "Refund {RefundId} at {Provider} has an unknown outcome ({ProviderError}); it stays pending")]
     private static partial void LogRefundUnknown(ILogger logger, Guid refundId, string provider, string providerError);
 
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Checking refund {RefundId} at {Provider} failed with {ProviderError}; it stays pending")]
+    private static partial void LogCheckFailed(ILogger logger, Guid refundId, string provider, string providerError);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Refund {RefundId} needs review: {Provider} refused a retry ({FailureCode}) and does not show the money returned")]
+    private static partial void LogNeedsReview(ILogger logger, Guid refundId, string provider, string? failureCode);
+
     [LoggerMessage(Level = LogLevel.Warning, Message = "Storing the provider's answer for refund {RefundId} failed with {Code}")]
     private static partial void LogApplyFailed(ILogger logger, Guid refundId, string code);
 
-    [LoggerMessage(Level = LogLevel.Information, Message = "Refund {RefundId} at {Provider}: {Status} {FailureCode}")]
-    private static partial void LogRefundResult(ILogger logger, Guid refundId, string provider, PaymentRefundStatus status, string? failureCode);
+    [LoggerMessage(Level = LogLevel.Information, Message = "Refund {RefundId} at {Provider}: {Resolution} {FailureCode}")]
+    private static partial void LogRefundResult(ILogger logger, Guid refundId, string provider, RefundResolution resolution, string? failureCode);
 }
 
 /// <summary>
-/// The safety net for refunds whose outcome stayed unknown (DEC-418): in the current school's scope, pending requests
-/// whose last provider call is older than a threshold are sent again with the same refund id. Run per school by the
-/// online payment reconciliation job.
+/// The safety net for refunds whose outcome stayed unknown (DEC-418, DEC-419): in the current school's scope, pending
+/// requests (not marked for review) whose last provider call is older than a threshold are sent again with the same
+/// refund id. Each send is claimed first, so overlapping runs never call the provider twice for one request.
 /// </summary>
 public sealed class PaymentRefundReconciliation(IPaymentRefundRepository refunds, PaymentRefunds flow, IPaymentProviders providers, TimeProvider clock)
 {
@@ -314,11 +443,12 @@ public sealed class PaymentRefundReconciliation(IPaymentRefundRepository refunds
             return 0;
         }
 
-        var pending = await refunds.ListPendingSinceBeforeAsync(clock.GetUtcNow() - olderThan, MaxPerRun, cancellationToken);
+        var threshold = clock.GetUtcNow() - olderThan;
+        var pending = await refunds.ListPendingSinceBeforeAsync(threshold, MaxPerRun, cancellationToken);
         var settled = 0;
         foreach (var refund in pending)
         {
-            settled += await flow.SendAsync(refund, cancellationToken) == PaymentRefundStatus.Pending ? 0 : 1;
+            settled += await flow.SendAsync(refund, threshold, cancellationToken) == PaymentRefundStatus.Pending ? 0 : 1;
         }
 
         return settled;
@@ -342,5 +472,6 @@ internal sealed class RefundViews(IPaymentRefundRepository refunds)
         refund.RequestedAt,
         refund.CompletedAt,
         refund.FailureCode,
-        refund.Attempts);
+        refund.Attempts,
+        refund.NeedsReview);
 }

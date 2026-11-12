@@ -23,6 +23,8 @@ internal sealed class FakePaymentProvider(IOptions<PaymentOptions> options, Time
     private int _failures;
     private int _declines;
     private int _refundCalls;
+    private int _lostAnswers;
+    private int _refundChecks;
 
     public string Name => PaymentOptions.FakeName;
 
@@ -102,10 +104,11 @@ internal sealed class FakePaymentProvider(IOptions<PaymentOptions> options, Time
     }
 
     /// <summary>
-    /// P3-13 (DEC-424): refunds a charge in full. Deterministic: the same refund id answers the same success again; a
-    /// charge already refunded by another request is declined (nothing is left to refund), as is an unknown charge id or
-    /// a different amount. <see cref="FailNextCalls"/> makes the outcome unknown; <see cref="DeclineNextRefunds"/> makes
-    /// the provider refuse.
+    /// P3-13 (DEC-418, DEC-424): refunds a charge in full, with iyzico's semantics: a charge can be refunded once, and any
+    /// later refund of it (even with the same refund id) is refused as "already refunded", which asks the caller to check
+    /// the payment detail. An unknown charge id or a different amount is refused. Test hooks: <see cref="FailNextCalls"/>
+    /// (unknown outcome, nothing refunded), <see cref="DeclineNextRefunds"/> (definite refusal) and
+    /// <see cref="LoseNextRefundAnswers"/> (the money is returned but the answer is lost).
     /// </summary>
     public Task<ProviderRefundResult> RefundAsync(RefundRequest request, CancellationToken cancellationToken)
     {
@@ -122,13 +125,34 @@ internal sealed class FakePaymentProvider(IOptions<PaymentOptions> options, Time
             return Task.FromResult(ProviderRefundResult.Declined("FakeUnknownCharge"));
         }
 
-        var refundId = "fr-" + request.RefundId.ToString("N")[..16];
-        var stored = _refunds.GetOrAdd(request.ProviderPaymentId, refundId);
         Interlocked.Increment(ref _refundCalls);
-        return Task.FromResult(string.Equals(stored, refundId, StringComparison.Ordinal)
-            ? ProviderRefundResult.Refunded(refundId)
-            : ProviderRefundResult.Declined("FakeAlreadyRefunded"));
+        var refundId = "fr-" + request.RefundId.ToString("N")[..16];
+        if (!_refunds.TryAdd(request.ProviderPaymentId, refundId))
+        {
+            return Task.FromResult(ProviderRefundResult.Verify("FakeAlreadyRefunded"));
+        }
+
+        return TryTake(ref _lostAnswers)
+            ? throw new PaymentProviderException("FakeAnswerLost")
+            : Task.FromResult(ProviderRefundResult.Refunded(refundId));
     }
+
+    /// <summary>DEC-418: the payment detail: the charge's money is back when it was refunded.</summary>
+    public Task<ProviderRefundCheck> CheckRefundAsync(RefundRequest request, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        ThrowIfFailing();
+        Interlocked.Increment(ref _refundChecks);
+        return Task.FromResult(_refunds.TryGetValue(request.ProviderPaymentId, out var refundId)
+            ? new ProviderRefundCheck(true, refundId)
+            : new ProviderRefundCheck(false, null));
+    }
+
+    /// <summary>Test hook: the next <paramref name="count"/> refunds return the money, but their answer is lost (a timeout).</summary>
+    public void LoseNextRefundAnswers(int count) => Interlocked.Exchange(ref _lostAnswers, count);
+
+    /// <summary>Test hook: how many payment detail checks reached the provider.</summary>
+    public int RefundChecks => Volatile.Read(ref _refundChecks);
 
     /// <summary>Test hook: the next <paramref name="count"/> refunds are refused by the provider (a definite answer).</summary>
     public void DeclineNextRefunds(int count) => Interlocked.Exchange(ref _declines, count);

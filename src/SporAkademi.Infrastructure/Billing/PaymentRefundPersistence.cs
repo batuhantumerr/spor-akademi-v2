@@ -26,6 +26,8 @@ internal sealed class PaymentRefundConfiguration : IEntityTypeConfiguration<Paym
                 "ck_payment_refunds_result",
                 "(status = 'Succeeded') = (provider_refund_id IS NOT NULL) AND (status = 'Failed') = (failure_code IS NOT NULL) AND (status = 'Pending') = (completed_at IS NULL)");
             t.HasCheckConstraint("ck_payment_refunds_attempts", "attempts >= 0");
+            // DEC-418: only a pending request waits for review.
+            t.HasCheckConstraint("ck_payment_refunds_review", "NOT needs_review OR status = 'Pending'");
         });
         builder.HasKey(r => r.Id);
         builder.HasOne<School>().WithMany().HasForeignKey(r => r.TenantId).OnDelete(DeleteBehavior.Restrict);
@@ -89,10 +91,35 @@ internal sealed class PaymentRefundRepository(AppDbContext db) : IPaymentRefundR
 
     public async Task<IReadOnlyList<PaymentRefund>> ListPendingSinceBeforeAsync(DateTimeOffset before, int max, CancellationToken cancellationToken) =>
         await db.Set<PaymentRefund>().AsNoTracking()
-            .Where(r => r.Status == PaymentRefundStatus.Pending && (r.LastAttemptAt ?? r.RequestedAt) < before)
+            .Where(r => r.Status == PaymentRefundStatus.Pending && !r.NeedsReview && (r.LastAttemptAt ?? r.RequestedAt) < before)
             .OrderBy(r => r.RequestedAt).ThenBy(r => r.Id)
             .Take(max)
             .ToListAsync(cancellationToken);
+
+    public async Task<bool> TryClaimAttemptAsync(
+        PaymentRefundId id,
+        int expectedAttempts,
+        DateTimeOffset now,
+        DateTimeOffset? lastAttemptBefore,
+        CancellationToken cancellationToken)
+    {
+        // DEC-419: one conditional UPDATE, committed at once outside any transaction of the caller (the refund flow never
+        // holds one here). Exactly one caller sees one changed row; the tenant filter applies.
+        var claimed = await db.Set<PaymentRefund>()
+            .Where(r => r.Id == id && r.Status == PaymentRefundStatus.Pending && r.Attempts == expectedAttempts
+                && (lastAttemptBefore == null || (r.LastAttemptAt ?? r.RequestedAt) < lastAttemptBefore))
+            .ExecuteUpdateAsync(
+                set => set.SetProperty(r => r.Attempts, r => r.Attempts + 1).SetProperty(r => r.LastAttemptAt, now),
+                cancellationToken);
+        // The request that created the row may still track it in this scope (same DbContext): refresh its attempts and
+        // xmin, or storing the provider's answer would fail with a concurrency conflict.
+        if (db.ChangeTracker.Entries<PaymentRefund>().FirstOrDefault(e => e.Entity.Id == id) is { } tracked)
+        {
+            await tracked.ReloadAsync(cancellationToken);
+        }
+
+        return claimed == 1;
+    }
 
     public void Add(PaymentRefund refund) => db.Add(refund);
 }

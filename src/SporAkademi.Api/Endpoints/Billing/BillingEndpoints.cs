@@ -30,6 +30,10 @@ internal static class BillingEndpoints
             .Produces<PaymentDto>()
             .Produces<PaymentDto>(StatusCodes.Status202Accepted)
             .ProducesProblems(400, 404, 409, 422);
+        payments.MapPost("/{id:guid}/refund/check", CheckRefund)
+            .Produces<PaymentDto>()
+            .Produces<PaymentDto>(StatusCodes.Status202Accepted)
+            .ProducesProblems(404, 409, 422);
 
         var dues = app.MapGroup("/api/v1/dues").WithTags("Payments").RequireRole(Role.SchoolAdmin);
         dues.MapGet("/outstanding", ListOutstanding).Produces<PageResponse<OutstandingDueDto>>().ProducesProblems(400);
@@ -89,7 +93,8 @@ internal static class BillingEndpoints
     /// P3-13 (DEC-418, DEC-419): refunds an online payment in full through its provider; requires an <c>Idempotency-Key</c>.
     /// 200 with the refunded payment; 202 when the provider's answer is unknown (the refund stays pending and the
     /// reconciliation job asks again); 422 <c>Refund.ProviderDeclined</c> when the provider refused. Repeating the request
-    /// (same key and body) answers 200 with <c>Idempotent-Replayed: true</c> and the payment as it stands.
+    /// (same key and body) never calls the provider again: it answers by that request's own status (200, 202 or 422) with
+    /// <c>Idempotent-Replayed: true</c> and that request as the payment's <c>refund</c>.
     /// </summary>
     private static async Task<IResult> RefundPayment(
         Guid id,
@@ -106,17 +111,40 @@ internal static class BillingEndpoints
             return ProblemResults.Problem(refunded.Error);
         }
 
-        var payment = await reader.Handle(new GetPaymentQuery(refunded.Value.PaymentId), cancellationToken);
         if (refunded.Value.Replayed)
         {
             context.Response.Headers[OnlinePaymentEndpoints.ReplayedHeader] = "true";
-            return payment.OkOrProblem();
         }
 
-        return refunded.Value.Status switch
+        return await RefundResultAsync(refunded.Value, reader, cancellationToken);
+    }
+
+    /// <summary>
+    /// P3-13 (DEC-418): "Sağlayıcıda kontrol et". Settles the payment's pending refund from the provider's payment detail:
+    /// 200 refunded; 422 <c>Refund.ProviderDeclined</c> when the provider shows the money not returned (the request fails,
+    /// a new request is the retry); 202 when the provider cannot answer. 409 when the last provider call is under a
+    /// minute old; 422 <c>Refund.NotPending</c> without a pending refund.
+    /// </summary>
+    private static async Task<IResult> CheckRefund(
+        Guid id,
+        PaymentRefunds refunds,
+        IQueryHandler<GetPaymentQuery, PaymentDto> reader,
+        CancellationToken cancellationToken)
+    {
+        var checkedRefund = await refunds.CheckAsync(id, cancellationToken);
+        return checkedRefund.IsSuccess
+            ? await RefundResultAsync(checkedRefund.Value, reader, cancellationToken)
+            : ProblemResults.Problem(checkedRefund.Error);
+    }
+
+    /// <summary>DEC-419: the answer follows the refund request's own status, with that request as the payment's refund.</summary>
+    private static async Task<IResult> RefundResultAsync(RefundOutcome outcome, IQueryHandler<GetPaymentQuery, PaymentDto> reader, CancellationToken cancellationToken)
+    {
+        var payment = await reader.Handle(new GetPaymentQuery(outcome.PaymentId, outcome.RefundId), cancellationToken);
+        return outcome.Status switch
         {
             PaymentRefundStatus.Succeeded => payment.OkOrProblem(),
-            PaymentRefundStatus.Pending => TypedResults.Accepted((string?)null, payment.Value),
+            PaymentRefundStatus.Pending => payment.IsSuccess ? TypedResults.Accepted((string?)null, payment.Value) : payment.OkOrProblem(),
             _ => ProblemResults.Problem(PaymentRefundErrors.ProviderDeclined),
         };
     }

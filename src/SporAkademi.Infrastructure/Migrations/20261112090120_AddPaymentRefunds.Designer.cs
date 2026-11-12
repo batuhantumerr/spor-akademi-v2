@@ -13,7 +13,7 @@ using SporAkademi.Infrastructure.Persistence;
 namespace SporAkademi.Infrastructure.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    [Migration("20261112075833_AddPaymentRefunds")]
+    [Migration("20261112090120_AddPaymentRefunds")]
     partial class AddPaymentRefunds
     {
         /// <inheritdoc />
@@ -1078,6 +1078,10 @@ namespace SporAkademi.Infrastructure.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("last_attempt_at");
 
+                    b.Property<bool>("NeedsReview")
+                        .HasColumnType("boolean")
+                        .HasColumnName("needs_review");
+
                     b.Property<Guid>("OnlinePaymentId")
                         .HasColumnType("uuid")
                         .HasColumnName("online_payment_id");
@@ -1200,6 +1204,8 @@ namespace SporAkademi.Infrastructure.Migrations
                             t.HasCheckConstraint("ck_payment_refunds_attempts", "attempts >= 0");
 
                             t.HasCheckConstraint("ck_payment_refunds_result", "(status = 'Succeeded') = (provider_refund_id IS NOT NULL) AND (status = 'Failed') = (failure_code IS NOT NULL) AND (status = 'Pending') = (completed_at IS NULL)");
+
+                            t.HasCheckConstraint("ck_payment_refunds_review", "NOT needs_review OR status = 'Pending'");
                         });
                 });
 

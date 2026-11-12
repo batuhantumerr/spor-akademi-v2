@@ -41,6 +41,7 @@ namespace SporAkademi.Infrastructure.Migrations
                     provider_refund_id = table.Column<string>(type: "character varying(128)", maxLength: 128, nullable: true),
                     failure_code = table.Column<string>(type: "character varying(64)", maxLength: 64, nullable: true),
                     completed_at = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
+                    needs_review = table.Column<bool>(type: "boolean", nullable: false),
                     created_at = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
                     created_by = table.Column<Guid>(type: "uuid", nullable: true),
                     updated_at = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
@@ -55,6 +56,7 @@ namespace SporAkademi.Infrastructure.Migrations
                     table.CheckConstraint("ck_payment_refunds_amount", "amount > 0");
                     table.CheckConstraint("ck_payment_refunds_attempts", "attempts >= 0");
                     table.CheckConstraint("ck_payment_refunds_result", "(status = 'Succeeded') = (provider_refund_id IS NOT NULL) AND (status = 'Failed') = (failure_code IS NOT NULL) AND (status = 'Pending') = (completed_at IS NULL)");
+                    table.CheckConstraint("ck_payment_refunds_review", "NOT needs_review OR status = 'Pending'");
                     table.ForeignKey(
                         name: "fk_payment_refunds_enrollment_tenant_id_enrollment_id",
                         columns: x => new { x.tenant_id, x.enrollment_id },
@@ -133,7 +135,8 @@ namespace SporAkademi.Infrastructure.Migrations
 
             // P3-13 (DEC-417): the database backs the refund state machine. A recorded online payment may become Refunded
             // (once, never back); a manual payment is still only cancelled. A refund request's payment, amount, reason and
-            // key never change, a final result (Succeeded or Failed) never changes, and no row is deleted.
+            // key never change, a request starts pending and untried, a final result (Succeeded or Failed) never changes, and no
+            // row is deleted.
             migrationBuilder.Sql("""
                 CREATE OR REPLACE FUNCTION billing.payments_guard() RETURNS trigger
                 LANGUAGE plpgsql AS $$
@@ -170,6 +173,13 @@ namespace SporAkademi.Infrastructure.Migrations
                     IF TG_OP = 'DELETE' THEN
                         RAISE EXCEPTION 'billing.payment_refunds rows are never deleted' USING ERRCODE = 'restrict_violation';
                     END IF;
+                    IF TG_OP = 'INSERT' THEN
+                        IF NEW.status <> 'Pending' OR NEW.attempts <> 0 OR NEW.needs_review OR NEW.last_attempt_at IS NOT NULL
+                           OR NEW.provider_refund_id IS NOT NULL OR NEW.failure_code IS NOT NULL OR NEW.completed_at IS NOT NULL THEN
+                            RAISE EXCEPTION 'a refund request starts pending, untried' USING ERRCODE = 'restrict_violation';
+                        END IF;
+                        RETURN NEW;
+                    END IF;
                     IF (NEW.id, NEW.tenant_id, NEW.payment_id, NEW.online_payment_id, NEW.enrollment_id, NEW.student_id,
                         NEW.amount, NEW.currency, NEW.provider, NEW.provider_payment_id, NEW.reason, NEW.idempotency_key,
                         NEW.request_hash, NEW.requested_by, NEW.requested_at, NEW.created_at, NEW.created_by)
@@ -180,9 +190,9 @@ namespace SporAkademi.Infrastructure.Migrations
                         RAISE EXCEPTION 'a refund request never changes' USING ERRCODE = 'restrict_violation';
                     END IF;
                     IF OLD.status <> 'Pending'
-                       AND (NEW.status, NEW.provider_refund_id, NEW.failure_code, NEW.completed_at, NEW.attempts, NEW.last_attempt_at)
+                       AND (NEW.status, NEW.provider_refund_id, NEW.failure_code, NEW.completed_at, NEW.attempts, NEW.last_attempt_at, NEW.needs_review)
                        IS DISTINCT FROM
-                       (OLD.status, OLD.provider_refund_id, OLD.failure_code, OLD.completed_at, OLD.attempts, OLD.last_attempt_at) THEN
+                       (OLD.status, OLD.provider_refund_id, OLD.failure_code, OLD.completed_at, OLD.attempts, OLD.last_attempt_at, OLD.needs_review) THEN
                         RAISE EXCEPTION 'a refund with a final result never changes' USING ERRCODE = 'restrict_violation';
                     END IF;
                     RETURN NEW;
@@ -190,7 +200,7 @@ namespace SporAkademi.Infrastructure.Migrations
                 $$;
 
                 CREATE TRIGGER trg_payment_refunds_guard
-                    BEFORE UPDATE OR DELETE ON billing.payment_refunds
+                    BEFORE INSERT OR UPDATE OR DELETE ON billing.payment_refunds
                     FOR EACH ROW EXECUTE FUNCTION billing.payment_refunds_guard();
                 """);
         }
@@ -198,6 +208,17 @@ namespace SporAkademi.Infrastructure.Migrations
         /// <inheritdoc />
         protected override void Down(MigrationBuilder migrationBuilder)
         {
+            // Refunded payments cannot be represented before this migration (the old guard and enum have no Refunded): stop.
+            migrationBuilder.Sql("""
+                DO $$
+                BEGIN
+                    IF EXISTS (SELECT 1 FROM billing.payments WHERE status = 'Refunded') THEN
+                        RAISE EXCEPTION 'refunded payments exist; AddPaymentRefunds cannot be reverted' USING ERRCODE = 'restrict_violation';
+                    END IF;
+                END;
+                $$;
+                """);
+
             migrationBuilder.Sql("""
                 DROP TRIGGER IF EXISTS trg_payment_refunds_guard ON billing.payment_refunds;
                 DROP FUNCTION IF EXISTS billing.payment_refunds_guard();
