@@ -388,7 +388,7 @@ describe('dashboard route', () => {
     const route = shell
       .children!.flatMap((r) => r.children ?? [])
       .find((r) => r.path === 'dashboard')!;
-    expect(route.title).toBe(ui.nav.dashboard);
+    expect((route.title as () => string)()).toBe(ui.nav.dashboard);
     const component = await (route.loadComponent as () => Promise<unknown>)();
     expect(component).toBe(DashboardPage);
   });

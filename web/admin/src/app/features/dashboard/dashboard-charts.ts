@@ -6,9 +6,9 @@ import {
   SportEnrollmentsDto,
   WeeklyAttendanceDto,
 } from '../../api/models';
-import { formatDate, formatNumber } from '../../core/format/format';
+import { formatDate, formatNumber, formatPercent } from '../../core/format/format';
 import { interpolate, ui } from '../../core/i18n/tr';
-import { LOCALE } from '../../core/i18n/locale';
+import { perLocale } from '../../core/i18n/locale';
 import { displayMoney } from '../../core/money/money';
 import { themeColor } from '../../shared/ui/chart.component';
 
@@ -52,17 +52,20 @@ export function percentText(value: number | string | null | undefined): string {
   return r === null ? ui.dashboard.noValue : percent(r);
 }
 
-const percentFormatter = new Intl.NumberFormat(LOCALE, {
-  style: 'percent',
-  maximumFractionDigits: 1,
-});
+const percentFormatter = perLocale(
+  (l) =>
+    new Intl.NumberFormat(l, {
+      style: 'percent',
+      maximumFractionDigits: 1,
+    }),
+);
 
 /**
  * One fraction digit, and never a misleading extreme: a ratio strictly between 0 and 1 is kept
  * within %0,1–%99,9, so 0.9996 is not "%100" and 0.0004 is not "%0".
  */
 export function percent(r: number): string {
-  return percentFormatter.format(r > 0 && r < 1 ? Math.min(Math.max(r, 0.001), 0.999) : r);
+  return percentFormatter().format(r > 0 && r < 1 ? Math.min(Math.max(r, 0.001), 0.999) : r);
 }
 
 /** Sport names are required by the API; a blank one still gets a visible label. */
@@ -75,12 +78,14 @@ export function noEnrollments(sports: SportEnrollmentsDto[]): boolean {
   return sports.every((s) => count(s.activeEnrollments) === 0);
 }
 
-const periodFormatter = new Intl.DateTimeFormat(LOCALE, { month: 'short', year: 'numeric' });
-/** "2026-11" → "Kas 2026". */
+const periodFormatter = perLocale(
+  (l) => new Intl.DateTimeFormat(l, { month: 'short', year: 'numeric' }),
+);
+/** "2026-11" → "Kas 2026" (Turkish) or "Nov 2026" (English). */
 export function periodLabel(period: string): string {
   const match = /^(\d{4})-(\d{2})$/.exec(period);
   return match
-    ? periodFormatter.format(new Date(Number(match[1]), Number(match[2]) - 1, 1))
+    ? periodFormatter().format(new Date(Number(match[1]), Number(match[2]) - 1, 1))
     : period;
 }
 
@@ -182,7 +187,12 @@ export function attendanceOption(
       },
     },
     xAxis: { type: 'category', boundaryGap: false, data: weeks.map(weekLabel) },
-    yAxis: { type: 'value', min: 0, max: 100, axisLabel: { formatter: (v: number) => `%${v}` } },
+    yAxis: {
+      type: 'value',
+      min: 0,
+      max: 100,
+      axisLabel: { formatter: (v: number) => formatPercent(v / 100) },
+    },
     series: [
       {
         name: text.rate,

@@ -2,6 +2,7 @@ import { HttpErrorResponse, HttpInterceptorFn, HttpRequest } from '@angular/comm
 import { inject } from '@angular/core';
 import { catchError, switchMap, throwError } from 'rxjs';
 
+import { language } from '../i18n/language';
 import { AuthService, SKIP_AUTH } from './auth.service';
 
 function withToken(request: HttpRequest<unknown>, token: string | null): HttpRequest<unknown> {
@@ -22,9 +23,14 @@ function isExpiredToken(error: HttpErrorResponse): boolean {
  * if another call already refreshed, otherwise refreshes once and retries. Only a rejected refresh
  * cookie ends the session; a network or server error during refresh is passed to the caller.
  */
-export const authInterceptor: HttpInterceptorFn = (request, next) => {
+export const authInterceptor: HttpInterceptorFn = (original, next) => {
   const auth = inject(AuthService);
-  if (request.context.get(SKIP_AUTH) || !request.url.startsWith('/api/')) {
+  if (!original.url.startsWith('/api/')) {
+    return next(original);
+  }
+  // P3-10: problem details come back in the UI language (title/detail); the error codes never change.
+  const request = original.clone({ setHeaders: { 'Accept-Language': language() } });
+  if (request.context.get(SKIP_AUTH)) {
     return next(request);
   }
 

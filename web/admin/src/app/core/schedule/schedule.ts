@@ -1,6 +1,6 @@
 import { DayOfWeek, ScheduleSlotDto } from '../../api/models';
 import { errorMessages, interpolate, ui } from '../i18n/tr';
-import { LOCALE } from '../i18n/locale';
+import { perLocale } from '../i18n/locale';
 
 /** Turkish week order (Monday first). */
 export const WEEK: readonly DayOfWeek[] = [
@@ -120,12 +120,12 @@ export function addDays(iso: string, days: number): string {
   return isoDate(new Date(y, m - 1, d + days));
 }
 
-const weekdayFormatter = new Intl.DateTimeFormat(LOCALE, { weekday: 'long' });
+const weekdayFormatter = perLocale((l) => new Intl.DateTimeFormat(l, { weekday: 'long' }));
 
 /** "Salı" for an ISO date. */
 export function weekdayName(iso: string): string {
   const [y, m, d] = iso.split('-').map(Number);
-  return weekdayFormatter.format(new Date(y, m - 1, d));
+  return weekdayFormatter().format(new Date(y, m - 1, d));
 }
 
 export function slotLabel(index: number): string {
