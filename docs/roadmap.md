@@ -128,7 +128,7 @@ Veli yalnızca **kendi çocuklarını** görür. Bu, okul izolasyonunun yanında
   - Bağlantı koptuğunda istemci yeniden bağlanır ve listeyi yeniler.
 
 ### 3.4 Raporlar (P3-F4)
-- [ ] P3-09 **Okul Admini raporları.**
+- [x] P3-09 **Okul Admini raporları.** (DEC-406 – DEC-412)
   - Devam oranı: grup, branş ve antrenör bazında, aylık.
   - Doluluk eğilimi.
   - Gelir: tahakkuk ve tahsilat, kardeş indiriminin etkisi, geciken borçlar.

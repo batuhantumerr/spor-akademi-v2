@@ -88,6 +88,7 @@ Sadece bu uygulamaya uygulanabilen maddeler listelenir (dosya yükleme, SOAP, Gr
 | 5.1.1 – 5.1.4 Sınırda pozitif doğrulama, toplu atama yok | ✅ | Her command için FluentValidation; istek kayıtları (record) sadece izinli alanları içerir; value object'ler (`Domain.UnitTests/SharedKernel/*`). |
 | 5.2 / 5.3 Çıktı kodlaması, XSS | ✅ | API sadece JSON döner; Angular şablonları varsayılan olarak kodlar (uygulama kodunda `innerHTML` / `bypassSecurityTrust*` yok). |
 | 5.3.4 SQL injection | ✅ | EF Core parametreli sorgular; ham SQL sadece `ExecuteSqlAsync` interpolasyonuyla (parametreye dönüşür, `EnrollmentLocks`, `GroupLocks`, `PlatformAdminSeed`) ve sabit `SET LOCAL lock_timeout` metniyle. |
+| 5.2 / 5.3 CSV (formül) enjeksiyonu | ✅ | P3-09 CSV dışa aktarmaları (DEC-411): `=`, `+`, `-`, `@`, sekme veya CR ile başlayan her hücreye `'` öneki, `;`/`"`/satır sonu içeren hücre tırnaklı ve tırnaklar ikili (`Application/Reports/ReportCsv.cs`). Kanıt: `Application.UnitTests/Reports/ReportCsvTests`, `IntegrationTests/Reports/ReportsTests.A_csv_cell_can_never_start_a_formula`. Dışa aktarma yalnız Okul Admini, hesap başına dakikada 10 istek, yalnız toplam veri (öğrenci adı yok), `no-store` ve `nosniff`. |
 | 5.5 Deserialization | ✅ | System.Text.Json, polimorfik tip çözümü yok; para metin olarak (DEC-066). |
 
 ### V7 Hata yönetimi ve loglama

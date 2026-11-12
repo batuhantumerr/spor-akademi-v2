@@ -1,3 +1,5 @@
+import { readFile } from 'node:fs/promises';
+
 import { BrowserContext, Page, expect, test } from '@playwright/test';
 
 import { expectNoSeriousA11yViolations } from '../support/a11y';
@@ -344,6 +346,33 @@ test('a sibling discount defined under fee rules shows on the dues list', async 
   await expect(discounted.getByTestId('list-fee')).toBeVisible();
   await expect(full.getByTestId('discount-hint')).toHaveCount(0);
   await expectNoSeriousA11yViolations(page, testInfo, 'dues-sibling-discount');
+});
+
+test('the reports page shows occupancy and revenue and downloads the revenue report as CSV', async () => {
+  // P3-09 (DEC-412): the group created above is open this month with the enrolled student.
+  const testInfo = test.info();
+  await nav('Raporlar');
+  await expect(page.getByRole('heading', { name: 'Raporlar', level: 1 })).toBeVisible();
+  await expect(page.getByRole('tab', { name: 'Devam' })).toHaveAttribute('aria-selected', 'true');
+
+  await page.getByRole('tab', { name: 'Doluluk' }).click();
+  const occupancy = page.getByTestId('occupancy-table');
+  await expect(occupancy.getByRole('rowheader', { name: names.group, exact: true })).toBeVisible();
+  await expectNoSeriousA11yViolations(page, testInfo, 'reports-occupancy');
+
+  await page.getByRole('tab', { name: 'Gelir' }).click();
+  await expect(page.getByTestId('overdue-table')).toBeVisible();
+  await expect(page.getByTestId('revenue-table')).toBeVisible();
+  await expectNoSeriousA11yViolations(page, testInfo, 'reports-revenue');
+
+  const download = page.waitForEvent('download');
+  await page.getByTestId('report-download').click();
+  const file = await download;
+  expect(file.suggestedFilename()).toMatch(/^gelir-raporu_d{4}-d{2}_d{4}-d{2}.csv$/);
+  const bytes = await readFile(await file.path());
+  // UTF-8 with a byte order mark (Excel in Turkish), semicolon separated, Turkish headers (DEC-411).
+  expect([...bytes.subarray(0, 3)]).toEqual([0xef, 0xbb, 0xbf]);
+  expect(bytes.subarray(3).toString('utf8')).toMatch(/^Ay;Liste tutarı (TL);/);
 });
 
 test('signs out; the refresh cookie is gone and a reload stays signed out', async () => {
