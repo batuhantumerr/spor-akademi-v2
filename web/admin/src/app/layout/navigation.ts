@@ -2,6 +2,7 @@ import {
   LucideBuilding,
   LucideCalendarCheck,
   LucideCalendarDays,
+  LucideChartColumn,
   LucideCreditCard,
   LucideDumbbell,
   LucideGraduationCap,
@@ -46,7 +47,12 @@ export function navigationFor(role: Role | null): NavSection[] {
       ];
     case 'SchoolAdmin':
       return [
-        { items: [{ label: ui.nav.dashboard, path: '/dashboard', icon: LucideLayoutDashboard }] },
+        {
+          items: [
+            { label: ui.nav.dashboard, path: '/dashboard', icon: LucideLayoutDashboard },
+            { label: ui.nav.reports, path: '/reports', icon: LucideChartColumn },
+          ],
+        },
         {
           title: ui.nav.setup,
           items: [

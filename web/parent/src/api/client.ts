@@ -1,5 +1,6 @@
 import createClient from 'openapi-fetch';
 import { session } from '../auth/session';
+import { getLanguage } from '../i18n/language';
 import type { paths } from './schema.gen';
 
 /**
@@ -23,14 +24,25 @@ function withToken(request: Request, token: string | null): Request {
   return new Request(request, { headers });
 }
 
+/** P3-10: problem details come back in the UI language (title/detail); error codes never change. */
+function withLanguage(request: Request): Request {
+  const headers = new Headers(request.headers);
+  headers.set('Accept-Language', getLanguage());
+  return new Request(request, { headers });
+}
+
 /**
  * Adds the in-memory access token to same-origin API calls (P3-05, like web/admin's auth interceptor). On a 401 it
  * retries with a newer token if another call already refreshed, otherwise refreshes once and retries. Only a
  * rejected refresh cookie ends the session; a network or server error during refresh goes to the caller.
  */
-export async function authFetch(request: Request): Promise<Response> {
-  const path = new URL(request.url).pathname;
-  if (!path.startsWith('/api/') || path.startsWith('/api/v1/auth/')) {
+export async function authFetch(original: Request): Promise<Response> {
+  const path = new URL(original.url).pathname;
+  if (!path.startsWith('/api/')) {
+    return fetch(original);
+  }
+  const request = withLanguage(original);
+  if (path.startsWith('/api/v1/auth/')) {
     return fetch(request);
   }
   const retry = request.clone();

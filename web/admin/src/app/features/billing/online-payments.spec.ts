@@ -4,6 +4,7 @@ import { HttpTestingController, provideHttpClientTesting } from '@angular/common
 import { signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { ActivatedRoute, Router, convertToParamMap, provideRouter } from '@angular/router';
+import { of } from 'rxjs';
 
 import { OnlinePaymentDto, OutstandingDueDto } from '../../api/models';
 import { AuthService } from '../../core/auth/auth.service';
@@ -55,6 +56,7 @@ const attempt = (overrides: Partial<OnlinePaymentDto> = {}): OnlinePaymentDto =>
   failureCode: null,
   paymentId: null,
   overpaid: false,
+  refundStatus: null,
   ...overrides,
 });
 
@@ -154,6 +156,82 @@ describe('OnlinePaymentsPage', () => {
       ...(root.querySelector('#online-filter-status') as HTMLSelectElement).options,
     ].map((o) => o.value);
     expect(options).toEqual(['', 'Created', 'Pending', 'Succeeded', 'Failed', 'Expired']);
+    backend.verify();
+  });
+
+  it('offers a refund of a succeeded attempt, with the overpayment noted, and shows the refund status', async () => {
+    const open = vi.fn().mockReturnValue({ closed: of('refundPending') });
+    const toast = { success: vi.fn(), error: vi.fn() };
+    TestBed.configureTestingModule({
+      imports: [OnlinePaymentsPage],
+      providers: providers({}, [
+        { provide: ToastService, useValue: toast },
+        { provide: Dialog, useValue: { open } },
+      ]),
+    });
+    const fixture = TestBed.createComponent(OnlinePaymentsPage);
+    const backend = TestBed.inject(HttpTestingController);
+    await settle(fixture);
+    const page = (items: OnlinePaymentDto[]) => ({
+      items,
+      page: 1,
+      pageSize: 25,
+      totalCount: items.length,
+      totalPages: 1,
+    });
+    backend
+      .expectOne((r) => r.url === '/api/v1/online-payments')
+      .flush(
+        page([
+          attempt(),
+          attempt({
+            id: 'op2',
+            status: 'Succeeded',
+            checkoutUrl: null,
+            paymentId: 'p2',
+            overpaid: true,
+          }),
+          attempt({
+            id: 'op3',
+            status: 'Succeeded',
+            checkoutUrl: null,
+            paymentId: 'p3',
+            refundStatus: 'Succeeded',
+          }),
+        ]),
+      );
+    await settle(fixture);
+
+    const root = fixture.nativeElement as HTMLElement;
+    const refundButton = (id: string) =>
+      [
+        ...(root.querySelector(`[data-testid="online-${id}"]`) as HTMLElement).querySelectorAll(
+          'button',
+        ),
+      ].find((b) => b.textContent?.trim() === ui.billing.refund);
+    expect(refundButton('op1')).toBeUndefined();
+    expect(refundButton('op3')).toBeUndefined();
+    expect(
+      root.querySelector('[data-testid="online-op3"] [data-testid="refund-status"]')?.textContent,
+    ).toContain(ui.billing.refundStatuses['Succeeded']);
+
+    refundButton('op2')!.click();
+    await settle(fixture);
+    // DEC-420: the live overpayment comes from the payment, not the attempt's flag.
+    backend.expectOne('/api/v1/payments/p2').flush({ id: 'p2', overpaidBy: tl('1250.00') });
+    await settle(fixture);
+    expect(open.mock.calls[0][1].data).toEqual({
+      payment: {
+        id: 'p2',
+        studentFirstName: 'Ayşe',
+        studentLastName: 'Yılmaz',
+        period: '2026-11',
+        amount: tl('1250.00'),
+      },
+      overpaidBy: tl('1250.00'),
+    });
+    expect(toast.success).toHaveBeenCalledWith(ui.billing.refundPending);
+    backend.expectOne((r) => r.url === '/api/v1/online-payments').flush(page([]));
     backend.verify();
   });
 });

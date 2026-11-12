@@ -60,6 +60,8 @@ internal sealed class PaymentConfiguration : IEntityTypeConfiguration<Payment>
         builder.HasIndex(p => p.OnlinePaymentId).IsUnique().HasFilter("online_payment_id IS NOT NULL").HasDatabaseName(OnlinePaymentIndex);
         // Only the online flow sets it, and only for the Online method.
         builder.ToTable(t => t.HasCheckConstraint("ck_payments_online", "(method = 'Online') = (online_payment_id IS NOT NULL)"));
+        // P3-13 (DEC-417): only an online payment's money is returned through the provider.
+        builder.ToTable(t => t.HasCheckConstraint("ck_payments_refunded", "status <> 'Refunded' OR method = 'Online'"));
         builder.Ignore(p => p.DomainEvents);
     }
 }
@@ -98,6 +100,12 @@ internal sealed class PaymentRepository(AppDbContext db) : IPaymentRepository
         if (filter.Status is { } status)
         {
             query = query.Where(p => p.Status == status);
+        }
+
+        if (filter.Statuses is { } statuses)
+        {
+            var allowed = statuses.Distinct().ToList();
+            query = query.Where(p => allowed.Contains(p.Status));
         }
 
         var total = await query.CountAsync(cancellationToken);

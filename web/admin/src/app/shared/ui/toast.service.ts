@@ -135,7 +135,7 @@ export class ToastService implements OnDestroy {
           <button
             type="button"
             class="text-muted-foreground hover:text-foreground"
-            [attr.aria-label]="closeLabel"
+            [attr.aria-label]="common.close"
             (click)="toasts.dismiss(toast.id)"
           >
             <svg lucideX class="size-4"></svg>
@@ -158,7 +158,7 @@ export class ToastService implements OnDestroy {
             <button
               type="button"
               class="text-muted-foreground hover:text-foreground"
-              [attr.aria-label]="closeLabel"
+              [attr.aria-label]="common.close"
               (click)="toasts.dismiss(toast.id)"
             >
               <svg lucideX class="size-4"></svg>
@@ -171,7 +171,8 @@ export class ToastService implements OnDestroy {
 })
 export class ToastsComponent {
   protected readonly toasts = inject(ToastService);
-  protected readonly closeLabel = ui.common.close;
+  // A section view, not the string, so the label follows a language switch (DEC-426).
+  protected readonly common = ui.common;
   protected readonly errors = computed(() =>
     this.toasts.toasts().filter((t) => t.kind === 'error'),
   );

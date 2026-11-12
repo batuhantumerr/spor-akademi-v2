@@ -604,6 +604,21 @@ describe('notify (P3-08)', () => {
     expect(messages()).toEqual(['Ada için ödeme alındı']);
   });
 
+  it('refund: refetches that child’s dues and payments (P3-13)', async () => {
+    await connected();
+    await notify({
+      ...base,
+      type: 'payment.refunded',
+      studentId: child().id,
+      groupId: 'g1',
+      reason: 'gizli',
+    });
+    expect(invalidatedKeys(keys).sort()).toEqual(
+      [parentKeys.dues(child().id), parentKeys.payments(child().id)].map((key) => key.join('/')).sort(),
+    );
+    expect(messages()).toEqual(['Ada için ödeme iade edildi']);
+  });
+
   it('announcement: refetches every child’s announcements', async () => {
     await connected();
     await notify({ ...base, type: 'announcement.published', groupId: 'g1', title: 'Sahte başlık' });

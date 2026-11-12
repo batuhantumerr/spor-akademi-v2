@@ -48,6 +48,7 @@ public sealed class LogPrivacyTests(DatabaseFixture database) : IdentityTest(dat
 
     /// <summary>Free text an admin might write; it can name people, so it must not reach the logs either.</summary>
     private const string CancelReason = "Saklisoyadli ailesi yanlış aya ödedi";
+    private const string RefundReason = "Velisakli hanım kaydı erken bitirdi";
 
     [Fact]
     public async Task Logs_never_contain_personal_data_passwords_or_tokens()
@@ -178,11 +179,20 @@ public sealed class LogPrivacyTests(DatabaseFixture database) : IdentityTest(dat
             start.Headers.Add("Idempotency-Key", "gizlilik-anahtari-1");
             var started = await client.SendAsync(start, ct);
             started.StatusCode.ShouldBe(HttpStatusCode.Created);
-            var checkoutUrl = (await started.Content.ReadFromJsonAsync<JsonElement>(ct)).GetProperty("checkoutUrl").GetString()!;
+            var attempt = await started.Content.ReadFromJsonAsync<JsonElement>(ct);
+            var checkoutUrl = attempt.GetProperty("checkoutUrl").GetString()!;
             var token = checkoutUrl[(checkoutUrl.IndexOf('=', StringComparison.Ordinal) + 1)..];
             (await client.PostAsJsonAsync("/api/v1/sandbox-checkout/complete", new { token, succeed = true }, ct)).StatusCode.ShouldBe(HttpStatusCode.OK);
             using var form = new FormUrlEncodedContent(new Dictionary<string, string> { ["token"] = token });
             (await client.PostAsync(new Uri("/api/v1/payment-callbacks", UriKind.Relative), form, ct)).StatusCode.ShouldNotBe(HttpStatusCode.InternalServerError);
+
+            // P3-13: the online payment is refunded with a reason naming the family; only ids and codes reach the log,
+            // and the refund e-mail (with names) goes out through the outbox.
+            var paid = await client.GetFromJsonAsync<JsonElement>($"/api/v1/online-payments/{attempt.GetProperty("id").GetGuid()}", ct);
+            using var refund = new HttpRequestMessage(HttpMethod.Post, new Uri($"/api/v1/payments/{paid.GetProperty("paymentId").GetGuid()}/refund", UriKind.Relative));
+            refund.Content = JsonContent.Create(new { reason = RefundReason });
+            refund.Headers.Add("Idempotency-Key", "gizlilik-iadesi-1");
+            (await client.SendAsync(refund, ct)).StatusCode.ShouldBe(HttpStatusCode.OK);
         }
 
         while (await processor.ProcessBatchAsync(ct) > 0)
@@ -218,6 +228,9 @@ public sealed class LogPrivacyTests(DatabaseFixture database) : IdentityTest(dat
         events.ShouldContain(e => e.Contains("RecordPaymentCommand", StringComparison.Ordinal));
         events.ShouldContain(e => e.Contains("StartOnlinePaymentCommand", StringComparison.Ordinal));
         events.ShouldContain(e => e.Contains("ApplyProviderStateCommand", StringComparison.Ordinal));
+        events.ShouldContain(e => e.Contains("RequestRefundCommand", StringComparison.Ordinal));
+        events.ShouldContain(e => e.Contains("ApplyRefundResultCommand", StringComparison.Ordinal));
+        events.ShouldContain(e => e.Contains("e-mailed to 1 recipients", StringComparison.Ordinal));
         events.ShouldContain(e => e.Contains("UploadStudentDocumentCommand", StringComparison.Ordinal) && e.Contains("Document.UnsupportedType", StringComparison.Ordinal));
 
         string[] forbidden =
@@ -228,7 +241,7 @@ public sealed class LogPrivacyTests(DatabaseFixture database) : IdentityTest(dat
             BirthDate, "23.07.2015",
             "9876543", "987 65 43", "8765432", "7654321",
             OwnPassword, "Yanlis-Sifre-987", "Gizli-Yeni-Sifre-55",
-            CancelReason, "Saklisoyadli ailesi",
+            CancelReason, "Saklisoyadli ailesi", RefundReason, "kaydı erken bitirdi",
             session.AccessToken, session.RefreshToken, newSession.AccessToken, newSession.RefreshToken,
             CoachEmail, CoachFirstName, "olmayan.gizli",
             resetToken, welcomeToken, ResetPassword,

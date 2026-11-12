@@ -16,6 +16,7 @@ import { AuthService } from '../../core/auth/auth.service';
 import { errorMessages, ui } from '../../core/i18n/tr';
 import { ThemeService } from '../../core/theme/theme.service';
 import { focusFirstInvalid } from '../../shared/forms/focus-first-invalid';
+import { LanguageSwitcherComponent } from '../../shared/ui/language-switcher.component';
 
 @Component({
   selector: 'app-login-page',
@@ -30,6 +31,7 @@ import { focusFirstInvalid } from '../../shared/forms/focus-first-invalid';
     LucideShieldCheck,
     LucideSun,
     LucideTrophy,
+    LanguageSwitcherComponent,
   ],
   template: `
     <div class="grid min-h-dvh lg:grid-cols-2">
@@ -65,18 +67,21 @@ import { focusFirstInvalid } from '../../shared/forms/focus-first-invalid';
       </section>
 
       <section class="relative flex items-center justify-center p-6">
-        <button
-          type="button"
-          class="btn btn-ghost btn-icon absolute top-4 right-4"
-          [attr.aria-label]="text.theme.toggle"
-          (click)="theme.toggle()"
-        >
-          @if (theme.isDark()) {
-            <svg lucideSun></svg>
-          } @else {
-            <svg lucideMoon></svg>
-          }
-        </button>
+        <div class="absolute top-4 right-4 flex items-center gap-1">
+          <app-language-switcher />
+          <button
+            type="button"
+            class="btn btn-ghost btn-icon"
+            [attr.aria-label]="text.theme.toggle"
+            (click)="theme.toggle()"
+          >
+            @if (theme.isDark()) {
+              <svg lucideSun></svg>
+            } @else {
+              <svg lucideMoon></svg>
+            }
+          </button>
+        </div>
 
         <div class="w-full max-w-sm">
           <div class="mb-8 flex items-center gap-3 lg:hidden">

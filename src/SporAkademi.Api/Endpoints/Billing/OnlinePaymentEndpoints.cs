@@ -198,7 +198,6 @@ internal static class OnlinePaymentEndpoints
         var problem = new ProblemDetails
         {
             Status = StatusCodes.Status503ServiceUnavailable,
-            Title = OnlinePaymentErrors.ProviderUnavailable.Code,
             Type = "https://httpstatuses.io/503",
         };
         problem.Extensions["code"] = OnlinePaymentErrors.ProviderUnavailable.Code;

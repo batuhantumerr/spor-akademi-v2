@@ -23,7 +23,7 @@ public sealed class CacheRulesTests
         var sport = Sport.Create(SchoolA, "Futbol").Value;
 
         CacheInvalidationInterceptor.TagsFor(sport, SchoolA.Value).ShouldBe(
-            [TenantCacheKey.AreaTag(SchoolA, CacheArea.Dashboard), TenantCacheKey.AreaTag(SchoolA, CacheArea.Sports)],
+            [TenantCacheKey.AreaTag(SchoolA, CacheArea.Dashboard), TenantCacheKey.AreaTag(SchoolA, CacheArea.Reports), TenantCacheKey.AreaTag(SchoolA, CacheArea.Sports)],
             ignoreOrder: true);
     }
 
@@ -33,7 +33,7 @@ public sealed class CacheRulesTests
         var facility = Facility.Create(SchoolA, "Saha", FacilityType.Field, Address.Create("Cd. 1", "Kadıköy", "İstanbul").Value, null).Value;
 
         CacheInvalidationInterceptor.TagsFor(facility, null).ShouldBe(
-            [TenantCacheKey.AreaTag(SchoolA, CacheArea.Dashboard), TenantCacheKey.AreaTag(SchoolA, CacheArea.Facilities)],
+            [TenantCacheKey.AreaTag(SchoolA, CacheArea.Dashboard), TenantCacheKey.AreaTag(SchoolA, CacheArea.Reports), TenantCacheKey.AreaTag(SchoolA, CacheArea.Facilities)],
             ignoreOrder: true);
     }
 
@@ -43,24 +43,24 @@ public sealed class CacheRulesTests
         var school = School.Create("Okul", Slug.Create("okul").Value, "Europe/Istanbul", RetentionPolicy.Default).Value;
 
         CacheInvalidationInterceptor.TagsFor(school, null).ShouldBe(
-            [TenantCacheKey.AreaTag(school.Id, CacheArea.School), TenantCacheKey.AreaTag(school.Id, CacheArea.Dashboard)],
+            [TenantCacheKey.AreaTag(school.Id, CacheArea.School), TenantCacheKey.AreaTag(school.Id, CacheArea.Dashboard), TenantCacheKey.AreaTag(school.Id, CacheArea.Reports)],
             ignoreOrder: true);
     }
 
     [Fact]
-    public void Any_other_change_of_a_school_invalidates_its_dashboard_only() =>
+    public void Any_other_change_of_a_school_invalidates_its_dashboard_and_reports_only() =>
         CacheInvalidationInterceptor.TagsFor(new OtherRow(SchoolB), SchoolB.Value)
-            .ShouldBe([TenantCacheKey.AreaTag(SchoolB, CacheArea.Dashboard)]);
+            .ShouldBe([TenantCacheKey.AreaTag(SchoolB, CacheArea.Dashboard), TenantCacheKey.AreaTag(SchoolB, CacheArea.Reports)]);
 
     [Fact]
     public void The_tags_follow_the_changed_rows_school_not_the_callers() =>
         CacheInvalidationInterceptor.TagsFor(new OtherRow(SchoolB), SchoolA.Value)
-            .ShouldBe([TenantCacheKey.AreaTag(SchoolB, CacheArea.Dashboard)]);
+            .ShouldBe([TenantCacheKey.AreaTag(SchoolB, CacheArea.Dashboard), TenantCacheKey.AreaTag(SchoolB, CacheArea.Reports)]);
 
     [Fact]
     public void A_child_row_without_a_tenant_invalidates_the_requests_school_dashboard()
     {
-        CacheInvalidationInterceptor.TagsFor(new object(), SchoolA.Value).ShouldBe([TenantCacheKey.AreaTag(SchoolA, CacheArea.Dashboard)]);
+        CacheInvalidationInterceptor.TagsFor(new object(), SchoolA.Value).ShouldBe([TenantCacheKey.AreaTag(SchoolA, CacheArea.Dashboard), TenantCacheKey.AreaTag(SchoolA, CacheArea.Reports)]);
         CacheInvalidationInterceptor.TagsFor(new object(), null).ShouldBeEmpty();
     }
 

@@ -1,6 +1,7 @@
 import { useSyncExternalStore } from 'react';
 import type { components } from '../api/schema.gen';
 import { ApiError, networkError, problemFromResponse } from '../api/errors';
+import { getLanguage } from '../i18n/language';
 
 export type User = components['schemas']['UserSummary'];
 type SessionResponse = components['schemas']['SessionResponse'];
@@ -239,8 +240,11 @@ function refusalFor(user: User): string | null {
 }
 
 function send(path: string, init: RequestInit): Promise<Response> {
+  const headers = new Headers(init.headers);
+  headers.set('Accept-Language', getLanguage()); // P3-10: localized problem details
   return fetch(new URL(path, window.location.origin), {
     ...init,
+    headers,
     method: 'POST',
     credentials: 'same-origin',
   });

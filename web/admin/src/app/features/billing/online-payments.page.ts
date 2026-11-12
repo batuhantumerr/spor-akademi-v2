@@ -1,25 +1,39 @@
+import { Dialog } from '@angular/cdk/dialog';
 import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { LucideCopy, LucideCreditCard, LucideExternalLink } from '@lucide/angular';
+import { firstValueFrom } from 'rxjs';
 
 import { Api } from '../../api/api';
-import { apiV1OnlinePaymentsGet } from '../../api/functions';
-import { OnlinePaymentDto, OnlinePaymentStatus } from '../../api/models';
-import { LOCALE } from '../../core/i18n/locale';
-import { interpolate, ui } from '../../core/i18n/tr';
+import { apiV1OnlinePaymentsGet, apiV1PaymentsIdGet } from '../../api/functions';
+import { MoneyDto, OnlinePaymentDto, OnlinePaymentStatus } from '../../api/models';
+import { perLocale } from '../../core/i18n/locale';
+import { errorMessages, interpolate, ui } from '../../core/i18n/tr';
 import { displayMoney } from '../../core/money/money';
 import { PagedList } from '../../shared/data/paged-list';
 import { PageHeaderComponent } from '../../shared/ui/page-header.component';
 import { PaginationComponent } from '../../shared/ui/pagination.component';
 import { ToastService } from '../../shared/ui/toast.service';
+import {
+  REFUND_ALREADY_HANDLED,
+  REFUND_PAYMENT_TITLE_ID,
+  REFUND_PENDING,
+  RefundPaymentData,
+  RefundPaymentDialog,
+  RefundPaymentResult,
+} from './billing-dialogs';
 import { periodLabel } from './billing-format';
+import { checkRefundAtProvider } from './refund-check';
 
 type StatusFilter = OnlinePaymentStatus | '';
 
-const dateTimeFormatter = new Intl.DateTimeFormat(LOCALE, {
-  dateStyle: 'short',
-  timeStyle: 'short',
-});
+const dateTimeFormatter = perLocale(
+  (l) =>
+    new Intl.DateTimeFormat(l, {
+      dateStyle: 'short',
+      timeStyle: 'short',
+    }),
+);
 
 /** Lifecycle order (DEC-342). */
 const STATUSES: OnlinePaymentStatus[] = ['Created', 'Pending', 'Succeeded', 'Failed', 'Expired'];
@@ -148,6 +162,15 @@ export function shareableCheckoutUrl(url: string, origin: string): string {
                       text.overpaidHint
                     }}</span>
                   }
+                  @if (p.refundStatus; as refund) {
+                    <span
+                      class="badge mt-1"
+                      data-testid="refund-status"
+                      [class.badge-info]="refund !== 'Failed'"
+                      [class.badge-danger]="refund === 'Failed'"
+                      >{{ billing.refundStatuses[refund] }}</span
+                    >
+                  }
                   @if (p.failureCode) {
                     <span class="mt-1 block text-xs text-muted-foreground">{{
                       failure(p.failureCode)
@@ -184,6 +207,28 @@ export function shareableCheckoutUrl(url: string, origin: string): string {
                       text.viewPayment
                     }}</a>
                   }
+                  @if (canRefund(p)) {
+                    <button
+                      type="button"
+                      class="btn btn-ghost btn-sm hover:!bg-destructive/10 hover:!text-destructive"
+                      [attr.aria-label]="refundLabel(p)"
+                      [disabled]="busy()"
+                      (click)="refund(p)"
+                    >
+                      {{ refundAction(p) }}
+                    </button>
+                  }
+                  @if (p.paymentId && p.refundStatus === 'Pending') {
+                    <button
+                      type="button"
+                      class="btn btn-ghost btn-sm"
+                      data-testid="refund-check"
+                      [disabled]="busy()"
+                      (click)="checkRefund(p)"
+                    >
+                      {{ billing.refundCheck }}
+                    </button>
+                  }
                 </td>
               </tr>
             }
@@ -205,12 +250,14 @@ export class OnlinePaymentsPage {
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
   private readonly toasts = inject(ToastService);
+  private readonly dialog = inject(Dialog);
 
   protected readonly text = ui.onlinePayments;
   protected readonly billing = ui.billing;
   protected readonly table = ui.table;
   protected readonly common = ui.common;
   protected readonly statuses = STATUSES;
+  protected readonly busy = signal(false);
   protected readonly status = signal<StatusFilter>('');
   protected readonly enrollmentId = signal(
     this.route.snapshot.queryParamMap.get('enrollmentId') ?? '',
@@ -240,7 +287,7 @@ export class OnlinePaymentsPage {
   }
 
   protected dateTime(iso: string): string {
-    return dateTimeFormatter.format(new Date(iso));
+    return dateTimeFormatter().format(new Date(iso));
   }
 
   protected expires(iso: string): string {
@@ -269,6 +316,87 @@ export class OnlinePaymentsPage {
       this.toasts.success(this.text.linkCopied);
     } catch {
       this.toasts.error(interpolate(this.text.copyFailed, { url: link }));
+    }
+  }
+
+  /** P3-13: a succeeded attempt whose payment has no refund in progress or done; after a failed one, the retry. */
+  protected canRefund(p: OnlinePaymentDto): boolean {
+    return (
+      p.status === 'Succeeded' &&
+      !!p.paymentId &&
+      p.refundStatus !== 'Pending' &&
+      p.refundStatus !== 'Succeeded'
+    );
+  }
+
+  protected refundAction(p: OnlinePaymentDto): string {
+    return p.refundStatus === 'Failed' ? this.billing.refundRetry : this.billing.refund;
+  }
+
+  protected refundLabel(p: OnlinePaymentDto): string {
+    return interpolate(this.billing.refundLabel, {
+      action: this.refundAction(p),
+      student: `${p.studentFirstName} ${p.studentLastName}`,
+      period: periodLabel(p.period),
+    });
+  }
+
+  /** The attempt carries what the dialog shows; the refund is of its recorded payment. */
+  protected async refund(p: OnlinePaymentDto): Promise<void> {
+    if (this.busy() || !p.paymentId) {
+      return;
+    }
+    this.busy.set(true);
+    try {
+      const data: RefundPaymentData = {
+        payment: {
+          id: p.paymentId,
+          studentFirstName: p.studentFirstName,
+          studentLastName: p.studentLastName,
+          period: p.period,
+          amount: p.amount,
+        },
+        // DEC-420: the due's live overpayment, from the payment itself; without it the generic text is shown.
+        overpaidBy: await this.overpaidByOf(p.paymentId),
+      };
+      const ref = this.dialog.open<RefundPaymentResult>(RefundPaymentDialog, {
+        data,
+        ariaLabelledBy: REFUND_PAYMENT_TITLE_ID,
+        backdropClass: ['bg-slate-900/60'],
+      });
+      const result = await firstValueFrom(ref.closed);
+      if (result === REFUND_PENDING) {
+        this.toasts.success(this.billing.refundPending);
+      } else if (result === REFUND_ALREADY_HANDLED) {
+        this.toasts.error(errorMessages['Refund.InProgress']);
+      } else if (result) {
+        this.toasts.success(this.billing.refunded);
+      }
+      await this.list.load();
+    } finally {
+      this.busy.set(false);
+    }
+  }
+
+  /** DEC-418: "Sağlayıcıda kontrol et" for a pending refund of the attempt's payment. */
+  protected async checkRefund(p: OnlinePaymentDto): Promise<void> {
+    if (this.busy() || !p.paymentId) {
+      return;
+    }
+    this.busy.set(true);
+    try {
+      await checkRefundAtProvider(this.api, this.toasts, p.paymentId);
+      await this.list.load();
+    } finally {
+      this.busy.set(false);
+    }
+  }
+
+  private async overpaidByOf(paymentId: string): Promise<MoneyDto | null> {
+    try {
+      return (await this.api.invoke(apiV1PaymentsIdGet, { id: paymentId })).overpaidBy ?? null;
+    } catch {
+      return null;
     }
   }
 
