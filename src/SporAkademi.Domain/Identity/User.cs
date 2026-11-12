@@ -52,6 +52,13 @@ public sealed class User : AggregateRoot<UserId>
     public static readonly TimeSpan RefreshTokenLifetime = TimeSpan.FromDays(7);
     public static readonly TimeSpan SessionLifetime = TimeSpan.FromDays(30);
 
+    /// <summary>
+    /// DEC-446: a rotated refresh token presented again within this time after its own rotation, while its successor is
+    /// still the unused head of the family, is a lost response being retried (reload or tab close during a refresh, a
+    /// dropped mobile response, an aborted boot request), not theft. See <see cref="RotateRefreshToken"/>.
+    /// </summary>
+    public static readonly TimeSpan RefreshTokenReuseGraceWindow = TimeSpan.FromSeconds(30);
+
     /// <summary>DEC-353: one self-service reset request per account in this window; later requests are ignored silently.</summary>
     public static readonly TimeSpan PasswordResetRequestCooldown = TimeSpan.FromMinutes(2);
 
@@ -348,7 +355,8 @@ public sealed class User : AggregateRoot<UserId>
 
     /// <summary>
     /// Exchanges an active refresh token for a new one in the same family (rotation). Presenting a token
-    /// that was already rotated is treated as theft: every token of the user is revoked (US-04).
+    /// that was already rotated is treated as theft: every token of the user is revoked (US-04, DEC-114), except for a
+    /// lost response retried within <see cref="RefreshTokenReuseGraceWindow"/> (DEC-446, <see cref="UnusedHeadWithinGrace"/>).
     /// </summary>
     public Result<RefreshToken> RotateRefreshToken(string presentedHash, string newHash, DateTimeOffset now)
     {
@@ -360,6 +368,11 @@ public sealed class User : AggregateRoot<UserId>
 
         if (current.ReplacedByTokenId is not null)
         {
+            if (UnusedHeadWithinGrace(current, now) is { } head)
+            {
+                return Result.Success(ReissueAfterLostResponse(current, head, newHash, now));
+            }
+
             RevokeAllRefreshTokens(now);
             return Result.Failure<RefreshToken>(AuthErrors.SessionExpired);
         }
@@ -512,6 +525,41 @@ public sealed class User : AggregateRoot<UserId>
         var token = RefreshToken.Issue(Id, refreshTokenHash, Guid.CreateVersion7(), now, now + SessionLifetime);
         _refreshTokens.Add(token);
         return token;
+    }
+
+    /// <summary>
+    /// DEC-446: returns the successor of a rotated token when presenting that token again is a benign retry: the token was
+    /// rotated less than <see cref="RefreshTokenReuseGraceWindow"/> ago (measured from its own rotation, which never moves,
+    /// so retries cannot stretch the window) and its successor is still the unused (not rotated), unrevoked, unexpired
+    /// head of the same family. An unused successor means the response that carried it most likely never arrived. If the
+    /// successor was itself rotated, the chain moved on and the stale token is held by someone else: that stays theft.
+    /// A revoked family (logout, password change, deactivation) never qualifies.
+    /// </summary>
+    private RefreshToken? UnusedHeadWithinGrace(RefreshToken presented, DateTimeOffset now)
+    {
+        if (presented.RevokedAt is not { } rotatedAt || now - rotatedAt >= RefreshTokenReuseGraceWindow)
+        {
+            return null;
+        }
+
+        var head = _refreshTokens.Find(t => t.Id == presented.ReplacedByTokenId);
+        return head is not null && head.FamilyId == presented.FamilyId && head.ReplacedByTokenId is null && head.IsActive(now)
+            ? head
+            : null;
+    }
+
+    /// <summary>
+    /// The never-delivered head is retired in favour of a fresh token in the same family. Only hashes are stored, so the
+    /// head itself cannot be handed out again. The presented token is re-pointed at the new head, so a second lost
+    /// response inside its (unchanged) window is still a retry rather than a reuse.
+    /// </summary>
+    private RefreshToken ReissueAfterLostResponse(RefreshToken presented, RefreshToken head, string newHash, DateTimeOffset now)
+    {
+        var successor = RefreshToken.Issue(Id, newHash, head.FamilyId, now, head.FamilyExpiresAt);
+        head.ReplaceWith(successor, now);
+        presented.RepointTo(successor);
+        _refreshTokens.Add(successor);
+        return successor;
     }
 
     private void RevokeAllRefreshTokens(DateTimeOffset now)

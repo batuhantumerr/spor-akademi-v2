@@ -155,6 +155,35 @@ public sealed class AuthHardeningTests(DatabaseFixture database) : IdentityTest(
     }
 
     [Fact]
+    [Trait("Story", "US-04")]
+    public async Task Concurrent_grace_replays_conflict_once_and_a_retry_still_succeeds_without_revoking()
+    {
+        // DEC-446: two tabs boot after a lost refresh response and both present the stale cookie at once.
+        var school = await SeedSchoolAsync();
+        var coach = await SeedUserAsync("coach@example.com", UserRole.Coach, school);
+        using var factory = new BarrierRefreshTokenFactory();
+        using var api = Api.WithWebHostBuilder(builder => builder.ConfigureTestServices(services =>
+            services.Replace(ServiceDescriptor.Singleton<IRefreshTokenFactory>(factory))));
+        using var client = api.CreateClient(new WebApplicationFactoryClientOptions { HandleCookies = false });
+        var otherDevice = await LoginOkAsync("coach@example.com");
+        var login = await client.PostAsJsonAsync("/api/v1/auth/login", new { email = "coach@example.com", password = OwnPassword }, TestContext.Current.CancellationToken);
+        var stale = RefreshCookieOf(login)!.Value;
+        (await RefreshWithAsync(client, stale)).StatusCode.ShouldBe(HttpStatusCode.OK); // this response is "lost"
+
+        factory.Enable(participants: 2);
+        var responses = await Task.WhenAll(RefreshWithAsync(client, stale), RefreshWithAsync(client, stale));
+        factory.Disable();
+
+        responses.Select(r => r.StatusCode).Order().ShouldBe([HttpStatusCode.OK, HttpStatusCode.Conflict]);
+        (await ErrorCodeAsync(responses.Single(r => r.StatusCode == HttpStatusCode.Conflict))).ShouldBe("Concurrency.Conflict");
+        var retry = await RefreshWithAsync(client, stale);
+        retry.StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await RefreshAsync(otherDevice.RefreshToken)).StatusCode.ShouldBe(HttpStatusCode.OK);
+        var family = (await LoadUserAsync(coach.Id)).RefreshTokens.Single(t => t.TokenHash == factory.Hash(stale)).FamilyId;
+        (await LoadUserAsync(coach.Id)).RefreshTokens.Count(t => t.FamilyId == family && t.RevokedAt is null).ShouldBe(1);
+    }
+
+    [Fact]
     [Trait("Story", "US-05")]
     public async Task Admin_reset_lifts_the_lock_ends_sessions_and_requires_a_password_change()
     {
@@ -237,6 +266,8 @@ public sealed class AuthHardeningTests(DatabaseFixture database) : IdentityTest(
         private Barrier? _barrier;
 
         public void Enable(int participants) => _barrier = new Barrier(participants);
+
+        public void Disable() => _barrier = null;
 
         public NewRefreshToken Create()
         {

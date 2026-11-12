@@ -58,6 +58,83 @@ public sealed class RefreshTokenTests
     }
 
     [Fact]
+    public void Replaying_a_rotated_token_within_the_grace_window_reissues_in_the_same_family()
+    {
+        // DEC-446: the response carrying h2 was lost, so the client presents h1 again a few seconds later.
+        var (user, first) = LoggedIn();
+        var otherDevice = user.CompleteLogin("other", Now).Value;
+        var lost = user.RotateRefreshToken("h1", "h2", Now.AddMinutes(20)).Value;
+        var retry = Now.AddMinutes(20).AddSeconds(10);
+
+        var reissued = user.RotateRefreshToken("h1", "h3", retry).Value;
+
+        reissued.TokenHash.ShouldBe("h3");
+        reissued.FamilyId.ShouldBe(first.FamilyId);
+        reissued.FamilyExpiresAt.ShouldBe(first.FamilyExpiresAt);
+        reissued.IsActive(retry).ShouldBeTrue();
+        lost.IsActive(retry).ShouldBeFalse();
+        lost.ReplacedByTokenId.ShouldBe(reissued.Id);
+        first.ReplacedByTokenId.ShouldBe(reissued.Id);
+        first.RevokedAt.ShouldBe(Now.AddMinutes(20));
+        otherDevice.IsActive(retry).ShouldBeTrue();
+    }
+
+    [Fact]
+    public void A_second_lost_response_within_the_original_window_is_still_a_retry()
+    {
+        var (user, _) = LoggedIn();
+        user.RotateRefreshToken("h1", "h2", Now).IsSuccess.ShouldBeTrue();
+        user.RotateRefreshToken("h1", "h3", Now.AddSeconds(5)).IsSuccess.ShouldBeTrue();
+
+        var again = user.RotateRefreshToken("h1", "h4", Now.AddSeconds(29));
+
+        again.IsSuccess.ShouldBeTrue();
+        user.RefreshTokens.Count(t => t.IsActive(Now.AddSeconds(29))).ShouldBe(1);
+    }
+
+    [Fact]
+    public void The_grace_window_is_measured_from_the_original_rotation_and_ends_after_thirty_seconds()
+    {
+        var (user, _) = LoggedIn();
+        var otherDevice = user.CompleteLogin("other", Now).Value;
+        user.RotateRefreshToken("h1", "h2", Now).IsSuccess.ShouldBeTrue();
+        user.RotateRefreshToken("h1", "h3", Now.AddSeconds(20)).IsSuccess.ShouldBeTrue();
+
+        // Retrying at second 20 did not move the window: second 30 is past it.
+        user.RotateRefreshToken("h1", "h4", Now + User.RefreshTokenReuseGraceWindow).Error.ShouldBe(AuthErrors.SessionExpired);
+
+        otherDevice.RevokedAt.ShouldNotBeNull();
+        user.RefreshTokens.ShouldAllBe(t => t.RevokedAt != null);
+    }
+
+    [Fact]
+    public void Replaying_a_token_whose_successor_was_already_used_revokes_everything_even_within_the_window()
+    {
+        // The successor was rotated, so whoever holds the chain received it; a second holder of the old token is theft.
+        var (user, _) = LoggedIn();
+        var otherDevice = user.CompleteLogin("other", Now).Value;
+        user.RotateRefreshToken("h1", "h2", Now).IsSuccess.ShouldBeTrue();
+        user.RotateRefreshToken("h2", "h3", Now.AddSeconds(2)).IsSuccess.ShouldBeTrue();
+
+        user.RotateRefreshToken("h1", "h4", Now.AddSeconds(5)).Error.ShouldBe(AuthErrors.SessionExpired);
+
+        otherDevice.IsActive(Now.AddSeconds(5)).ShouldBeFalse();
+        user.RefreshTokens.ShouldAllBe(t => t.RevokedAt != null);
+    }
+
+    [Fact]
+    public void Replaying_a_rotated_token_of_a_logged_out_family_gets_no_grace()
+    {
+        var (user, _) = LoggedIn();
+        user.RotateRefreshToken("h1", "h2", Now).IsSuccess.ShouldBeTrue();
+        user.RevokeRefreshToken("h2", Now.AddSeconds(1));
+
+        user.RotateRefreshToken("h1", "h3", Now.AddSeconds(2)).Error.ShouldBe(AuthErrors.SessionExpired);
+
+        user.RefreshTokens.ShouldNotContain(t => t.TokenHash == "h3");
+    }
+
+    [Fact]
     public void A_token_revoked_by_logout_is_rejected_without_revoking_other_sessions()
     {
         var (user, _) = LoggedIn();
