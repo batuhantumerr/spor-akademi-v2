@@ -17,6 +17,8 @@ export default defineConfig({
     proxy: {
       '/api': api,
       '/health': api,
+      // P3-08: the notifications hub (SignalR negotiate over HTTP, then a WebSocket).
+      '/hubs': { ...api, ws: true },
     },
   },
   preview: {
