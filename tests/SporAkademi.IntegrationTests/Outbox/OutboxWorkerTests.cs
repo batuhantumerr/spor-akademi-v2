@@ -30,6 +30,12 @@ public sealed class OutboxWorkerTests(DatabaseFixture database) : OutboxTest(dat
         }
 
         Probe.Deliveries.ShouldHaveSingleItem();
+        // The handler runs before the processor commits the message as processed; give the commit a moment.
+        for (var wait = 0; wait < 40 && (await SingleMessageAsync()).ProcessedAt is null; wait++)
+        {
+            await Task.Delay(TimeSpan.FromMilliseconds(50), Ct);
+        }
+
         (await SingleMessageAsync()).ProcessedAt.ShouldNotBeNull();
     }
 }

@@ -8,6 +8,7 @@ public static class RealtimeEventTypes
     public const string AnnouncementPublished = "announcement.published";
     public const string AttendanceRecorded = "attendance.recorded";
     public const string PaymentRecorded = "payment.recorded";
+    public const string PaymentRefunded = "payment.refunded";
 }
 
 /// <summary>

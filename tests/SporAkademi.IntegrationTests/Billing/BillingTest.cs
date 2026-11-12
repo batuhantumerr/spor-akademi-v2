@@ -95,4 +95,45 @@ public abstract class BillingTest(DatabaseFixture database) : EnrollmentsTest(da
         response.StatusCode.ShouldBe(HttpStatusCode.Created);
         return await BodyOf(response);
     }
+
+    /// <summary>
+    /// P2-F1: pays a due online end to end: starts the attempt, the payer pays on the Fake sandbox page (which also sends
+    /// the provider's webhook). Returns the online payment and the recorded payment.
+    /// </summary>
+    protected async Task<(Guid OnlinePayment, Guid Payment)> PayOnlineAsync(Guid enrollmentId, string period = "2027-01", HttpClient? client = null)
+    {
+        var started = await StartOnlineOkAsync(enrollmentId, period, client: client);
+        var url = started.GetProperty("checkoutUrl").GetString()!;
+        var token = url[(url.IndexOf("token=", StringComparison.Ordinal) + "token=".Length)..];
+        using (var payer = Api.CreateClient())
+        {
+            (await payer.PostAsJsonAsync("/api/v1/sandbox-checkout/complete", new { token, succeed = true }, Ct)).StatusCode.ShouldBe(HttpStatusCode.OK);
+        }
+
+        var paid = await (client ?? Admin).GetFromJsonAsync<JsonElement>($"/api/v1/online-payments/{IdOf(started)}", Ct);
+        paid.GetProperty("status").GetString().ShouldBe("Succeeded");
+        return (IdOf(started), paid.GetProperty("paymentId").GetGuid());
+    }
+
+    /// <summary>P3-13: refunds a payment with a reason and an <c>Idempotency-Key</c> (none when <paramref name="key"/> is null).</summary>
+    protected async Task<HttpResponseMessage> RefundAsync(Guid paymentId, string? reason, string? key, HttpClient? client = null)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Post, new Uri($"/api/v1/payments/{paymentId}/refund", UriKind.Relative))
+        {
+            Content = JsonContent.Create(new { reason }),
+        };
+        if (key is not null)
+        {
+            request.Headers.Add("Idempotency-Key", key);
+        }
+
+        return await (client ?? Admin).SendAsync(request, Ct);
+    }
+
+    protected async Task<JsonElement> RefundOkAsync(Guid paymentId, string reason = "Kayıt erken bitti", HttpClient? client = null)
+    {
+        var response = await RefundAsync(paymentId, reason, $"iade-{Guid.NewGuid():N}", client);
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        return await BodyOf(response);
+    }
 }

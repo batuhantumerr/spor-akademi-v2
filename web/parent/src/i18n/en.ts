@@ -138,6 +138,8 @@ export const enText: ParentText = {
     title: 'Payments',
     empty: 'No payments recorded.',
     methods: { Cash: 'Cash', BankTransfer: 'Bank transfer', Online: 'Online' },
+    refunded: 'Refunded',
+    refundedOn: 'Refunded to card: {date}',
     more: 'Show more',
   },
   announcements: {
@@ -201,6 +203,7 @@ export const enText: ParentText = {
     yourChild: 'Your child',
     announcement: 'New announcement published',
     payment: 'Payment received for {name}',
+    refund: 'Payment refunded for {name}',
     attendanceUpdated: 'Attendance updated for {name}',
     attendanceToday: {
       Present: '{name} attended training today',

@@ -12,3 +12,8 @@ export function periodLabel(period: string): string {
   }
   return periodFormatter().format(new Date(Number(match[1]), Number(match[2]) - 1, 1));
 }
+
+/** A unique key per user action (DEC-341, DEC-419); the API refuses a reused key with another body. */
+export function newIdempotencyKey(): string {
+  return crypto.randomUUID();
+}

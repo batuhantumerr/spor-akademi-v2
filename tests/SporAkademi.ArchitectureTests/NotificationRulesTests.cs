@@ -15,6 +15,7 @@ public sealed class NotificationRulesTests
     private static readonly string[] Senders =
     [
         "SporAkademi.Application.Billing.SendDuesReminderEmail",
+        "SporAkademi.Application.Billing.SendPaymentRefundedEmail",
         "SporAkademi.Application.Identity.Passwords.PasswordLinkMailer",
     ];
 

@@ -117,3 +117,22 @@ internal sealed class NotifyPaymentRecorded(IStudentParentAccounts parents, IRea
         await notifier.NotifyUsersAsync(tenant, recipients, notice, cancellationToken);
     }
 }
+
+/// <summary>P3-13: a refunded payment, to that child's parents only (the parent app reloads dues and payments).</summary>
+internal sealed class NotifyPaymentRefunded(IStudentParentAccounts parents, IRealtimeNotifier notifier) : IOutboxMessageHandler<PaymentRefundedMessage>
+{
+    public async Task Handle(PaymentRefundedMessage message, OutboxMessageContext context, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(message);
+        ArgumentNullException.ThrowIfNull(context);
+        var tenant = RealtimeRecipients.TenantOf(context);
+        var recipients = await RealtimeRecipients.ParentsOfAsync(parents, [StudentId.From(message.StudentId)], cancellationToken);
+        if (recipients.Count == 0)
+        {
+            return;
+        }
+
+        var notice = new RealtimeEvent(RealtimeEventTypes.PaymentRefunded, message.PaymentId, GroupId: message.GroupId, StudentId: message.StudentId);
+        await notifier.NotifyUsersAsync(tenant, recipients, notice, cancellationToken);
+    }
+}

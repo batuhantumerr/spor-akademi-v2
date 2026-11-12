@@ -21,10 +21,16 @@ public enum PaymentMethod
     Online,
 }
 
+/// <summary>
+/// Only <see cref="Recorded"/> payments count toward a due. <see cref="Cancelled"/> is a bookkeeping correction of a
+/// manual entry; <see cref="Refunded"/> (P3-13, DEC-416) is an online payment whose money the provider returned. Both
+/// stay visible and are excluded from every total the same way.
+/// </summary>
 public enum PaymentStatus
 {
     Recorded,
     Cancelled,
+    Refunded,
 }
 
 /// <summary>A payment was recorded, by hand or online (P3-08: the student's parents are told after commit).</summary>
@@ -146,6 +152,20 @@ public sealed class Payment : AggregateRoot<PaymentId>, ITenantScoped
         return payment;
     }
 
+    /// <summary>
+    /// The provider returned the money of this online payment (P3-13, DEC-417); only <see cref="PaymentRefund"/> calls it,
+    /// in the transaction that stores the provider's confirmation. From then on the payment no longer counts toward the due.
+    /// </summary>
+    internal void MarkRefunded()
+    {
+        if (Method != PaymentMethod.Online || Status != PaymentStatus.Recorded)
+        {
+            throw new InvalidOperationException("Only a recorded online payment can be refunded.");
+        }
+
+        Status = PaymentStatus.Refunded;
+    }
+
     /// <summary>Cancels a wrong entry with a reason; who and when are kept. The amount and the rest never change.</summary>
     public Result Cancel(string reason, UserId cancelledBy, DateTimeOffset now)
     {
@@ -157,7 +177,7 @@ public sealed class Payment : AggregateRoot<PaymentId>, ITenantScoped
         }
 
         // DEC-346: the money of an online payment was really taken; cancelling it here would reopen the due for a
-        // second charge. Refunds go through the provider (not in P2-F1).
+        // second charge. Its money is returned by a refund through the provider instead (P3-13, PaymentRefund).
         if (Method == PaymentMethod.Online)
         {
             return Result.Failure(PaymentErrors.OnlineNotCancellable);
