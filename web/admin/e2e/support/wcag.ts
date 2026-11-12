@@ -335,11 +335,16 @@ export async function applyVariant(page: Page, variant: Variant): Promise<void> 
 
 /** Waits until finite animations and transitions are over, so colours and positions are final. */
 export async function settle(page: Page): Promise<void> {
-  await page.waitForFunction(() =>
-    document
-      .getAnimations()
-      .every((a) => a.playState !== 'running' || a.effect?.getTiming().iterations === Infinity),
-  );
+  // Twice, a moment apart: a list that finishes reloading just after the first check re-enables its buttons, which
+  // then fade in (P3-11: a half-faded button reads as low contrast).
+  for (let check = 0; check < 2; check++) {
+    if (check > 0) await page.waitForTimeout(250);
+    await page.waitForFunction(() =>
+      document
+        .getAnimations()
+        .every((a) => a.playState !== 'running' || a.effect?.getTiming().iterations === Infinity),
+    );
+  }
 }
 
 interface FocusProbe {
@@ -443,8 +448,29 @@ function probeFocus(scope: string | null): FocusProbe | null {
 function horizontalOverflow(): string[] {
   const offenders: string[] = [];
   const root = document.scrollingElement ?? document.documentElement;
-  if (root.scrollWidth > root.clientWidth + 1)
+  if (root.scrollWidth > root.clientWidth + 1) {
     offenders.push(`document ${root.scrollWidth}px > ${root.clientWidth}px`);
+    // The innermost elements reaching past the viewport (the page itself scrolls, so no box clips them).
+    for (const node of Array.from(document.querySelectorAll<HTMLElement>('body *'))) {
+      const r = node.getBoundingClientRect();
+      if (r.width === 0 || r.right <= innerWidth + 1) continue;
+      if (Array.from(node.children).some((c) => c.getBoundingClientRect().right > innerWidth + 1))
+        continue;
+      // Content inside a box that clips or scrolls cannot widen the page.
+      let clipped = false;
+      for (let p = node.parentElement; p && p !== document.body; p = p.parentElement) {
+        if (getComputedStyle(p).overflowX !== 'visible') {
+          clipped = true;
+          break;
+        }
+      }
+      if (clipped) continue;
+      offenders.push(
+        `${node.tagName.toLowerCase()}.${String(node.className).split(' ').slice(0, 3).join('.')} right=${Math.round(r.right)} ${getComputedStyle(node).position}`,
+      );
+      if (offenders.length > 6) return offenders;
+    }
+  }
   const main = document.querySelector('main');
   if (main && main.scrollWidth > main.clientWidth + 1) {
     offenders.push(`main ${main.scrollWidth}px > ${main.clientWidth}px`);
