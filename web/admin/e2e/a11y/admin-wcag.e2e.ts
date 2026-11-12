@@ -192,6 +192,22 @@ test('admin panel screens meet WCAG 2.2 AA', async ({ page, context, browser }, 
       await audit.screen(page, 'online-payments');
     });
 
+    await test.step('reports: attendance, occupancy and revenue (P3-09)', async () => {
+      await nav(page, 'Raporlar');
+      await expect(page.getByRole('heading', { level: 1, name: 'Raporlar' })).toBeVisible();
+      // The tab stays selected across the language, theme and width switches (page state, not the URL).
+      for (const [tab, name] of [
+        ['Devam', 'reports-attendance'],
+        ['Doluluk', 'reports-occupancy'],
+        ['Gelir', 'reports-revenue'],
+      ] as const) {
+        await page.getByRole('tab', { name: tab }).click();
+        await expect(page.getByRole('tab', { name: tab })).toHaveAttribute('aria-selected', 'true');
+        await expect(page.getByRole('tabpanel')).toBeVisible();
+        await audit.screen(page, name);
+      }
+    });
+
     for (const [label, name] of [
       ['Veri saklama', 'settings-data-retention'],
       ['Aidat kuralları', 'settings-billing-rules'],

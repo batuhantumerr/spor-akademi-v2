@@ -1,8 +1,8 @@
 import { DOCUMENT } from '@angular/common';
 import { DestroyRef, Injectable, inject } from '@angular/core';
 
-/** Horizontally scrolling table boxes (`.table-shell` in styles.css). */
-const SELECTOR = '.table-shell';
+/** Horizontally scrolling boxes: `.table-shell` (styles.css) and plain `overflow-x-auto` wrappers (reports, charts). */
+const SELECTOR = '.table-shell, .overflow-x-auto';
 const FOCUSABLE =
   'a[href], button:not([disabled]), input, select, textarea, [tabindex]:not([tabindex="-1"])';
 

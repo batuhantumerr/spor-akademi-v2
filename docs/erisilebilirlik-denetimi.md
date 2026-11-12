@@ -35,6 +35,7 @@ Her biri 8 varyantta (TR/EN × açık/koyu × masaüstü/360 px) taranır. Klavy
 | Admin | Yoklama (aylık tablo) | |
 | Admin | Ödemeler, iade diyaloğu | P3-13 iade penceresi |
 | Admin | Ödenmemiş borçlar, Online ödemeler | |
+| Admin | Raporlar: Devam, Doluluk, Gelir sekmeleri | P3-09; grafik, tablo ve CSV düğmesi |
 | Admin | Ayarlar: Veri saklama, Aidat kuralları | |
 | Admin (antrenör, telefon) | Şifre değiştirme (ilk giriş), Bugün, Yoklama al, Gruplarım, Kadro, Duyurular | |
 | Veli | Şifremi unuttum, şifre belirleme (davet bağlantısı), Giriş | Oturumsuz |
@@ -42,7 +43,7 @@ Her biri 8 varyantta (TR/EN × açık/koyu × masaüstü/360 px) taranır. Klavy
 | Veli | Sandbox ödeme sayfası, ödeme sonucu | Fake sağlayıcı |
 | Veli | Çevrimdışı durumu | Service worker kabuğu, ağ yok |
 
-Toplam: admin 27 ekran ve 212 axe taraması, veli 8 ekran ve 64 axe taraması. Raporlar ekranları (P3-09, PR #103) bu PR açıldığında `main`'de değildi; o PR birleşince aynı yardımcıyla listeye eklenecek (bölüm 5).
+Toplam: admin 30 ekran ve 236 axe taraması, veli 8 ekran ve 64 axe taraması. Raporlar (P3-09) bu dal açıkken birleşti ve denetime eklendi.
 
 ## 3. Araçlar ve sürümler
 
@@ -76,7 +77,7 @@ Durum: **Geçti** (bulgu yok), **Düzeltildi** (bu PR'da bulundu ve düzeltildi)
 | 2.4.2 Sayfa başlığı | Geçti | Her rotada "<sayfa> · Spor Akademi", dil değişince güncelleniyor. |
 | 2.4.3 Odak sırası | Düzeltildi | (1) Sayfa değişince odak tıklanan menü bağlantısında kalıyordu: artık yeni sayfanın `main` alanına geçiyor (DEC-438). (2) Diyaloğu açan düğme, sayfa diyalog boyunca devre dışı tuttuğu için kapanışta odak alamıyordu ve odak sayfa başına düşüyordu: `DialogFocusRestorer` düğme yeniden etkinleşince odağı ona veriyor (DEC-441). (3) Mobil çekmece açılınca odak kapat düğmesine gidemiyordu: `.btn`'in `transition-all`'ı `visibility`'yi de geçişliyordu ve görünmez düğme odak almıyordu. Artık `transition` (DEC-441). (4) Veli uygulamasında dil değişimi sayfayı yeniden kurduğu için odak sayfa başına düşüyordu: artık dil seçicisine dönüyor (DEC-439). |
 | 2.4.6 Başlıklar ve etiketler | Geçti | axe; her sayfada tek `h1`. |
-| 2.4.7 Görünür odak | Düzeltildi | Odak halkası artık tam renk ve 2 px boşluklu. Klavye turu her durakta görünür değişiklik buldu. Tek istisna yerel ay/tarih alanının Chromium'un çizdiği takvim düğmesi (bölüm 5). |
+| 2.4.7 Görünür odak | Düzeltildi | Odak halkası artık tam renk ve 2 px boşluklu; raporlar sekmelerinde de. Klavye turu her durakta görünür değişiklik buldu. Tek istisna yerel ay/tarih alanının Chromium'un çizdiği takvim düğmesi (bölüm 5). |
 | 2.4.11 Odak gizlenmez (en az) | Düzeltildi | Veli uygulamasında yapışkan başlık ve alt sekme çubuğu için `scroll-padding`. Antrenörün sabit "kaydet" çubuğu için `main:has(.save-bar)` alt boşluğu. Admin bildirimleri (toast) odaklı öğenin üstüne gelebiliyordu: Escape artık bütün bildirimleri kapatıyor (diyalog açıkken Escape diyaloğundur). Klavye turunda tamamen örtülen durak yok. |
 | 2.5.3 Addaki etiket | Düzeltildi | Veli uygulamasında İngilizce "Pay online" düğmesinin erişilebilir adı görünen metni içermiyordu ("Pay the … monthly fee online"). Ad artık "Pay online: …". |
 | 2.5.7 Sürükleme hareketleri | Uygulanmaz | Sürükleyerek yapılan işlem yok (sıralama, kaydırıcı, grafik yakınlaştırma yok). |
@@ -93,19 +94,18 @@ Durum: **Geçti** (bulgu yok), **Düzeltildi** (bu PR'da bulundu ve düzeltildi)
 | 4.1.2 Ad, rol, değer | Geçti | axe. Diyaloglarda `aria-labelledby`, menü düğmesinde `aria-expanded`/`aria-controls`. |
 | 4.1.3 Durum mesajları | Düzeltildi | Bildirimler: başarı ve bilgi tek `role="status"` canlı bölgede, hatalar `role="alert"`. Veli uygulamasının anlık bildirimleri `aria-live="polite"`. Eklenen: sayfa değişince yeni başlık kibar bir canlı bölgeyle duyuruluyor (iki uygulamada, DEC-438). |
 
-Grafikler (P3-09'dan önceki panel grafikleri): ECharts canvas'ı `role="img"` ve dil izleyen özetle sunuluyor; her grafiğin altında "Tabloyu göster" ile aynı verinin tablosu açılıyor. Seri renkleri iki temada karta karşı 3:1'in üstünde. Bilgi yalnız renge bağlı değil, eksen etiketleri ve tablo var.
+Grafikler (panel ve raporlar): ECharts canvas'ı `role="img"` ve dil izleyen özetle sunuluyor; her grafiğin altında "Tabloyu göster" ile aynı verinin tablosu açılıyor. Seri renkleri iki temada karta karşı 3:1'in üstünde. Bilgi yalnız renge bağlı değil, eksen etiketleri ve tablo var.
 
 ## 5. Açık kalanlar
 
 | # | Konu | Gerekçe | Takip |
 | --- | --- | --- | --- |
 | 1 | Gerçek ekran okuyucuyla elle kontrol (NVDA + Firefox/Chrome, VoiceOver iOS, TalkBack) | Agent ortamında ekran okuyucu yok. Erişilebilirlik ağacı ve canlı bölgeler test edildi, okunuş sırası ve tonlama edilmedi. | Sahip: Faz 3 geçişinden önce giriş, öğrenci kaydı (hata özeti), yoklama alma ve velinin online ödemesi için 30 dakikalık tur. |
-| 2 | Raporlar ekranları (P3-09) | PR #103 bu PR açıldığında birleşmemişti. | Birleşince `admin-wcag.e2e.ts`'e "Raporlar" adımı eklenir (aynı `audit.screen`). Grafik ve CSV düğmeleri de aynı kontrollerden geçer. |
-| 3 | Yerel ay/tarih alanı (`input type="month"`, `date`) odak göstergesi | Alanın parçalarında stil değişiyor. Chromium'un kendi çizdiği takvim düğmesi durağı sayfa stilinden okunamıyor; betik bunu minor not olarak raporluyor. | Ayrı bir Chromium betiğiyle bakıldı: alanın ay ve yıl parçalarında `:focus-visible` stili uygulanıyor; takvim düğmesinin halkası tarayıcıya ait. Gerçek cihazda madde 1 ile birlikte bakılmalı. |
-| 4 | Admin kenar çubuğu daraltma düğmesi masaüstünde kısmen başlığın altında | Yalnız 2.4.12 (AAA) notu, AA geçiyor (düğme görünür). | Düşük öncelik; kenar çubuğu tasarımı değişirse. |
-| 5 | Şifre alanında "şifreyi göster" düğmesi alanın sağ ucunu örtüyor | Bilinçli tasarım, AAA notu. | — |
-| 6 | Tutarlı yardım (3.2.6) | Yardım mekanizması yok. | Destek/iletişim bağlantısı eklenirse her sayfada aynı konumda olmalı. |
-| 7 | Firefox ve WebKit'te axe | Matris yalnız Chromium'da. Mevcut okul yöneticisi ve antrenör e2e akışları Firefox/WebKit'te serious/critical kontrolünü zaten yapıyor. | Gerek görülürse matris başka tarayıcıya genişletilir (süre yaklaşık iki katına çıkar). |
+| 2 | Yerel ay/tarih alanı (`input type="month"`, `date`) odak göstergesi | Alanın parçalarında stil değişiyor. Chromium'un kendi çizdiği takvim düğmesi durağı sayfa stilinden okunamıyor; betik bunu minor not olarak raporluyor. | Ayrı bir Chromium betiğiyle bakıldı: alanın ay ve yıl parçalarında `:focus-visible` stili uygulanıyor; takvim düğmesinin halkası tarayıcıya ait. Gerçek cihazda madde 1 ile birlikte bakılmalı. |
+| 3 | Admin kenar çubuğu daraltma düğmesi masaüstünde kısmen başlığın altında | Yalnız 2.4.12 (AAA) notu, AA geçiyor (düğme görünür). | Düşük öncelik; kenar çubuğu tasarımı değişirse. |
+| 4 | Şifre alanında "şifreyi göster" düğmesi alanın sağ ucunu örtüyor | Bilinçli tasarım, AAA notu. | — |
+| 5 | Tutarlı yardım (3.2.6) | Yardım mekanizması yok. | Destek/iletişim bağlantısı eklenirse her sayfada aynı konumda olmalı. |
+| 6 | Firefox ve WebKit'te axe | Matris yalnız Chromium'da. Mevcut okul yöneticisi ve antrenör e2e akışları Firefox/WebKit'te serious/critical kontrolünü zaten yapıyor. | Gerek görülürse matris başka tarayıcıya genişletilir (süre yaklaşık iki katına çıkar). |
 
 ## 6. Yeniden çalıştırma
 

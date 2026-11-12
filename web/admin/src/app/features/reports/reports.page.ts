@@ -124,7 +124,7 @@ const DIMENSIONS: Dimension[] = ['group', 'sport', 'coach'];
             [attr.aria-selected]="tab() === t"
             [attr.aria-controls]="'report-panel'"
             [attr.tabindex]="tab() === t ? 0 : -1"
-            class="inline-flex h-9 items-center rounded-md px-3 text-xs font-semibold focus-visible:ring-2 focus-visible:ring-primary/50 focus-visible:outline-none"
+            class="inline-flex h-9 items-center rounded-md px-3 text-xs font-semibold focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card focus-visible:outline-none"
             [class]="
               tab() === t
                 ? 'bg-primary text-primary-foreground'
