@@ -163,16 +163,21 @@ test('phase 3 exit: invitation, attendance, online payment, live announcement, t
     await expect(paymentRow.getByRole('cell', { name: 'Online', exact: true })).toBeVisible();
     await expectNoSeriousA11yViolations(admin, testInfo, 'admin-payments');
     await nav(admin, 'Ödenmemiş borçlar');
+    // Wait for the group-filtered response: until it lands the page still shows the unfiltered list.
+    const filtered = admin.waitForResponse(
+      (r) =>
+        r.url().includes('/api/v1/dues/outstanding') &&
+        r.url().includes(`groupId=${arranged.groupId}`),
+    );
     await admin.getByLabel('Grup', { exact: true }).selectOption({ label: arranged.groupName });
-    // Other projects' groups share the school, so assert on this child's row rather than the empty state.
+    await filtered;
     await expect(
-      admin
-        .getByRole('table', { name: 'Ödenmemiş borç listesi' })
-        .or(admin.getByText('Bu filtrelerde ödenmemiş borç yok.', { exact: true })),
+      admin.getByText('Bu filtrelerde ödenmemiş borç yok.', { exact: true }),
     ).toBeVisible();
-    await expect(
-      admin.getByRole('row', { name: new RegExp(arranged.childName) }),
-    ).toHaveCount(0);
+    const outstanding = await api.get<{ items: unknown[] }>(
+      `/api/v1/dues/outstanding?groupId=${arranged.groupId}&pageSize=100`,
+    );
+    expect(outstanding.items).toEqual([]);
     const recorded = await api.get<{
       items: { enrollmentId: string; method: string; status: string; amount: { amount: string } }[];
     }>(`/api/v1/payments?groupId=${arranged.groupId}&pageSize=100`);
