@@ -166,6 +166,26 @@ public sealed class RealtimeNotificationTests(DatabaseFixture database) : Realti
     }
 
     [Fact]
+    [Trait("Roadmap", "P3-13")]
+    public async Task A_refund_reaches_only_that_childs_parents_without_the_reason()
+    {
+        var (_, payment) = await PayOnlineAsync(_a.Enrollment);
+        await DeliverAsync();
+        var parentA = await ListenAsync(_a.Token);
+        var parentB = await ListenAsync(_b.Token);
+
+        await RefundOkAsync(payment, "Arda taşındı");
+        await DeliverAsync();
+
+        var notice = await parentA.WaitForAsync(OfType("payment.refunded"), Arrives);
+        Text(notice, "id").ShouldBe(payment.ToString());
+        Text(notice, "studentId").ShouldBe(_a.Student.ToString());
+        notice.GetRawText().ShouldNotContain("taşındı");
+        await Task.Delay(StaysQuiet, Ct);
+        parentB.Received.ShouldBeEmpty();
+    }
+
+    [Fact]
     public async Task Notices_go_out_only_after_commit_and_never_for_a_rolled_back_change()
     {
         var coach = await ListenAsync(Token(Ayse.Id.Value, "Coach", School.Value));

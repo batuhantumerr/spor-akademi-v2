@@ -931,6 +931,9 @@ namespace SporAkademi.Infrastructure.Migrations
                     b.HasKey("Id")
                         .HasName("pk_payments");
 
+                    b.HasAlternateKey("TenantId", "Id")
+                        .HasName("ak_payments_tenant_id_id");
+
                     b.HasIndex("OnlinePaymentId")
                         .IsUnique()
                         .HasDatabaseName("ix_payments_online_payment_id")
@@ -961,6 +964,8 @@ namespace SporAkademi.Infrastructure.Migrations
                             t.HasCheckConstraint("ck_payments_cancellation", "(status = 'Cancelled') = (cancel_reason IS NOT NULL) AND (status = 'Cancelled') = (cancelled_at IS NOT NULL) AND (status = 'Cancelled') = (cancelled_by IS NOT NULL)");
 
                             t.HasCheckConstraint("ck_payments_online", "(method = 'Online') = (online_payment_id IS NOT NULL)");
+
+                            t.HasCheckConstraint("ck_payments_refunded", "status <> 'Refunded' OR method = 'Online'");
                         });
                 });
 
@@ -1027,6 +1032,172 @@ namespace SporAkademi.Infrastructure.Migrations
                         .HasDatabaseName("ix_payment_notifications_tenant_id_online_payment_id");
 
                     b.ToTable("payment_notifications", "billing");
+                });
+
+            modelBuilder.Entity("SporAkademi.Domain.Billing.PaymentRefund", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<int>("Attempts")
+                        .HasColumnType("integer")
+                        .HasColumnName("attempts");
+
+                    b.Property<DateTimeOffset?>("CompletedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("completed_at");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid?>("CreatedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("created_by");
+
+                    b.Property<Guid>("EnrollmentId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("enrollment_id");
+
+                    b.Property<string>("FailureCode")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("failure_code");
+
+                    b.Property<string>("IdempotencyKey")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("idempotency_key");
+
+                    b.Property<DateTimeOffset?>("LastAttemptAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("last_attempt_at");
+
+                    b.Property<Guid>("OnlinePaymentId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("online_payment_id");
+
+                    b.Property<Guid>("PaymentId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("payment_id");
+
+                    b.Property<string>("Provider")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .HasColumnName("provider");
+
+                    b.Property<string>("ProviderPaymentId")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)")
+                        .HasColumnName("provider_payment_id");
+
+                    b.Property<string>("ProviderRefundId")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)")
+                        .HasColumnName("provider_refund_id");
+
+                    b.Property<string>("Reason")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("reason");
+
+                    b.Property<string>("RequestHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character(64)")
+                        .HasColumnName("request_hash")
+                        .IsFixedLength();
+
+                    b.Property<DateTimeOffset>("RequestedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("requested_at");
+
+                    b.Property<Guid>("RequestedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("requested_by");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .HasColumnName("status");
+
+                    b.Property<Guid>("StudentId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("student_id");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("tenant_id");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<Guid?>("UpdatedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("updated_by");
+
+                    b.Property<uint>("Version")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
+
+                    b.ComplexProperty(typeof(Dictionary<string, object>), "Amount", "SporAkademi.Domain.Billing.PaymentRefund.Amount#Money", b1 =>
+                        {
+                            b1.IsRequired();
+
+                            b1.Property<decimal>("Amount")
+                                .HasPrecision(12, 2)
+                                .HasColumnType("numeric(12,2)")
+                                .HasColumnName("amount");
+
+                            b1.Property<string>("Currency")
+                                .IsRequired()
+                                .HasMaxLength(3)
+                                .HasColumnType("character varying(3)")
+                                .HasColumnName("currency");
+                        });
+
+                    b.HasKey("Id")
+                        .HasName("pk_payment_refunds");
+
+                    b.HasIndex("PaymentId")
+                        .IsUnique()
+                        .HasDatabaseName("ix_payment_refunds_active_payment")
+                        .HasFilter("status IN ('Pending', 'Succeeded')");
+
+                    b.HasIndex("TenantId", "EnrollmentId")
+                        .HasDatabaseName("ix_payment_refunds_tenant_id_enrollment_id");
+
+                    b.HasIndex("TenantId", "IdempotencyKey")
+                        .IsUnique()
+                        .HasDatabaseName("ix_payment_refunds_tenant_id_idempotency_key");
+
+                    b.HasIndex("TenantId", "OnlinePaymentId")
+                        .HasDatabaseName("ix_payment_refunds_tenant_id_online_payment_id");
+
+                    b.HasIndex("TenantId", "RequestedAt")
+                        .HasDatabaseName("ix_payment_refunds_tenant_id_requested_at")
+                        .HasFilter("status = 'Pending'");
+
+                    b.HasIndex("TenantId", "PaymentId", "RequestedAt")
+                        .HasDatabaseName("ix_payment_refunds_tenant_id_payment_id_requested_at");
+
+                    b.ToTable("payment_refunds", "billing", t =>
+                        {
+                            t.HasCheckConstraint("ck_payment_refunds_amount", "amount > 0");
+
+                            t.HasCheckConstraint("ck_payment_refunds_attempts", "attempts >= 0");
+
+                            t.HasCheckConstraint("ck_payment_refunds_result", "(status = 'Succeeded') = (provider_refund_id IS NOT NULL) AND (status = 'Failed') = (failure_code IS NOT NULL) AND (status = 'Pending') = (completed_at IS NULL)");
+                        });
                 });
 
             modelBuilder.Entity("SporAkademi.Domain.Enrollments.Enrollment", b =>
@@ -2493,6 +2664,40 @@ namespace SporAkademi.Infrastructure.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired()
                         .HasConstraintName("fk_payment_notifications_online_payments_tenant_id_online_paym");
+                });
+
+            modelBuilder.Entity("SporAkademi.Domain.Billing.PaymentRefund", b =>
+                {
+                    b.HasOne("SporAkademi.Domain.Tenancy.School", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_payment_refunds_school_tenant_id");
+
+                    b.HasOne("SporAkademi.Domain.Enrollments.Enrollment", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId", "EnrollmentId")
+                        .HasPrincipalKey("TenantId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_payment_refunds_enrollment_tenant_id_enrollment_id");
+
+                    b.HasOne("SporAkademi.Domain.Billing.OnlinePayment", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId", "OnlinePaymentId")
+                        .HasPrincipalKey("TenantId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_payment_refunds_online_payments_tenant_id_online_payment_id");
+
+                    b.HasOne("SporAkademi.Domain.Billing.Payment", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId", "PaymentId")
+                        .HasPrincipalKey("TenantId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_payment_refunds_payments_tenant_id_payment_id");
                 });
 
             modelBuilder.Entity("SporAkademi.Domain.Enrollments.Enrollment", b =>

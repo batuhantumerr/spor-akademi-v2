@@ -20,8 +20,15 @@ internal sealed class IyzicoPaymentProvider(IHttpClientFactory httpClients, IOpt
     public const string HttpClientName = "iyzico";
     public const string InitializePath = "/payment/iyzipos/checkoutform/initialize/auth/ecom";
     public const string RetrievePath = "/payment/iyzipos/checkoutform/auth/ecom/detail";
+    public const string RefundPath = "/v2/payment/refund";
+
+    /// <summary>iyzico requires the refund requester's IP; a fixed placeholder, never a user's address (KVKK).</summary>
+    public const string RefundRequesterIp = "127.0.0.1";
 
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
+
+    /// <summary>Where iyzico's refund answer carries its reference, in order of preference.</summary>
+    private static readonly string[] RefundReferenceFields = ["refundHostReference", "hostReference", "paymentTransactionId"];
 
     public string Name => PaymentOptions.IyzicoName;
 
@@ -117,6 +124,50 @@ internal sealed class IyzicoPaymentProvider(IHttpClientFactory httpClients, IOpt
         return string.Equals(paymentStatus, "FAILURE", StringComparison.OrdinalIgnoreCase)
             ? new ProviderPaymentState(ProviderPaymentOutcome.Failed, conversation, null, null, ErrorCode(root, "PaymentFailed"))
             : new ProviderPaymentState(ProviderPaymentOutcome.Pending, conversation, null, null, null);
+    }
+
+    /// <summary>
+    /// P3-13 (DEC-424): iyzico's amount-based refund (<c>/v2/payment/refund</c>) of the full charge by its payment id; our
+    /// refund id is the conversation id. <c>status=success</c> is a refund; <c>status=failure</c> with an error code is a
+    /// definite refusal; a server error, timeout or unreadable answer is an unknown outcome (the request stays pending).
+    /// iyzico wants the requester's IP; a fixed placeholder is sent, never a user's address.
+    /// </summary>
+    public async Task<ProviderRefundResult> RefundAsync(RefundRequest request, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        var conversationId = request.RefundId.ToString();
+        var body = new
+        {
+            locale = "tr",
+            conversationId,
+            paymentId = request.ProviderPaymentId,
+            price = request.Amount.ToAmountString(),
+            currency = request.Amount.Currency,
+            ip = RefundRequesterIp,
+        };
+
+        using var response = await PostAsync(RefundPath, body, cancellationToken);
+        var root = response.RootElement;
+        if (root.ValueKind != JsonValueKind.Object || IyzicoProtocol.Text(root, "status").Length == 0)
+        {
+            throw new PaymentProviderException("UnreadableRefund");
+        }
+
+        if (!IsSuccess(root))
+        {
+            return ProviderRefundResult.Declined(ErrorCode(root, "RefundDeclined"));
+        }
+
+        var echoed = IyzicoProtocol.Text(root, "conversationId");
+        if (echoed.Length > 0 && !string.Equals(echoed, conversationId, StringComparison.OrdinalIgnoreCase))
+        {
+            throw new PaymentProviderException("RefundConversationMismatch");
+        }
+
+        var reference = RefundReferenceFields
+            .Select(name => IyzicoProtocol.Text(root, name))
+            .FirstOrDefault(value => value.Length > 0);
+        return ProviderRefundResult.Refunded(reference ?? $"iyzico-refund-{request.RefundId:N}");
     }
 
     public ProviderNotification? VerifyNotification(string body, IReadOnlyDictionary<string, string> headers) =>

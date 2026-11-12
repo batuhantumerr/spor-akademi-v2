@@ -174,7 +174,8 @@ internal sealed partial class RefreshTokenCleanupJob(
 /// <summary>
 /// P2-F1 (DEC-343): per school (DEC-334), open online payments older than <c>Payments:ReconcileAfter</c> are re-queried at
 /// the provider (a lost webhook still credits the due once) and open attempts past their checkout lifetime become
-/// Expired. Does nothing when online payment is disabled.
+/// Expired; refunds still pending after the same time are sent again (P3-13, DEC-418). Does nothing when online payment is
+/// disabled.
 /// </summary>
 internal sealed partial class OnlinePaymentReconcileJob(
     TenantJobRunner runner,
@@ -197,7 +198,12 @@ internal sealed partial class OnlinePaymentReconcileJob(
         var changed = 0;
         await runner.ForEachSchoolAsync(
             JobId,
-            async (services, _, ct) => changed += await services.GetRequiredService<OnlinePaymentReconciliation>().ReconcileAsync(payments.Value.ReconcileAfter, ct),
+            async (services, _, ct) =>
+            {
+                changed += await services.GetRequiredService<OnlinePaymentReconciliation>().ReconcileAsync(payments.Value.ReconcileAfter, ct);
+                // P3-13 (DEC-418): refunds whose outcome stayed unknown are sent again with the same refund id.
+                changed += await services.GetRequiredService<PaymentRefundReconciliation>().ReconcileAsync(payments.Value.ReconcileAfter, ct);
+            },
             cancellationToken);
         if (changed > 0)
         {

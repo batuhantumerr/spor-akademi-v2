@@ -160,12 +160,13 @@ internal sealed class CancelPaymentHandler(IPaymentRepository payments, ICurrent
 }
 
 /// <summary>Adds student and group names from the Students and Groups contracts, in batches.</summary>
-internal sealed class PaymentViews(IStudentDirectory students, IGroupDirectory groups)
+internal sealed class PaymentViews(IStudentDirectory students, IGroupDirectory groups, RefundViews refunds)
 {
     public async Task<IReadOnlyList<PaymentDto>> ToDtosAsync(IReadOnlyList<Payment> payments, CancellationToken cancellationToken)
     {
         var studentNames = await students.GetManyAsync([.. payments.Select(p => p.StudentId.Value).Distinct()], cancellationToken);
         var groupNames = await groups.GetManyAsync([.. payments.Select(p => p.GroupId.Value).Distinct()], cancellationToken);
+        var latestRefunds = await refunds.LatestAsync(payments.Where(p => p.Method == PaymentMethod.Online).Select(p => p.Id), cancellationToken);
         return
         [
             .. payments.Select(p =>
@@ -186,7 +187,9 @@ internal sealed class PaymentViews(IStudentDirectory students, IGroupDirectory g
                     p.Status,
                     p.CancelReason,
                     p.CancelledBy?.Value,
-                    p.CancelledAt);
+                    p.CancelledAt,
+                    p.OnlinePaymentId?.Value,
+                    latestRefunds.TryGetValue(p.Id, out var refund) ? RefundViews.ToDto(refund) : null);
             }),
         ];
     }

@@ -17,7 +17,12 @@ internal sealed class FakePaymentProvider(IOptions<PaymentOptions> options, Time
     public const string EventType = "CHECKOUT_FORM_AUTH";
 
     private readonly ConcurrentDictionary<string, FakeCheckout> _checkouts = new(StringComparer.Ordinal);
+
+    /// <summary>Refunded charges: charge id → the refund id that refunded it (a full refund happens once).</summary>
+    private readonly ConcurrentDictionary<string, string> _refunds = new(StringComparer.Ordinal);
     private int _failures;
+    private int _declines;
+    private int _refundCalls;
 
     public string Name => PaymentOptions.FakeName;
 
@@ -96,22 +101,68 @@ internal sealed class FakePaymentProvider(IOptions<PaymentOptions> options, Time
         return (webhook.ToJson(), headers);
     }
 
+    /// <summary>
+    /// P3-13 (DEC-424): refunds a charge in full. Deterministic: the same refund id answers the same success again; a
+    /// charge already refunded by another request is declined (nothing is left to refund), as is an unknown charge id or
+    /// a different amount. <see cref="FailNextCalls"/> makes the outcome unknown; <see cref="DeclineNextRefunds"/> makes
+    /// the provider refuse.
+    /// </summary>
+    public Task<ProviderRefundResult> RefundAsync(RefundRequest request, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        ThrowIfFailing();
+        if (TryTake(ref _declines))
+        {
+            return Task.FromResult(ProviderRefundResult.Declined("FakeRefundDeclined"));
+        }
+
+        var charge = _checkouts.Values.FirstOrDefault(c => c.State == FakeState.Succeeded && ChargeId(c) == request.ProviderPaymentId);
+        if (!request.ProviderPaymentId.StartsWith("fp-", StringComparison.Ordinal) || (charge is not null && charge.Amount != request.Amount))
+        {
+            return Task.FromResult(ProviderRefundResult.Declined("FakeUnknownCharge"));
+        }
+
+        var refundId = "fr-" + request.RefundId.ToString("N")[..16];
+        var stored = _refunds.GetOrAdd(request.ProviderPaymentId, refundId);
+        Interlocked.Increment(ref _refundCalls);
+        return Task.FromResult(string.Equals(stored, refundId, StringComparison.Ordinal)
+            ? ProviderRefundResult.Refunded(refundId)
+            : ProviderRefundResult.Declined("FakeAlreadyRefunded"));
+    }
+
+    /// <summary>Test hook: the next <paramref name="count"/> refunds are refused by the provider (a definite answer).</summary>
+    public void DeclineNextRefunds(int count) => Interlocked.Exchange(ref _declines, count);
+
+    /// <summary>Test hook: how many refund requests reached the Fake provider's ledger.</summary>
+    public int RefundCalls => Volatile.Read(ref _refundCalls);
+
+    /// <summary>Test hook: whether the charge was refunded at the provider.</summary>
+    public bool IsRefunded(string providerPaymentId) => _refunds.ContainsKey(providerPaymentId);
+
     private static string ChargeId(FakeCheckout checkout) => "fp-" + checkout.ConversationId.ToString("N")[..16];
 
-    private void ThrowIfFailing()
+    private static bool TryTake(ref int counter)
     {
         while (true)
         {
-            var remaining = Volatile.Read(ref _failures);
+            var remaining = Volatile.Read(ref counter);
             if (remaining <= 0)
             {
-                return;
+                return false;
             }
 
-            if (Interlocked.CompareExchange(ref _failures, remaining - 1, remaining) == remaining)
+            if (Interlocked.CompareExchange(ref counter, remaining - 1, remaining) == remaining)
             {
-                throw new PaymentProviderException("FakeUnavailable");
+                return true;
             }
+        }
+    }
+
+    private void ThrowIfFailing()
+    {
+        if (TryTake(ref _failures))
+        {
+            throw new PaymentProviderException("FakeUnavailable");
         }
     }
 

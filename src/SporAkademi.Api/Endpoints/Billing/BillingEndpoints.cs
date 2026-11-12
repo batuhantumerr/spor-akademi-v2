@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Mvc;
 using SporAkademi.Api.Errors;
 using SporAkademi.Application.Abstractions;
 using SporAkademi.Application.Abstractions.Authentication;
@@ -12,6 +13,9 @@ internal sealed record RecordPaymentRequest(Guid EnrollmentId, string Period, Mo
 
 internal sealed record CancelPaymentRequest(string Reason);
 
+/// <summary>P3-13: why the school returns the money (required; the school's own note, never sent to the parent or provider).</summary>
+internal sealed record RefundPaymentRequest(string? Reason);
+
 /// <summary>Payments and dues (appendix D §2.10; US-23, US-24). School Admin only. Payments are never edited or deleted.</summary>
 internal static class BillingEndpoints
 {
@@ -22,6 +26,10 @@ internal static class BillingEndpoints
         payments.MapGet("/{id:guid}", GetPayment).Produces<PaymentDto>().ProducesProblems(404);
         payments.MapPost("/", RecordPayment).Produces<PaymentDto>(StatusCodes.Status201Created).ProducesProblems(400, 404, 422);
         payments.MapPost("/{id:guid}/cancel", CancelPayment).Produces<PaymentDto>().ProducesProblems(400, 404, 409, 422);
+        payments.MapPost("/{id:guid}/refund", RefundPayment)
+            .Produces<PaymentDto>()
+            .Produces<PaymentDto>(StatusCodes.Status202Accepted)
+            .ProducesProblems(400, 404, 409, 422);
 
         var dues = app.MapGroup("/api/v1/dues").WithTags("Payments").RequireRole(Role.SchoolAdmin);
         dues.MapGet("/outstanding", ListOutstanding).Produces<PageResponse<OutstandingDueDto>>().ProducesProblems(400);
@@ -75,6 +83,42 @@ internal static class BillingEndpoints
         return cancelled.IsSuccess
             ? (await reader.Handle(new GetPaymentQuery(PaymentId.From(id)), cancellationToken)).OkOrProblem()
             : ProblemResults.Problem(cancelled.Error);
+    }
+
+    /// <summary>
+    /// P3-13 (DEC-418, DEC-419): refunds an online payment in full through its provider; requires an <c>Idempotency-Key</c>.
+    /// 200 with the refunded payment; 202 when the provider's answer is unknown (the refund stays pending and the
+    /// reconciliation job asks again); 422 <c>Refund.ProviderDeclined</c> when the provider refused. Repeating the request
+    /// (same key and body) answers 200 with <c>Idempotent-Replayed: true</c> and the payment as it stands.
+    /// </summary>
+    private static async Task<IResult> RefundPayment(
+        Guid id,
+        [FromHeader(Name = OnlinePaymentEndpoints.IdempotencyKeyHeader)] string? idempotencyKey,
+        RefundPaymentRequest request,
+        PaymentRefunds refunds,
+        IQueryHandler<GetPaymentQuery, PaymentDto> reader,
+        HttpContext context,
+        CancellationToken cancellationToken)
+    {
+        var refunded = await refunds.RefundAsync(id, request.Reason, idempotencyKey, cancellationToken);
+        if (refunded.IsFailure)
+        {
+            return ProblemResults.Problem(refunded.Error);
+        }
+
+        var payment = await reader.Handle(new GetPaymentQuery(refunded.Value.PaymentId), cancellationToken);
+        if (refunded.Value.Replayed)
+        {
+            context.Response.Headers[OnlinePaymentEndpoints.ReplayedHeader] = "true";
+            return payment.OkOrProblem();
+        }
+
+        return refunded.Value.Status switch
+        {
+            PaymentRefundStatus.Succeeded => payment.OkOrProblem(),
+            PaymentRefundStatus.Pending => TypedResults.Accepted((string?)null, payment.Value),
+            _ => ProblemResults.Problem(PaymentRefundErrors.ProviderDeclined),
+        };
     }
 
     private static async Task<IResult> ListOutstanding(

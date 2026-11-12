@@ -31,7 +31,10 @@ internal sealed class PaymentOptions
 
     internal bool IyzicoConfigured => !string.IsNullOrWhiteSpace(Iyzico.ApiKey) && !string.IsNullOrWhiteSpace(Iyzico.SecretKey);
 
-    /// <summary>Open attempts older than this are re-queried at the provider by the reconciliation job.</summary>
+    /// <summary>
+    /// Open attempts older than this are re-queried at the provider by the reconciliation job; refunds whose outcome stayed
+    /// unknown this long are sent again (P3-13, DEC-418).
+    /// </summary>
     public TimeSpan ReconcileAfter { get; set; } = TimeSpan.FromMinutes(10);
 
     /// <summary>Environments where the Fake provider is the default (DEC-340); elsewhere it must be chosen explicitly.</summary>
@@ -182,6 +185,7 @@ internal static class PaymentProviderRegistration
         services.AddScoped<ICheckoutTenantResolver, Tenancy.CheckoutTenantResolver>();
         services.AddScoped<ITenantWorkScope, Persistence.TenantWorkScope>();
         services.AddScoped<IOnlinePaymentRepository, OnlinePaymentRepository>();
+        services.AddScoped<IPaymentRefundRepository, PaymentRefundRepository>();
         return services;
     }
 }

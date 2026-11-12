@@ -140,6 +140,54 @@ public sealed partial class ParentIsolationTests(DatabaseFixture database) : Par
     }
 
     [Fact]
+    [Trait("Roadmap", "P3-13")]
+    public async Task A_parent_cannot_refund_and_sees_only_the_own_refund_without_the_schools_reason()
+    {
+        const string OwnReason = "Kendi ailesinin özel iade gerekçesi";
+        const string NeighbourReason = "Komşu ailenin özel iade gerekçesi";
+        var ownPayment = await CompleteOnlineAsync(_own, Admin);
+        var neighbourPayment = await CompleteOnlineAsync(_neighbour, Admin);
+        var otherSchoolPayment = await CompleteOnlineAsync(_otherSchool, _adminB);
+
+        // The refund is the school's: a parent is refused (403) for their own payment too, and nothing is requested.
+        foreach (var payment in new[] { ownPayment, neighbourPayment, otherSchoolPayment })
+        {
+            (await ExpectAsync(_parent, "POST", $"/api/v1/payments/{payment}/refund", new { reason = "Veli iadesi" }, 403, null, $"veli-iade-{payment:N}"))
+                .ShouldBeEmpty();
+        }
+
+        (await ScalarAsync("SELECT count(*) FROM billing.payment_refunds WHERE id <> @id", Guid.Empty)).ShouldBe(0L);
+
+        await RefundOkAsync(ownPayment, OwnReason);
+        await RefundOkAsync(neighbourPayment, NeighbourReason);
+        await RefundOkAsync(otherSchoolPayment, NeighbourReason, _adminB);
+
+        var history = await GetOkAsync(_parent, $"/api/v1/parent/children/{_own.Student}/payments");
+        var refunded = history.GetProperty("items").EnumerateArray().Single(p => p.GetProperty("id").GetGuid() == ownPayment);
+        refunded.GetProperty("status").GetString().ShouldBe("Refunded");
+        refunded.GetProperty("refundedAt").ValueKind.ShouldBe(JsonValueKind.String);
+        var text = history.GetRawText();
+        text.ShouldNotContain(OwnReason);
+        text.ShouldNotContain(NeighbourReason);
+        text.ShouldNotContain(neighbourPayment.ToString());
+        text.ShouldNotContain(otherSchoolPayment.ToString());
+    }
+
+    /// <summary>The family's open online attempt is paid on the sandbox page; returns the recorded payment.</summary>
+    private async Task<Guid> CompleteOnlineAsync(Family family, HttpClient admin)
+    {
+        var attempt = await GetOkAsync(admin, $"/api/v1/online-payments/{family.OnlinePayment}");
+        var url = attempt.GetProperty("checkoutUrl").GetString()!;
+        var token = url[(url.IndexOf("token=", StringComparison.Ordinal) + "token=".Length)..];
+        using (var payer = Api.CreateClient())
+        {
+            (await payer.PostAsJsonAsync("/api/v1/sandbox-checkout/complete", new { token, succeed = true }, Ct)).StatusCode.ShouldBe(HttpStatusCode.OK);
+        }
+
+        return (await GetOkAsync(admin, $"/api/v1/online-payments/{family.OnlinePayment}")).GetProperty("paymentId").GetGuid();
+    }
+
+    [Fact]
     public void A_parent_reaches_no_signed_in_endpoint_without_a_role_except_the_pinned_ones()
     {
         // Endpoints that only require a signed-in user are open to parents too; each one is reviewed here.

@@ -13,8 +13,9 @@ using SporAkademi.Domain.Students;
 namespace SporAkademi.Application.Billing;
 
 /// <summary>
-/// A payment as the parent sees it (P3-03, DEC-385): recorded payments only. Cancelled entries were bookkeeping
-/// mistakes; who cancelled them and why stays with the school (DEC-007).
+/// A payment as the parent sees it (P3-03, DEC-385): recorded and refunded payments. Cancelled entries were bookkeeping
+/// mistakes; who cancelled them and why stays with the school (DEC-007). A refunded payment (P3-13, DEC-423) shows when
+/// the money was returned, never the school's reason.
 /// </summary>
 public sealed record ParentPaymentDto(
     Guid Id,
@@ -24,7 +25,9 @@ public sealed record ParentPaymentDto(
     string Period,
     MoneyDto Amount,
     PaymentMethod Method,
-    DateOnly PaidOn);
+    DateOnly PaidOn,
+    PaymentStatus Status,
+    DateTimeOffset? RefundedAt);
 
 /// <summary>An online payment attempt of the parent's own child (P3-03, DEC-386): where it stands and the checkout link.</summary>
 public sealed record ParentOnlinePaymentDto(
@@ -47,7 +50,7 @@ public sealed record ParentOnlinePaymentDto(
 /// </summary>
 public sealed record ListChildDuesQuery(StudentId StudentId) : IQuery<IReadOnlyList<OutstandingDueDto>>;
 
-/// <summary>P3-03: the child's recorded payments, newest payment date first.</summary>
+/// <summary>P3-03: the child's recorded and refunded payments (P3-13), newest payment date first.</summary>
 public sealed record ListChildPaymentsQuery(StudentId StudentId, PageRequest Page) : IQuery<PagedResult<ParentPaymentDto>>;
 
 /// <summary>P3-03: an online payment attempt of one of the caller's children; any other is "not found".</summary>
@@ -92,9 +95,20 @@ internal sealed class ListChildPaymentsHandler(IParentChildren children, IPaymen
             return Result.Failure<PagedResult<ParentPaymentDto>>(StudentErrors.NotFound);
         }
 
-        var page = await payments.ListAsync(new PaymentFilter(query.StudentId, null, null, PaymentStatus.Recorded), query.Page, cancellationToken);
+        var page = await payments.ListAsync(
+            new PaymentFilter(query.StudentId, null, null, null, [PaymentStatus.Recorded, PaymentStatus.Refunded]), query.Page, cancellationToken);
         var items = (await views.ToDtosAsync(page.Items, cancellationToken))
-            .Select(p => new ParentPaymentDto(p.Id, p.EnrollmentId, p.GroupId, p.GroupName, p.Period, p.Amount, p.Method, p.PaidOn))
+            .Select(p => new ParentPaymentDto(
+                p.Id,
+                p.EnrollmentId,
+                p.GroupId,
+                p.GroupName,
+                p.Period,
+                p.Amount,
+                p.Method,
+                p.PaidOn,
+                p.Status,
+                p.Status == PaymentStatus.Refunded ? p.Refund?.CompletedAt : null))
             .ToList();
         return Result.Success(new PagedResult<ParentPaymentDto>(items, page.Page, page.PageSize, page.TotalCount));
     }

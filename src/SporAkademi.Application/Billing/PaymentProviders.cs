@@ -20,6 +20,28 @@ public interface IPaymentProvider
 
     /// <summary>Verifies a webhook's signature and reads which checkout it is about; <c>null</c> when it is not authentic.</summary>
     ProviderNotification? VerifyNotification(string body, IReadOnlyDictionary<string, string> headers);
+
+    /// <summary>
+    /// Returns the full amount of a charge (P3-13, DEC-418). A definite answer is returned (refunded, or refused with a
+    /// code); when the outcome is unknown (unreachable, timeout, server error) it throws <see cref="PaymentProviderException"/>
+    /// and the refund stays pending for the reconciliation job. Calling it again for the same refund must never return
+    /// money twice: the refund is always the full amount, so a provider has nothing left to refund after a success.
+    /// </summary>
+    Task<ProviderRefundResult> RefundAsync(RefundRequest request, CancellationToken cancellationToken);
+}
+
+/// <summary>What the provider needs to refund a charge: ids and the amount only, never the reason or personal data.</summary>
+/// <param name="RefundId">Our refund id; sent as the provider's conversation id.</param>
+public sealed record RefundRequest(Guid RefundId, string ProviderPaymentId, Money Amount);
+
+/// <summary>A definite answer to a refund request.</summary>
+/// <param name="ProviderRefundId">The provider's reference of the refund when <paramref name="Succeeded"/>.</param>
+/// <param name="FailureCode">The provider's error code when it refused.</param>
+public sealed record ProviderRefundResult(bool Succeeded, string? ProviderRefundId, string? FailureCode)
+{
+    public static ProviderRefundResult Refunded(string providerRefundId) => new(true, providerRefundId, null);
+
+    public static ProviderRefundResult Declined(string failureCode) => new(false, null, failureCode);
 }
 
 /// <summary>What the provider needs to open a checkout: ids and the amount only, no personal data (DEC-345).</summary>
