@@ -32,8 +32,12 @@ public sealed record ReportRange(YearMonth From, YearMonth To)
     /// <summary>The range when none is given: the current month and the five before it, like the dashboard's series.</summary>
     public const int DefaultMonths = 6;
 
-    /// <summary>How far back a report may start: the dues window (DEC-183), also the default retention of personal data.</summary>
-    public const int HorizonMonths = 24;
+    /// <summary>
+    /// How far back a report may start: the dues window (DEC-183), also the default retention of personal data. One
+    /// source with <see cref="Billing.OutstandingDues.HorizonMonths"/>: the revenue report reads the dues summary, which refuses
+    /// a longer window, so a range the validation lets through can never reach it and fail with a 500.
+    /// </summary>
+    public const int HorizonMonths = Billing.OutstandingDues.HorizonMonths;
 
     public int Months => MonthsBetween(From, To);
 
