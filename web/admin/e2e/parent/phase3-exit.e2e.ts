@@ -157,17 +157,21 @@ test('phase 3 exit: invitation, attendance, online payment, live announcement, t
     await admin.goto(`/students/${arranged.studentId}`);
     await expect(badge).toHaveText('Aktif');
     await nav(admin, 'Ödemeler');
+    await expect(admin.getByRole('heading', { level: 1, name: 'Ödemeler' })).toBeVisible();
     await admin.getByLabel('Grup', { exact: true }).selectOption({ label: arranged.groupName });
     const paymentRow = admin.getByRole('row', { name: new RegExp(arranged.childName) });
     await expect(paymentRow).toHaveCount(1);
     await expect(paymentRow.getByRole('cell', { name: 'Online', exact: true })).toBeVisible();
     await expectNoSeriousA11yViolations(admin, testInfo, 'admin-payments');
     await nav(admin, 'Ödenmemiş borçlar');
+    // The payments page has a 'Grup' select too: wait for the dues page before using the label.
+    await expect(admin.getByRole('heading', { level: 1, name: 'Ödenmemiş borçlar' })).toBeVisible();
     // Wait for the group-filtered response: until it lands the page still shows the unfiltered list.
     const filtered = admin.waitForResponse(
       (r) =>
         r.url().includes('/api/v1/dues/outstanding') &&
         r.url().includes(`groupId=${arranged.groupId}`),
+      { timeout: 15_000 },
     );
     await admin.getByLabel('Grup', { exact: true }).selectOption({ label: arranged.groupName });
     await filtered;
