@@ -38,7 +38,8 @@ export function localized<T extends object>(
     const id = path.map(String).join('\u0000');
     const existing = views.get(id);
     if (existing) return existing;
-    const target = at(dictionaries.tr, path) as object;
+    // A section only some languages have (an open map) gets an empty stand-in target.
+    const target = (at(dictionaries.tr, path) as object | undefined) ?? {};
     const proxy = new Proxy(target, {
       get: (_target, key) => valueAt(path, key),
       has: (_target, key) => key in read(path),

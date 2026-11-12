@@ -50,7 +50,7 @@ internal static class ProblemShape
         }
 
         problem.Title = ProblemTexts.Title(problem.Status, language);
-        problem.Detail = ProblemTexts.Detail(code, language, arguments);
+        problem.Detail = ProblemTexts.Detail(code, language, arguments) ?? problem.Detail;
         context.HttpContext.Response.Headers[HeaderNames.ContentLanguage] = language;
         context.HttpContext.Response.Headers.Append(HeaderNames.Vary, HeaderNames.AcceptLanguage);
     }

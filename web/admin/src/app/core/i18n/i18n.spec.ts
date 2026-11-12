@@ -4,6 +4,7 @@ import { Title } from '@angular/platform-browser';
 import { Router, TitleStrategy, provideRouter } from '@angular/router';
 
 import { formatDate, formatMoney, formatPercent } from '../format/format';
+import { displayMoney, parseMoneyInput } from '../money/money';
 import { LanguageSwitcherComponent } from '../../shared/ui/language-switcher.component';
 import { LANGUAGE_STORAGE_KEY, initialLanguage, language, setLanguage } from './language';
 import { LanguageService } from './language.service';
@@ -137,6 +138,17 @@ describe('formats per language (money always TRY)', () => {
     expect(formatMoney('12345678901234567.15')).toBe('₺12,345,678,901,234,567.15');
     expect(formatDate('2027-01-04')).toBe('04/01/2027');
     expect(formatPercent(0.42)).toBe('42%');
+  });
+
+  it('shows and reads typed amounts with the separators of the language', () => {
+    expect(displayMoney('1250.5')).toBe('₺1.250,50');
+    expect(parseMoneyInput('1.250,5')).toBe('1250.50');
+    setLanguage('en');
+    expect(displayMoney('1250.5')).toBe('₺1,250.50');
+    expect(displayMoney('-12500000')).toBe('-₺12,500,000.00');
+    expect(parseMoneyInput('1,250.50')).toBe('1250.50');
+    expect(parseMoneyInput('1,250')).toBe('1250.00');
+    expect(parseMoneyInput('1250.5')).toBe('1250.50');
   });
 });
 

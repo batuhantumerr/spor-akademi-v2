@@ -1,4 +1,5 @@
 import { MoneyDto } from '../../api/models';
+import { language } from '../i18n/language';
 
 /**
  * Money stays text end to end (DEC-066): amounts go to the API as "1250.00" and are shown as
@@ -19,10 +20,14 @@ const MAX_INTEGER_DIGITS = 10;
  * Reads what a Turkish user types: "1250", "1.250", "1.250,5", "1250,50" or "1250.50". Dots are
  * thousands separators only in a well-formed grouping that starts with 1–9 ("1.250", "12.500.000"),
  * so "0.500" or "00.500" are not read as 500. Returns the API form "1250.50", or null when the
- * text is not an amount (more than two decimals, letters, a sign…).
+ * text is not an amount (more than two decimals, letters, a sign…). In English (P3-10) the separators are swapped:
+ * "1,250.50", "1,250" and "1250.50".
  */
 export function parseMoneyInput(text: string): string | null {
-  const value = text.trim().replace(/\s|₺/g, '');
+  const typed = text.trim().replace(/\s|₺/g, '');
+  // P3-10: in English the separators are swapped ("1,250.50"); read it as the Turkish form of the same amount.
+  const value =
+    language() === 'en' ? typed.replace(/[.,]/g, (c) => (c === '.' ? ',' : '.')) : typed;
   if (value === '') {
     return null;
   }
@@ -84,7 +89,7 @@ export function isPositive(amount: string): boolean {
   return toKurus(amount) > 0n;
 }
 
-/** "1250.50" → "₺1.250,50" (grouping and comma decimals as in tr-TR, from the text itself). */
+/** "1250.50" → "₺1.250,50" (Turkish) or "₺1,250.50" (English, P3-10), built from the text itself. */
 export function displayMoney(amount: string | MoneyDto | null | undefined): string {
   const text = typeof amount === 'string' ? amount : amount?.amount;
   if (text === null || text === undefined || !API_AMOUNT.test(text)) {
@@ -93,8 +98,9 @@ export function displayMoney(amount: string | MoneyDto | null | undefined): stri
   const kurus = toKurus(text);
   const normalized = fromKurus(kurus < 0n ? -kurus : kurus);
   const [integer, fraction] = normalized.split('.');
-  const grouped = integer.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
-  return `${kurus < 0n ? '-' : ''}₺${grouped},${fraction}`;
+  const [group, decimal] = language() === 'en' ? [',', '.'] : ['.', ','];
+  const grouped = integer.replace(/\B(?=(\d{3})+(?!\d))/g, group);
+  return `${kurus < 0n ? '-' : ''}₺${grouped}${decimal}${fraction}`;
 }
 
 export function money(amount: string): MoneyDto {

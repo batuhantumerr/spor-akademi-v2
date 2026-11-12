@@ -650,7 +650,7 @@ export const enUi: UiText = {
     effectiveFrom: 'Effective from',
     effectiveFromHint: 'This month or later; past periods can’t be changed.',
     amount: 'Amount (₺)',
-    amountHint: 'e.g. 1.250,00 or 1250',
+    amountHint: 'e.g. 1,250.00 or 1250',
     defineFee: 'Set monthly fee',
     feeDefined: 'Monthly fee set.',
     currentFee: 'Current',
