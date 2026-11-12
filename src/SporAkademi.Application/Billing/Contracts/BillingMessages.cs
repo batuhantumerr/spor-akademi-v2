@@ -23,3 +23,10 @@ public sealed record DuesReminderMessage(Guid ReminderId, Guid RecipientId) : IO
 /// </summary>
 [OutboxMessage("billing.payment-recorded.v1")]
 public sealed record PaymentRecordedMessage(Guid PaymentId, Guid StudentId, Guid GroupId) : IOutboxMessage;
+
+/// <summary>
+/// The provider returned the money of an online payment and the refund is committed (P3-13, DEC-423). Ids only
+/// (NFR-PRV-03): no amount, no reason; the parent's e-mail and app read what they need when they run.
+/// </summary>
+[OutboxMessage("billing.payment-refunded.v1")]
+public sealed record PaymentRefundedMessage(Guid RefundId, Guid PaymentId, Guid StudentId, Guid GroupId) : IOutboxMessage;

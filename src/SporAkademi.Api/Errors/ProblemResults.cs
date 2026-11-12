@@ -26,7 +26,6 @@ internal static class ProblemResults
         var problem = new ProblemDetails
         {
             Status = status,
-            Title = error.Code,
             Type = $"https://httpstatuses.io/{status}",
         };
         problem.Extensions["code"] = error.Code;
@@ -44,7 +43,7 @@ internal static class ProblemResults
             problem.Extensions["errors"] = errors;
         }
 
-        // traceId is added by the ProblemDetails customization in Program.
+        // traceId and the localized title/detail (P3-10) are added by ProblemShape, the ProblemDetails customization.
         return TypedResults.Problem(problem);
     }
 

@@ -22,7 +22,8 @@ public sealed record RecordPaymentCommand(Guid EnrollmentId, string Period, Mone
 /// <summary>US-23: cancels a wrong entry with a reason. Payments are never edited or deleted.</summary>
 public sealed record CancelPaymentCommand(PaymentId Id, string Reason) : ICommand<Unit>;
 
-public sealed record GetPaymentQuery(PaymentId Id) : IQuery<PaymentDto>;
+/// <param name="Refund">When set, the payment's <c>refund</c> is this request instead of the latest one (a replay, DEC-419).</param>
+public sealed record GetPaymentQuery(PaymentId Id, PaymentRefundId? Refund = null) : IQuery<PaymentDto>;
 
 public sealed record ListPaymentsQuery(Guid? StudentId, Guid? GroupId, string? Period, PaymentStatus? Status, PageRequest Page) : IQuery<PagedResult<PaymentDto>>;
 
@@ -159,13 +160,25 @@ internal sealed class CancelPaymentHandler(IPaymentRepository payments, ICurrent
     }
 }
 
-/// <summary>Adds student and group names from the Students and Groups contracts, in batches.</summary>
-internal sealed class PaymentViews(IStudentDirectory students, IGroupDirectory groups)
+/// <summary>
+/// Adds student and group names from the Students and Groups contracts, in batches; for recorded online payments also
+/// the latest refund request and, live from the due (DEC-420), how much the due's recorded payments exceed what it owes.
+/// </summary>
+internal sealed class PaymentViews(
+    IStudentDirectory students,
+    IGroupDirectory groups,
+    RefundViews refunds,
+    IPaymentRepository repository,
+    IEnrollmentDirectory enrollments,
+    DueCharges dueCharges,
+    IPaymentRefundRepository refundRepository)
 {
     public async Task<IReadOnlyList<PaymentDto>> ToDtosAsync(IReadOnlyList<Payment> payments, CancellationToken cancellationToken)
     {
         var studentNames = await students.GetManyAsync([.. payments.Select(p => p.StudentId.Value).Distinct()], cancellationToken);
         var groupNames = await groups.GetManyAsync([.. payments.Select(p => p.GroupId.Value).Distinct()], cancellationToken);
+        var latestRefunds = await refunds.LatestAsync(payments.Where(p => p.Method == PaymentMethod.Online).Select(p => p.Id), cancellationToken);
+        var overpaid = await OverpaymentsAsync(payments, cancellationToken);
         return
         [
             .. payments.Select(p =>
@@ -186,18 +199,70 @@ internal sealed class PaymentViews(IStudentDirectory students, IGroupDirectory g
                     p.Status,
                     p.CancelReason,
                     p.CancelledBy?.Value,
-                    p.CancelledAt);
+                    p.CancelledAt,
+                    p.OnlinePaymentId?.Value,
+                    latestRefunds.TryGetValue(p.Id, out var refund) ? RefundViews.ToDto(refund) : null,
+                    p.Method == PaymentMethod.Online && p.Status == PaymentStatus.Recorded
+                        && overpaid.TryGetValue((p.EnrollmentId, p.Period), out var over) && over > 0
+                        ? new MoneyDto(over.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture), p.Amount.Currency)
+                        : null);
             }),
         ];
     }
+
+    /// <summary>
+    /// DEC-420: for each due of a recorded online payment, the recorded total minus what the due owes now (under the fee
+    /// rules, DEC-373; nothing when the enrollment was not active that month). A refund of such a payment leaves the due
+    /// paid when this is at least its amount. Computed live, unlike the online attempt's <c>overpaid</c> flag.
+    /// </summary>
+    private async Task<Dictionary<(EnrollmentId, YearMonth), decimal>> OverpaymentsAsync(IReadOnlyList<Payment> payments, CancellationToken cancellationToken)
+    {
+        var dues = payments.Where(p => p.Method == PaymentMethod.Online && p.Status == PaymentStatus.Recorded)
+            .Select(p => (p.EnrollmentId, p.Period)).Distinct().ToList();
+        var result = new Dictionary<(EnrollmentId, YearMonth), decimal>();
+        if (dues.Count == 0)
+        {
+            return result;
+        }
+
+        var totals = await repository.RecordedTotalsOfEnrollmentsAsync(
+            [.. dues.Select(d => d.EnrollmentId).Distinct()], dues.Min(d => d.Period)!, dues.Max(d => d.Period)!, cancellationToken);
+        // Payments whose refund is pending do not cover the due: their money may already be on its way back.
+        var pending = await refundRepository.PendingRefundTotalsAsync([.. dues.Select(d => d.EnrollmentId).Distinct()], cancellationToken);
+        // ForEnrollmentAsync per due: a page has few online payments, and the family-wide or school-wide charge books
+        // would read far more than they save.
+        var infos = new Dictionary<EnrollmentId, EnrollmentInfo?>();
+        foreach (var (enrollmentId, period) in dues)
+        {
+            if (!infos.TryGetValue(enrollmentId, out var info))
+            {
+                info = await enrollments.FindAsync(enrollmentId, cancellationToken);
+                infos[enrollmentId] = info;
+            }
+
+            var owed = info is null ? 0m : (await dueCharges.ForEnrollmentAsync(info, period, cancellationToken))?.Fee.Amount ?? 0m;
+            result[(enrollmentId, period)] = totals.GetValueOrDefault((enrollmentId, period)) - pending.GetValueOrDefault((enrollmentId, period)) - owed;
+        }
+
+        return result;
+    }
 }
 
-internal sealed class GetPaymentHandler(IPaymentRepository payments, PaymentViews views) : IQueryHandler<GetPaymentQuery, PaymentDto>
+internal sealed class GetPaymentHandler(IPaymentRepository payments, IPaymentRefundRepository refunds, PaymentViews views)
+    : IQueryHandler<GetPaymentQuery, PaymentDto>
 {
-    public async Task<Result<PaymentDto>> Handle(GetPaymentQuery query, CancellationToken cancellationToken) =>
-        await payments.FindAsync(query.Id, cancellationToken) is { } payment
-            ? Result.Success((await views.ToDtosAsync([payment], cancellationToken))[0])
-            : Result.Failure<PaymentDto>(PaymentErrors.NotFound);
+    public async Task<Result<PaymentDto>> Handle(GetPaymentQuery query, CancellationToken cancellationToken)
+    {
+        if (await payments.FindAsync(query.Id, cancellationToken) is not { } payment)
+        {
+            return Result.Failure<PaymentDto>(PaymentErrors.NotFound);
+        }
+
+        var dto = (await views.ToDtosAsync([payment], cancellationToken))[0];
+        return query.Refund is { } refundId && await refunds.FindAsync(refundId, cancellationToken) is { } refund && refund.PaymentId == payment.Id
+            ? Result.Success(dto with { Refund = RefundViews.ToDto(refund) })
+            : Result.Success(dto);
+    }
 }
 
 internal sealed class ListPaymentsHandler(IPaymentRepository payments, PaymentViews views)

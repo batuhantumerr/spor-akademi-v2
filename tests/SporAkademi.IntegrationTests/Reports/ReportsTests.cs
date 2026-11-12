@@ -213,6 +213,18 @@ public sealed class ReportsTests(DatabaseFixture database) : BillingTest(databas
         lines.ShouldContain("31–60 gün;3;2100,00");
         lines.ShouldContain("91 gün ve üzeri;0;0,00");
 
+        // DEC-413: in English the headers, separator and decimal mark follow Accept-Language.
+        using (var english = new HttpRequestMessage(HttpMethod.Get, new Uri($"/api/v1/reports/revenue/csv?{Range}", UriKind.Relative)))
+        {
+            english.Headers.AcceptLanguage.ParseAdd("en-GB");
+            var response = await admin.SendAsync(english, Ct);
+            response.Content.Headers.ContentDisposition!.FileName!.Trim('"').ShouldBe("revenue-report_2027-01_2027-03.csv");
+            var englishBytes = await response.Content.ReadAsByteArrayAsync(Ct);
+            var englishLines = Encoding.UTF8.GetString(englishBytes, 3, englishBytes.Length - 3).Split("\r\n");
+            englishLines[0].ShouldStartWith("Period,List fees (TRY),");
+            englishLines[1].ShouldBe("2027-01,4800.00,80.00,0.00,4720.00,2620.00,2100.00,2220.00,55.5,6,1");
+        }
+
         var attendance = await ReadCsvAsync(admin, $"/api/v1/reports/attendance/csv?{Range}&by=coach");
         attendance[0].ShouldBe("Antrenör;Ay;Geldi;Geç;Gelmedi;Mazeretli;Devam oranı (%)");
         attendance.ShouldContain("Tüm okul;Toplam;6;1;4;1;63,6");

@@ -1,9 +1,9 @@
-import { LOCALE } from '../i18n/locale';
+import { locale, perLocale } from '../i18n/locale';
 import { dateIn } from '../time/school-clock';
 
 /** "şimdi", "dün"… only where they read naturally; otherwise "2 gün önce" (not "evvelsi gün"). */
-const natural = new Intl.RelativeTimeFormat(LOCALE, { numeric: 'auto' });
-const relative = new Intl.RelativeTimeFormat(LOCALE, { numeric: 'always' });
+const natural = perLocale((l) => new Intl.RelativeTimeFormat(l, { numeric: 'auto' }));
+const relative = perLocale((l) => new Intl.RelativeTimeFormat(l, { numeric: 'always' }));
 
 const MINUTE = 60_000;
 const HOUR = 60 * MINUTE;
@@ -35,19 +35,19 @@ export function relativeTime(
     return '';
   }
   if (diff < MINUTE) {
-    return natural.format(0, 'second');
+    return natural().format(0, 'second');
   }
   const days = calendarDays(dateIn(then, timeZone), dateIn(now, timeZone));
   if (days === 0) {
     return diff < HOUR
-      ? relative.format(-Math.floor(diff / MINUTE), 'minute')
-      : relative.format(-Math.floor(diff / HOUR), 'hour');
+      ? relative().format(-Math.floor(diff / MINUTE), 'minute')
+      : relative().format(-Math.floor(diff / HOUR), 'hour');
   }
   if (days === 1) {
-    return natural.format(-1, 'day');
+    return natural().format(-1, 'day');
   }
   if (days < 7) {
-    return relative.format(-days, 'day');
+    return relative().format(-days, 'day');
   }
   return absoluteTime(iso, timeZone);
 }
@@ -63,10 +63,10 @@ export function absoluteTime(iso: string, timeZone: string | null = null): strin
     hourCycle: 'h23',
   };
   try {
-    return new Intl.DateTimeFormat(LOCALE, timeZone ? { ...options, timeZone } : options)
+    return new Intl.DateTimeFormat(locale(), timeZone ? { ...options, timeZone } : options)
       .format(new Date(iso))
       .replace(',', '');
   } catch {
-    return new Intl.DateTimeFormat(LOCALE, options).format(new Date(iso)).replace(',', '');
+    return new Intl.DateTimeFormat(locale(), options).format(new Date(iso)).replace(',', '');
   }
 }

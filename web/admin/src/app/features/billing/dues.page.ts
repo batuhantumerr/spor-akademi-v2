@@ -19,12 +19,9 @@ import { PageHeaderComponent } from '../../shared/ui/page-header.component';
 import { PaginationComponent } from '../../shared/ui/pagination.component';
 import { ToastService } from '../../shared/ui/toast.service';
 import { RECORD_PAYMENT_TITLE_ID, RecordPaymentData, RecordPaymentDialog } from './billing-dialogs';
-import { periodLabel } from './billing-format';
+import { newIdempotencyKey, periodLabel } from './billing-format';
 
-/** A unique key per user action (DEC-341); the API refuses a reused key with another body. */
-export function newIdempotencyKey(): string {
-  return crypto.randomUUID();
-}
+export { newIdempotencyKey } from './billing-format';
 
 interface Totals {
   /** Null when the list changed while the pages were being walked (count not reliable). */

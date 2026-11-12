@@ -243,7 +243,7 @@ const DIMENSIONS: Dimension[] = ['group', 'sport', 'coach'];
                     [height]="300"
                   />
                   @if (report.rows.length > chartRowLimit) {
-                    <p class="mt-2 text-xs text-muted-foreground">{{ chartLimitText }}</p>
+                    <p class="mt-2 text-xs text-muted-foreground">{{ chartLimitText() }}</p>
                   }
                   <section class="card mt-4 min-w-0" aria-labelledby="attendance-table-title">
                     <h2 id="attendance-table-title" class="px-4 pt-4 text-sm font-semibold">
@@ -437,7 +437,7 @@ const DIMENSIONS: Dimension[] = ['group', 'sport', 'coach'];
                     <table class="w-full text-sm" data-testid="revenue-table">
                       <thead class="border-b border-border bg-muted/60">
                         <tr>
-                          @for (c of revenueColumns; track $index) {
+                          @for (c of revenueColumns(); track $index) {
                             <th
                               scope="col"
                               class="h-9 px-3 text-xs font-semibold"
@@ -586,8 +586,10 @@ export class ReportsPage {
   protected readonly dimensions = DIMENSIONS;
   protected readonly presets = [3, 6, 12];
   protected readonly chartRowLimit = CHART_ROWS;
-  protected readonly chartLimitText = interpolate(ui.reports.chartLimit, { count: CHART_ROWS });
-  protected readonly revenueColumns = [
+  protected readonly chartLimitText = computed(() =>
+    interpolate(this.text.chartLimit, { count: CHART_ROWS }),
+  );
+  protected readonly revenueColumns = computed(() => [
     ui.reports.revenue.period,
     ui.reports.revenue.listFees,
     ui.reports.revenue.siblingDiscount,
@@ -597,7 +599,7 @@ export class ReportsPage {
     ui.reports.revenue.outstanding,
     ui.reports.revenue.collectedInMonth,
     ui.reports.revenue.collectionRate,
-  ];
+  ]);
 
   /** The school's current month; the server stays authoritative and refuses later months. */
   readonly currentPeriod = computed(() => this.clock.today().slice(0, 7));

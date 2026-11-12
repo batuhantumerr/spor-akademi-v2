@@ -11,6 +11,7 @@ import {
   RevenuePeriodDto,
   RevenueReportDto,
 } from '../../api/models';
+import { setLanguage } from '../../core/i18n/language';
 import { errorMessages, ui } from '../../core/i18n/tr';
 import { money } from '../../core/money/money';
 import { ThemeService } from '../../core/theme/theme.service';
@@ -401,6 +402,27 @@ describe('ReportsPage', () => {
     expect(toast.error).toHaveBeenCalledWith(errorMessages['Request.TooManyRequests']);
   });
 
+  it('follows the language: labels, chart summary and number formats switch to English', async () => {
+    expectReport('attendance').flush(attendance());
+    await settle(fixture);
+    setLanguage('en');
+    try {
+      await settle(fixture);
+      expect(root.querySelector('#report-tab-occupancy')?.textContent?.trim()).toBe('Occupancy');
+      expect(
+        root.querySelector('[data-testid="report-download"]')?.getAttribute('aria-label'),
+      ).toBe('Download CSV: Attendance report');
+      const figure = root.querySelector('[data-testid="chart-figure"]');
+      expect(figure?.getAttribute('aria-label')).toContain('Whole-school attendance rate');
+      expect(figure?.getAttribute('aria-label')).toContain('66.7%');
+      expect(
+        root.querySelector('[data-testid="attendance-table"] tbody tr')?.textContent,
+      ).toContain('Records: 4');
+    } finally {
+      setLanguage('tr');
+    }
+  });
+
   it('shows an API error with a working retry', async () => {
     expectReport('attendance').flush(
       { type: 'about:blank', title: 'x', status: 400, code: 'Report.InvalidRange' },
@@ -424,7 +446,7 @@ describe('reports route', () => {
     const route = shell
       .children!.flatMap((r) => r.children ?? [])
       .find((r) => r.path === 'reports')!;
-    expect(route.title).toBe(ui.nav.reports);
+    expect((route.title as () => string)()).toBe(ui.nav.reports);
     expect(await (route.loadComponent as () => Promise<unknown>)()).toBe(ReportsPage);
     const { navigationFor } = await import('../../layout/navigation');
     expect(

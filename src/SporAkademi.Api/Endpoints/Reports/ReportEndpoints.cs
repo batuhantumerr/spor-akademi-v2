@@ -79,7 +79,7 @@ internal static class ReportEndpoints
     {
         var result = await handler.Handle(new GetAttendanceReportQuery(from, to, by, sportId, coachId), cancellationToken);
         return result.IsSuccess
-            ? new CsvResult(FileName("devam", result.Value.From, result.Value.To), ReportCsv.Attendance(result.Value))
+            ? new CsvResult("attendance", result.Value.From, result.Value.To, csv => csv.Attendance(result.Value))
             : ProblemResults.Problem(result.Error);
     }
 
@@ -94,7 +94,7 @@ internal static class ReportEndpoints
     {
         var result = await handler.Handle(new GetOccupancyReportQuery(from, to, by, sportId, coachId), cancellationToken);
         return result.IsSuccess
-            ? new CsvResult(FileName("doluluk", result.Value.From, result.Value.To), ReportCsv.Occupancy(result.Value))
+            ? new CsvResult("occupancy", result.Value.From, result.Value.To, csv => csv.Occupancy(result.Value))
             : ProblemResults.Problem(result.Error);
     }
 
@@ -106,31 +106,30 @@ internal static class ReportEndpoints
     {
         var result = await handler.Handle(new GetRevenueReportQuery(from, to), cancellationToken);
         return result.IsSuccess
-            ? new CsvResult(FileName("gelir", result.Value.From, result.Value.To), ReportCsv.Revenue(result.Value))
+            ? new CsvResult("revenue", result.Value.From, result.Value.To, csv => csv.Revenue(result.Value))
             : ProblemResults.Problem(result.Error);
     }
-
-    /// <summary>ASCII only (no quoting or encoding issues in any browser): <c>devam-raporu_2027-01_2027-03.csv</c>.</summary>
-    private static string FileName(string report, string from, string to) => $"{report}-raporu_{from}_{to}.csv";
 
     /// <summary>
     /// Streams the rows to the response as UTF-8 with a byte order mark (Excel then reads Turkish letters correctly);
     /// the rows are produced and written one by one, the CSV text is never built in memory as a whole.
     /// </summary>
-    private sealed class CsvResult(string fileName, IEnumerable<IReadOnlyList<string>> rows) : IResult
+    private sealed class CsvResult(string report, string from, string to, Func<ReportCsv, IEnumerable<IReadOnlyList<string>>> rows) : IResult
     {
         private static readonly UTF8Encoding Utf8 = new(encoderShouldEmitUTF8Identifier: false);
 
         public async Task ExecuteAsync(HttpContext httpContext)
         {
+            // DEC-413: headers, separator and number format follow Accept-Language like the problem texts (DEC-430).
+            var csv = ReportCsv.For(ProblemLanguage.From(httpContext));
             var response = httpContext.Response;
             response.ContentType = CsvContentType;
-            response.Headers.ContentDisposition = new ContentDispositionHeaderValue("attachment") { FileName = fileName }.ToString();
+            response.Headers.ContentDisposition = new ContentDispositionHeaderValue("attachment") { FileName = csv.FileName(report, from, to) }.ToString();
             response.Headers.XContentTypeOptions = "nosniff";
 
             await response.Body.WriteAsync(Encoding.UTF8.Preamble.ToArray(), httpContext.RequestAborted);
             await using var writer = new StreamWriter(response.Body, Utf8, bufferSize: 16 * 1024, leaveOpen: true);
-            await ReportCsv.WriteAsync(writer, rows, httpContext.RequestAborted);
+            await csv.WriteAsync(writer, rows(csv), httpContext.RequestAborted);
         }
     }
 }

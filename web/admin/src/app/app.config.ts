@@ -18,6 +18,7 @@ import { firstValueFrom, of, timeout } from 'rxjs';
 import { routes } from './app.routes';
 import { authInterceptor } from './core/auth/auth.interceptor';
 import { AuthService } from './core/auth/auth.service';
+import { LanguageService } from './core/i18n/language.service';
 import { AppTitleStrategy } from './core/i18n/title.strategy';
 import { RealtimeService } from './core/realtime/realtime.service';
 import { MenuNavigationReuseStrategy } from './core/routing/menu-navigation';
@@ -39,10 +40,11 @@ export const appConfig: ApplicationConfig = {
     { provide: RouteReuseStrategy, useExisting: MenuNavigationReuseStrategy },
     { provide: TitleStrategy, useClass: AppTitleStrategy },
     provideHttpClient(withInterceptors([authInterceptor])),
-    // Apply the theme and restore the session (refresh cookie) before the first route resolves.
+    // Apply the theme and the language (<html lang>, P3-10) and restore the session (refresh cookie) before the first route resolves.
     // Real-time notifications follow the session from here on (P3-08).
     provideAppInitializer(() => {
       inject(ThemeService);
+      inject(LanguageService);
       inject(RealtimeService).connectWhileSignedIn();
       return firstValueFrom(
         inject(AuthService)

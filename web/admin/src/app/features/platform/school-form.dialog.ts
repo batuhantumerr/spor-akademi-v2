@@ -15,7 +15,6 @@ import { problemMessage, toProblem } from '../../core/api/problem';
 import { errorMessages, ui } from '../../core/i18n/tr';
 import { focusFirstInvalid } from '../../shared/forms/focus-first-invalid';
 import { ServerFieldErrors } from '../../shared/forms/server-field-errors';
-import { LOCALE } from '../../core/i18n/locale';
 
 export const SCHOOL_FORM_TITLE_ID = 'school-form-title';
 
@@ -30,13 +29,13 @@ export const DEFAULT_TIME_ZONE = 'Europe/Istanbul';
 /** Same rule as the API's Slug value object: lowercase words joined by single hyphens, 3–50 chars. */
 export const SLUG_PATTERN = /^[a-z0-9]+(-[a-z0-9]+)*$/;
 
-const trMap: Record<string, string> = { ç: 'c', ğ: 'g', ı: 'i', ö: 'o', ş: 's', ü: 'u' };
+const trMap: Record<string, string> = { ç: 'c', ğ: 'g', ı: 'i', ö: 'o', ş: 's', ü: 'u' }; // i18n-ignore: slug transliteration
 
 /** Suggests a slug from a school name: "Kartal Spor Kulübü" → "kartal-spor-kulubu". */
 export function slugify(name: string): string {
   return name
-    .toLocaleLowerCase(LOCALE)
-    .replace(/[çğıöşü]/g, (c) => trMap[c])
+    .toLocaleLowerCase('tr-TR') // school names are Turkish whatever the UI language
+    .replace(/[çğıöşü]/g, (c) => trMap[c]) // i18n-ignore: slug transliteration
     .normalize('NFD')
     .replace(/[̀-ͯ]/g, '')
     .replace(/[^a-z0-9]+/g, '-')

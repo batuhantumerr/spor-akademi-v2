@@ -37,7 +37,7 @@ public sealed class ReportCsvTests
         var builder = new StringBuilder();
         await using var writer = new StringWriter(builder);
 
-        await ReportCsv.WriteAsync(writer, [["Grup", "Ay"], ["=Kötü;ad", "2027-01"], []], TestContext.Current.CancellationToken);
+        await ReportCsv.Turkish.WriteAsync(writer, [["Grup", "Ay"], ["=Kötü;ad", "2027-01"], []], TestContext.Current.CancellationToken);
 
         builder.ToString().ShouldBe("Grup;Ay\r\n\"'=Kötü;ad\";2027-01\r\n\r\n");
     }
@@ -51,7 +51,7 @@ public sealed class ReportCsvTests
             "2027-01", "2027-01", new DateOnly(2027, 3, 10), 10, [period], period with { Period = null },
             [new OverdueBucketDto(1, 30, 1, M("5.00")), new OverdueBucketDto(91, null, 0, M("0.00"))], 1, M("5.00"), 0, M("0.00"));
 
-        var rows = ReportCsv.Revenue(report).Select(r => string.Join(';', r)).ToList();
+        var rows = ReportCsv.Turkish.Revenue(report).Select(r => string.Join(';', r)).ToList();
 
         rows[1].ShouldBe("2027-01;1234567,50;80,00;0,00;1234487,50;1000,00;1233487,50;1000,00;0,1;3;1");
         rows[2].ShouldStartWith("Toplam;");
@@ -66,7 +66,7 @@ public sealed class ReportCsvTests
         var row = new AttendanceRowDto(null, string.Empty, [cell], cell with { Period = null });
         var report = new AttendanceReportDto("2027-01", "2027-01", ReportDimension.Coach, null, null, ["2027-01"], [row], row);
 
-        var rows = ReportCsv.Attendance(report).Select(r => string.Join(';', r)).ToList();
+        var rows = ReportCsv.Turkish.Attendance(report).Select(r => string.Join(';', r)).ToList();
 
         rows.ShouldBe(
         [
@@ -76,6 +76,30 @@ public sealed class ReportCsvTests
             "Tüm okul;2027-01;1;0;1;0;50,0",
             "Tüm okul;Toplam;1;0;1;0;50,0",
         ]);
+    }
+
+    [Fact]
+    public async Task English_uses_commas_a_decimal_point_and_english_headers()
+    {
+        static MoneyDto M(string amount) => new(amount, "TRY");
+        var period = new RevenuePeriodDto("2027-01", M("1234.50"), M("80.00"), M("0.00"), M("1154.50"), M("1000.00"), M("154.50"), M("1000.00"), 0.8662m, 2, 1);
+        var report = new RevenueReportDto(
+            "2027-01", "2027-01", new DateOnly(2027, 3, 10), 10, [period], period with { Period = null },
+            [new OverdueBucketDto(31, 60, 1, M("154.50"))], 1, M("154.50"), 0, M("0.00"));
+        var builder = new StringBuilder();
+        await using var writer = new StringWriter(builder);
+
+        await ReportCsv.English.WriteAsync(writer, ReportCsv.English.Revenue(report), TestContext.Current.CancellationToken);
+        var lines = builder.ToString().Split("\r\n");
+
+        lines[0].ShouldStartWith("Period,List fees (TRY),Sibling discount (TRY),");
+        lines[1].ShouldBe("2027-01,1234.50,80.00,0.00,1154.50,1000.00,154.50,1000.00,86.6,2,1");
+        lines[4].ShouldBe("Overdue fees (as of 10/03/2027; fees are due on day 10 of each month),Unpaid fees,Amount (TRY)");
+        lines[5].ShouldBe("31–60 days,1,154.50");
+        ReportCsv.English.FileName("revenue", "2027-01", "2027-03").ShouldBe("revenue-report_2027-01_2027-03.csv");
+        ReportCsv.For("en").ShouldBeSameAs(ReportCsv.English);
+        ReportCsv.For("tr").ShouldBeSameAs(ReportCsv.Turkish);
+        ReportCsv.For(null).ShouldBeSameAs(ReportCsv.Turkish);
     }
 }
 

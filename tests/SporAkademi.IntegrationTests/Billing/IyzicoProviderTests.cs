@@ -144,6 +144,108 @@ public sealed class IyzicoProviderTests
         provider.VerifyNotification("not json", new Dictionary<string, string> { ["X-IYZ-SIGNATURE-V3"] = expected }).ShouldBeNull();
     }
 
+    [Fact]
+    [Trait("Roadmap", "P3-13")]
+    public async Task A_refund_is_the_signed_amount_based_refund_of_the_full_charge()
+    {
+        var refundId = Guid.Parse("0192f0c5-3b7a-7c2e-9f1a-2b3c4d5e6f71");
+        var (provider, handler) = Provider("""{"status":"success","conversationId":"0192f0c5-3b7a-7c2e-9f1a-2b3c4d5e6f71","paymentId":"22416035","price":1000.0,"currency":"TRY","hostReference":"host-77"}""");
+
+        var result = await provider.RefundAsync(new RefundRequest(refundId, "22416035", Money.Try(1000m)), Ct);
+
+        result.Outcome.ShouldBe(ProviderRefundOutcome.Refunded);
+        result.ProviderRefundId.ShouldBe("host-77");
+        var request = handler.Requests.ShouldHaveSingleItem();
+        request.Uri.ShouldBe(new Uri("https://sandbox-api.iyzipay.com/v2/payment/refund"));
+        var random = request.Headers["x-iyzi-rnd"];
+        var decoded = Encoding.UTF8.GetString(Convert.FromBase64String(request.Headers["Authorization"]["IYZWSv2 ".Length..]));
+        var expectedSignature = Convert.ToHexStringLower(HMACSHA256.HashData(
+            Encoding.UTF8.GetBytes(SecretKey),
+            Encoding.UTF8.GetBytes(random + "/v2/payment/refund" + request.Body)));
+        decoded.ShouldBe($"apiKey:{ApiKey}&randomKey:{random}&signature:{expectedSignature}");
+
+        using var body = JsonDocument.Parse(request.Body);
+        body.RootElement.GetProperty("conversationId").GetString().ShouldBe(refundId.ToString());
+        body.RootElement.GetProperty("paymentId").GetString().ShouldBe("22416035");
+        body.RootElement.GetProperty("price").GetString().ShouldBe("1000.00");
+        body.RootElement.GetProperty("currency").GetString().ShouldBe("TRY");
+        // A fixed placeholder, never a user's address; and no reason or names reach the provider.
+        body.RootElement.GetProperty("ip").GetString().ShouldBe("127.0.0.1");
+        body.RootElement.EnumerateObject().Select(p => p.Name).ShouldBe(["locale", "conversationId", "paymentId", "price", "currency", "ip"]);
+    }
+
+    [Fact]
+    [Trait("Roadmap", "P3-13")]
+    public async Task A_refused_refund_is_checked_against_the_payment_detail_with_only_the_error_code()
+    {
+        var (provider, _) = Provider("""{"status":"failure","errorCode":"5093","errorMessage":"İade süresi geçti, Ali Veli"}""");
+
+        var result = await provider.RefundAsync(new RefundRequest(Guid.CreateVersion7(), "22416035", Money.Try(10m)), Ct);
+
+        // DEC-418: a refusal can mean "already refunded"; the payment detail decides.
+        result.Outcome.ShouldBe(ProviderRefundOutcome.Verify);
+        result.FailureCode.ShouldBe("Iyzico5093");
+    }
+
+    [Theory]
+    [Trait("Roadmap", "P3-13")]
+    [InlineData("503:{}")]
+    [InlineData("not json")]
+    [InlineData("{}")]
+    [InlineData("""{"status":"success","conversationId":"0192f0c5-3b7a-7c2e-9f1a-2b3c4d5e6f99"}""")]
+    public async Task A_server_error_or_an_unreadable_refund_answer_is_an_unknown_outcome(string response)
+    {
+        var (provider, _) = Provider(response);
+
+        await Should.ThrowAsync<PaymentProviderException>(() =>
+            provider.RefundAsync(new RefundRequest(Guid.Parse("0192f0c5-3b7a-7c2e-9f1a-2b3c4d5e6f71"), "22416035", Money.Try(10m)), Ct));
+    }
+
+    [Theory]
+    [Trait("Roadmap", "P3-13")]
+    [InlineData("TOTAL_REFUNDED", true)]
+    [InlineData("NOT_REFUNDED", false)]
+    public async Task The_refund_status_check_is_a_signed_get_of_the_payment_detail(string status, bool refunded)
+    {
+        var (provider, handler) = Provider($$"""{"status":"success","payments":[{"paymentId":"22416035","paymentRefundStatus":"{{status}}"}]}""");
+
+        var check = await provider.CheckRefundAsync(new RefundRequest(Guid.CreateVersion7(), "22416035", Money.Try(10m)), Ct);
+
+        check.Refunded.ShouldBe(refunded);
+        var request = handler.Requests.ShouldHaveSingleItem();
+        request.Uri.PathAndQuery.ShouldBe("/v2/reporting/payment/details?paymentId=22416035");
+        request.Body.ShouldBeEmpty();
+        var random = request.Headers["x-iyzi-rnd"];
+        var decoded = Encoding.UTF8.GetString(Convert.FromBase64String(request.Headers["Authorization"]["IYZWSv2 ".Length..]));
+        var expectedSignature = Convert.ToHexStringLower(HMACSHA256.HashData(
+            Encoding.UTF8.GetBytes(SecretKey),
+            // Like iyzipay-dotnet (FindUriPath): the signed path stops at the query string.
+            Encoding.UTF8.GetBytes(random + "/v2/reporting/payment/details")));
+        decoded.ShouldBe($"apiKey:{ApiKey}&randomKey:{random}&signature:{expectedSignature}");
+    }
+
+    [Theory]
+    [Trait("Roadmap", "P3-13")]
+    [InlineData("""{"status":"success","payments":[{"paymentId":"22416035","paymentRefundStatus":"PARTIAL_REFUNDED"}]}""")]
+    [InlineData("""{"status":"success","payments":[]}""")]
+    [InlineData("""{"status":"failure","errorCode":"1"}""")]
+    [InlineData("503:{}")]
+    public async Task An_inconclusive_refund_status_is_not_a_result(string response)
+    {
+        var (provider, _) = Provider(response);
+
+        await Should.ThrowAsync<PaymentProviderException>(() =>
+            provider.CheckRefundAsync(new RefundRequest(Guid.CreateVersion7(), "22416035", Money.Try(10m)), Ct));
+    }
+
+    [Theory]
+    [Trait("Roadmap", "P3-13")]
+    [InlineData("/v2/reporting/payment/details?paymentId=22416035", "/v2/reporting/payment/details")]
+    [InlineData("/v2/payment/refund", "/v2/payment/refund")]
+    [InlineData("/a?b=1?c=2", "/a")]
+    public void The_signed_path_stops_at_the_query_like_the_official_sdks(string pathAndQuery, string expected) =>
+        IyzicoProtocol.SignedPath(pathAndQuery).ShouldBe(expected);
+
     private sealed record CapturedRequest(Uri Uri, Dictionary<string, string> Headers, string Body);
 
     private sealed class StubHandler(string[] responses) : HttpMessageHandler
@@ -155,8 +257,13 @@ public sealed class IyzicoProviderTests
         protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
         {
             var headers = request.Headers.ToDictionary(h => h.Key, h => string.Join(",", h.Value), StringComparer.OrdinalIgnoreCase);
-            Requests.Add(new CapturedRequest(request.RequestUri!, headers, await request.Content!.ReadAsStringAsync(cancellationToken)));
-            return new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(responses[_next++]) };
+            var body = request.Content is null ? string.Empty : await request.Content.ReadAsStringAsync(cancellationToken);
+            Requests.Add(new CapturedRequest(request.RequestUri!, headers, body));
+            // "503:" prefixes a server error answer.
+            var response = responses[_next++];
+            return response.StartsWith("503:", StringComparison.Ordinal)
+                ? new HttpResponseMessage(HttpStatusCode.ServiceUnavailable) { Content = new StringContent(response[4..]) }
+                : new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(response) };
         }
     }
 
