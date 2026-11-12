@@ -127,6 +127,8 @@ export const errorMessages: Readonly<Record<string, string>> = {
   'Refund.ProviderDeclined':
     'Ödeme sağlayıcısı iadeyi kabul etmedi. Sağlayıcı panelini kontrol edip daha sonra tekrar deneyin.',
   'Refund.NotFound': 'İade bulunamadı.',
+  'Refund.NotInReview': 'Bu iade incelemede değil.',
+  'Refund.ResolutionNoteRequired': 'Not zorunludur.',
   'BillingRules.PeriodInPast': 'Geçmiş bir dönemin aidat kuralları değiştirilemez.',
   'BillingRules.AlreadyDefined': 'Bu dönem için aidat kuralları zaten tanımlı.',
   'BillingRules.InvalidPercent': 'İndirim oranı 0 ile 100 arasında bir tam sayı olmalı.',
@@ -713,6 +715,25 @@ export const ui = {
     refundCheckTooSoon: 'Sağlayıcıya az önce soruldu; biraz sonra tekrar deneyin.',
     refundNeedsReview: 'İnceleme gerekli',
     refundNeedsReviewHint: 'Sağlayıcı iadeyi sonuçlandıramadı; sağlayıcıda kontrol edin.',
+    refundResolve: 'Elle sonuçlandır',
+    refundResolveLabel: 'Elle sonuçlandır: {student}, {period}',
+    refundResolveTitle: 'İade elle sonuçlandırılsın mı?',
+    refundResolveText:
+      '{student} · {period} · {amount}. Bu iade otomatik olarak sonuçlandırılamadı. Ödeme sağlayıcısının panelinde paranın karta dönüp dönmediğini kontrol edin ve sonucu seçin.',
+    refundResolveChoice: 'Sağlayıcı panelinde ne görünüyor?',
+    refundResolveRefunded: 'Para karta iade edildi',
+    refundResolveRefundedHint: 'Ödeme iade edilmiş sayılır, veliye bildirim gider.',
+    refundResolveNotRefunded: 'Para iade edilmedi',
+    refundResolveNotRefundedHint:
+      'İade başarısız sayılır; gerekirse iadeyi tekrar deneyebilirsiniz.',
+    refundResolveChoiceRequired: 'Bir sonuç seçin.',
+    refundResolveNote: 'Not',
+    refundResolveNoteHint:
+      'Neye göre karar verdiğinizi yazın (ör. sağlayıcı panelindeki durum). Kişi adı veya başka kişisel veri yazmayın; not silinmez ve veliye gösterilmez.',
+    refundResolveConfirm: 'Sonuçlandır',
+    refundResolvedRefunded: 'İade elle sonuçlandırıldı: ödeme iade edildi.',
+    refundResolvedFailed: 'İade elle sonuçlandırıldı: iade başarısız sayıldı.',
+    refundResolvedBecause: 'Elle sonuçlandırma notu: {note}',
     refundReason: 'İade gerekçesi',
     refundReasonHint:
       'Gerekçeye kişi adı veya başka kişisel veri yazmayın; gerekçe silinmez ve veliye gösterilmez.',

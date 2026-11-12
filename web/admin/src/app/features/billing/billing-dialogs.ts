@@ -15,6 +15,7 @@ import { Api } from '../../api/api';
 import {
   apiV1PaymentsIdCancelPost,
   apiV1PaymentsIdRefundPost,
+  apiV1PaymentsIdRefundResolvePost,
   apiV1PaymentsPost,
   apiV1StudentsGet,
   apiV1StudentsIdEnrollmentsGet,
@@ -762,6 +763,180 @@ export class RefundPaymentDialog {
     this.error.set(message);
     this.focus('refund-error');
     this.saving.set(false);
+  }
+
+  private focus(id: string): void {
+    afterNextRender(() => this.host.nativeElement.querySelector<HTMLElement>(`#${id}`)?.focus(), {
+      injector: this.injector,
+    });
+  }
+}
+
+export const RESOLVE_REFUND_TITLE_ID = 'resolve-refund-title';
+/** What the resolve dialog closes with when the refund is no longer waiting for review (someone settled it first). */
+export const REFUND_NOT_IN_REVIEW = 'refundNotInReview' as const;
+export type ResolveRefundResult = PaymentDto | typeof REFUND_NOT_IN_REVIEW;
+
+export interface ResolveRefundData {
+  payment: Pick<PaymentDto, 'id' | 'studentFirstName' | 'studentLastName' | 'period' | 'amount'>;
+}
+
+/**
+ * P3-13 (DEC-418): settles a refund the system could not settle ("İnceleme gerekli") by hand, after the School Admin
+ * checked the provider panel: the money is back or it is not, with a required internal note. No default choice.
+ */
+@Component({
+  selector: 'app-resolve-refund-dialog',
+  changeDetection: ChangeDetectionStrategy.OnPush,
+  template: `
+    <form [class]="dialogClass" (submit)="$event.preventDefault(); save()" novalidate>
+      <h2 [id]="titleId" class="text-lg font-semibold">{{ text.refundResolveTitle }}</h2>
+      <p class="mt-2 text-sm text-muted-foreground">{{ description }}</p>
+      @if (error()) {
+        <p
+          id="resolve-error"
+          role="alert"
+          tabindex="-1"
+          class="mt-3 rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive"
+        >
+          {{ error() }}
+        </p>
+      }
+      <fieldset
+        class="mt-4"
+        [attr.aria-invalid]="!!choiceError()"
+        [attr.aria-describedby]="choiceError() ? 'resolve-choice-error' : null"
+      >
+        <legend class="field-label">{{ text.refundResolveChoice }}</legend>
+        <label class="mt-2 flex items-start gap-2 text-sm">
+          <input
+            id="resolve-refunded"
+            type="radio"
+            name="resolve-outcome"
+            class="mt-1"
+            [checked]="refunded() === true"
+            (change)="refunded.set(true); choiceError.set(null)"
+          />
+          <span>
+            {{ text.refundResolveRefunded }}
+            <span class="block text-xs text-muted-foreground">{{
+              text.refundResolveRefundedHint
+            }}</span>
+          </span>
+        </label>
+        <label class="mt-2 flex items-start gap-2 text-sm">
+          <input
+            id="resolve-not-refunded"
+            type="radio"
+            name="resolve-outcome"
+            class="mt-1"
+            [checked]="refunded() === false"
+            (change)="refunded.set(false); choiceError.set(null)"
+          />
+          <span>
+            {{ text.refundResolveNotRefunded }}
+            <span class="block text-xs text-muted-foreground">{{
+              text.refundResolveNotRefundedHint
+            }}</span>
+          </span>
+        </label>
+        @if (choiceError(); as m) {
+          <p id="resolve-choice-error" class="field-error">{{ m }}</p>
+        }
+      </fieldset>
+      <div class="mt-4">
+        <label class="field-label" for="resolve-note">{{ text.refundResolveNote }}</label>
+        <textarea
+          id="resolve-note"
+          class="input h-auto min-h-24 py-2"
+          rows="3"
+          maxlength="500"
+          [value]="note()"
+          (input)="note.set($any($event.target).value); noteError.set(null)"
+          [attr.aria-invalid]="!!noteError()"
+          [attr.aria-describedby]="'resolve-note-hint' + (noteError() ? ' resolve-note-error' : '')"
+        ></textarea>
+        <p id="resolve-note-hint" class="mt-1.5 text-xs text-muted-foreground">
+          {{ text.refundResolveNoteHint }}
+        </p>
+        @if (noteError(); as m) {
+          <p id="resolve-note-error" class="field-error">{{ m }}</p>
+        }
+      </div>
+      <div class="mt-6 flex flex-wrap justify-end gap-2">
+        <button type="button" class="btn btn-secondary" (click)="ref.close()">
+          {{ actions.cancel }}
+        </button>
+        <button type="submit" class="btn btn-primary" [disabled]="saving()">
+          {{ text.refundResolveConfirm }}
+        </button>
+      </div>
+    </form>
+  `,
+})
+export class ResolveRefundDialog {
+  private readonly api = inject(Api);
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
+  private readonly injector = inject(Injector);
+  protected readonly ref = inject<DialogRef<ResolveRefundResult>>(DialogRef);
+  private readonly payment = inject<ResolveRefundData>(DIALOG_DATA).payment;
+
+  protected readonly dialogClass = dialogClass;
+  protected readonly titleId = RESOLVE_REFUND_TITLE_ID;
+  protected readonly text = ui.billing;
+  protected readonly actions = ui.actions;
+  protected readonly description = interpolate(ui.billing.refundResolveText, {
+    student: `${this.payment.studentFirstName} ${this.payment.studentLastName}`,
+    period: periodLabel(this.payment.period),
+    amount: displayMoney(this.payment.amount),
+  });
+  protected readonly refunded = signal<boolean | null>(null);
+  protected readonly choiceError = signal<string | null>(null);
+  protected readonly note = signal('');
+  protected readonly noteError = signal<string | null>(null);
+  protected readonly saving = signal(false);
+  protected readonly error = signal<string | null>(null);
+
+  protected async save(): Promise<void> {
+    if (this.saving()) {
+      return;
+    }
+    const refunded = this.refunded();
+    const note = this.note().trim();
+    if (refunded === null) {
+      this.choiceError.set(ui.billing.refundResolveChoiceRequired);
+    }
+    if (!note) {
+      this.noteError.set(errorMessages['Refund.ResolutionNoteRequired']);
+    }
+    if (refunded === null || !note) {
+      this.focus(refunded === null ? 'resolve-refunded' : 'resolve-note');
+      return;
+    }
+    this.saving.set(true);
+    this.error.set(null);
+    try {
+      const resolved = await this.api.invoke(apiV1PaymentsIdRefundResolvePost, {
+        id: this.payment.id,
+        body: { refunded, note },
+      });
+      this.ref.close(resolved);
+    } catch (err) {
+      const problem = toProblem(err);
+      if (problem.code === 'Refund.NotInReview') {
+        // Settled meanwhile (by someone else or the provider check); the list reloads.
+        this.ref.close(REFUND_NOT_IN_REVIEW);
+        return;
+      }
+      if (problem.code === 'Refund.ResolutionNoteRequired' || fieldErrors(problem)['note']) {
+        this.noteError.set(problemMessage(problem));
+        this.focus('resolve-note');
+      } else {
+        this.error.set(problemMessage(problem));
+        this.focus('resolve-error');
+      }
+      this.saving.set(false);
+    }
   }
 
   private focus(id: string): void {

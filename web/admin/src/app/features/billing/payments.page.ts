@@ -29,6 +29,11 @@ import {
   RefundPaymentData,
   RefundPaymentDialog,
   RefundPaymentResult,
+  REFUND_NOT_IN_REVIEW,
+  RESOLVE_REFUND_TITLE_ID,
+  ResolveRefundData,
+  ResolveRefundDialog,
+  ResolveRefundResult,
 } from './billing-dialogs';
 import { periodLabel } from './billing-format';
 import { checkRefundAtProvider } from './refund-check';
@@ -200,6 +205,13 @@ type StatusFilter = PaymentStatus | '';
                     <span class="mt-1 block text-xs text-muted-foreground">{{
                       refundedBecause(r.reason)
                     }}</span>
+                    @if (r.resolutionNote) {
+                      <span
+                        class="mt-1 block text-xs text-muted-foreground"
+                        data-testid="refund-resolution-note"
+                        >{{ resolvedBecause(r.resolutionNote) }}</span
+                      >
+                    }
                   }
                 </td>
                 <td class="text-right">
@@ -224,6 +236,18 @@ type StatusFilter = PaymentStatus | '';
                       (click)="checkRefund(p)"
                     >
                       {{ text.refundCheck }}
+                    </button>
+                  }
+                  @if (needsReview(p)) {
+                    <button
+                      type="button"
+                      class="btn btn-ghost btn-sm"
+                      data-testid="refund-resolve"
+                      [attr.aria-label]="resolveLabel(p)"
+                      [disabled]="busy()"
+                      (click)="resolveRefund(p)"
+                    >
+                      {{ text.refundResolve }}
                     </button>
                   }
                   @if (p.status === 'Recorded' && p.method !== 'Online') {
@@ -301,6 +325,44 @@ export class PaymentsPage {
 
   protected refundedBecause(reason: string): string {
     return interpolate(this.text.refundedBecause, { reason });
+  }
+
+  protected resolvedBecause(note: string): string {
+    return interpolate(this.text.refundResolvedBecause, { note });
+  }
+
+  /** DEC-418: a refund the system gave up on; a School Admin settles it by hand. */
+  protected needsReview(p: PaymentDto): boolean {
+    return p.status === 'Recorded' && p.refund?.status === 'Pending' && p.refund.needsReview;
+  }
+
+  protected resolveLabel(p: PaymentDto): string {
+    return interpolate(this.text.refundResolveLabel, {
+      student: p.studentFirstName + ' ' + p.studentLastName,
+      period: periodLabel(p.period),
+    });
+  }
+
+  protected async resolveRefund(payment: PaymentDto): Promise<void> {
+    await this.exclusive(async () => {
+      const data: ResolveRefundData = { payment };
+      const ref = this.dialog.open<ResolveRefundResult>(ResolveRefundDialog, {
+        data,
+        ariaLabelledBy: RESOLVE_REFUND_TITLE_ID,
+        backdropClass: ['bg-slate-900/60'],
+      });
+      const result = await firstValueFrom(ref.closed);
+      if (result === REFUND_NOT_IN_REVIEW) {
+        this.toasts.error(errorMessages['Refund.NotInReview']);
+      } else if (result) {
+        this.toasts.success(
+          result.status === 'Refunded'
+            ? this.text.refundResolvedRefunded
+            : this.text.refundResolvedFailed,
+        );
+      }
+      await this.list.load();
+    });
   }
 
   protected refundFailure(code: string): string {
