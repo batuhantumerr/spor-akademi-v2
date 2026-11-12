@@ -254,8 +254,10 @@
     @apply border-border bg-card/50 text-muted-foreground;
   }
 
+  /* relative: visually hidden (sr-only, absolute) text in a wide table stays inside the scroll box instead of widening
+     the page at 320 px (WCAG 1.4.10, P3-11). */
   .table-shell {
-    @apply w-full overflow-x-auto rounded-xl border border-border bg-card;
+    @apply relative w-full overflow-x-auto rounded-xl border border-border bg-card focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background focus-visible:outline-none;
   }
 
   .data-table {

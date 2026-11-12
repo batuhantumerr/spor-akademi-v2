@@ -238,7 +238,7 @@ const DESKTOP_QUERY = '(min-width: 64rem)';
           #main
           id="main-content"
           tabindex="-1"
-          class="flex-1 overflow-y-auto p-4 focus:outline-none md:p-6"
+          class="relative flex-1 overflow-y-auto p-4 focus:outline-none md:p-6"
         >
           <div class="mx-auto w-full max-w-7xl">
             <router-outlet />

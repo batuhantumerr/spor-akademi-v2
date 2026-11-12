@@ -22,6 +22,7 @@ import { LanguageService } from './core/i18n/language.service';
 import { AppTitleStrategy } from './core/i18n/title.strategy';
 import { RealtimeService } from './core/realtime/realtime.service';
 import { DialogFocusRestorer } from './core/routing/dialog-focus';
+import { ScrollRegions } from './core/routing/scroll-regions';
 import { MenuNavigationReuseStrategy } from './core/routing/menu-navigation';
 import { ThemeService } from './core/theme/theme.service';
 
@@ -48,6 +49,8 @@ export const appConfig: ApplicationConfig = {
       inject(LanguageService);
       // Focus goes back to the control that opened a dialog, also when it was disabled meanwhile (P3-11).
       inject(DialogFocusRestorer).watch();
+      // Tables that scroll sideways on a phone can be reached and scrolled with the keyboard (P3-11).
+      inject(ScrollRegions).watch();
       inject(RealtimeService).connectWhileSignedIn();
       return firstValueFrom(
         inject(AuthService)
