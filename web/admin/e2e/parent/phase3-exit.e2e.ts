@@ -154,6 +154,9 @@ test('phase 3 exit: invitation, attendance, online payment, live announcement, t
     await expectNoSeriousA11yViolations(page, testInfo, 'parent-child-paid');
 
     // Paid in the admin panel: the guardian's account is active, the payment is listed once as Online, the due is gone.
+    // Leave the student page first: re-entering it reloads the guardian's status.
+    await nav(admin, 'Panel');
+    await expect(admin.getByRole('heading', { level: 1, name: 'Panel' })).toBeVisible();
     await navigateInApp(admin, `/students/${arranged.studentId}`);
     await expect(badge).toHaveText('Aktif');
     await nav(admin, 'Ödemeler');
