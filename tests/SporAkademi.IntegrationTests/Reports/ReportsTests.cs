@@ -192,6 +192,31 @@ public sealed class ReportsTests(DatabaseFixture database) : BillingTest(databas
     }
 
     [Fact]
+    [Trait("Roadmap", "P3-13")]
+    public async Task A_refunded_payment_counts_neither_for_its_period_nor_in_its_month()
+    {
+        // Two students of one group (1000 each, January 2027): one pays online through the Fake provider, the other in
+        // cash on 2027-01-10. Both count until the online payment is refunded (DEC-420); then only the cash payment does.
+        var (_, group, online) = await EnrolledAsync();
+        var cash = IdOf(await EnrollOkAsync(await RegisterStudentAsync("Veli"), group, "2027-01-04"));
+        var (_, payment) = await PayOnlineAsync(online);
+        await RecordOkAsync(cash, "2027-01", "1000.00");
+        const string Query = "/api/v1/reports/revenue?from=2027-01&to=2027-01";
+
+        var before = await GetOkAsync(Admin, Query);
+        Revenue(before.GetProperty("total")).ShouldBe("- 2000.00 0.00 0.00 2000.00 2000.00 0.00 2000.00 1 2 0");
+
+        (await RefundOkAsync(payment)).GetProperty("status").GetString().ShouldBe("Refunded");
+
+        var after = await GetOkAsync(Admin, Query);
+        after.GetProperty("periods").EnumerateArray().Select(Revenue).ShouldBe(
+            ["2027-01 2000.00 0.00 0.00 2000.00 1000.00 1000.00 1000.00 0.5 2 0"]);
+        Revenue(after.GetProperty("total")).ShouldBe("- 2000.00 0.00 0.00 2000.00 1000.00 1000.00 1000.00 0.5 2 0");
+        var csv = await ReadCsvAsync(Admin, "/api/v1/reports/revenue/csv?from=2027-01&to=2027-01");
+        csv[1].ShouldBe("2027-01;2000,00;0,00;0,00;2000,00;1000,00;1000,00;1000,00;50,0;2;0");
+    }
+
+    [Fact]
     public async Task Csv_exports_are_utf8_with_bom_semicolon_separated_and_match_the_report()
     {
         var admin = await SeedAsync();
