@@ -7,7 +7,8 @@ import { parentKeys, type Child } from '../parent/queries';
  * What the notifications hub sends (P3-08): ids only, never display data. The app refetches the REST queries it
  * already has and builds the toast text from its own cache; only `status` is taken from the payload.
  */
-export type NotificationType = 'announcement.published' | 'attendance.recorded' | 'payment.recorded';
+export type NotificationType =
+  'announcement.published' | 'attendance.recorded' | 'payment.recorded' | 'payment.refunded';
 export type AttendanceStatus = 'Present' | 'Absent' | 'Late' | 'Excused';
 
 export interface ParentNotification {
@@ -20,7 +21,12 @@ export interface ParentNotification {
   readonly status: AttendanceStatus | null;
 }
 
-const TYPES: readonly string[] = ['announcement.published', 'attendance.recorded', 'payment.recorded'];
+const TYPES: readonly string[] = [
+  'announcement.published',
+  'attendance.recorded',
+  'payment.recorded',
+  'payment.refunded',
+];
 const STATUSES: readonly string[] = ['Present', 'Absent', 'Late', 'Excused'];
 
 /** The hub's `notify` argument, or null when it is not one this app understands (ignored, never shown). */
@@ -83,6 +89,8 @@ export function invalidateFor(queryClient: QueryClient, notification: ParentNoti
             predicate: ({ queryKey }) => isChildList(queryKey, ['attendance']),
           });
     case 'payment.recorded':
+    case 'payment.refunded':
+      // P3-13: a refund reopens the month's due (unless other payments cover it) and changes the payment's status.
       return child
         ? Promise.all([
             queryClient.invalidateQueries({ queryKey: parentKeys.dues(child) }),
@@ -108,6 +116,8 @@ export function notificationMessage(notification: ParentNotification, name: stri
       return text.realtime.announcement;
     case 'payment.recorded':
       return format(text.realtime.payment, { name });
+    case 'payment.refunded':
+      return format(text.realtime.refund, { name });
     case 'attendance.recorded': {
       if (!notification.status) return format(text.realtime.attendanceUpdated, { name });
       if (!notification.date || notification.date === today) {

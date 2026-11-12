@@ -7,7 +7,11 @@ using SporAkademi.Domain.Students;
 
 namespace SporAkademi.Application.Billing;
 
-/// <summary>A payment for the School Admin (appendix D §2.10); cancelled ones stay visible with who, when and why.</summary>
+/// <summary>
+/// A payment for the School Admin (appendix D §2.10); cancelled ones stay visible with who, when and why. An online
+/// payment carries its online attempt and its latest refund request (P3-13), if any; a recorded online payment of a due
+/// whose recorded payments exceed what it owes carries the excess (<c>OverpaidBy</c>, live, DEC-420).
+/// </summary>
 public sealed record PaymentDto(
     Guid Id,
     Guid EnrollmentId,
@@ -23,7 +27,10 @@ public sealed record PaymentDto(
     PaymentStatus Status,
     string? CancelReason,
     Guid? CancelledBy,
-    DateTimeOffset? CancelledAt);
+    DateTimeOffset? CancelledAt,
+    Guid? OnlinePaymentId,
+    PaymentRefundDto? Refund,
+    MoneyDto? OverpaidBy);
 
 /// <summary>
 /// One unpaid period of an enrollment (US-24): what is owed (<see cref="Fee"/>, after the fee rules of P2-F8), what was
@@ -47,7 +54,8 @@ public sealed record OutstandingDueDto(
     ChargeAdjustment Adjustment,
     int DiscountPercent);
 
-public sealed record PaymentFilter(StudentId? StudentId, GroupId? GroupId, YearMonth? Period, PaymentStatus? Status);
+/// <param name="Statuses">When set, only payments in one of these statuses (in addition to <paramref name="Status"/>).</param>
+public sealed record PaymentFilter(StudentId? StudentId, GroupId? GroupId, YearMonth? Period, PaymentStatus? Status, IReadOnlyCollection<PaymentStatus>? Statuses = null);
 
 /// <summary>Payments of the current school (tenant filter applies). There is deliberately no update or delete.</summary>
 public interface IPaymentRepository
@@ -63,7 +71,8 @@ public interface IPaymentRepository
     Task<PagedResult<Payment>> ListAsync(PaymentFilter filter, PageRequest page, CancellationToken cancellationToken);
 
     /// <summary>
-    /// Sum of <see cref="PaymentStatus.Recorded"/> payments per enrollment and period, for periods from
+    /// Sum of <see cref="PaymentStatus.Recorded"/> payments per enrollment and period (cancelled and refunded payments never
+    /// count, DEC-420), for periods from
     /// <paramref name="firstPeriod"/> to <paramref name="lastPeriod"/> (inclusive), optionally of one group. Summed in the
     /// database as plain decimals, so no total can overflow <see cref="Money"/>.
     /// </summary>

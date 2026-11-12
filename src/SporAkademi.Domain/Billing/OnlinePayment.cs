@@ -131,7 +131,7 @@ public sealed class OnlinePayment : AggregateRoot<OnlinePaymentId>, ITenantScope
 
     /// <summary>
     /// The success brought the due's recorded total above its fee (e.g. a late success after a cash payment, DEC-342);
-    /// the money is kept and the refund is handled outside the system for now.
+    /// the money is kept until the school refunds this payment through the provider (P3-13, DEC-420).
     /// </summary>
     public bool Overpaid { get; private set; }
 

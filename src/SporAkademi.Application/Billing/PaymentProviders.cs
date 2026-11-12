@@ -20,7 +20,51 @@ public interface IPaymentProvider
 
     /// <summary>Verifies a webhook's signature and reads which checkout it is about; <c>null</c> when it is not authentic.</summary>
     ProviderNotification? VerifyNotification(string body, IReadOnlyDictionary<string, string> headers);
+
+    /// <summary>
+    /// Returns the full amount of a charge (P3-13, DEC-418). The answer is a refund, a definite refusal, or a refusal that
+    /// may mean "already refunded" (<see cref="ProviderRefundOutcome.Verify"/>: the caller checks the payment detail before
+    /// deciding, DEC-418). When the outcome is unknown (unreachable, timeout, server error) it throws
+    /// <see cref="PaymentProviderException"/>. The refund is always the full amount, so a provider never returns money twice.
+    /// </summary>
+    Task<ProviderRefundResult> RefundAsync(RefundRequest request, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Whether the charge's money is back with the payer, from the provider's payment detail (DEC-418). Throws
+    /// <see cref="PaymentProviderException"/> when the provider cannot answer or the answer is not conclusive.
+    /// </summary>
+    Task<ProviderRefundCheck> CheckRefundAsync(RefundRequest request, CancellationToken cancellationToken);
 }
+
+/// <summary>What the provider needs to refund a charge: ids and the amount only, never the reason or personal data.</summary>
+/// <param name="RefundId">Our refund id; sent as the provider's conversation id.</param>
+public sealed record RefundRequest(Guid RefundId, string ProviderPaymentId, Money Amount);
+
+public enum ProviderRefundOutcome
+{
+    Refunded,
+
+    /// <summary>A definite refusal: nothing was returned.</summary>
+    Declined,
+
+    /// <summary>Refused in a way that can also mean "already refunded"; the payment detail decides (DEC-418).</summary>
+    Verify,
+}
+
+/// <summary>A definite answer to a refund request.</summary>
+/// <param name="ProviderRefundId">The provider's reference of the refund when refunded.</param>
+/// <param name="FailureCode">The provider's error code when it refused.</param>
+public sealed record ProviderRefundResult(ProviderRefundOutcome Outcome, string? ProviderRefundId, string? FailureCode)
+{
+    public static ProviderRefundResult Refunded(string providerRefundId) => new(ProviderRefundOutcome.Refunded, providerRefundId, null);
+
+    public static ProviderRefundResult Declined(string failureCode) => new(ProviderRefundOutcome.Declined, null, failureCode);
+
+    public static ProviderRefundResult Verify(string failureCode) => new(ProviderRefundOutcome.Verify, null, failureCode);
+}
+
+/// <summary>The provider's payment detail: the money is back (<paramref name="Refunded"/>) or not.</summary>
+public sealed record ProviderRefundCheck(bool Refunded, string? ProviderRefundId);
 
 /// <summary>What the provider needs to open a checkout: ids and the amount only, no personal data (DEC-345).</summary>
 public sealed record CheckoutRequest(Guid OnlinePaymentId, Guid EnrollmentId, Guid StudentId, string Period, Money Amount);
@@ -72,6 +116,9 @@ public interface IPaymentProviders
 
     /// <summary>How long an attempt may stay <c>Created</c> (no checkout yet) before a new attempt for the due may start.</summary>
     TimeSpan CheckoutLifetime { get; }
+
+    /// <summary>Open attempts and unsettled refunds older than this are looked at again by the reconciliation job.</summary>
+    TimeSpan ReconcileAfter { get; }
 }
 
 /// <summary>Finds the school and id of an online payment by the provider's token; used before any tenant is known (DEC-344).</summary>

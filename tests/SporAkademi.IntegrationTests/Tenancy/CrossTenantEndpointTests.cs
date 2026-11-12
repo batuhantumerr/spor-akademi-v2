@@ -467,10 +467,17 @@ public sealed partial class CrossTenantEndpointTests(DatabaseFixture database) :
             ["POST /api/v1/enrollments/{id:guid}/end"] = (new { date = "2027-01-14" }, ""),
             ["GET /api/v1/payments/{id:guid}"] = (null, ""),
             ["POST /api/v1/payments/{id:guid}/cancel"] = (new { reason = "Hack" }, ""),
+            // P3-13: refunding another school's payment is "not found" (with a valid key, so validation passes).
+            ["POST /api/v1/payments/{id:guid}/refund"] = (new { reason = "Hack" }, ""),
+            ["POST /api/v1/payments/{id:guid}/refund/check"] = (null, ""),
+            ["POST /api/v1/payments/{id:guid}/refund/resolve"] = (new { refunded = true, note = "Hack" }, ""),
             ["GET /api/v1/online-payments/{id:guid}"] = (null, ""),
             ["DELETE /api/v1/settings/billing-rules/{effectiveFrom}"] = (null, ""),
         };
-        return probes.ToDictionary(p => p.Key, p => new Probe(p.Key, p.Value.Body, p.Value.Query, 404, NotFoundOf(p.Key.Split(' ')[1])), StringComparer.Ordinal);
+        return probes.ToDictionary(
+            p => p.Key,
+            p => new Probe(p.Key, p.Value.Body, p.Value.Query, 404, NotFoundOf(p.Key.Split(' ')[1]), p.Key.EndsWith("/refund", StringComparison.Ordinal) ? IdempotencyKey : null),
+            StringComparer.Ordinal);
     }
 
     /// <summary>

@@ -133,6 +133,8 @@ export const text = {
     title: 'Ödemeler',
     empty: 'Kayıtlı ödeme yok.',
     methods: { Cash: 'Nakit', BankTransfer: 'Havale/EFT', Online: 'Online' } as Record<string, string>,
+    refunded: 'İade edildi',
+    refundedOn: 'Karta iade: {date}',
     more: 'Daha fazla göster',
   },
   announcements: {
@@ -197,6 +199,7 @@ export const text = {
     yourChild: 'Çocuğunuz',
     announcement: 'Yeni duyuru yayımlandı',
     payment: '{name} için ödeme alındı',
+    refund: '{name} için ödeme iade edildi',
     attendanceUpdated: '{name} için yoklama güncellendi',
     attendanceToday: {
       Present: '{name} bugün antrenmana katıldı',
