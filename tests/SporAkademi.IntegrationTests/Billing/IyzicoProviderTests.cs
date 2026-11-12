@@ -219,7 +219,8 @@ public sealed class IyzicoProviderTests
         var decoded = Encoding.UTF8.GetString(Convert.FromBase64String(request.Headers["Authorization"]["IYZWSv2 ".Length..]));
         var expectedSignature = Convert.ToHexStringLower(HMACSHA256.HashData(
             Encoding.UTF8.GetBytes(SecretKey),
-            Encoding.UTF8.GetBytes(random + "/v2/reporting/payment/details?paymentId=22416035")));
+            // Like iyzipay-dotnet (FindUriPath): the signed path stops at the query string.
+            Encoding.UTF8.GetBytes(random + "/v2/reporting/payment/details")));
         decoded.ShouldBe($"apiKey:{ApiKey}&randomKey:{random}&signature:{expectedSignature}");
     }
 
@@ -236,6 +237,14 @@ public sealed class IyzicoProviderTests
         await Should.ThrowAsync<PaymentProviderException>(() =>
             provider.CheckRefundAsync(new RefundRequest(Guid.CreateVersion7(), "22416035", Money.Try(10m)), Ct));
     }
+
+    [Theory]
+    [Trait("Roadmap", "P3-13")]
+    [InlineData("/v2/reporting/payment/details?paymentId=22416035", "/v2/reporting/payment/details")]
+    [InlineData("/v2/payment/refund", "/v2/payment/refund")]
+    [InlineData("/a?b=1?c=2", "/a")]
+    public void The_signed_path_stops_at_the_query_like_the_official_sdks(string pathAndQuery, string expected) =>
+        IyzicoProtocol.SignedPath(pathAndQuery).ShouldBe(expected);
 
     private sealed record CapturedRequest(Uri Uri, Dictionary<string, string> Headers, string Body);
 

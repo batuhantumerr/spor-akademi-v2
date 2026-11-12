@@ -16,6 +16,9 @@ internal sealed record CancelPaymentRequest(string Reason);
 /// <summary>P3-13: why the school returns the money (required; the school's own note, never sent to the parent or provider).</summary>
 internal sealed record RefundPaymentRequest(string? Reason);
 
+/// <summary>P3-13 (DEC-418): settles a refund in review by hand: the money is back (<c>refunded</c>) or not, with an internal note.</summary>
+internal sealed record ResolveRefundRequest(bool Refunded, string? Note);
+
 /// <summary>Payments and dues (appendix D §2.10; US-23, US-24). School Admin only. Payments are never edited or deleted.</summary>
 internal static class BillingEndpoints
 {
@@ -30,6 +33,7 @@ internal static class BillingEndpoints
             .Produces<PaymentDto>()
             .Produces<PaymentDto>(StatusCodes.Status202Accepted)
             .ProducesProblems(400, 404, 409, 422);
+        payments.MapPost("/{id:guid}/refund/resolve", ResolveRefund).Produces<PaymentDto>().ProducesProblems(400, 404, 409, 422);
         payments.MapPost("/{id:guid}/refund/check", CheckRefund)
             .Produces<PaymentDto>()
             .Produces<PaymentDto>(StatusCodes.Status202Accepted)
@@ -135,6 +139,24 @@ internal static class BillingEndpoints
         return checkedRefund.IsSuccess
             ? await RefundResultAsync(checkedRefund.Value, reader, cancellationToken)
             : ProblemResults.Problem(checkedRefund.Error);
+    }
+
+    /// <summary>
+    /// P3-13 (DEC-418): a School Admin settles a refund the system could not settle ("İnceleme gerekli") after checking
+    /// the provider panel. 200 with the payment (refunded, or still recorded with a failed refund); 422
+    /// <c>Refund.NotInReview</c> when the refund is not waiting for review; 400 without a note.
+    /// </summary>
+    private static async Task<IResult> ResolveRefund(
+        Guid id,
+        ResolveRefundRequest request,
+        ICommandHandler<ResolveRefundCommand, PaymentRefundId> handler,
+        IQueryHandler<GetPaymentQuery, PaymentDto> reader,
+        CancellationToken cancellationToken)
+    {
+        var resolved = await handler.Handle(new ResolveRefundCommand(PaymentId.From(id), request.Refunded, request.Note), cancellationToken);
+        return resolved.IsSuccess
+            ? (await reader.Handle(new GetPaymentQuery(PaymentId.From(id), resolved.Value), cancellationToken)).OkOrProblem()
+            : ProblemResults.Problem(resolved.Error);
     }
 
     /// <summary>DEC-419: the answer follows the refund request's own status, with that request as the payment's refund.</summary>

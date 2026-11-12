@@ -146,6 +146,8 @@ internal sealed class PaymentProviders(IOptions<PaymentOptions> options, IHostEn
     public IPaymentProvider? Active => _active.Value;
 
     public TimeSpan CheckoutLifetime => options.Value.CheckoutLifetime;
+
+    public TimeSpan ReconcileAfter => options.Value.ReconcileAfter;
 }
 
 /// <summary>The Fake provider's hosted checkout, only while it is the active provider.</summary>

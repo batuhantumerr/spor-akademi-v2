@@ -116,6 +116,9 @@ public interface IPaymentProviders
 
     /// <summary>How long an attempt may stay <c>Created</c> (no checkout yet) before a new attempt for the due may start.</summary>
     TimeSpan CheckoutLifetime { get; }
+
+    /// <summary>Open attempts and unsettled refunds older than this are looked at again by the reconciliation job.</summary>
+    TimeSpan ReconcileAfter { get; }
 }
 
 /// <summary>Finds the school and id of an online payment by the provider's token; used before any tenant is known (DEC-344).</summary>

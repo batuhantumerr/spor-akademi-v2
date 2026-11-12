@@ -39,6 +39,9 @@ public sealed class PaymentRefund : AggregateRoot<PaymentRefundId>, ITenantScope
     public const int ReasonMaxLength = 500;
     public const int FailureCodeMaxLength = OnlinePayment.FailureCodeMaxLength;
 
+    /// <summary>The failure code of a request in review that a School Admin settled as not refunded.</summary>
+    public const string ManuallyFailedCode = "ResolvedNotRefunded";
+
     private PaymentRefund(
         PaymentRefundId id,
         Payment payment,
@@ -132,6 +135,14 @@ public sealed class PaymentRefund : AggregateRoot<PaymentRefundId>, ITenantScope
     /// at the provider ("Sağlayıcıda kontrol et").
     /// </summary>
     public bool NeedsReview { get; private set; }
+
+    /// <summary>The School Admin who settled a request in review by hand (DEC-418); <c>null</c> otherwise.</summary>
+    public UserId? ResolvedBy { get; private set; }
+
+    public DateTimeOffset? ResolvedAt { get; private set; }
+
+    /// <summary>Why it was settled by hand (e.g. what the provider panel shows); for the school only.</summary>
+    public string? ResolutionNote { get; private set; }
 
     /// <summary>
     /// Requests the full refund of an online payment. The payment must still count toward its due
@@ -234,6 +245,50 @@ public sealed class PaymentRefund : AggregateRoot<PaymentRefundId>, ITenantScope
         return Result.Success(true);
     }
 
+    /// <summary>
+    /// DEC-418: a School Admin settles a request in review by hand after checking the provider panel: the money is back
+    /// (the payment becomes <see cref="PaymentStatus.Refunded"/>) or it is not (the request fails; a new request is the
+    /// retry). Who, when and the required note are kept.
+    /// </summary>
+    public Result ResolveManually(Payment payment, bool refunded, string note, UserId resolvedBy, DateTimeOffset now)
+    {
+        ArgumentNullException.ThrowIfNull(payment);
+        ArgumentNullException.ThrowIfNull(note);
+        if (Status != PaymentRefundStatus.Pending || !NeedsReview)
+        {
+            return Result.Failure(PaymentRefundErrors.NotInReview);
+        }
+
+        var trimmed = note.Trim();
+        if (trimmed.Length == 0)
+        {
+            return Result.Failure(PaymentRefundErrors.ResolutionNoteRequired);
+        }
+
+        if (trimmed.Length > ReasonMaxLength)
+        {
+            return Result.Failure(CommonErrors.FieldTooLong);
+        }
+
+        if (refunded)
+        {
+            var succeeded = Succeed(payment, $"manual-{Id.Value:N}", now);
+            if (succeeded.IsFailure)
+            {
+                return Result.Failure(succeeded.Error);
+            }
+        }
+        else
+        {
+            Fail(ManuallyFailedCode, now);
+        }
+
+        ResolvedBy = resolvedBy;
+        ResolvedAt = now;
+        ResolutionNote = trimmed;
+        return Result.Success();
+    }
+
     /// <summary>A retried refund was refused and the provider does not show the money returned: a person must look (DEC-418).</summary>
     /// <returns><c>true</c> when the state changed.</returns>
     public bool MarkForReview()
@@ -275,4 +330,6 @@ public static class PaymentRefundErrors
     public static readonly Error InProgress = Error.Conflict("Refund.InProgress", "A refund of the payment is in progress.");
     public static readonly Error NotPending = Error.BusinessRule("Refund.NotPending", "The refund already has a final result.");
     public static readonly Error ProviderDeclined = Error.BusinessRule("Refund.ProviderDeclined", "The payment provider declined the refund.");
+    public static readonly Error NotInReview = Error.BusinessRule("Refund.NotInReview", "The refund is not waiting for review.");
+    public static readonly Error ResolutionNoteRequired = Error.Validation("Refund.ResolutionNoteRequired", "A note is required to settle a refund by hand.");
 }

@@ -42,6 +42,9 @@ namespace SporAkademi.Infrastructure.Migrations
                     failure_code = table.Column<string>(type: "character varying(64)", maxLength: 64, nullable: true),
                     completed_at = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
                     needs_review = table.Column<bool>(type: "boolean", nullable: false),
+                    resolved_by = table.Column<Guid>(type: "uuid", nullable: true),
+                    resolved_at = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
+                    resolution_note = table.Column<string>(type: "character varying(500)", maxLength: 500, nullable: true),
                     created_at = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
                     created_by = table.Column<Guid>(type: "uuid", nullable: true),
                     updated_at = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
@@ -55,6 +58,7 @@ namespace SporAkademi.Infrastructure.Migrations
                     table.PrimaryKey("pk_payment_refunds", x => x.id);
                     table.CheckConstraint("ck_payment_refunds_amount", "amount > 0");
                     table.CheckConstraint("ck_payment_refunds_attempts", "attempts >= 0");
+                    table.CheckConstraint("ck_payment_refunds_resolution", "(resolved_at IS NULL) = (resolved_by IS NULL) AND (resolved_at IS NULL) = (resolution_note IS NULL) AND (resolved_at IS NULL OR status <> 'Pending')");
                     table.CheckConstraint("ck_payment_refunds_result", "(status = 'Succeeded') = (provider_refund_id IS NOT NULL) AND (status = 'Failed') = (failure_code IS NOT NULL) AND (status = 'Pending') = (completed_at IS NULL)");
                     table.CheckConstraint("ck_payment_refunds_review", "NOT needs_review OR status = 'Pending'");
                     table.ForeignKey(
@@ -175,7 +179,8 @@ namespace SporAkademi.Infrastructure.Migrations
                     END IF;
                     IF TG_OP = 'INSERT' THEN
                         IF NEW.status <> 'Pending' OR NEW.attempts <> 0 OR NEW.needs_review OR NEW.last_attempt_at IS NOT NULL
-                           OR NEW.provider_refund_id IS NOT NULL OR NEW.failure_code IS NOT NULL OR NEW.completed_at IS NOT NULL THEN
+                           OR NEW.provider_refund_id IS NOT NULL OR NEW.failure_code IS NOT NULL OR NEW.completed_at IS NOT NULL
+                           OR NEW.resolved_at IS NOT NULL OR NEW.resolved_by IS NOT NULL OR NEW.resolution_note IS NOT NULL THEN
                             RAISE EXCEPTION 'a refund request starts pending, untried' USING ERRCODE = 'restrict_violation';
                         END IF;
                         RETURN NEW;
@@ -190,9 +195,11 @@ namespace SporAkademi.Infrastructure.Migrations
                         RAISE EXCEPTION 'a refund request never changes' USING ERRCODE = 'restrict_violation';
                     END IF;
                     IF OLD.status <> 'Pending'
-                       AND (NEW.status, NEW.provider_refund_id, NEW.failure_code, NEW.completed_at, NEW.attempts, NEW.last_attempt_at, NEW.needs_review)
+                       AND (NEW.status, NEW.provider_refund_id, NEW.failure_code, NEW.completed_at, NEW.attempts, NEW.last_attempt_at, NEW.needs_review,
+                            NEW.resolved_by, NEW.resolved_at, NEW.resolution_note)
                        IS DISTINCT FROM
-                       (OLD.status, OLD.provider_refund_id, OLD.failure_code, OLD.completed_at, OLD.attempts, OLD.last_attempt_at, OLD.needs_review) THEN
+                       (OLD.status, OLD.provider_refund_id, OLD.failure_code, OLD.completed_at, OLD.attempts, OLD.last_attempt_at, OLD.needs_review,
+                            OLD.resolved_by, OLD.resolved_at, OLD.resolution_note) THEN
                         RAISE EXCEPTION 'a refund with a final result never changes' USING ERRCODE = 'restrict_violation';
                     END IF;
                     RETURN NEW;

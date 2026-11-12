@@ -1125,6 +1125,19 @@ namespace SporAkademi.Infrastructure.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("requested_by");
 
+                    b.Property<string>("ResolutionNote")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("resolution_note");
+
+                    b.Property<DateTimeOffset?>("ResolvedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("resolved_at");
+
+                    b.Property<Guid?>("ResolvedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("resolved_by");
+
                     b.Property<string>("Status")
                         .IsRequired()
                         .HasMaxLength(32)
@@ -1199,6 +1212,8 @@ namespace SporAkademi.Infrastructure.Migrations
                             t.HasCheckConstraint("ck_payment_refunds_amount", "amount > 0");
 
                             t.HasCheckConstraint("ck_payment_refunds_attempts", "attempts >= 0");
+
+                            t.HasCheckConstraint("ck_payment_refunds_resolution", "(resolved_at IS NULL) = (resolved_by IS NULL) AND (resolved_at IS NULL) = (resolution_note IS NULL) AND (resolved_at IS NULL OR status <> 'Pending')");
 
                             t.HasCheckConstraint("ck_payment_refunds_result", "(status = 'Succeeded') = (provider_refund_id IS NOT NULL) AND (status = 'Failed') = (failure_code IS NOT NULL) AND (status = 'Pending') = (completed_at IS NULL)");
 

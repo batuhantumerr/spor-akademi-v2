@@ -170,7 +170,8 @@ internal sealed class PaymentViews(
     RefundViews refunds,
     IPaymentRepository repository,
     IEnrollmentDirectory enrollments,
-    DueCharges dueCharges)
+    DueCharges dueCharges,
+    IPaymentRefundRepository refundRepository)
 {
     public async Task<IReadOnlyList<PaymentDto>> ToDtosAsync(IReadOnlyList<Payment> payments, CancellationToken cancellationToken)
     {
@@ -226,6 +227,10 @@ internal sealed class PaymentViews(
 
         var totals = await repository.RecordedTotalsOfEnrollmentsAsync(
             [.. dues.Select(d => d.EnrollmentId).Distinct()], dues.Min(d => d.Period)!, dues.Max(d => d.Period)!, cancellationToken);
+        // Payments whose refund is pending do not cover the due: their money may already be on its way back.
+        var pending = await refundRepository.PendingRefundTotalsAsync([.. dues.Select(d => d.EnrollmentId).Distinct()], cancellationToken);
+        // ForEnrollmentAsync per due: a page has few online payments, and the family-wide or school-wide charge books
+        // would read far more than they save.
         var infos = new Dictionary<EnrollmentId, EnrollmentInfo?>();
         foreach (var (enrollmentId, period) in dues)
         {
@@ -236,7 +241,7 @@ internal sealed class PaymentViews(
             }
 
             var owed = info is null ? 0m : (await dueCharges.ForEnrollmentAsync(info, period, cancellationToken))?.Fee.Amount ?? 0m;
-            result[(enrollmentId, period)] = totals.GetValueOrDefault((enrollmentId, period)) - owed;
+            result[(enrollmentId, period)] = totals.GetValueOrDefault((enrollmentId, period)) - pending.GetValueOrDefault((enrollmentId, period)) - owed;
         }
 
         return result;

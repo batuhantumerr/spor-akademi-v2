@@ -176,7 +176,7 @@ internal sealed class IyzicoPaymentProvider(IHttpClientFactory httpClients, IOpt
 
     /// <summary>
     /// DEC-418: the payment's refund status from iyzico's reporting API (<c>GET /v2/reporting/payment/details?paymentId=</c>,
-    /// signed over the path with its query and an empty body): <c>paymentRefundStatus=TOTAL_REFUNDED</c> means the money is
+    /// signed over the path without its query and an empty body, like the official SDKs): <c>paymentRefundStatus=TOTAL_REFUNDED</c> means the money is
     /// back, <c>NOT_REFUNDED</c> that it is not. Anything else (partial refund, unreadable or failed answer) is not
     /// conclusive and throws, so the request stays pending for a person to check.
     /// </summary>
@@ -208,7 +208,7 @@ internal sealed class IyzicoPaymentProvider(IHttpClientFactory httpClients, IOpt
     private Task<JsonDocument> PostAsync(string path, object payload, CancellationToken cancellationToken) =>
         SendAsync(HttpMethod.Post, path, JsonSerializer.Serialize(payload, Json), cancellationToken);
 
-    /// <summary>A signed call; for a <c>GET</c> the signed path includes the query and the body is empty.</summary>
+    /// <summary>A signed call; for a <c>GET</c> the body is empty and the signed path stops at the query (as the SDKs do).</summary>
     private async Task<JsonDocument> SendAsync(HttpMethod method, string path, string body, CancellationToken cancellationToken)
     {
         var randomKey = Convert.ToHexStringLower(RandomNumberGenerator.GetBytes(12));
@@ -218,7 +218,7 @@ internal sealed class IyzicoPaymentProvider(IHttpClientFactory httpClients, IOpt
             request.Content = new StringContent(body, Encoding.UTF8, "application/json");
         }
 
-        request.Headers.TryAddWithoutValidation("Authorization", IyzicoProtocol.Authorization(Settings.ApiKey!, Settings.SecretKey!, randomKey, path, body));
+        request.Headers.TryAddWithoutValidation("Authorization", IyzicoProtocol.Authorization(Settings.ApiKey!, Settings.SecretKey!, randomKey, IyzicoProtocol.SignedPath(path), body));
         request.Headers.Add(IyzicoProtocol.RandomHeader, randomKey);
         request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
 

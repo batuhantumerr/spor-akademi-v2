@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using SporAkademi.Application.Billing;
 using SporAkademi.Domain.Billing;
 using SporAkademi.Domain.Enrollments;
+using SporAkademi.Domain.SharedKernel;
 using SporAkademi.Domain.Tenancy;
 using SporAkademi.Infrastructure.Persistence;
 
@@ -28,6 +29,10 @@ internal sealed class PaymentRefundConfiguration : IEntityTypeConfiguration<Paym
             t.HasCheckConstraint("ck_payment_refunds_attempts", "attempts >= 0");
             // DEC-418: only a pending request waits for review.
             t.HasCheckConstraint("ck_payment_refunds_review", "NOT needs_review OR status = 'Pending'");
+            // DEC-418: a manual settlement always has its author, time and note, and only on a final request.
+            t.HasCheckConstraint(
+                "ck_payment_refunds_resolution",
+                "(resolved_at IS NULL) = (resolved_by IS NULL) AND (resolved_at IS NULL) = (resolution_note IS NULL) AND (resolved_at IS NULL OR status <> 'Pending')");
         });
         builder.HasKey(r => r.Id);
         builder.HasOne<School>().WithMany().HasForeignKey(r => r.TenantId).OnDelete(DeleteBehavior.Restrict);
@@ -54,6 +59,7 @@ internal sealed class PaymentRefundConfiguration : IEntityTypeConfiguration<Paym
         builder.Property(r => r.IdempotencyKey).HasMaxLength(OnlinePayment.IdempotencyKeyMaxLength);
         builder.Property(r => r.RequestHash).HasMaxLength(OnlinePayment.RequestHashLength).IsFixedLength();
         builder.Property(r => r.FailureCode).HasMaxLength(PaymentRefund.FailureCodeMaxLength);
+        builder.Property(r => r.ResolutionNote).HasMaxLength(PaymentRefund.ReasonMaxLength);
 
         builder.HasIndex(r => new { r.TenantId, r.IdempotencyKey }).IsUnique().HasDatabaseName(IdempotencyKeyIndex);
         builder.HasIndex(r => r.PaymentId).IsUnique().HasFilter("status IN ('Pending', 'Succeeded')").HasDatabaseName(ActivePaymentIndex);
@@ -109,7 +115,9 @@ internal sealed class PaymentRefundRepository(AppDbContext db) : IPaymentRefundR
             .Where(r => r.Id == id && r.Status == PaymentRefundStatus.Pending && r.Attempts == expectedAttempts
                 && (lastAttemptBefore == null || (r.LastAttemptAt ?? r.RequestedAt) < lastAttemptBefore))
             .ExecuteUpdateAsync(
-                set => set.SetProperty(r => r.Attempts, r => r.Attempts + 1).SetProperty(r => r.LastAttemptAt, now),
+                set => set.SetProperty(r => r.Attempts, r => r.Attempts + 1)
+                    .SetProperty(r => r.LastAttemptAt, now)
+                    .SetProperty(r => EF.Property<DateTimeOffset>(r, AuditColumns.UpdatedAt), now),
                 cancellationToken);
         // The request that created the row may still track it in this scope (same DbContext): refresh its attempts and
         // xmin, or storing the provider's answer would fail with a concurrency conflict.
@@ -119,6 +127,25 @@ internal sealed class PaymentRefundRepository(AppDbContext db) : IPaymentRefundR
         }
 
         return claimed == 1;
+    }
+
+    public async Task<IReadOnlyDictionary<(EnrollmentId Enrollment, YearMonth Period), decimal>> PendingRefundTotalsAsync(
+        IReadOnlyCollection<EnrollmentId> enrollmentIds,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(enrollmentIds);
+        var ids = enrollmentIds.Distinct().ToList();
+        var totals = await db.Set<PaymentRefund>().AsNoTracking()
+            .Where(r => r.Status == PaymentRefundStatus.Pending && ids.Contains(r.EnrollmentId))
+            .Join(
+                db.Set<Payment>().AsNoTracking().Where(p => p.Status == PaymentStatus.Recorded),
+                r => r.PaymentId,
+                p => p.Id,
+                (r, p) => new { p.EnrollmentId, p.Period, Amount = p.Amount.Amount })
+            .GroupBy(x => new { x.EnrollmentId, x.Period })
+            .Select(g => new { g.Key.EnrollmentId, g.Key.Period, Total = g.Sum(x => x.Amount) })
+            .ToListAsync(cancellationToken);
+        return totals.ToDictionary(t => (t.EnrollmentId, t.Period), t => t.Total);
     }
 
     public void Add(PaymentRefund refund) => db.Add(refund);

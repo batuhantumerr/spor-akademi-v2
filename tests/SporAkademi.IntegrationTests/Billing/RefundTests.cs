@@ -402,6 +402,124 @@ public sealed class RefundTests(DatabaseFixture database) : OnlinePaymentTest(da
         (await RunReconcileJobAsync()).ShouldBe(1);
     }
 
+    private Task<HttpResponseMessage> ResolveAsync(Guid payment, bool refunded, string? note, HttpClient? client = null) =>
+        (client ?? Admin).PostAsJsonAsync($"/api/v1/payments/{payment}/refund/resolve", new { refunded, note }, Ct);
+
+    /// <summary>A refund the job gave up on after <c>MaxAutomaticAttempts</c> unknown outcomes; returns a fresh admin client.</summary>
+    private async Task<HttpClient> StuckRefundAsync(Guid payment, string key)
+    {
+        Fake.FailNextCalls(3);
+        (await RefundAsync(payment, Reason, key)).StatusCode.ShouldBe(HttpStatusCode.Accepted);
+        for (var run = 0; run < 3; run++)
+        {
+            Api.Clock.Advance(TimeSpan.FromMinutes(11));
+            (await RunReconcileJobAsync()).ShouldBe(0);
+        }
+
+        return Api.SchoolAdminClient(School);
+    }
+
+    [Fact]
+    public async Task After_three_unanswered_attempts_the_job_stops_and_marks_the_refund_for_review()
+    {
+        var (_, _, enrollment) = await EnrolledAsync();
+        var (_, payment) = await PayOnlineAsync(enrollment);
+
+        using var admin = await StuckRefundAsync(payment, "takili-1");
+
+        var refund = (await PaymentAsync(payment, admin)).GetProperty("refund");
+        refund.GetProperty("status").GetString().ShouldBe("Pending");
+        refund.GetProperty("attempts").GetInt32().ShouldBe(3);
+        refund.GetProperty("needsReview").GetBoolean().ShouldBeTrue();
+        var calls = Fake.RefundCalls;
+        Api.Clock.Advance(TimeSpan.FromMinutes(11));
+        (await RunReconcileJobAsync()).ShouldBe(0);
+        Fake.RefundCalls.ShouldBe(calls);
+        (await PaymentAsync(payment, admin)).GetProperty("refund").GetProperty("attempts").GetInt32().ShouldBe(3);
+    }
+
+    [Fact]
+    public async Task A_refund_in_review_is_settled_by_hand_as_refunded_with_an_audited_note()
+    {
+        var (_, _, enrollment) = await EnrolledAsync();
+        var (_, payment) = await PayOnlineAsync(enrollment);
+        using var admin = await StuckRefundAsync(payment, "elle-iade-1");
+
+        var noNote = await ResolveAsync(payment, true, "  ", admin);
+        noNote.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        (await BodyOf(noNote)).GetProperty("errors").GetProperty("note")[0].GetString().ShouldBe("Refund.ResolutionNoteRequired");
+
+        var resolved = await ResolveAsync(payment, true, "Sağlayıcı panelinde iade görünüyor", admin);
+
+        resolved.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var body = await BodyOf(resolved);
+        body.GetProperty("status").GetString().ShouldBe("Refunded");
+        var refund = body.GetProperty("refund");
+        refund.GetProperty("status").GetString().ShouldBe("Succeeded");
+        refund.GetProperty("needsReview").GetBoolean().ShouldBeFalse();
+        refund.GetProperty("resolutionNote").GetString().ShouldBe("Sağlayıcı panelinde iade görünüyor");
+        refund.GetProperty("resolvedBy").GetGuid().ShouldNotBe(Guid.Empty);
+        refund.GetProperty("resolvedAt").ValueKind.ShouldBe(JsonValueKind.String);
+        (await CountAsync("SELECT count(*) FROM outbox.messages WHERE type = 'billing.payment-refunded.v1'")).ShouldBe(1);
+        (await CountAsync("SELECT count(*) FROM outbox.messages WHERE payload::text LIKE '%panelinde%'")).ShouldBe(0);
+
+        var again = await ResolveAsync(payment, false, "tekrar", admin);
+        again.StatusCode.ShouldBe(HttpStatusCode.UnprocessableEntity);
+        (await CodeOf(again)).ShouldBe("Refund.NotInReview");
+    }
+
+    [Fact]
+    public async Task A_refund_in_review_settled_as_not_refunded_fails_and_can_be_requested_again()
+    {
+        var (_, _, enrollment) = await EnrolledAsync();
+        var (_, payment) = await PayOnlineAsync(enrollment);
+        using var admin = await StuckRefundAsync(payment, "elle-red-1");
+
+        var resolved = await ResolveAsync(payment, false, "Sağlayıcıda iade yok", admin);
+
+        resolved.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var body = await BodyOf(resolved);
+        body.GetProperty("status").GetString().ShouldBe("Recorded");
+        body.GetProperty("refund").GetProperty("status").GetString().ShouldBe("Failed");
+        body.GetProperty("refund").GetProperty("failureCode").GetString().ShouldBe("ResolvedNotRefunded");
+        (await RefundOkAsync(payment, client: admin)).GetProperty("status").GetString().ShouldBe("Refunded");
+    }
+
+    [Fact]
+    public async Task Only_a_refund_in_review_is_settled_by_hand()
+    {
+        var (_, _, enrollment) = await EnrolledAsync();
+        var (_, payment) = await PayOnlineAsync(enrollment);
+        Fake.FailNextCalls(1);
+        (await RefundAsync(payment, Reason, "bekleyen-1")).StatusCode.ShouldBe(HttpStatusCode.Accepted);
+
+        var pending = await ResolveAsync(payment, true, "erken");
+
+        pending.StatusCode.ShouldBe(HttpStatusCode.UnprocessableEntity);
+        (await CodeOf(pending)).ShouldBe("Refund.NotInReview");
+        (await ResolveAsync(Guid.CreateVersion7(), true, "yok")).StatusCode.ShouldBe(HttpStatusCode.NotFound);
+    }
+
+    [Fact]
+    public async Task The_admin_check_fails_a_refund_only_after_the_reconciliation_threshold()
+    {
+        var (_, _, enrollment) = await EnrolledAsync();
+        var (_, payment) = await PayOnlineAsync(enrollment);
+        Fake.FailNextCalls(1);
+        (await RefundAsync(payment, Reason, "esik-anahtari-1")).StatusCode.ShouldBe(HttpStatusCode.Accepted);
+
+        // Past the quiet minute but younger than ReconcileAfter: "not refunded" may still change, so it stays pending.
+        using var soon = AdvanceTo(Api.Clock.GetUtcNow().AddMinutes(2));
+        var early = await soon.PostAsync(new Uri($"/api/v1/payments/{payment}/refund/check", UriKind.Relative), null, Ct);
+        early.StatusCode.ShouldBe(HttpStatusCode.Accepted);
+        (await BodyOf(early)).GetProperty("refund").GetProperty("status").GetString().ShouldBe("Pending");
+
+        using var later = AdvanceTo(Api.Clock.GetUtcNow().AddMinutes(11));
+        var late = await later.PostAsync(new Uri($"/api/v1/payments/{payment}/refund/check", UriKind.Relative), null, Ct);
+        late.StatusCode.ShouldBe(HttpStatusCode.UnprocessableEntity);
+        (await PaymentAsync(payment, later)).GetProperty("refund").GetProperty("failureCode").GetString().ShouldBe("NotRefundedAtProvider");
+    }
+
     [Fact]
     public async Task The_fake_provider_refunds_a_charge_once_like_iyzico()
     {

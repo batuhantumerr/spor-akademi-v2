@@ -470,6 +470,7 @@ public sealed partial class CrossTenantEndpointTests(DatabaseFixture database) :
             // P3-13: refunding another school's payment is "not found" (with a valid key, so validation passes).
             ["POST /api/v1/payments/{id:guid}/refund"] = (new { reason = "Hack" }, ""),
             ["POST /api/v1/payments/{id:guid}/refund/check"] = (null, ""),
+            ["POST /api/v1/payments/{id:guid}/refund/resolve"] = (new { refunded = true, note = "Hack" }, ""),
             ["GET /api/v1/online-payments/{id:guid}"] = (null, ""),
             ["DELETE /api/v1/settings/billing-rules/{effectiveFrom}"] = (null, ""),
         };

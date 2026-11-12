@@ -142,4 +142,38 @@ public sealed class PaymentRefundTests
 
         PaymentRefund.Request(otherPayment, online, "iade", "iade-anahtari-1", Hash, Admin, Now).Error.ShouldBe(PaymentRefundErrors.NotRefundable);
     }
+
+    [Fact]
+    public void Only_a_request_in_review_is_settled_by_hand_with_a_note_and_its_author()
+    {
+        var (online, payment) = Paid();
+        var refund = Requested(payment, online);
+        refund.ResolveManually(payment, true, "panelde iade var", Admin, Now).Error.ShouldBe(PaymentRefundErrors.NotInReview);
+        refund.MarkForReview().ShouldBeTrue();
+        refund.MarkForReview().ShouldBeFalse();
+        refund.ResolveManually(payment, true, "  ", Admin, Now).Error.ShouldBe(PaymentRefundErrors.ResolutionNoteRequired);
+
+        refund.ResolveManually(payment, true, " panelde iade var ", Admin, Now).IsSuccess.ShouldBeTrue();
+
+        refund.Status.ShouldBe(PaymentRefundStatus.Succeeded);
+        refund.NeedsReview.ShouldBeFalse();
+        refund.ResolvedBy.ShouldBe(Admin);
+        refund.ResolutionNote.ShouldBe("panelde iade var");
+        payment.Status.ShouldBe(PaymentStatus.Refunded);
+        refund.DomainEvents.OfType<PaymentRefunded>().Count().ShouldBe(1);
+    }
+
+    [Fact]
+    public void A_request_in_review_settled_as_not_refunded_fails_and_keeps_the_payment()
+    {
+        var (online, payment) = Paid();
+        var refund = Requested(payment, online);
+        refund.MarkForReview();
+
+        refund.ResolveManually(payment, false, "panelde iade yok", Admin, Now).IsSuccess.ShouldBeTrue();
+
+        refund.Status.ShouldBe(PaymentRefundStatus.Failed);
+        refund.FailureCode.ShouldBe(PaymentRefund.ManuallyFailedCode);
+        payment.Status.ShouldBe(PaymentStatus.Recorded);
+    }
 }
