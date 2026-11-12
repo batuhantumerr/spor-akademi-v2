@@ -1030,5 +1030,6 @@ export function saveFile(blob: Blob, name: string): void {
   document.body.appendChild(link);
   link.click();
   link.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 0);
+  // Some browsers cancel a download whose URL is revoked at once; a short delay is enough.
+  setTimeout(() => URL.revokeObjectURL(url), 10_000);
 }
