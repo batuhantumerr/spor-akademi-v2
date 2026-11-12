@@ -16,6 +16,7 @@ import {
   CancelPaymentDialog,
   PAYMENT_SEARCH_DEBOUNCE_MS,
   RecordPaymentDialog,
+  RefundPaymentDialog,
 } from './billing-dialogs';
 import { DuesPage } from './dues.page';
 import { GroupFeesComponent } from './group-fees.component';
@@ -477,6 +478,95 @@ describe('billing dialogs', () => {
     await settle(fixture);
     expect(close).toHaveBeenCalled();
   });
+
+  const refundData = {
+    payment: {
+      id: 'p1',
+      studentFirstName: 'Ayşe',
+      studentLastName: 'Yılmaz',
+      period: '2026-11',
+      amount: tl('1250.00'),
+    },
+  };
+
+  it('requires a refund reason, warns about personal data and that the due reopens', async () => {
+    await open(RefundPaymentDialog, refundData);
+    expect(root.textContent).toContain('Ayşe Yılmaz · Kasım 2026 · ₺1.250,00');
+    expect(root.querySelector('#refund-effect')?.textContent).toContain(ui.billing.refundReopens);
+    expect(root.querySelector('#refund-reason-hint')?.textContent).toContain(
+      ui.billing.refundReasonHint,
+    );
+    await submit();
+    backend.expectNone('/api/v1/payments/p1/refund');
+    expect(root.querySelector('#refund-reason-error')?.textContent).toContain(
+      errorMessages['Refund.ReasonRequired'],
+    );
+    expect(document.activeElement).toBe(root.querySelector('#refund-reason'));
+  });
+
+  it('says the due stays paid when refunding an overpayment', async () => {
+    await open(RefundPaymentDialog, { ...refundData, overpaid: true });
+    expect(root.querySelector('#refund-effect')?.textContent).toContain(ui.billing.refundOverpaid);
+  });
+
+  it('sends the same Idempotency-Key when the same refund is retried and closes when refunded', async () => {
+    await open(RefundPaymentDialog, refundData);
+    await type('refund-reason', '  Kayıt erken bitti  ');
+    await submit();
+    const first = backend.expectOne('/api/v1/payments/p1/refund');
+    expect(first.request.body).toEqual({ reason: 'Kayıt erken bitti' });
+    const key = first.request.headers.get('Idempotency-Key');
+    expect(key).toMatch(/^[A-Za-z0-9._:-]{8,100}$/);
+    first.flush(null, { status: 0, statusText: '' });
+    await settle(fixture);
+    await settle(fixture);
+    expect(document.activeElement).toBe(root.querySelector('#refund-error'));
+
+    await submit();
+    const retry = backend.expectOne('/api/v1/payments/p1/refund');
+    expect(retry.request.headers.get('Idempotency-Key')).toBe(key);
+    retry.flush({ id: 'p1', status: 'Refunded', refund: { status: 'Succeeded' } });
+    await settle(fixture);
+    expect(close).toHaveBeenCalledWith(expect.objectContaining({ status: 'Refunded' }));
+  });
+
+  it('closes as pending when the provider answer is unknown (202)', async () => {
+    await open(RefundPaymentDialog, refundData);
+    await type('refund-reason', 'Kayıt erken bitti');
+    await submit();
+    backend
+      .expectOne('/api/v1/payments/p1/refund')
+      .flush(
+        { id: 'p1', status: 'Recorded', refund: { status: 'Pending' } },
+        { status: 202, statusText: 'Accepted' },
+      );
+    await settle(fixture);
+    expect(close).toHaveBeenCalledWith('refundPending');
+  });
+
+  it('shows a declined refund and retries it with a new key; closes when someone else refunded', async () => {
+    await open(RefundPaymentDialog, refundData);
+    await type('refund-reason', 'Kayıt erken bitti');
+    await submit();
+    const declined = backend.expectOne('/api/v1/payments/p1/refund');
+    const key = declined.request.headers.get('Idempotency-Key');
+    declined.flush(
+      { code: 'Refund.ProviderDeclined' },
+      { status: 422, statusText: 'Unprocessable Entity' },
+    );
+    await settle(fixture);
+    expect(root.querySelector('#refund-error')?.textContent).toContain(
+      errorMessages['Refund.ProviderDeclined'],
+    );
+    expect(close).not.toHaveBeenCalled();
+
+    await submit();
+    const retry = backend.expectOne('/api/v1/payments/p1/refund');
+    expect(retry.request.headers.get('Idempotency-Key')).not.toBe(key);
+    retry.flush({ code: 'Refund.AlreadyRefunded' }, { status: 422, statusText: 'Unprocessable' });
+    await settle(fixture);
+    expect(close).toHaveBeenCalledWith('refundAlreadyHandled');
+  });
 });
 
 describe('PaymentsPage', () => {
@@ -511,6 +601,8 @@ describe('PaymentsPage', () => {
       cancelReason: 'Yanlış dönem',
       cancelledBy: 'u1',
       cancelledAt: '2026-11-06T10:00:00Z',
+      onlinePaymentId: null,
+      refund: null,
     };
     backend
       .expectOne((r) => r.url === '/api/v1/payments')
@@ -538,6 +630,117 @@ describe('PaymentsPage', () => {
     expect(root.textContent).toContain(ui.billing.noPayments);
     backend.verify();
   });
+
+  it('offers a refund only for recorded online payments and shows refund states (P3-13)', async () => {
+    const open = vi.fn().mockReturnValue({ closed: of(refundedPayment) });
+    const toast = { success: vi.fn(), error: vi.fn() };
+    TestBed.configureTestingModule({
+      imports: [PaymentsPage],
+      providers: providers([
+        { provide: Dialog, useValue: { open } },
+        { provide: ToastService, useValue: toast },
+      ]),
+    });
+    const fixture = TestBed.createComponent(PaymentsPage);
+    const backend = TestBed.inject(HttpTestingController);
+    await settle(fixture);
+    backend
+      .expectOne((r) => r.url === '/api/v1/groups')
+      .flush({ items: [], page: 1, pageSize: 100, totalCount: 0, totalPages: 0 });
+    const refund = {
+      id: 'r1',
+      reason: 'Kayıt erken bitti',
+      requestedBy: 'u1',
+      requestedAt: '2026-11-10T10:00:00Z',
+      attempts: 1,
+    };
+    const items: PaymentDto[] = [
+      onlinePayment('cash', { method: 'Cash', onlinePaymentId: null }),
+      onlinePayment('online'),
+      onlinePayment('failed', {
+        refund: {
+          ...refund,
+          status: 'Failed',
+          completedAt: '2026-11-10T10:00:01Z',
+          failureCode: 'FakeRefundDeclined',
+        },
+      }),
+      onlinePayment('pending', {
+        refund: { ...refund, status: 'Pending', completedAt: null, failureCode: null },
+      }),
+      { ...refundedPayment, id: 'done' },
+    ];
+    backend
+      .expectOne((r) => r.url === '/api/v1/payments')
+      .flush({ items, page: 1, pageSize: 25, totalCount: items.length, totalPages: 1 });
+    await settle(fixture);
+
+    const root = fixture.nativeElement as HTMLElement;
+    const row = (id: string) => root.querySelector(`[data-testid="payment-${id}"]`) as HTMLElement;
+    const buttons = (id: string) =>
+      [...row(id).querySelectorAll('button')].map((b) => b.textContent?.trim());
+    expect(buttons('cash')).toEqual([ui.billing.cancel]);
+    expect(buttons('online')).toEqual([ui.billing.refund]);
+    expect(buttons('failed')).toEqual([ui.billing.refundRetry]);
+    expect(row('failed').textContent).toContain(ui.billing.refundStatuses['Failed']);
+    expect(row('failed').textContent).toContain('FakeRefundDeclined');
+    expect(buttons('pending')).toEqual([]);
+    expect(row('pending').textContent).toContain(ui.billing.refundStatuses['Pending']);
+    expect(buttons('done')).toEqual([]);
+    expect(row('done').querySelector('[data-testid="status-Refunded"]')?.textContent).toContain(
+      ui.billing.statuses['Refunded'],
+    );
+    expect(row('done').textContent).toContain('İade gerekçesi: Kayıt erken bitti');
+
+    (row('online').querySelector('button') as HTMLButtonElement).click();
+    await settle(fixture);
+    expect(open.mock.calls[0][1].data.payment.id).toBe('online');
+    expect(toast.success).toHaveBeenCalledWith(ui.billing.refunded);
+    backend
+      .expectOne((r) => r.url === '/api/v1/payments')
+      .flush({ items: [], page: 1, pageSize: 25, totalCount: 0, totalPages: 0 });
+
+    const status = root.querySelector('#pay-filter-status') as HTMLSelectElement;
+    expect([...status.options].map((o) => o.value)).toContain('Refunded');
+    backend.verify();
+  });
+});
+
+function onlinePayment(id: string, overrides: Partial<PaymentDto> = {}): PaymentDto {
+  return {
+    id,
+    enrollmentId: 'e1',
+    studentId: 'st1',
+    studentFirstName: 'Ayşe',
+    studentLastName: 'Yılmaz',
+    groupId: 'g1',
+    groupName: 'U12 Mavi',
+    period: '2026-11',
+    amount: tl('1250.00'),
+    method: 'Online',
+    paidOn: '2026-11-05',
+    status: 'Recorded',
+    cancelReason: null,
+    cancelledBy: null,
+    cancelledAt: null,
+    onlinePaymentId: 'op1',
+    refund: null,
+    ...overrides,
+  };
+}
+
+const refundedPayment: PaymentDto = onlinePayment('refunded', {
+  status: 'Refunded',
+  refund: {
+    id: 'r9',
+    status: 'Succeeded',
+    reason: 'Kayıt erken bitti',
+    requestedBy: 'u1',
+    requestedAt: '2026-11-10T10:00:00Z',
+    completedAt: '2026-11-10T10:00:01Z',
+    failureCode: null,
+    attempts: 1,
+  },
 });
 
 describe('DuesPage', () => {

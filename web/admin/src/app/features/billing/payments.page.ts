@@ -23,12 +23,18 @@ import {
   RECORD_PAYMENT_TITLE_ID,
   RecordPaymentData,
   RecordPaymentDialog,
+  REFUND_ALREADY_HANDLED,
+  REFUND_PAYMENT_TITLE_ID,
+  REFUND_PENDING,
+  RefundPaymentData,
+  RefundPaymentDialog,
+  RefundPaymentResult,
 } from './billing-dialogs';
 import { periodLabel } from './billing-format';
 
 type StatusFilter = PaymentStatus | '';
 
-/** US-17: payments with group / period / status filters; record and cancel. */
+/** US-17: payments with group / period / status filters; record and cancel; refund online payments (P3-13). */
 @Component({
   selector: 'app-payments-page',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -74,6 +80,7 @@ type StatusFilter = PaymentStatus | '';
           <option value="">{{ text.allStatuses }}</option>
           <option value="Recorded">{{ text.statuses['Recorded'] }}</option>
           <option value="Cancelled">{{ text.statuses['Cancelled'] }}</option>
+          <option value="Refunded">{{ text.statuses['Refunded'] }}</option>
         </select>
       </div>
     </div>
@@ -128,7 +135,10 @@ type StatusFilter = PaymentStatus | '';
           </thead>
           <tbody>
             @for (p of list.items(); track p.id) {
-              <tr [class.opacity-70]="p.status === 'Cancelled'">
+              <tr
+                [class.opacity-70]="p.status !== 'Recorded'"
+                [attr.data-testid]="'payment-' + p.id"
+              >
                 <th scope="row">
                   <a
                     class="text-primary underline-offset-4 hover:underline"
@@ -145,7 +155,9 @@ type StatusFilter = PaymentStatus | '';
                   <span
                     class="badge"
                     [class.badge-success]="p.status === 'Recorded'"
-                    [class.badge-muted]="p.status !== 'Recorded'"
+                    [class.badge-info]="p.status === 'Refunded'"
+                    [class.badge-muted]="p.status === 'Cancelled'"
+                    [attr.data-testid]="'status-' + p.status"
                     >{{ text.statuses[p.status] }}</span
                   >
                   @if (p.cancelReason) {
@@ -153,8 +165,38 @@ type StatusFilter = PaymentStatus | '';
                       cancelledBecause(p.cancelReason)
                     }}</span>
                   }
+                  @if (p.refund; as r) {
+                    @if (r.status !== 'Succeeded') {
+                      <span
+                        class="badge mt-1"
+                        data-testid="refund-status"
+                        [class.badge-info]="r.status === 'Pending'"
+                        [class.badge-danger]="r.status === 'Failed'"
+                        >{{ text.refundStatuses[r.status] }}</span
+                      >
+                    }
+                    @if (r.failureCode && r.status === 'Failed') {
+                      <span class="mt-1 block text-xs text-muted-foreground">{{
+                        refundFailure(r.failureCode)
+                      }}</span>
+                    }
+                    <span class="mt-1 block text-xs text-muted-foreground">{{
+                      refundedBecause(r.reason)
+                    }}</span>
+                  }
                 </td>
                 <td class="text-right">
+                  @if (canRefund(p)) {
+                    <button
+                      type="button"
+                      class="btn btn-ghost btn-sm hover:!bg-destructive/10 hover:!text-destructive"
+                      [attr.aria-label]="refundLabel(p)"
+                      [disabled]="busy()"
+                      (click)="refund(p)"
+                    >
+                      {{ refundAction(p) }}
+                    </button>
+                  }
                   @if (p.status === 'Recorded' && p.method !== 'Online') {
                     <button
                       type="button"
@@ -226,6 +268,52 @@ export class PaymentsPage {
 
   protected cancelledBecause(reason: string): string {
     return interpolate(this.text.cancelledBecause, { reason });
+  }
+
+  protected refundedBecause(reason: string): string {
+    return interpolate(this.text.refundedBecause, { reason });
+  }
+
+  protected refundFailure(code: string): string {
+    return interpolate(this.text.refundFailure, { code });
+  }
+
+  /** P3-13: a recorded online payment without a refund in progress; after a failed refund this is the retry. */
+  protected canRefund(p: PaymentDto): boolean {
+    return p.method === 'Online' && p.status === 'Recorded' && p.refund?.status !== 'Pending';
+  }
+
+  protected refundAction(p: PaymentDto): string {
+    return p.refund?.status === 'Failed' ? this.text.refundRetry : this.text.refund;
+  }
+
+  protected refundLabel(p: PaymentDto): string {
+    return interpolate(this.text.refundLabel, {
+      action: this.refundAction(p),
+      student: `${p.studentFirstName} ${p.studentLastName}`,
+      period: periodLabel(p.period),
+    });
+  }
+
+  protected async refund(payment: PaymentDto): Promise<void> {
+    await this.exclusive(async () => {
+      const data: RefundPaymentData = { payment };
+      const ref = this.dialog.open<RefundPaymentResult>(RefundPaymentDialog, {
+        data,
+        ariaLabelledBy: REFUND_PAYMENT_TITLE_ID,
+        backdropClass: ['bg-slate-900/60'],
+      });
+      const result = await firstValueFrom(ref.closed);
+      if (result === REFUND_PENDING) {
+        this.toasts.success(this.text.refundPending);
+      } else if (result === REFUND_ALREADY_HANDLED) {
+        this.toasts.error(errorMessages['Refund.InProgress']);
+      } else if (result) {
+        this.toasts.success(this.text.refunded);
+      }
+      // Reload either way: a declined refund is shown on the row too.
+      await this.list.load();
+    });
   }
 
   protected setFilter(filter: 'group' | 'period' | 'status', value: string): void {

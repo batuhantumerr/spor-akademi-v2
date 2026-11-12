@@ -117,6 +117,16 @@ export const errorMessages: Readonly<Record<string, string>> = {
   'Payment.FeeNotDefined': 'Bu grup için bu dönemde tanımlı bir aidat yok.',
   'Payment.AlreadyCancelled': 'Bu ödeme zaten iptal edilmiş.',
   'Payment.CancelReasonRequired': 'İptal gerekçesi zorunludur.',
+  'Refund.ReasonRequired': 'İade gerekçesi zorunludur.',
+  'Refund.NotOnline':
+    'Sadece online alınan ödemeler iade edilebilir. Nakit veya havale ödemeyi elle iade edip kaydı iptal edin.',
+  'Refund.AlreadyRefunded': 'Bu ödeme zaten iade edilmiş.',
+  'Refund.NotRefundable': 'Bu ödeme iade edilemez.',
+  'Refund.InProgress': 'Bu ödemenin iadesi sürüyor. Sonucunu bekleyin.',
+  'Refund.NotPending': 'Bu iadenin sonucu zaten belli.',
+  'Refund.ProviderDeclined':
+    'Ödeme sağlayıcısı iadeyi kabul etmedi. Sağlayıcı panelini kontrol edip daha sonra tekrar deneyin.',
+  'Refund.NotFound': 'İade bulunamadı.',
   'BillingRules.PeriodInPast': 'Geçmiş bir dönemin aidat kuralları değiştirilemez.',
   'BillingRules.AlreadyDefined': 'Bu dönem için aidat kuralları zaten tanımlı.',
   'BillingRules.InvalidPercent': 'İndirim oranı 0 ile 100 arasında bir tam sayı olmalı.',
@@ -669,7 +679,10 @@ export const ui = {
     dueLabel: '{student} · {group}',
     status: 'Durum',
     allStatuses: 'Tüm durumlar',
-    statuses: { Recorded: 'Kayıtlı', Cancelled: 'İptal' } as Record<string, string>,
+    statuses: { Recorded: 'Kayıtlı', Cancelled: 'İptal', Refunded: 'İade edildi' } as Record<
+      string,
+      string
+    >,
     cancel: 'İptal et',
     cancelTitle: 'Ödeme iptal edilsin mi?',
     cancelText:
@@ -679,6 +692,29 @@ export const ui = {
       'Gerekçeye kişi adı veya başka kişisel veri yazmayın; ödeme kayıtları değişmez ve gerekçe silinmez.',
     cancelled: 'Ödeme iptal edildi.',
     cancelledBecause: 'İptal: {reason}',
+    refund: 'İade et',
+    refundRetry: 'İadeyi tekrar dene',
+    refundTitle: 'Ödeme iade edilsin mi?',
+    refundText:
+      '{student} · {period} · {amount}. Tutarın tamamı ödeme sağlayıcısı üzerinden ödemenin yapıldığı karta iade edilir.',
+    refundReopens:
+      'İade edilen ödeme bu dönemin borcundan düşer: dönem başka ödemelerle karşılanmıyorsa borç yeniden açılır.',
+    refundOverpaid:
+      'Bu ödeme fazla ödeme olarak işaretli: dönem başka bir ödemeyle karşılandığı için iadeden sonra borç ödenmiş kalır.',
+    refundReason: 'İade gerekçesi',
+    refundReasonHint:
+      'Gerekçeye kişi adı veya başka kişisel veri yazmayın; gerekçe silinmez ve veliye gösterilmez.',
+    refundConfirm: 'İade et',
+    refunded: 'Ödeme iade edildi.',
+    refundPending: 'İade sağlayıcıya iletildi, sonuç bekleniyor.',
+    refundedBecause: 'İade gerekçesi: {reason}',
+    refundStatuses: {
+      Pending: 'İade bekliyor',
+      Succeeded: 'İade edildi',
+      Failed: 'İade başarısız',
+    } as Record<string, string>,
+    refundFailure: 'Sağlayıcı kodu: {code}',
+    refundLabel: '{action}: {student}, {period}',
     noPayments: 'Bu filtrelere uyan ödeme yok.',
     dues: 'Ödenmemiş borçlar',
     duesDescription: 'Aidatı tam ödenmemiş kayıtlar.',
@@ -716,7 +752,8 @@ export const ui = {
     } as Record<string, string>,
     failure: 'Neden: {code}',
     overpaid: 'Fazla ödeme',
-    overpaidHint: 'Bu dönem başka bir ödemeyle de ödenmiş; fazlası elle iade edilmeli.',
+    overpaidHint:
+      'Bu dönem başka bir ödemeyle de ödenmiş; fazlası "İade et" ile karta iade edilebilir.',
     copyLink: 'Bağlantıyı kopyala',
     copyLinkLabel: 'Ödeme bağlantısını kopyala: {student}, {period}',
     linkCopied: 'Ödeme bağlantısı kopyalandı.',
@@ -893,6 +930,8 @@ export const ui = {
     endText: '{student} öğrencisinin {group} kaydı seçilen tarihte sona erer.',
     endDateLabel: 'Bitiş tarihi',
     endDateHint: 'Başlangıç tarihinden önce olamaz, bugünden sonra olamaz.',
+    prepaidWarning:
+      'Bu kayıt için bitişten sonraki aylara ödeme alınmış: {months}. Kaydı bitirmek ödemeyi geri vermez; online ödemeleri Ödemeler sayfasında "İade et" ile iade edin, nakit veya havale ödemeleri elle iade edip kaydı iptal edin.',
     endedToast: 'Kayıt sonlandırıldı.',
     capacity: 'Kontenjan',
     capacityValue: '{used} / {capacity}',
