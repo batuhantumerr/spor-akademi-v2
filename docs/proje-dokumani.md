@@ -1542,7 +1542,8 @@ Yoklamanın kaydedilmesi neden `POST` değil `PUT`: aynı istek iki kez gönderi
 | `POST` | `/payments` | Elle ödeme kaydı | SA | US-23 |
 | `POST` | `/payments/{id}/cancel` | Gerekçeyle iptal; düzenleme ve silme yok | SA | US-23 |
 | `POST` | `/payments/{id}/refund` | Online ödemenin tamamını sağlayıcı üzerinden gerekçeyle iade eder; `Idempotency-Key` zorunlu; `200` iade edildi, `202` sonuç bekleniyor (P3-13, DEC-416 – DEC-425) | SA | US-23 |
-| `POST` | `/payments/{id}/refund/check` | "Sağlayıcıda kontrol et": bekleyen iadeyi sağlayıcının ödeme detayına göre sonuçlandırır; para döndüyse `200`, dönmediyse `422 Refund.ProviderDeclined`, cevap yoksa `202` (DEC-418) | SA | US-23 |
+| `POST` | `/payments/{id}/refund/check` | "Sağlayıcıda kontrol et": bekleyen iadeyi sağlayıcının ödeme detayına göre sonuçlandırır; para döndüyse `200`, dönmediyse (son deneme 10 dakikadan eskiyse) `422 Refund.ProviderDeclined`, aksi halde veya cevap yoksa `202` (DEC-418) | SA | US-23 |
+| `POST` | `/payments/{id}/refund/resolve` | İncelemedeki iadeyi elle sonuçlandırır (`refunded`, zorunlu iç not); kim ve ne zaman saklanır (DEC-418) | SA | US-23 |
 | `GET` | `/dues/outstanding` | Ödenmemiş borçlar (`?groupId=&period=`) | SA | US-24 |
 | `POST` | `/online-payments` | Bir borcun (kayıt + dönem) kalanı için online ödeme başlatır; `Idempotency-Key` başlığı zorunlu, tekrarında aynı deneme `200` + `Idempotent-Replayed` (P2-F1, DEC-341) | SA | US-23 |
 | `GET` | `/online-payments` | Online ödeme denemeleri (`?enrollmentId=&period=&status=`) | SA | US-23 |
@@ -1775,6 +1776,8 @@ API'nin döndüğü tüm hata ve uyarı kodlarının kataloğu. Kurallar:
 | `Refund.NotPending` | BusinessRule | Bu iadenin sonucu zaten belli. | P3-13 |
 | `Refund.ProviderDeclined` | BusinessRule | Ödeme sağlayıcısı iadeyi kabul etmedi. | P3-13 |
 | `Refund.NotFound` | NotFound | İade bulunamadı. | P3-13 |
+| `Refund.NotInReview` | BusinessRule | Bu iade incelemede değil. | P3-13 |
+| `Refund.ResolutionNoteRequired` | Validation | Not zorunludur. | P3-13 |
 | `Idempotency.KeyRequired` | Validation | İstek anahtarı eksik. | P2-F1 |
 | `Idempotency.KeyInvalid` | Validation | İstek anahtarı geçersiz. | P2-F1 |
 | `Idempotency.KeyReused` | BusinessRule | Bu istek anahtarı başka bir işlem için kullanılmış. | P2-F1 |
