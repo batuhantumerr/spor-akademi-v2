@@ -2,7 +2,7 @@
 
 Tarih: 2026-11-12. Kapsam: yönetim paneli (`web/admin`, Okul Admini ve antrenör) ve veli uygulaması (`web/parent`). Kararlar DEC-436 – DEC-443 ([karar günlüğü](karar-gunlugu-v2.md)). Gereksinim: NFR-USA-03 (WCAG 2.2 AA, denetim raporu).
 
-Kısa sonuç: listelenen bütün önemli ekranlarda, iki dilde, iki temada, masaüstü ve 360 px genişlikte axe'ın WCAG 2.0/2.1/2.2 A ve AA kurallarından **serious veya critical bulgu yok**; betikli klavye, reflow ve metin aralığı kontrolleri de geçiyor. Denetim sırasında bulunan 21 sorun düzeltildi (bölüm 4). Açık kalanlar küçük ve gerekçeli (bölüm 5); en önemlisi gerçek ekran okuyucuyla elle yapılacak kontrol, sahibe bırakıldı.
+Kısa sonuç: listelenen bütün önemli ekranlarda, iki dilde, iki temada, masaüstü ve 360 px genişlikte axe'ın WCAG 2.0/2.1/2.2 A ve AA kurallarından **serious veya critical bulgu yok**; betikli klavye, reflow ve metin aralığı kontrolleri de geçiyor. Denetim sırasında bulunan 23 sorun düzeltildi (bölüm 4). Açık kalanlar küçük ve gerekçeli (bölüm 5); en önemlisi gerçek ekran okuyucuyla elle yapılacak kontrol, sahibe bırakıldı.
 
 ## 1. Yöntem
 
@@ -67,11 +67,11 @@ Durum: **Geçti** (bulgu yok), **Düzeltildi** (bu PR'da bulundu ve düzeltildi)
 | 1.4.1 Rengin tek başına kullanımı | Geçti | Yoklama seçiminde işaret ikonu ve kalın kenar; rozetlerde metin. |
 | 1.4.3 Kontrast (metin) | Düzeltildi | Antrenörün "Gelmedi" seçimi açık temada 4,46:1'di (`bg-destructive/15`). Dört yoklama tonu `/10`'a indi (4,87:1 ve üstü). Token çiftleri `check-contrast.mjs` ile CI'da. |
 | 1.4.4 Metni yeniden boyutlandırma | Geçti | Kök yazı boyutu yüzde ile (`87.5%`), kullanıcı ayarı ölçekler. Metin aralığı ve reflow kontrolleri taşma bulmadı. |
-| 1.4.10 Reflow | Düzeltildi | Öğrenci ayrıntısı 320 px'te (aralık artınca) 330 px'e taşıyordu: dış ızgara `grid-cols-1` oldu. Panel grafikleri yeni genişliği alıyor. Veri tabloları kendi kutusunda kayar (istisna). |
+| 1.4.10 Reflow | Düzeltildi | Öğrenci ayrıntısı 320 px'te (aralık artınca) 330 px'e taşıyordu: dış ızgara `grid-cols-1` oldu. Panel grafikleri yeni genişliği alıyor. Veri tabloları kendi kutusunda kayar (istisna). Ödenmemiş borçlar listesinde, geniş tablonun hücrelerindeki görsel olarak gizli (sr-only) metin kaydırma kutusundan kaçıp sayfayı 334 px'e genişletiyordu; `.table-shell` ve admin `main` artık `relative`. |
 | 1.4.11 Metin dışı kontrast | Düzeltildi | Form kontrol kenarlığı 1,2:1'di (`--border`). Yeni `--control-border` token'ı açık temada 3,6:1, koyu temada 3,4:1. Odak halkası %50 saydamdı (≈2,5:1); artık tam renk `ring` ve 2 px boşluk (açıkta 5,2:1, koyuda 6,4:1). Grafik serileri iki temada 3:1 üstünde. |
 | 1.4.12 Metin aralığı | Düzeltildi | Panelde grup adları, kadroda öğrenci adı, tesis kartı başlığı ve belge adı `truncate` (üç nokta) ile kesiliyordu. Artık satır kırılıyor. |
 | 1.4.13 Üzerine gelince açılan içerik | Geçti | Yalnız `title` ve ECharts ipuçları; ipucundaki bilgi veri tablosunda da var. |
-| 2.1.1 Klavye / 2.1.2 Klavye tuzağı yok | Geçti | Klavye turu her ekranda başa döndü. Diyaloglar CDK odak tuzağıyla Escape'le kapanıyor. |
+| 2.1.1 Klavye / 2.1.2 Klavye tuzağı yok | Düzeltildi | Klavye turu her ekranda başa döndü. Telefonda yana kayan ve içinde odaklanacak öğe olmayan tablolar (ör. aidat kuralları sürümleri) klavyeyle kaydırılamıyordu (axe `scrollable-region-focusable`). Artık `ScrollRegions` böyle bir kutuyu tablonun başlığıyla adlandırılmış bir Tab durağı yapıyor; sığınca durak kalkıyor (DEC-442). Diyaloglar CDK odak tuzağıyla Escape'le kapanıyor. |
 | 2.4.1 Blokları atlama | Düzeltildi | Admin kabuğunda "Ana içeriğe geç" bağlantısı yoktu, eklendi (ilk Tab durağı). Veli uygulamasında zaten vardı. |
 | 2.4.2 Sayfa başlığı | Geçti | Her rotada "<sayfa> · Spor Akademi", dil değişince güncelleniyor. |
 | 2.4.3 Odak sırası | Düzeltildi | (1) Sayfa değişince odak tıklanan menü bağlantısında kalıyordu: artık yeni sayfanın `main` alanına geçiyor (DEC-438). (2) Diyaloğu açan düğme, sayfa diyalog boyunca devre dışı tuttuğu için kapanışta odak alamıyordu ve odak sayfa başına düşüyordu: `DialogFocusRestorer` düğme yeniden etkinleşince odağı ona veriyor (DEC-441). (3) Mobil çekmece açılınca odak kapat düğmesine gidemiyordu: `.btn`'in `transition-all`'ı `visibility`'yi de geçişliyordu ve görünmez düğme odak almıyordu. Artık `transition` (DEC-441). (4) Veli uygulamasında dil değişimi sayfayı yeniden kurduğu için odak sayfa başına düşüyordu: artık dil seçicisine dönüyor (DEC-439). |
