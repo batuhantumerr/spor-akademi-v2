@@ -184,6 +184,49 @@ public sealed class AuthHardeningTests(DatabaseFixture database) : IdentityTest(
     }
 
     [Fact]
+    [Trait("Story", "US-04")]
+    public async Task A_grace_replay_racing_the_successors_rotation_conflicts_exactly_once_and_revokes_nothing()
+    {
+        var school = await SeedSchoolAsync();
+        var coach = await SeedUserAsync("coach@example.com", UserRole.Coach, school);
+        using var factory = new BarrierRefreshTokenFactory();
+        using var api = Api.WithWebHostBuilder(builder => builder.ConfigureTestServices(services =>
+            services.Replace(ServiceDescriptor.Singleton<IRefreshTokenFactory>(factory))));
+        using var client = api.CreateClient(new WebApplicationFactoryClientOptions { HandleCookies = false });
+        var login = await client.PostAsJsonAsync("/api/v1/auth/login", new { email = "coach@example.com", password = OwnPassword }, TestContext.Current.CancellationToken);
+        var stale = RefreshCookieOf(login)!.Value;
+        var successor = RefreshCookieOf(await RefreshWithAsync(client, stale))!.Value;
+
+        factory.Enable(participants: 2);
+        var responses = await Task.WhenAll(RefreshWithAsync(client, stale), RefreshWithAsync(client, successor));
+        factory.Disable();
+
+        responses.Select(r => r.StatusCode).Order().ShouldBe([HttpStatusCode.OK, HttpStatusCode.Conflict]);
+        (await ErrorCodeAsync(responses.Single(r => r.StatusCode == HttpStatusCode.Conflict))).ShouldBe("Concurrency.Conflict");
+        var tokens = (await LoadUserAsync(coach.Id)).RefreshTokens;
+        var family = tokens.Single(t => t.TokenHash == factory.Hash(stale)).FamilyId;
+        tokens.Count(t => t.FamilyId == family && t.RevokedAt is null).ShouldBe(1);
+    }
+
+    [Fact]
+    [Trait("Story", "US-04")]
+    public async Task Logout_is_retried_once_after_a_concurrency_conflict()
+    {
+        var handler = new ConflictOnceLogoutHandler();
+        using var api = Api.WithWebHostBuilder(builder => builder.ConfigureTestServices(services =>
+            services.Replace(ServiceDescriptor.Singleton<ICommandHandler<LogoutCommand, Unit>>(handler))));
+        using var client = api.CreateClient(new WebApplicationFactoryClientOptions { HandleCookies = false });
+        using var request = new HttpRequestMessage(HttpMethod.Post, "/api/v1/auth/logout");
+        request.Headers.Add("Cookie", "sa_refresh=c29tZS10b2tlbg");
+        request.Headers.Add("X-Requested-With", "XMLHttpRequest");
+
+        var response = await client.SendAsync(request, TestContext.Current.CancellationToken);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.NoContent);
+        handler.Calls.ShouldBe(2);
+    }
+
+    [Fact]
     [Trait("Story", "US-05")]
     public async Task Admin_reset_lifts_the_lock_ends_sessions_and_requires_a_password_change()
     {
@@ -257,6 +300,19 @@ public sealed class AuthHardeningTests(DatabaseFixture database) : IdentityTest(
     {
         public Task<Result<Unit>> Handle(LogoutCommand command, CancellationToken cancellationToken) =>
             Task.FromResult(Result.Failure<Unit>(PersistenceErrors.LockTimeout));
+    }
+
+    /// <summary>Fails the first logout with a concurrency conflict (a grace replay won the race), then succeeds.</summary>
+    private sealed class ConflictOnceLogoutHandler : ICommandHandler<LogoutCommand, Unit>
+    {
+        private int _calls;
+
+        public int Calls => _calls;
+
+        public Task<Result<Unit>> Handle(LogoutCommand command, CancellationToken cancellationToken) =>
+            Task.FromResult(Interlocked.Increment(ref _calls) == 1
+                ? Result.Failure<Unit>(PersistenceErrors.ConcurrencyConflict)
+                : Result.Success(Unit.Value));
     }
 
     /// <summary>The real factory; once enabled, token creation (which happens after the user is loaded) waits for all requests.</summary>

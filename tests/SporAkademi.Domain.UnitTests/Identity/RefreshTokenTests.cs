@@ -135,6 +135,50 @@ public sealed class RefreshTokenTests
     }
 
     [Fact]
+    public void Replaying_within_the_window_after_deactivation_gets_no_grace()
+    {
+        var (user, _) = LoggedIn();
+        user.RotateRefreshToken("h1", "h2", Now).IsSuccess.ShouldBeTrue();
+        user.Deactivate(Now.AddSeconds(1)).IsSuccess.ShouldBeTrue();
+
+        user.RotateRefreshToken("h1", "h3", Now.AddSeconds(2)).Error.ShouldBe(AuthErrors.SessionExpired);
+
+        user.RefreshTokens.ShouldNotContain(t => t.TokenHash == "h3");
+        user.RefreshTokens.ShouldAllBe(t => t.RevokedAt != null);
+    }
+
+    [Fact]
+    public void Replaying_within_the_window_after_a_password_change_gets_no_grace()
+    {
+        var (user, _) = LoggedIn();
+        user.RotateRefreshToken("h1", "h2", Now).IsSuccess.ShouldBeTrue();
+        var afterChange = user.ChangePassword("new-password-hash", "fresh", Now.AddSeconds(1)).Value;
+
+        user.RotateRefreshToken("h1", "h3", Now.AddSeconds(2)).Error.ShouldBe(AuthErrors.SessionExpired);
+
+        user.RefreshTokens.ShouldNotContain(t => t.TokenHash == "h3");
+        // A reuse of a rotated token still counts as theft: the new session ends too.
+        afterChange.IsActive(Now.AddSeconds(2)).ShouldBeFalse();
+    }
+
+    [Fact]
+    public void Replaying_within_the_window_after_the_family_expired_gets_no_grace()
+    {
+        var (user, first) = LoggedIn();
+        var rotatedAt = first.FamilyExpiresAt.AddSeconds(-10);
+        user.RotateRefreshToken("h1", "h2", Now.AddDays(6)).IsSuccess.ShouldBeTrue();
+        user.RotateRefreshToken("h2", "h3", Now.AddDays(12)).IsSuccess.ShouldBeTrue();
+        user.RotateRefreshToken("h3", "h4", Now.AddDays(18)).IsSuccess.ShouldBeTrue();
+        user.RotateRefreshToken("h4", "h5", Now.AddDays(24)).IsSuccess.ShouldBeTrue();
+        user.RotateRefreshToken("h5", "h6", rotatedAt).IsSuccess.ShouldBeTrue();
+
+        // Ten seconds after the rotation the family (and so the unused head h6) has reached its 30-day end.
+        user.RotateRefreshToken("h5", "h7", rotatedAt.AddSeconds(10)).Error.ShouldBe(AuthErrors.SessionExpired);
+
+        user.RefreshTokens.ShouldNotContain(t => t.TokenHash == "h7");
+    }
+
+    [Fact]
     public void A_token_revoked_by_logout_is_rejected_without_revoking_other_sessions()
     {
         var (user, _) = LoggedIn();
