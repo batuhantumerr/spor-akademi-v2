@@ -328,13 +328,27 @@ public sealed class LogPrivacyTests(DatabaseFixture database) : IdentityTest(dat
         (await client.GetAsync(new Uri($"/hubs/notifications?id={connectionToken}&access_token={token}", UriKind.Relative), ct)).StatusCode.ShouldBe(HttpStatusCode.OK);
         (await client.PostAsync(new Uri($"/hubs/notifications/negotiate?negotiateVersion=1&access_token={expired}", UriKind.Relative), null, ct))
             .StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
+        // The token URL-encoded inside another parameter (e.g. a return address) is masked too.
+        var encoded = Uri.EscapeDataString($"/hubs/notifications?id={connectionToken}&access_token={token}");
+        (await client.GetAsync(new Uri($"/api/v1/me?next={encoded}", UriKind.Relative), ct)).StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
 
         var events = sink.Rendered();
         events.ShouldContain(e => e.Contains("Request starting", StringComparison.Ordinal) && e.Contains("/hubs/notifications", StringComparison.Ordinal));
+        events.ShouldContain(e => e.Contains("id=[REDACTED]", StringComparison.Ordinal));
+        events.ShouldContain(e => e.Contains("access_token%3D[REDACTED]", StringComparison.OrdinalIgnoreCase));
         events.ShouldContain(e => e.Contains("access_token=[REDACTED]", StringComparison.Ordinal));
-        string[] forbidden = [token, expired, token.Split('.')[1], token.Split('.')[2], expired.Split('.')[2]];
+        string[] forbidden = [token, expired, token.Split('.')[1], token.Split('.')[2], expired.Split('.')[2], connectionToken];
         ShouldNotContainAny(events, forbidden);
     }
+
+    [Theory]
+    [Trait("Story", "P3-08")]
+    [InlineData("/hubs/notifications?id=abc123&access_token=eyJ.x.y", "/hubs/notifications?id=[REDACTED]&access_token=[REDACTED]")]
+    [InlineData("GET /hubs/notifications/negotiate?negotiateVersion=1&ACCESS_TOKEN=eyJ.x.y HTTP/1.1", "GET /hubs/notifications/negotiate?negotiateVersion=1&ACCESS_TOKEN=[REDACTED] HTTP/1.1")]
+    [InlineData("next=%2Fhubs%3Fid%3Dabc%26access_token%3DeyJ.x.y&page=2", "next=%2Fhubs%3Fid%3D[REDACTED]%26access_token%3D[REDACTED]&page=2")]
+    [InlineData("groupId=7&studentid=8", "groupId=7&studentid=8")]
+    public void Hub_secrets_are_masked_in_any_text(string text, string expected) =>
+        SporAkademi.Api.Observability.AccessTokenRedaction.RedactText(text).ShouldBe(expected);
 
     /// <summary>
     /// The API with every configurable log level at its most verbose, including the categories the API pins in code

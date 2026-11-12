@@ -61,10 +61,21 @@ internal sealed class NotificationHub : Hub<INotificationClient>
             return;
         }
 
+        try
+        {
+            await Groups.AddToGroupAsync(Context.ConnectionId, RealtimeGroups.User(tenantId, userId));
+            await Groups.AddToGroupAsync(Context.ConnectionId, RealtimeGroups.Role(tenantId, role.Value));
+            await base.OnConnectedAsync();
+        }
+        catch
+        {
+            // E.g. the backplane is down: SignalR then never calls OnDisconnectedAsync for this connection, so the
+            // slot is given back here, otherwise ten failures would lock the user out until a restart.
+            Release(userId);
+            throw;
+        }
+
         Context.Items[CountedKey] = userId;
-        await Groups.AddToGroupAsync(Context.ConnectionId, RealtimeGroups.User(tenantId, userId));
-        await Groups.AddToGroupAsync(Context.ConnectionId, RealtimeGroups.Role(tenantId, role.Value));
-        await base.OnConnectedAsync();
     }
 
     public override Task OnDisconnectedAsync(Exception? exception)
