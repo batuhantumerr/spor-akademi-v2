@@ -27,8 +27,9 @@ jobs:
     runs-on: ubuntu-24.04
     # The integration suite (~740 Testcontainers tests, one API host each, run serially) took 8–13.5 minutes on
     # hosted runners on 2026-11-10, about two minutes after restore and build; 15 minutes cancelled main (6a47840)
-    # with the suite already passed. 25 leaves headroom without hiding a real hang for long.
-    timeout-minutes: 25
+    # with the suite already passed. By 2026-11-12 the job took ~18 minutes and runner variance pushed some runs
+    # past 25, so 35 leaves headroom without hiding a real hang for long.
+    timeout-minutes: 35
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6.1.0

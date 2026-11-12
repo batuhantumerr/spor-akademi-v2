@@ -207,6 +207,24 @@ describe('report helpers', () => {
     expect(tooltip([{ dataIndex: 1 }])).toContain(`${ui.reports.schoolTotal}: —`);
   });
 
+  it('labels the attendance Y axis with the locale-aware percent', () => {
+    const label = () =>
+      (
+        (attendanceOption(attendance(), theme) as Option)['yAxis'] as {
+          axisLabel: { formatter: (v: number) => string };
+        }
+      ).axisLabel.formatter;
+    expect(label()(50)).toBe('%50');
+    expect(label()(0)).toBe('%0');
+    setLanguage('en');
+    try {
+      expect(label()(50)).toBe('50%');
+      expect(label()(100)).toBe('100%');
+    } finally {
+      setLanguage('tr');
+    }
+  });
+
   it('labels money in the revenue tooltip from the amount text', () => {
     const option = revenueOption(revenue(), theme) as Option;
     const tooltip = (option['tooltip'] as { formatter: (p: unknown) => string }).formatter;

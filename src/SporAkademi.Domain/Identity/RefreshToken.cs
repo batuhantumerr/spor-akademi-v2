@@ -45,7 +45,10 @@ public sealed class RefreshToken : Entity<RefreshTokenId>
 
     public DateTimeOffset? RevokedAt { get; private set; }
 
-    /// <summary>Set when the token was rotated; presenting such a token again is a reuse (US-04).</summary>
+    /// <summary>
+    /// Set when the token was rotated; presenting such a token again is a reuse (US-04), unless it is a lost response
+    /// retried within <see cref="User.RefreshTokenReuseGraceWindow"/> (DEC-446).
+    /// </summary>
     public RefreshTokenId? ReplacedByTokenId { get; private set; }
 
     public bool IsActive(DateTimeOffset now) => RevokedAt is null && now < ExpiresAt;
@@ -64,6 +67,9 @@ public sealed class RefreshToken : Entity<RefreshTokenId>
         Revoke(now);
         ReplacedByTokenId = successor.Id;
     }
+
+    /// <summary>DEC-446: a rotated token whose successor was re-issued after a lost response points at the new head.</summary>
+    internal void RepointTo(RefreshToken successor) => ReplacedByTokenId = successor.Id;
 
     private static DateTimeOffset Min(DateTimeOffset a, DateTimeOffset b) => a <= b ? a : b;
 }

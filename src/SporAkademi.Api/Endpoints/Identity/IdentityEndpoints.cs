@@ -136,6 +136,8 @@ internal static partial class IdentityEndpoints
     /// <summary>
     /// Always ends the session on the client: the cookie is cleared and 204 returned even when revoking
     /// fails (e.g. a lock timeout); the token then simply expires. The failure is logged by code only.
+    /// A concurrency conflict (e.g. a refresh of the same family committed first, DEC-446) is retried once
+    /// against the committed state, so the session still ends server-side.
     /// </summary>
     private static async Task<IResult> Logout(
         ICommandHandler<LogoutCommand, Unit> handler,
@@ -143,7 +145,13 @@ internal static partial class IdentityEndpoints
         HttpContext httpContext,
         CancellationToken cancellationToken)
     {
-        var result = await handler.Handle(new LogoutCommand(RefreshCookie.Read(httpContext.Request)), cancellationToken);
+        var command = new LogoutCommand(RefreshCookie.Read(httpContext.Request));
+        var result = await handler.Handle(command, cancellationToken);
+        if (result.IsFailure && result.Error == PersistenceErrors.ConcurrencyConflict)
+        {
+            result = await handler.Handle(command, cancellationToken);
+        }
+
         if (result.IsFailure)
         {
             LogRevokeFailed(loggerFactory.CreateLogger(typeof(IdentityEndpoints)), result.Error.Code);

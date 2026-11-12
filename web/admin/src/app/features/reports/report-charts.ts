@@ -191,7 +191,13 @@ export function attendanceOption(
       },
     },
     xAxis: { type: 'category', data: report.periods.map(periodLabel) },
-    yAxis: { type: 'value', min: 0, max: 100, axisLabel: { formatter: (v: number) => `%${v}` } },
+    // The plot is 0–100; the label is the locale's percent ("%50" in Turkish, "50%" in English).
+    yAxis: {
+      type: 'value',
+      min: 0,
+      max: 100,
+      axisLabel: { formatter: (v: number) => percentText(v / 100) },
+    },
     series: [school, ...series],
   };
 }
