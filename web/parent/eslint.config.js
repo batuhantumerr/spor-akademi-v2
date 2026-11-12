@@ -20,14 +20,17 @@ export default defineConfig([
     languageOptions: {
       globals: globals.browser,
       parserOptions: {
-        projectService: { allowDefaultProject: ['vite.config.ts'], defaultProject: 'tsconfig.node.json' },
+        projectService: {
+          allowDefaultProject: ['vite.config.ts', 'pwa/*.ts'],
+          defaultProject: 'tsconfig.node.json',
+        },
         tsconfigRootDir: import.meta.dirname,
       },
     },
   },
   {
     // Tests read requests they made themselves; a failed `!` fails the test, which is what it should do.
-    files: ['src/**/*.test.{ts,tsx}', 'src/test/**'],
+    files: ['src/**/*.test.{ts,tsx}', 'src/test/**', 'sw/**/*.test.ts', 'pwa/**/*.test.ts'],
     rules: { '@typescript-eslint/no-non-null-assertion': 'off' },
   },
   {

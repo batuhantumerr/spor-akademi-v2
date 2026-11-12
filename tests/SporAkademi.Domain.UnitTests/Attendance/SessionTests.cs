@@ -177,4 +177,24 @@ public sealed class SessionTests
             parsed.Error.ShouldBe(AttendanceErrors.InvalidSessionKey);
         }
     }
+
+    [Fact]
+    [Trait("Story", "P3-08")]
+    public void A_save_raises_attendance_recorded_for_the_students_whose_status_changed_only()
+    {
+        var session = NewSession();
+        session.Save(Marks((Ali, AttendanceStatus.Present), (Veli, AttendanceStatus.Absent)), new Recorder(Coach, false), Local(14, 12), At);
+        var first = session.DomainEvents.OfType<AttendanceRecorded>().ShouldHaveSingleItem();
+        first.Marks.ShouldBe(Marks((Ali, AttendanceStatus.Present), (Veli, AttendanceStatus.Absent)));
+        (first.TenantId, first.SessionId, first.GroupId, first.Date).ShouldBe((School, session.Id, Group, Thursday));
+        session.ClearDomainEvents();
+
+        // The same statuses again: nothing changed, nothing to tell.
+        session.Save(Marks((Ali, AttendanceStatus.Present)), new Recorder(Coach, false), Local(14, 12), At);
+        session.DomainEvents.ShouldBeEmpty();
+
+        // A correction tells only about the corrected child.
+        session.Save(Marks((Ali, AttendanceStatus.Present), (Veli, AttendanceStatus.Late)), new Recorder(Coach, false), Local(14, 12), At);
+        session.DomainEvents.OfType<AttendanceRecorded>().ShouldHaveSingleItem().Marks.ShouldBe(Marks((Veli, AttendanceStatus.Late)));
+    }
 }

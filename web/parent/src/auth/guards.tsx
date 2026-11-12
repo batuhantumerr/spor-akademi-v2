@@ -1,5 +1,6 @@
 import { Navigate, Outlet, useLocation } from 'react-router';
 import { text } from '../i18n/tr';
+import { OfflineState } from '../pwa/notices';
 import { safeReturnUrl } from './links';
 import { useSession } from './session';
 
@@ -21,6 +22,7 @@ export function RequireSession() {
   const state = useSession();
   const location = useLocation();
   if (state.status === 'loading') return <BootLoading />;
+  if (state.status === 'offline') return <OfflineState />;
   if (state.status === 'signedOut') {
     const params = new URLSearchParams();
     const here = location.pathname + location.search;
@@ -37,6 +39,7 @@ export function GuestOnly() {
   const state = useSession();
   const location = useLocation();
   if (state.status === 'loading') return <BootLoading />;
+  if (state.status === 'offline') return <OfflineState />;
   if (state.status === 'signedIn') {
     return <Navigate to={safeReturnUrl(new URLSearchParams(location.search).get('returnUrl'))} replace />;
   }

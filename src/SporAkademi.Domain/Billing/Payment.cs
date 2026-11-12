@@ -27,6 +27,9 @@ public enum PaymentStatus
     Cancelled,
 }
 
+/// <summary>A payment was recorded, by hand or online (P3-08: the student's parents are told after commit).</summary>
+public sealed record PaymentRecorded(SchoolId TenantId, PaymentId PaymentId, StudentId StudentId, GroupId GroupId) : IDomainEvent;
+
 /// <summary>The enrollment a payment is for, as the Enrollments module reports it.</summary>
 public sealed record PaidEnrollment(EnrollmentId Id, StudentId StudentId, GroupId GroupId, DateOnly StartDate, DateOnly? EndDate);
 
@@ -127,7 +130,7 @@ public sealed class Payment : AggregateRoot<PaymentId>, ITenantScoped
             return Result.Failure<Payment>(CommonErrors.FieldInvalid);
         }
 
-        return Result.Success(new Payment(EntityId.New<PaymentId>(), tenantId, enrollment, period, amount, method, paidOn));
+        return Result.Success(Recorded(new Payment(EntityId.New<PaymentId>(), tenantId, enrollment, period, amount, method, paidOn)));
     }
 
     /// <summary>
@@ -135,7 +138,13 @@ public sealed class Payment : AggregateRoot<PaymentId>, ITenantScoped
     /// the money is taken, so it is recorded even if the enrollment changed since.
     /// </summary>
     internal static Payment RecordOnline(SchoolId tenantId, PaidEnrollment enrollment, YearMonth period, Money amount, DateOnly paidOn, OnlinePaymentId onlinePaymentId) =>
-        new(EntityId.New<PaymentId>(), tenantId, enrollment, period, amount, PaymentMethod.Online, paidOn) { OnlinePaymentId = onlinePaymentId };
+        Recorded(new Payment(EntityId.New<PaymentId>(), tenantId, enrollment, period, amount, PaymentMethod.Online, paidOn) { OnlinePaymentId = onlinePaymentId });
+
+    private static Payment Recorded(Payment payment)
+    {
+        payment.Raise(new PaymentRecorded(payment.TenantId, payment.Id, payment.StudentId, payment.GroupId));
+        return payment;
+    }
 
     /// <summary>Cancels a wrong entry with a reason; who and when are kept. The amount and the rest never change.</summary>
     public Result Cancel(string reason, UserId cancelledBy, DateTimeOffset now)

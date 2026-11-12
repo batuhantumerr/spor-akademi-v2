@@ -16,3 +16,10 @@ public sealed record OnlinePaymentSucceededMessage(Guid OnlinePaymentId, Guid Pa
 /// </summary>
 [OutboxMessage("billing.dues-reminder.v1")]
 public sealed record DuesReminderMessage(Guid ReminderId, Guid RecipientId) : IOutboxMessage;
+
+/// <summary>
+/// A payment was recorded, by hand (US-23) or online (P2-F1) (P3-08, DEC-397). Ids only (NFR-PRV-03): no amount, no
+/// method; the parent app reads the child's dues and payments again.
+/// </summary>
+[OutboxMessage("billing.payment-recorded.v1")]
+public sealed record PaymentRecordedMessage(Guid PaymentId, Guid StudentId, Guid GroupId) : IOutboxMessage;

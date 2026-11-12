@@ -44,4 +44,13 @@ public sealed class AnnouncementTests
         Publish(new string('a', 151), "Metin").Error.ShouldBe(CommonErrors.FieldTooLong);
         Publish("Başlık", new string('b', 4001)).Error.ShouldBe(CommonErrors.FieldTooLong);
     }
+
+    [Fact]
+    [Trait("Story", "P3-08")]
+    public void Publishing_raises_announcement_published()
+    {
+        var announcement = Publish("Başlık", "Metin").Value;
+
+        announcement.DomainEvents.ShouldBe([new AnnouncementPublished(School, announcement.Id, Group)]);
+    }
 }

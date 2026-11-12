@@ -111,13 +111,13 @@ Veli yalnızca **kendi çocuklarını** görür. Bu, okul izolasyonunun yanında
   - Paket seçimleri bir ADR'de kayda geçer.
 - [x] P3-05 **Oturum.** Giriş, bellekte tutulan access token ve refresh çerezi, davet kabulü, şifre sıfırlama ve çıkış. (DEC-389, DEC-390)
 - [x] P3-06 **Ekranlar** (önce mobil). Çocuklarım, program, yoklama geçmişi, borçlar ve online ödeme, ödeme geçmişi, duyurular. (DEC-391 – DEC-393)
-- [ ] P3-07 **PWA.**
+- [x] P3-07 **PWA.** (DEC-394, DEC-395)
   - Manifest ve kurulabilirlik.
   - Service worker yalnızca statik dosyaları önbelleğe alır; API yanıtları ve kişisel veri önbelleğe alınmaz.
   - Çevrimdışı sayfası.
 
 ### 3.3 Gerçek zamanlı (P3-F3)
-- [ ] P3-08 **SignalR.**
+- [x] P3-08 **SignalR.** (DEC-396 – DEC-405)
   - Kimlik doğrulama JWT ile yapılır; yayın grupları okul, rol, grup ve veli bazındadır.
   - Mesajlar commit'ten sonra outbox üzerinden yayınlanır.
   - Anlık bildirim gönderilen durumlar:

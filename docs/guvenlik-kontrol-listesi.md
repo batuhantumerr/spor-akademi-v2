@@ -29,7 +29,7 @@ Test sınıfları `tests/` altındaki yollarıyla verilir (`IntegrationTests/...
 
 ## 2. OWASP ASVS 4.0.3 Seviye 1
 
-Sadece bu uygulamaya uygulanabilen maddeler listelenir (dosya yükleme, SOAP, GraphQL, OAuth/OIDC sağlayıcısı, WebSocket yok).
+Sadece bu uygulamaya uygulanabilen maddeler listelenir (SOAP, GraphQL, OAuth/OIDC sağlayıcısı yok; dosya yükleme P2-F6'dan, WebSocket/SignalR P3-08'den beri var).
 
 ### V1 Mimari (L1'de sadece kod kalitesi beklentileri)
 | Madde | Durum | Kanıt / not |
@@ -56,10 +56,11 @@ Sadece bu uygulamaya uygulanabilen maddeler listelenir (dosya yükleme, SOAP, Gr
 ### V3 Oturum yönetimi
 | Madde | Durum | Kanıt / not |
 | --- | --- | --- |
-| 3.1.1 Oturum token'ı URL'de yok | ✅ | Access token `Authorization` başlığında, refresh token cookie'de. |
+| 3.1.1 Oturum token'ı URL'de yok | 🟡 | Access token `Authorization` başlığında, refresh token cookie'de. **İstisna (P3-08, DEC-399):** tarayıcı WebSocket'i başlık taşıyamadığı için SignalR token'ı `access_token` sorgu parametresinde gönderir; API bunu yalnız `/hubs/notifications` yolunda ve `Authorization` başlığı yokken kabul eder (`/api`'de yok sayılır, `RealtimeNotificationTests`), Serilog'da her olayda maskelenir, URL-kodlu biçimi ve SignalR bağlantı token'ı (`?id=`) dahil (`AccessTokenRedaction`, `LogPrivacyTests.The_hub_access_token_*`, `Hub_secrets_are_masked_in_any_text`; DEC-405). Token 15 dakikalıktır. Açık nokta: Deploy bloğunda Caddy erişim logundan `access_token` silinmeli. |
 | 3.2.1 – 3.2.3 Yeni token girişte, ≥ 64 bit entropi, güvenli saklama | ✅ | Refresh token 256 bit CSPRNG, DB'de SHA-256 hash (`Credentials.cs`, `LoginTests`). |
 | 3.3.1 Çıkışta oturum biter | ✅ | `SessionTests.Logout_*`, `AuthHardeningTests.Logout_clears_the_cookie_even_when_revoking_fails`. |
 | 3.3.2 Mutlak süre | ✅ | 30 gün (`SessionTests`). |
+| Çok sekmede refresh ve açık sekmenin oturumu (P3-08) | ✅ | Sekmelerin refresh'i `navigator.locks` (`sa-refresh`) ile sıraya girer, aynı anda refresh yeniden kullanım tespitiyle bütün oturumları kapatmaz; gizli sekme realtime için refresh etmez. Açık sekme oturumu mutlak 30 güne kadar uzatabilir (bilinçli kabul, DEC-405). |
 | 3.4.1 – 3.4.3 Cookie `Secure`, `HttpOnly`, `SameSite` | ✅ | `LoginTests.Valid_credentials_*`. |
 | 3.5.2 – 3.5.3 Token imza/süre doğrulaması | ✅ | HS256, issuer/audience/lifetime, tutarsız rol/tenant reddi (`JwtSetup.cs`, `ErrorHandlingTests.Invalid_tokens_are_rejected`). |
 | 3.7.1 Hassas işlemde yeniden doğrulama | ✅ | Şifre değişimi mevcut şifreyi ister. |
@@ -80,6 +81,7 @@ Sadece bu uygulamaya uygulanabilen maddeler listelenir (dosya yükleme, SOAP, Gr
 | Veli e-postasının değişmesi | ✅ | Değişen veya silinen e-posta bekleyen daveti ve aktif hesabı kapatır; yanlış adrese giden bağlantı düzeltmeden sonra çalışmaz (`ParentInvitationTests.Changing_*`, DEC-384). |
 | Veli API'si maliyeti ve davet sıklığı | ✅ | Hesap başına dakikada 60 istek; borçlar yalnız ailenin kayıtlarını okur; aynı hesaba iki dakikada en fazla bir davet (`ParentInvitationTests`, DEC-388). |
 | Veli verisinin en aza indirilmesi (NFR-PRV-01) | ✅ | Veli yanıtlarında acil durum kişisi, belgeler, diğer velilerin iletişim bilgisi, iptal edilen ödemeler ve iptal gerekçesi, duyuru yazarının ID'si, antrenörün iletişim bilgisi yok (`ParentApiTests`, DEC-385). |
+| 4.1.1, 4.2.1 Gerçek zamanlı bildirimlerde okul ve aile sınırı (P3-08) | ✅ | Hub grupları sunucuda token'dan atanır (`t:{okul}:u:{kullanıcı}`, `t:{okul}:r:{rol}`); istemci gruba katılamaz. Alıcılar gönderim anında hesaplanır: yoklama ve ödeme yalnız o çocuğun aktif veli hesaplarına, duyuru grubun antrenörüne, gruba bugün kayıtlı çocukların velilerine ve okulun Okul Adminlerine. `RealtimeNotificationTests`: A ailesinin velisi B'nin çocuğunun olayını, X grubunun antrenörü Y grubununkini, başka okulun admini ve başka okul token'ındaki aynı kullanıcı ID'si hiçbir şeyi almaz; iptal edilen veli hesabı token'ı yaşarken de almaz. Backplane'de aynı kural (`RealtimeBackplaneTests`). Yalnız outbox handler'ları bildirim gönderir (`NotificationRulesTests`), geri alınan değişiklik bildirim üretmez (DEC-396, DEC-398). |
 | Veli hesabının kapanması | ✅ | Okul Admini iptali, son aktif çocuğun ayrılması ve velinin silinmesi hesabı aynı transaction'da kapatır, refresh token'ları iptal eder; iptal edilen hesap açık access token'la da hemen hiçbir çocuk görmez; silinen velinin hesabındaki kişisel veri silinir (`ParentAccountClosingTests`, `ParentInvitationTests`, DEC-384). |
 
 ### V5 Doğrulama, temizleme, kodlama
@@ -101,6 +103,7 @@ Sadece bu uygulamaya uygulanabilen maddeler listelenir (dosya yükleme, SOAP, Gr
 | Madde | Durum | Kanıt / not |
 | --- | --- | --- |
 | 8.2.1 Hassas veriler önbelleğe alınmaz | ✅ | `/api` yanıtlarında `Cache-Control: no-store` (`AuthHardeningTests.Api_responses_are_never_cached`). |
+| 8.2.1 Veli uygulamasının service worker'ı kişisel veri önbelleğe almaz (P3-07) | ✅ | Worker yalnız build çıktısını (uygulama kabuğu, hash'li dosyalar, manifest, ikonlar) önbelleğe alır; `/api/*` (kimlik doğrulama dahil), `/health*`, GET dışı, başka origin'li, `Authorization`/`Range` başlıklı isteklere hiç cevap vermez ve saklamaz (`web/parent/sw/policy.test.ts`). CI `images` işi precache listesinde `/api`/`/health` olmadığını, e2e (`parent-mobile-chromium`) oturum sonrası önbelleklerde hiçbir API yolu olmadığını ve çevrimdışı yenilemede çocuğun verisinin görünmediğini doğrular (DEC-394, DEC-395). |
 | 8.3.1 Hassas veri URL'de taşınmaz | 🟡 | Öğrenci araması isim/telefon parçasını sorgu dizesinde taşır (`?search=`); proxy erişim loglarında görünebilir. Fikirler 7. |
 | 8.3.4 Kişisel veri envanteri | ⛔ | NFR-PRV-01 envanteri henüz yok; Fikirler 8. |
 
@@ -128,9 +131,12 @@ Sadece bu uygulamaya uygulanabilen maddeler listelenir (dosya yükleme, SOAP, Gr
 ### V13 API
 | Madde | Durum | Kanıt / not |
 | --- | --- | --- |
-| 13.1.3 URL'de anahtar/token yok | ✅ | V3.1.1. |
+| 13.1.3 URL'de anahtar/token yok | 🟡 | V3.1.1 (hub istisnası ve log maskelemesi dahil). |
 | 13.2.1 – 13.2.3 Yöntem kısıtı, JSON şema, CSRF | ✅ | Rotalar sadece tanımlı yöntemleri kabul eder (`405`, `IntegrationTests/Security/ApiSurfaceTests`); OpenAPI sözleşme testi (`OpenApiContractTests`); CSRF V4.2.2. |
 | 13.2.5 `Content-Type` kontrolü | ✅ | JSON gövdeli endpoint'ler başka içerik türünü `415` ile reddeder (`ApiSurfaceTests`). |
+| 13.5 WebSocket / SignalR (P3-08) kimlik doğrulama ve oturum | ✅ | Hub yalnız geçerli JWT ile (`401` anonim, geçersiz ve süresi dolmuş token; Platform Admin ve şifre değiştirmesi gereken token `403`); bağlantı token süresi bitince sunucuca kapatılır (`CloseOnAuthenticationExpiration`), istemci taze token'la yeniden bağlanır (`RealtimeNotificationTests.A_hub_connection_needs_*`, DEC-399). Aynı origin, CORS yok (DEC-054); WebSocket upgrade'i Deploy bloğunda Caddy'de, imajlar `/hubs`'a `404` döner (`scripts/check-api-paths.sh`, DEC-402). |
+| 13.5 WebSocket / SignalR girdi ve kaynak sınırları | ✅ | İstemci çağırabilen hub metodu yok; alınan mesaj ve tampon 4 KB; paralel çağrı 1; ayrıntılı hata kapalı; kullanıcı başına instance başına 10 bağlantı (testli); negotiate kullanıcı başına dakikada 30 (DEC-400). Bağlantı sayacı instance başına (çok instance'ta sınır instance başına). |
+| 13.5 WebSocket mesajlarında veri en aza indirme | ✅ | Bildirim yalnız tür, ID, tarih ve durum taşır; isim, başlık, tutar, serbest metin yok; istemci ayrıntıyı yetkili REST uç noktalarından okur (`RealtimeNotificationTests`, DEC-397). |
 
 ### V14 Yapılandırma
 | Madde | Durum | Kanıt / not |

@@ -1,4 +1,5 @@
 import { ChangeDetectionStrategy, Component, inject } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { RouterLink } from '@angular/router';
 import { LucideArrowLeft } from '@lucide/angular';
 
@@ -6,6 +7,7 @@ import { Api } from '../../api/api';
 import { apiV1MeAnnouncementsGet } from '../../api/functions';
 import { AnnouncementDto } from '../../api/models';
 import { ui } from '../../core/i18n/tr';
+import { RealtimeService } from '../../core/realtime/realtime.service';
 import { PagedList } from '../../shared/data/paged-list';
 import { PaginationComponent } from '../../shared/ui/pagination.component';
 import { AnnouncementItemComponent } from './announcement-item.component';
@@ -64,5 +66,10 @@ export class CoachAnnouncementsPage {
 
   constructor() {
     void this.list.load();
+    // A new announcement for one of the coach's groups, or a reconnect: reload in place (P3-08).
+    inject(RealtimeService)
+      .announcementsChanged()
+      .pipe(takeUntilDestroyed())
+      .subscribe(() => void this.list.load());
   }
 }

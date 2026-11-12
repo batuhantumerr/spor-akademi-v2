@@ -43,8 +43,19 @@ Veliler davet e-postasındaki bağlantıyla (`/reset-password#token=…`) şifre
 ```bash
 cd web/parent
 npm ci
-npm run dev                        # http://localhost:4201 (/api ve /health proxy'si API'ye gider, vite.config.ts)
+npm run dev                        # http://localhost:4201 (/api, /health ve /hubs proxy'si API'ye gider, vite.config.ts)
 ```
+
+**PWA (P3-07):** service worker yalnız production build'de kaydolur ve tarayıcılar onu yalnız güvenli bağlamda (HTTPS veya `localhost`) çalıştırır; `npm run dev` worker'sız çalışır. Yerelde denemek için:
+
+```bash
+cd web/parent
+npm run build && npm run preview   # http://localhost:4201 (localhost güvenli bağlam sayılır; /api proxy'si yok)
+```
+
+Tarayıcının geliştirici araçlarında Application → Service workers / Cache storage / Manifest bölümleri kontrol edilir; Network → Offline ile sayfa yenilenince "Bağlantı yok" ekranı görünmelidir. Önbellekte yalnız `sa-parent-<sürüm>` adlı tek önbellek ve build dosyaları olmalı, hiçbir `/api` yolu olmamalı. Oturumlu bir deneme için API ile birlikte `docker build -f docker/parent/Dockerfile` imajı veya e2e ortamı kullanılır. Eski bir worker'ı kaldırmak: Application → Service workers → Unregister ve Clear site data (DEC-394, DEC-395).
+
+**Gerçek zamanlı bildirimler (P3-08):** iki uygulama da girişten sonra API'nin SignalR hub'ına (`/hubs/notifications`) bağlanır. Dev proxy'leri (`web/admin/proxy.conf.json`, `web/parent/vite.config.ts`) `/hubs`'ı WebSocket'le (`ws: true`) API'ye yollar. Bildirimler outbox teslim edilince gider: `scripts/run-api.sh` ile Hangfire varsayılan olarak 10 saniyede bir teslim eder, yani bir duyuru veya yoklama birkaç saniye içinde görünür. Denemek için bir sekmede veli (veya antrenör) olarak giriş yapın, başka sekmede Okul Admini olarak o grubun duyurusunu yayımlayın ya da yoklamasını kaydedin. Valkey çalışıyorsa (`cache` profili) aynı bağlantı dizesi SignalR backplane'i olarak da kullanılır. Üretimde reverse proxy `/hubs`'ı WebSocket upgrade'iyle API'ye yönlendirmeli ve erişim logundan `access_token` sorgu parametresini silmelidir (Deploy bloğu, DEC-399, DEC-402).
 
 İki uygulama da istemcisini commit edilen OpenAPI belgesinden (`openapi/spor-akademi.json`) çalıştırma/build/test öncesi otomatik üretir. Tema token'ları admin'den kopyalanır; `bash scripts/check-theme-tokens.sh` sapmayı yakalar (DEC-378).
 
@@ -140,7 +151,7 @@ bash scripts/e2e.sh --project=chromium --project=mobile-chromium   # sadece Chro
 
 - Her çalıştırma compose PostgreSQL'inde ayrı bir `spor_akademi_e2e` veritabanını silip yeniden kurar ve migration'ları migrator rolüyle uygular; geliştirme veritabanına (`spor_akademi`) ve çalışan dev API'ye/arayüze dokunmaz. Okul, Okul Admini ve antrenörler çalıştırmaya özel üretilen şifrelerle API üzerinden oluşturulur; hiçbir şifre diske yazılmaz.
 - Playwright API'yi `http://127.0.0.1:5180`'de, admin'in production build'ini `https://localhost:4300`'de (çalıştırmaya özel self-signed sertifika, `/api` proxy'si `e2e/serve.mjs`) başlatır ve sonunda kapatır. Bu iki port boş olmalı.
-- Projeler: masaüstü `chromium`, `firefox`, `webkit` (Okul Admini akışları) ve telefon boyutunda `mobile-chromium` (360 px), `mobile-webkit` (antrenör yoklaması, süre loglanır); veli uygulamasında 360 px Chromium'da `parent-mobile-chromium` (davet e-postası → şifre → giriş → çocuk, yoklama, aidat → Fake sandbox ile online ödeme). Betik davet e-postası için compose'un Mailpit'ini (`mail` profili) kendisi başlatır ve veli uygulamasını `https://localhost:4301`'de sunar. Ziyaret edilen ana sayfalarda axe çalışır; `serious`/`critical` bulgular testi kırar.
+- Projeler: masaüstü `chromium`, `firefox`, `webkit` (Okul Admini akışları) ve telefon boyutunda `mobile-chromium` (360 px), `mobile-webkit` (antrenör yoklaması, süre loglanır); veli uygulamasında 360 px Chromium'da `parent-mobile-chromium` (davet e-postası → şifre → giriş → çocuk, yoklama, aidat → Fake sandbox ile online ödeme → PWA: manifest, service worker, çevrimdışı "Bağlantı yok"). Betik davet e-postası için compose'un Mailpit'ini (`mail` profili) kendisi başlatır ve veli uygulamasını `https://localhost:4301`'de sunar. Ziyaret edilen ana sayfalarda axe çalışır; `serious`/`critical` bulgular testi kırar.
 - Rapor: `web/admin/playwright-report` (`npx playwright show-report`); hata olursa trace'ler `web/admin/test-results`'ta.
 - Git worktree'den çalıştırırken `.env` ana checkout'taysa: `SPOR_AKADEMI_ENV_FILE=/yol/.env bash scripts/e2e.sh`.
 - CI'da `e2e` işi aynı betiği geçici bir `.env` ile çalıştırır; zorunlu check değildir (DEC-240).
