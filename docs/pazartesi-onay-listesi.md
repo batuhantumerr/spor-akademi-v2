@@ -350,6 +350,13 @@ Bu repoya eklenen her paket ve imaj tek tabloda. Dokümandaki baz listeden gelen
 | DEC-375 | Ay kapanışı: günlük `billing-close-periods` işi kural sürümü olan geçmiş ayların borçlarını `billing.charge_snapshots`'a dondurur, ayı `billing.closed_periods`'a yazar; tablolar değiştirilemez. Kapanmış aya geç eklenen kardeş dondurulmuşlardan sonra sıralanır; kapanmayan ay `/health/ready`'de `billing-close` uyarısı verir. |
 | DEC-376 | Form gelecek ayı önerir, bu ay seçilirse onay ister; başlamamış sürüm `DELETE /api/v1/settings/billing-rules/{effectiveFrom}` ile geri alınır, başlamış sürüm `422 BillingRules.AlreadyStarted`. |
 
+#### Oturum dayanıklılığı (2026-11-12)
+
+| ID | Özet |
+| --- | --- |
+| DEC-446 | Refresh token tekrarında 30 sn tolerans: rotasyondan sonraki 30 sn içinde ve halef hiç kullanılmamışken eski token aynı ailede yeni token alır, hiçbir şey iptal edilmez; pencere dışında ya da halef kullanılmışsa bütün oturumlar kapanır (DEC-405'teki "sunucu penceresi yok" kararını değiştirir). |
+| DEC-447 | Admin açılışı yalnız `401`/`403`'te oturumsuz açılır; ağ, `409`, `5xx` hatasında 500 ms sonra bir kez yeniden dener (`429` denemez); 5 sn bekleme refresh isteğini iptal etmez, geç başarı (giriş başlamadıysa) giriş sayfasından `returnUrl`'e götürür; o arada başlayan giriş eski geri yüklemenin sonucunu düşürür ve çağrının bitmesini (en çok 15 sn) bekler. |
+
 ## 6. Sapmalar / bilgilendirme
 
 - **`docker image inspect` (P2-F6).** P2-F6 sırasında bir agent, herkese açık SeaweedFS imajı üzerinde bir kez `docker image inspect` çalıştırdı (sadece metadata; belirtilen kurala aykırıydı). Tekrarlanmadı.

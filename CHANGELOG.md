@@ -50,6 +50,7 @@ Bu dosya [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) biçimini ve [
 
 ### Fixed
 - Admin arayüzü: yanıt gövdesi olmayan uç noktaların (ör. iş paneli oturumu) hataları metin olarak gelen ProblemDetails'ten okunur; "Beklenmeyen hata" yerine doğru Türkçe mesaj görünür (DEC-354).
+- Oturum: refresh yanıtı tarayıcıya ulaşmadığında (refresh sırasında sayfa yenileme, sekme kapatma, kaybolan mobil yanıt) bir sonraki açılış artık kullanıcının bütün cihazlardaki oturumlarını kapatmıyor. Rotasyondan sonraki 30 saniye içinde, halef hiç kullanılmamışsa eski token aynı oturumda yeni bir token alır; pencere dışında ya da halef kullanılmışsa yeniden kullanım tespiti eskisi gibi her şeyi kapatır (DEC-446). Admin açılışı yalnız reddedilen çerezde giriş sayfasına düşer; ağ, `409` ve sunucu hatasında bir kez yeniden dener ve 5 saniyelik beklemede refresh isteğini iptal etmez; o arada başka biri giriş yaparsa eski geri yükleme sonucu yok sayılır (DEC-447).
 
 ### Security
 - Admin imajında zlib ve musl güvenlik yükseltmeleri (DEC-104, DEC-202; öneri aşamasında). Veli imajı aynı yükseltmeleri taşır (P3-04).

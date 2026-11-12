@@ -38,6 +38,7 @@ public sealed class SessionTests(DatabaseFixture database) : IdentityTest(databa
         var (coach, first) = await CoachSessionAsync();
         var otherDevice = await LoginOkAsync("coach@example.com");
         var second = await SessionFromAsync(await RefreshAsync(first.RefreshToken));
+        Api.Clock.Advance(User.RefreshTokenReuseGraceWindow);
 
         var reuse = await RefreshAsync(first.RefreshToken);
 
@@ -45,6 +46,49 @@ public sealed class SessionTests(DatabaseFixture database) : IdentityTest(databa
         (await ErrorCodeAsync(reuse)).ShouldBe("Auth.SessionExpired");
         RefreshCookieOf(reuse)!.Attributes["expires"].ShouldContain("1970");
         (await RefreshAsync(second.RefreshToken)).StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
+        (await RefreshAsync(otherDevice.RefreshToken)).StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
+        (await LoadUserAsync(coach.Id)).RefreshTokens.ShouldAllBe(t => t.RevokedAt != null);
+    }
+
+    [Fact]
+    public async Task Replaying_a_rotated_token_within_the_grace_window_returns_a_new_pair_and_revokes_nothing()
+    {
+        // DEC-446: the server committed the rotation but the browser never stored the new cookie.
+        var (coach, first) = await CoachSessionAsync();
+        var otherDevice = await LoginOkAsync("coach@example.com");
+        (await RefreshAsync(first.RefreshToken)).StatusCode.ShouldBe(HttpStatusCode.OK);
+        Api.Clock.Advance(User.RefreshTokenReuseGraceWindow - TimeSpan.FromSeconds(1));
+
+        var retry = await RefreshAsync(first.RefreshToken);
+
+        retry.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var recovered = await SessionFromAsync(retry);
+        recovered.RefreshToken.ShouldNotBe(first.RefreshToken);
+        recovered.Body.User.Id.ShouldBe(coach.Id.Value);
+        (await SendAsync(HttpMethod.Get, "/api/v1/me", recovered.AccessToken)).StatusCode.ShouldBe(HttpStatusCode.OK);
+        // The session still has exactly one live token: the never-delivered one was retired.
+        var tokens = (await LoadUserAsync(coach.Id)).RefreshTokens;
+        var family = tokens.Where(t => t.ReplacedByTokenId is not null).Select(t => t.FamilyId).Distinct().Single();
+        tokens.Count(t => t.FamilyId == family && t.RevokedAt is null).ShouldBe(1);
+        (await RefreshAsync(otherDevice.RefreshToken)).StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await RefreshAsync(recovered.RefreshToken)).StatusCode.ShouldBe(HttpStatusCode.OK);
+    }
+
+    [Fact]
+    public async Task Replaying_a_token_whose_successor_was_already_used_revokes_all_sessions_even_within_the_window()
+    {
+        // The chain moved on (the successor was itself rotated), so the old token is held by someone else.
+        var (coach, first) = await CoachSessionAsync();
+        var otherDevice = await LoginOkAsync("coach@example.com");
+        var second = await SessionFromAsync(await RefreshAsync(first.RefreshToken));
+        var third = await SessionFromAsync(await RefreshAsync(second.RefreshToken));
+        Api.Clock.Advance(TimeSpan.FromSeconds(5));
+
+        var reuse = await RefreshAsync(first.RefreshToken);
+
+        reuse.StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
+        (await ErrorCodeAsync(reuse)).ShouldBe("Auth.SessionExpired");
+        (await RefreshAsync(third.RefreshToken)).StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
         (await RefreshAsync(otherDevice.RefreshToken)).StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
         (await LoadUserAsync(coach.Id)).RefreshTokens.ShouldAllBe(t => t.RevokedAt != null);
     }

@@ -13,7 +13,6 @@ import {
   withComponentInputBinding,
   withRouterConfig,
 } from '@angular/router';
-import { firstValueFrom, of, timeout } from 'rxjs';
 
 import { routes } from './app.routes';
 import { authInterceptor } from './core/auth/auth.interceptor';
@@ -26,7 +25,10 @@ import { ScrollRegions } from './core/routing/scroll-regions';
 import { MenuNavigationReuseStrategy } from './core/routing/menu-navigation';
 import { ThemeService } from './core/theme/theme.service';
 
-/** A hanging refresh call must never keep the app from starting; the user then signs in again. */
+/**
+ * A hanging refresh call must never keep the app from starting: after this wait the app starts signed out, but the
+ * call itself is not cancelled; if it still succeeds the user leaves the login page (DEC-447).
+ */
 const RESTORE_TIMEOUT_MS = 5000;
 
 export const appConfig: ApplicationConfig = {
@@ -52,11 +54,7 @@ export const appConfig: ApplicationConfig = {
       // Tables that scroll sideways on a phone can be reached and scrolled with the keyboard (P3-11).
       inject(ScrollRegions).watch();
       inject(RealtimeService).connectWhileSignedIn();
-      return firstValueFrom(
-        inject(AuthService)
-          .restore()
-          .pipe(timeout({ first: RESTORE_TIMEOUT_MS, with: () => of(false) })),
-      );
+      return inject(AuthService).restoreAtBoot(RESTORE_TIMEOUT_MS);
     }),
   ],
 };
