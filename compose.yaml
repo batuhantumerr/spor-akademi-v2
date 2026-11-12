@@ -54,7 +54,7 @@ services:
   # mail anywhere: every message stays in Mailpit and is read in its web UI. Both ports listen on 127.0.0.1 only and
   # need no .env key (the host ports have defaults). Testcontainers reads this image reference too.
   mailpit:
-    image: axllent/mailpit:v1.32.0@sha256:0790692be935ea4420d085694f7985b1f692ca6a8771ab0e0bd8ba75ac180498
+    image: axllent/mailpit:v1.33.0@sha256:9b3a463be15354c0f0eba91697d80e3e0d8a5623ef0e627cacc836bc17fd5231
     profiles: ["mail"]
     environment:
       MP_MAX_MESSAGES: "500"
@@ -87,7 +87,7 @@ services:
   # .env without them still works for everything else; the container itself refuses to start without them or
   # with the .env.example placeholders (SeaweedFS without credentials would accept anonymous requests).
   storage:
-    image: chrislusf/seaweedfs:4.51@sha256:f7a49e3f3972ebed5be2ed4befa4a0c68eb7bdddba6e692d42729ceb545134b8
+    image: chrislusf/seaweedfs:4.52@sha256:57877e32bb90073b37dc109b438ba66e84fd5ed9ced5f5c04f56444ef243ce59
     profiles: ["storage"]
     environment:
       AWS_ACCESS_KEY_ID: ${STORAGE_ACCESS_KEY:-}
