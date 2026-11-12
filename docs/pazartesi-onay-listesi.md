@@ -355,7 +355,7 @@ Bu repoya eklenen her paket ve imaj tek tabloda. Dokümandaki baz listeden gelen
 | ID | Özet |
 | --- | --- |
 | DEC-446 | Refresh token tekrarında 30 sn tolerans: rotasyondan sonraki 30 sn içinde ve halef hiç kullanılmamışken eski token aynı ailede yeni token alır, hiçbir şey iptal edilmez; pencere dışında ya da halef kullanılmışsa bütün oturumlar kapanır (DEC-405'teki "sunucu penceresi yok" kararını değiştirir). |
-| DEC-447 | Admin açılışı yalnız `401`/`403`'te oturumsuz açılır; ağ, `409`, `429`, `5xx` hatasında 500 ms sonra bir kez yeniden dener; 5 sn bekleme refresh isteğini iptal etmez, geç başarı giriş sayfasından `returnUrl`'e götürür. |
+| DEC-447 | Admin açılışı yalnız `401`/`403`'te oturumsuz açılır; ağ, `409`, `5xx` hatasında 500 ms sonra bir kez yeniden dener (`429` denemez); 5 sn bekleme refresh isteğini iptal etmez, geç başarı (giriş başlamadıysa) giriş sayfasından `returnUrl`'e götürür; o arada başlayan giriş eski geri yüklemenin sonucunu düşürür ve çağrının bitmesini (en çok 15 sn) bekler. |
 
 ## 6. Sapmalar / bilgilendirme
 
