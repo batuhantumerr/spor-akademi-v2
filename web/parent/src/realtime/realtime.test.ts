@@ -13,8 +13,13 @@ const hub = vi.hoisted(() => {
     accessTokenFactory: () => Promise<string>;
   }
   interface RetryPolicy {
-    nextRetryDelayInMilliseconds(context: { previousRetryCount: number }): number | null;
+    nextRetryDelayInMilliseconds(context: {
+      previousRetryCount: number;
+      retryReason?: unknown;
+    }): number | null;
   }
+
+  type Outcome = 'ok' | 'fail' | 'forbidden';
 
   class FakeConnection {
     readonly handlers = new Map<string, Callback>();
@@ -29,15 +34,18 @@ const hub = vi.hoisted(() => {
       readonly options: Options,
       readonly retryPolicy: RetryPolicy,
       readonly logLevel: unknown,
-      private readonly startOutcome: 'ok' | 'fail',
+      private readonly startOutcome: Outcome,
     ) {}
 
     start(): Promise<void> {
       this.starts++;
       // Like the real client, the token is asked for on every start.
-      return this.options
-        .accessTokenFactory()
-        .then(() => (this.startOutcome === 'ok' ? undefined : Promise.reject(new Error('negotiate failed'))));
+      return this.options.accessTokenFactory().then(() => {
+        if (this.startOutcome === 'fail') throw new Error('negotiate failed');
+        // SignalR's HttpError for a refused negotiate.
+        if (this.startOutcome === 'forbidden')
+          throw Object.assign(new Error('Forbidden'), { statusCode: 403 });
+      });
     }
 
     stop(): Promise<void> {
@@ -72,8 +80,8 @@ const hub = vi.hoisted(() => {
       this.handlers.get(name)?.(payload);
     }
 
-    close(): void {
-      for (const callback of this.closeCallbacks) callback();
+    close(error?: unknown): void {
+      for (const callback of this.closeCallbacks) callback(error);
     }
 
     reconnected(): void {
@@ -83,7 +91,7 @@ const hub = vi.hoisted(() => {
 
   const state = {
     built: [] as FakeConnection[],
-    startOutcomes: [] as ('ok' | 'fail')[],
+    startOutcomes: [] as Outcome[],
   };
 
   class HubConnectionBuilder {
@@ -354,6 +362,79 @@ describe('notifications hub connection (P3-08)', () => {
     expect(built()).toHaveLength(3);
     await vi.advanceTimersByTimeAsync(60_000);
     expect(built()).toHaveLength(3); // The third start succeeded.
+  });
+
+  it('stops for this session when the server refuses the negotiate (403); a new sign-in connects again', async () => {
+    hub.state.startOutcomes.push('forbidden');
+    startRealtime();
+    session.adopt(VALID, parentUser());
+    await settle();
+    expect(built()).toHaveLength(1);
+
+    await vi.advanceTimersByTimeAsync(10 * 60_000);
+    session.adopt(jwt(NOW + 20 * 60_000), parentUser()); // A token refresh is the same session.
+    await settle();
+    expect(built()).toHaveLength(1);
+
+    session.forget();
+    session.adopt(VALID, parentUser());
+    await settle();
+    expect(built()).toHaveLength(2);
+    expect(last().starts).toBe(1);
+  });
+
+  it('gives up reconnecting on a 403 and does not restart', async () => {
+    startRealtime();
+    session.adopt(VALID, parentUser());
+    await settle();
+    const forbidden = Object.assign(new Error('Forbidden'), { statusCode: 403 });
+
+    expect(
+      last().retryPolicy.nextRetryDelayInMilliseconds({ previousRetryCount: 1, retryReason: forbidden }),
+    ).toBeNull();
+    last().close(); // SignalR closes after the policy gave up.
+    await vi.advanceTimersByTimeAsync(10 * 60_000);
+    expect(built()).toHaveLength(1);
+  });
+
+  it('a hidden tab waits until it is visible before refreshing for a reconnect', async () => {
+    let visibility: DocumentVisibilityState = 'hidden';
+    Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => visibility });
+    try {
+      const fresh = jwt(NOW + 16 * 60_000);
+      const api = fakeApi({ 'POST /api/v1/auth/refresh': () => json(sessionResponse(parentUser(), fresh)) });
+      startRealtime();
+      session.adopt(EXPIRED, parentUser());
+      await vi.advanceTimersByTimeAsync(60_000);
+      expect(api.callsTo('POST /api/v1/auth/refresh')).toHaveLength(0);
+
+      visibility = 'visible';
+      document.dispatchEvent(new Event('visibilitychange'));
+      await settle();
+      expect(api.callsTo('POST /api/v1/auth/refresh')).toHaveLength(1);
+      expect(session.token()).toBe(fresh);
+      expect(built()).toHaveLength(1);
+    } finally {
+      Reflect.deleteProperty(document, 'visibilityState');
+    }
+  });
+
+  it('a hidden tab that is signed out while waiting never refreshes', async () => {
+    Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => 'hidden' });
+    try {
+      const api = fakeApi();
+      startRealtime();
+      session.adopt(EXPIRED, parentUser());
+      await settle();
+      const factory = last().options.accessTokenFactory();
+      session.forget();
+      await expect(factory).rejects.toThrow();
+      await vi.advanceTimersByTimeAsync(10 * 60_000);
+      expect(api.calls).toHaveLength(0);
+      expect(built()).toHaveLength(1);
+    } finally {
+      Reflect.deleteProperty(document, 'visibilityState');
+    }
   });
 
   it('does not restart after a close once the parent signed out', async () => {

@@ -60,6 +60,8 @@ export class Realtime {
   private connectedAt: number | null = null;
   private restartAttempt = 0;
   private restartTimer: ReturnType<typeof setTimeout> | null = null;
+  /** Session epoch whose negotiate was refused (403): no more attempts until a new session. */
+  private refusedEpoch: number | null = null;
   private disposers: (() => void)[] = [];
 
   constructor(options: RealtimeOptions) {
@@ -114,6 +116,7 @@ export class Realtime {
       this.disconnect();
       return;
     }
+    if (epoch === this.refusedEpoch) return;
     // A token refresh re-announces `signedIn` for the same session; only a new session needs a new connection.
     if (epoch === this.connectionEpoch && (this.connection !== null || this.restartTimer !== null)) return;
     this.disconnect();
@@ -127,8 +130,13 @@ export class Realtime {
     const connection = new HubConnectionBuilder()
       .withUrl(this.hubUrl, { accessTokenFactory: () => this.accessToken(epoch) })
       .withAutomaticReconnect({
-        nextRetryDelayInMilliseconds: (context: RetryContext) =>
-          this.wanted(epoch) ? (RECONNECT_DELAYS_MS[context.previousRetryCount] ?? null) : null,
+        nextRetryDelayInMilliseconds: (context: RetryContext) => {
+          if (isForbidden(context.retryReason)) {
+            this.refusedEpoch = epoch; // SignalR then closes; restartLater sees the refusal.
+            return null;
+          }
+          return this.wanted(epoch) ? (RECONNECT_DELAYS_MS[context.previousRetryCount] ?? null) : null;
+        },
       })
       // No console output: URLs and messages may carry tokens and ids.
       .configureLogging(LogLevel.None)
@@ -142,10 +150,10 @@ export class Realtime {
       this.connectedAt = this.now();
       void invalidateAfterConnect(this.queryClient);
     });
-    connection.onclose(() => {
+    connection.onclose((error) => {
       if (this.connection !== connection) return; // Stopped on purpose.
       this.connection = null;
-      this.restartLater();
+      this.restartLater(error);
     });
 
     this.connection = connection;
@@ -159,10 +167,10 @@ export class Realtime {
         this.connectedAt = this.now();
         void invalidateAfterConnect(this.queryClient);
       },
-      () => {
+      (error: unknown) => {
         if (this.connection !== connection) return;
         this.connection = null;
-        this.restartLater();
+        this.restartLater(error);
       },
     );
   }
@@ -175,12 +183,41 @@ export class Realtime {
     if (!this.wanted(epoch)) throw new Error('Not signed in.');
     const token = this.session.token();
     if (token && !expiresSoon(token, this.now())) return token;
+    // A hidden tab does not refresh (and rotate the shared cookie) just to reconnect; it waits until it is seen.
+    await this.whenVisible(epoch);
     const fresh = await this.session.refresh();
     if (!fresh || !this.wanted(epoch)) throw new Error('Not signed in.');
     return fresh;
   }
 
-  private restartLater(): void {
+  /** Resolves when the page is visible; rejects if the session ends while waiting. */
+  private whenVisible(epoch: number): Promise<void> {
+    if (document.visibilityState !== 'hidden') return Promise.resolve();
+    return new Promise((resolve, reject) => {
+      const cleanup = () => {
+        document.removeEventListener('visibilitychange', onVisibility);
+        unsubscribe();
+      };
+      const onVisibility = () => {
+        if (document.visibilityState === 'hidden') return;
+        cleanup();
+        resolve();
+      };
+      const unsubscribe = this.session.subscribe(() => {
+        if (this.wanted(epoch)) return;
+        cleanup();
+        reject(new Error('Not signed in.'));
+      });
+      document.addEventListener('visibilitychange', onVisibility);
+    });
+  }
+
+  private restartLater(error?: unknown): void {
+    if (isForbidden(error)) {
+      // The server refuses this session (e.g. a password change is pending): no retry loop; a new sign-in may.
+      this.refusedEpoch = this.connectionEpoch;
+    }
+    if (this.refusedEpoch === this.connectionEpoch) return;
     if (!this.wanted() || this.restartTimer !== null) return;
     if (this.connectedAt !== null && this.now() - this.connectedAt >= STABLE_CONNECTION_MS) {
       this.restartAttempt = 0;
@@ -219,6 +256,11 @@ export class Realtime {
     const name = childFirstName(this.queryClient, notification.studentId);
     this.toasts.show(notificationMessage(notification, name, today));
   }
+}
+
+/** SignalR's `HttpError` with status 403 (negotiate refused). */
+function isForbidden(error: unknown): boolean {
+  return typeof error === 'object' && error !== null && 'statusCode' in error && error.statusCode === 403;
 }
 
 /** True when the JWT's `exp` is past or within the skew; an unreadable token is left to the server to judge. */

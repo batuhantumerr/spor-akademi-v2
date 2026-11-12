@@ -167,7 +167,13 @@ describe('RealtimeService', () => {
   afterEach(() => {
     TestBed.resetTestingModule();
     vi.useRealTimers();
+    delete (document as unknown as Record<string, unknown>)['visibilityState'];
   });
+
+  function setVisibility(state: DocumentVisibilityState): void {
+    Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => state });
+    document.dispatchEvent(new Event('visibilitychange'));
+  }
 
   it.each<Role>(['SchoolAdmin', 'Coach'])('connects after a %s signs in', async (role) => {
     await settle();
@@ -227,6 +233,59 @@ describe('RealtimeService', () => {
     refresh.mockReturnValueOnce(of('next-token'));
     await expect(factory()).resolves.toBe('next-token');
     expect(refresh).toHaveBeenCalledTimes(2);
+  });
+
+  it('defers a needed refresh while the tab is hidden', async () => {
+    currentUser.set(user('Coach'));
+    await settle();
+    setVisibility('hidden');
+    token = jwt(10);
+    let result: string | undefined;
+    void built[0].accessTokenFactory().then((t) => (result = t));
+    await settle(60_000);
+    expect(refresh).not.toHaveBeenCalled();
+    expect(result).toBeUndefined();
+
+    setVisibility('visible');
+    await settle();
+    expect(refresh).toHaveBeenCalledTimes(1);
+    expect(result).toBeDefined();
+  });
+
+  it('uses a token renewed elsewhere while the tab was hidden, without refreshing', async () => {
+    currentUser.set(user('Coach'));
+    await settle();
+    setVisibility('hidden');
+    token = null;
+    const pending = built[0].accessTokenFactory();
+    await settle();
+    token = jwt(900);
+    setVisibility('visible');
+    await expect(pending).resolves.toBe(token);
+    expect(refresh).not.toHaveBeenCalled();
+  });
+
+  it('still returns a fresh token from a hidden tab without refreshing', async () => {
+    currentUser.set(user('Coach'));
+    await settle();
+    setVisibility('hidden');
+    await expect(built[0].accessTokenFactory()).resolves.toBe(token);
+    expect(refresh).not.toHaveBeenCalled();
+  });
+
+  it('gives up waiting for visibility when the session ends', async () => {
+    currentUser.set(user('Coach'));
+    await settle();
+    setVisibility('hidden');
+    token = null;
+    const pending = built[0].accessTokenFactory();
+    const outcome = expect(pending).rejects.toThrow();
+    currentUser.set(null);
+    await settle();
+    await outcome;
+    setVisibility('visible');
+    await settle();
+    expect(refresh).not.toHaveBeenCalled();
   });
 
   it('fails the token request when the refresh says the session is over', async () => {

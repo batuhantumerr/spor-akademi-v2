@@ -15,6 +15,9 @@ export interface SessionState {
   readonly expired: boolean;
 }
 
+/** Web Lock that serializes refresh calls across this origin's tabs (the admin app uses the same name). */
+export const REFRESH_LOCK = 'sa-refresh';
+
 /** Refresh and logout carry this header (DEC-055): a cross-site form cannot set it. */
 const AJAX_HEADERS = { 'X-Requested-With': 'XMLHttpRequest' };
 
@@ -108,7 +111,7 @@ export class Session {
    */
   refresh(): Promise<string | null> {
     if (this.refreshInFlight) return this.refreshInFlight;
-    const call: Promise<string | null> = this.doRefresh().finally(() => {
+    const call: Promise<string | null> = this.refreshAcrossTabs().finally(() => {
       // A logout may have dropped this call and a newer refresh may have started meanwhile; keep that one.
       if (this.refreshInFlight === call) this.refreshInFlight = null;
     });
@@ -136,6 +139,24 @@ export class Session {
   adopt(accessToken: string, user: User): void {
     this.accessToken = accessToken;
     this.setState({ status: 'signedIn', user, expired: false });
+  }
+
+  /**
+   * Tabs of this origin share the refresh cookie, and the API treats a reused (already rotated) refresh token as
+   * theft and ends every session (P3-08). A Web Lock serializes the refresh calls of all tabs, so each one sends
+   * the cookie the previous one rotated. Without the Web Locks API the call runs directly.
+   */
+  private refreshAcrossTabs(): Promise<string | null> {
+    const locks = typeof navigator === 'undefined' ? undefined : (navigator.locks as LockManager | undefined);
+    if (!locks) return this.doRefresh();
+    const epoch = this.sessionEpoch;
+    const tokenAtQueue = this.accessToken;
+    return locks.request(REFRESH_LOCK, { mode: 'exclusive' }, () => {
+      // Signed out while waiting: nothing to refresh. A token adopted meanwhile (a login) is already fresh.
+      if (epoch !== this.sessionEpoch) return null;
+      if (this.accessToken !== null && this.accessToken !== tokenAtQueue) return this.accessToken;
+      return this.doRefresh();
+    });
   }
 
   private async doRefresh(): Promise<string | null> {

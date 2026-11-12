@@ -9,6 +9,7 @@ import { Injectable, computed, inject, signal } from '@angular/core';
 import { Router } from '@angular/router';
 import {
   Observable,
+  Subscription,
   catchError,
   defer,
   finalize,
@@ -39,6 +40,9 @@ interface TokenResponse {
   accessToken: string;
   expiresIn: number;
 }
+
+/** Web Lock that serializes refresh calls across the tabs of this origin. */
+export const REFRESH_LOCK = 'sa-refresh';
 
 /** Marks requests that must not get a bearer token or trigger a refresh retry. */
 export const SKIP_AUTH = new HttpContextToken<boolean>(() => false);
@@ -100,41 +104,48 @@ export class AuthService {
    * One refresh at a time; concurrent 401s wait for the same call. Emits the new token, or null
    * when the refresh cookie was rejected (401/403: the session is over). Network and server errors
    * are re-thrown without touching the session, so a flaky connection does not log the user out.
+   *
+   * Across tabs the call runs under an exclusive Web Lock (P3-08): each tab then rotates the cookie
+   * the previous one already rotated, instead of two tabs presenting the same refresh token at once
+   * (reuse detection would end the session on every device). A tab whose session ended while it
+   * waited for the lock skips the call.
    */
   refresh(): Observable<string | null> {
     if (this.refreshInFlight) {
       return this.refreshInFlight;
     }
     const epoch = this.sessionEpoch;
-    const call: Observable<string | null> = this.http
-      .post<TokenResponse>('/api/v1/auth/refresh', null, {
-        headers: ajaxHeaders(),
-        context: skipAuth(),
-      })
-      .pipe(
-        map((response) => {
-          if (epoch !== this.sessionEpoch) {
-            return null; // Logged out while the refresh was in flight.
-          }
-          this.accessToken.set(response.accessToken);
-          return response.accessToken;
-        }),
-        catchError((error: unknown) => {
-          if (!endsSession(error)) {
-            return throwError(() => error);
-          }
-          if (epoch === this.sessionEpoch) {
-            this.clear();
-          }
-          return of(null);
-        }),
-        finalize(() => {
-          if (this.refreshInFlight === call) {
-            this.refreshInFlight = null;
-          }
-        }),
-        shareReplay({ bufferSize: 1, refCount: true }),
-      );
+    const post = this.http.post<TokenResponse>('/api/v1/auth/refresh', null, {
+      headers: ajaxHeaders(),
+      context: skipAuth(),
+    });
+    const call: Observable<string | null> = underRefreshLock(
+      post,
+      () => epoch !== this.sessionEpoch,
+    ).pipe(
+      map((response) => {
+        if (!response || epoch !== this.sessionEpoch) {
+          return null; // Logged out while the refresh was in flight.
+        }
+        this.accessToken.set(response.accessToken);
+        return response.accessToken;
+      }),
+      catchError((error: unknown) => {
+        if (!endsSession(error)) {
+          return throwError(() => error);
+        }
+        if (epoch === this.sessionEpoch) {
+          this.clear();
+        }
+        return of(null);
+      }),
+      finalize(() => {
+        if (this.refreshInFlight === call) {
+          this.refreshInFlight = null;
+        }
+      }),
+      shareReplay({ bufferSize: 1, refCount: true }),
+    );
     this.refreshInFlight = call;
     return call;
   }
@@ -242,6 +253,45 @@ export class AuthService {
     this.accessToken.set(null);
     this.currentUser.set(null);
   }
+}
+
+/**
+ * Runs `source` while holding the cross-tab refresh lock; emits null without running it when
+ * `stale()` says the session ended while waiting. Without the Web Locks API it runs directly.
+ */
+function underRefreshLock<T>(source: Observable<T>, stale: () => boolean): Observable<T | null> {
+  const locks = typeof navigator === 'undefined' ? undefined : navigator.locks;
+  if (!locks) {
+    return source;
+  }
+  return new Observable<T | null>((subscriber) => {
+    const abort = new AbortController();
+    let inner: Subscription | undefined;
+    locks
+      .request(REFRESH_LOCK, { mode: 'exclusive', signal: abort.signal }, () => {
+        if (subscriber.closed) {
+          return undefined;
+        }
+        if (stale()) {
+          subscriber.next(null);
+          subscriber.complete();
+          return undefined;
+        }
+        // The lock is held until the call settles or is unsubscribed.
+        return new Promise<void>((release) => {
+          inner = source.pipe(finalize(release)).subscribe(subscriber);
+        });
+      })
+      .catch((error: unknown) => {
+        if (!abort.signal.aborted) {
+          subscriber.error(error);
+        }
+      });
+    return () => {
+      abort.abort();
+      inner?.unsubscribe();
+    };
+  });
 }
 
 /** Only an explicit rejection of the refresh cookie ends the session. */

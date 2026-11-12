@@ -1,3 +1,4 @@
+import { DOCUMENT } from '@angular/common';
 import {
   DestroyRef,
   Injectable,
@@ -81,6 +82,9 @@ export class RealtimeService {
   private readonly toasts = inject(ToastService);
   private readonly loadSignalR = inject(SIGNALR_LOADER);
   private readonly injector = inject(Injector);
+  private readonly document = inject(DOCUMENT);
+  /** Cancels token requests waiting for the tab to become visible; called when the session stops. */
+  private readonly visibilityWaits = new Set<() => void>();
 
   private readonly eventSubject = new Subject<RealtimeEvent>();
   private readonly connectionState = signal<RealtimeState>('disconnected');
@@ -150,6 +154,9 @@ export class RealtimeService {
 
   private stop(): void {
     this.generation++;
+    for (const cancel of [...this.visibilityWaits]) {
+      cancel();
+    }
     if (this.restartTimer) {
       clearTimeout(this.restartTimer);
       this.restartTimer = null;
@@ -259,11 +266,19 @@ export class RealtimeService {
     }, delay);
   }
 
-  /** Called by SignalR before every (re)connect. Throws when the session is over. */
+  /**
+   * Called by SignalR before every (re)connect. Throws when the session is over. A hidden tab does
+   * not refresh: it waits until it is visible again (the token may be fresh by then).
+   */
   private async freshToken(): Promise<string> {
-    const token = this.auth.token();
-    if (token && !this.forceRefresh && !expiresSoon(token, Date.now())) {
-      return token;
+    const current = this.usableToken();
+    if (current) {
+      return current;
+    }
+    await this.waitUntilVisible();
+    const renewed = this.usableToken();
+    if (renewed) {
+      return renewed;
     }
     this.forceRefresh = false;
     const refreshed = await firstValueFrom(this.auth.refresh());
@@ -272,6 +287,35 @@ export class RealtimeService {
       throw new Error('Session ended.');
     }
     return refreshed;
+  }
+
+  private usableToken(): string | null {
+    const token = this.auth.token();
+    return token && !this.forceRefresh && !expiresSoon(token, Date.now()) ? token : null;
+  }
+
+  private waitUntilVisible(): Promise<void> {
+    if (this.document.visibilityState !== 'hidden') {
+      return Promise.resolve();
+    }
+    return new Promise<void>((resolve, reject) => {
+      const done = () => {
+        this.document.removeEventListener('visibilitychange', onChange);
+        this.visibilityWaits.delete(cancel);
+      };
+      const onChange = () => {
+        if (this.document.visibilityState !== 'hidden') {
+          done();
+          resolve();
+        }
+      };
+      const cancel = () => {
+        done();
+        reject(new Error('Session ended.'));
+      };
+      this.document.addEventListener('visibilitychange', onChange);
+      this.visibilityWaits.add(cancel);
+    });
   }
 
   private receive(payload: unknown): void {
