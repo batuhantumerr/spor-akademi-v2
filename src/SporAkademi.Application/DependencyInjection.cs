@@ -25,6 +25,9 @@ public static class DependencyInjection
         services.AddScoped<Billing.OnlinePaymentNotifications>();
         services.AddScoped<Billing.OnlinePaymentReconciliation>();
         services.AddScoped<Billing.Contracts.IBillingSummary, Billing.BillingSummaryService>();
+        services.AddScoped<Billing.Contracts.IBillingReport, Billing.BillingReportService>();
+        services.AddScoped<Reports.ReportGroups>();
+        services.AddScoped<Reports.ReportFilters>();
         services.AddScoped<IIdentityModule, IdentityModule>();
         services.AddScoped<EnrollmentModule>();
         services.AddScoped<IEnrollmentCounts>(sp => sp.GetRequiredService<EnrollmentModule>());
