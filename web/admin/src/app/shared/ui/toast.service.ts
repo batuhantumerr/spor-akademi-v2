@@ -116,7 +116,7 @@ export class ToastService implements OnDestroy {
 @Component({
   selector: 'app-toasts',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  host: { '(document:keydown.escape)': 'dismissAll()' },
+  host: { '(document:keydown.escape)': 'dismissAll($event)' },
   imports: [LucideBell, LucideCircleAlert, LucideCircleCheck, LucideX],
   template: `
     <div
@@ -186,8 +186,9 @@ export class ToastsComponent {
    * WCAG 2.4.11: a toast may sit over the focused control; Escape clears the stack without moving focus. With a
    * dialog open, Escape belongs to the dialog.
    */
-  protected dismissAll(): void {
-    if (document.querySelector('[role="dialog"], [role="alertdialog"]')) {
+  protected dismissAll(event: Event): void {
+    // A CDK dialog handles its Escape (and prevents default) and is already gone from the DOM by the time this runs.
+    if (event.defaultPrevented || document.querySelector('[role="dialog"], [role="alertdialog"]')) {
       return;
     }
     for (const toast of this.toasts.toasts()) {

@@ -165,6 +165,7 @@ export class A11yAudit {
       if (known) known.indicator ||= probe.indicator;
       else stops.set(probe.id, probe);
     }
+    expect(stops.size, 'the keyboard walk reached no focusable element').toBeGreaterThan(0);
     for (const probe of stops.values()) {
       if (!probe.inScope) continue;
       if (!probe.indicator) {

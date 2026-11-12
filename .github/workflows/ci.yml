@@ -100,7 +100,8 @@ jobs:
   # check (yet): adding it to the ruleset is the owner's call (docs/pazartesi-onay-listesi.md).
   e2e:
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    # The WCAG audit projects take ~8 of the ~14 minutes; keep headroom for runner variance.
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6.1.0

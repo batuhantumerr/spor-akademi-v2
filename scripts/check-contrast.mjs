@@ -17,6 +17,10 @@ const block = css.slice(css.indexOf('theme-tokens:start'), css.indexOf('theme-to
 
 function tokens(selector) {
   const start = block.indexOf(`${selector} {`);
+  if (start === -1) {
+    console.error(`check-contrast: no "${selector} {" block between the theme-tokens markers`);
+    process.exit(1);
+  }
   const body = block.slice(start, block.indexOf('}', start));
   return Object.fromEntries(
     [...body.matchAll(/--([\w-]+):\s*(#[0-9a-fA-F]{6})\s*;/g)].map((m) => [m[1], m[2]]),
