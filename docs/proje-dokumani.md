@@ -1542,6 +1542,7 @@ Yoklamanın kaydedilmesi neden `POST` değil `PUT`: aynı istek iki kez gönderi
 | `POST` | `/payments` | Elle ödeme kaydı | SA | US-23 |
 | `POST` | `/payments/{id}/cancel` | Gerekçeyle iptal; düzenleme ve silme yok | SA | US-23 |
 | `POST` | `/payments/{id}/refund` | Online ödemenin tamamını sağlayıcı üzerinden gerekçeyle iade eder; `Idempotency-Key` zorunlu; `200` iade edildi, `202` sonuç bekleniyor (P3-13, DEC-416 – DEC-425) | SA | US-23 |
+| `POST` | `/payments/{id}/refund/check` | "Sağlayıcıda kontrol et": bekleyen iadeyi sağlayıcının ödeme detayına göre sonuçlandırır; para döndüyse `200`, dönmediyse `422 Refund.ProviderDeclined`, cevap yoksa `202` (DEC-418) | SA | US-23 |
 | `GET` | `/dues/outstanding` | Ödenmemiş borçlar (`?groupId=&period=`) | SA | US-24 |
 | `POST` | `/online-payments` | Bir borcun (kayıt + dönem) kalanı için online ödeme başlatır; `Idempotency-Key` başlığı zorunlu, tekrarında aynı deneme `200` + `Idempotent-Replayed` (P2-F1, DEC-341) | SA | US-23 |
 | `GET` | `/online-payments` | Online ödeme denemeleri (`?enrollmentId=&period=&status=`) | SA | US-23 |
