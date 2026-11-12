@@ -307,7 +307,9 @@ describe('ReportsPage', () => {
     expectReport('attendance').flush(attendance());
     await settle(fixture);
 
-    const drill = root.querySelector('button[aria-label^="Futbol"]') as HTMLButtonElement;
+    const drill = root.querySelector(
+      'button[aria-label="Gruplarını göster: Futbol"]',
+    ) as HTMLButtonElement;
     expect(drill.textContent).toContain(ui.reports.drill);
     drill.click();
     await settle(fixture);
