@@ -127,6 +127,77 @@ public sealed class ErrorHandlingTests(DatabaseFixture database) : IntegrationTe
         problem.GetProperty("traceId").GetString().ShouldNotBeNullOrWhiteSpace();
     }
 
+    [Fact]
+    public async Task Problem_texts_follow_accept_language_while_the_code_stays()
+    {
+        using var client = ClientWithTestEndpoints();
+        client.Authorize(TestTokens.Create(Guid.CreateVersion7(), "SchoolAdmin", Guid.CreateVersion7(), Api.Clock.GetUtcNow()));
+
+        var turkish = await ProblemAsync(client, "/test/business-rule", acceptLanguage: null);
+        turkish.Language.ShouldBe("tr");
+        turkish.Body.GetProperty("code").GetString().ShouldBe("Group.CapacityBelowActiveEnrollments");
+        turkish.Body.GetProperty("title").GetString().ShouldBe("İşlem yapılamadı");
+        turkish.Body.GetProperty("detail").GetString()
+            .ShouldBe("Kontenjan, gruptaki aktif öğrenci sayısının (12) altına düşürülemez.");
+
+        var english = await ProblemAsync(client, "/test/business-rule", acceptLanguage: "en-GB,en;q=0.9,tr;q=0.8");
+        english.Language.ShouldBe("en");
+        english.Body.GetProperty("code").GetString().ShouldBe("Group.CapacityBelowActiveEnrollments");
+        english.Body.GetProperty("args").GetProperty("count").GetInt32().ShouldBe(12);
+        english.Body.GetProperty("title").GetString().ShouldBe("Request could not be completed");
+        english.Body.GetProperty("detail").GetString()
+            .ShouldBe("Capacity can’t be lower than the number of active students in the group (12).");
+    }
+
+    [Fact]
+    public async Task Framework_problems_are_localized_too()
+    {
+        var anonymous = await ProblemAsync(Client, "/api/v1/anything", acceptLanguage: "en");
+        anonymous.Body.GetProperty("code").GetString().ShouldBe("Auth.Unauthenticated");
+        anonymous.Body.GetProperty("title").GetString().ShouldBe("Sign-in required");
+        anonymous.Body.GetProperty("detail").GetString().ShouldBe("Sign in to continue.");
+
+        using var client = ClientWithTestEndpoints();
+        client.Authorize(TestTokens.Create(Guid.CreateVersion7(), "SchoolAdmin", Guid.CreateVersion7(), Api.Clock.GetUtcNow()));
+        var unexpected = await ProblemAsync(client, "/test/throw", acceptLanguage: "en");
+        var traceId = unexpected.Body.GetProperty("traceId").GetString();
+        unexpected.Body.GetProperty("detail").GetString()
+            .ShouldBe($"Something went wrong. If the problem persists, send this code to the support team: {traceId}");
+
+        var turkish = await ProblemAsync(client, "/test/throw", acceptLanguage: "de-DE");
+        turkish.Body.GetProperty("title").GetString().ShouldBe("Beklenmeyen hata");
+    }
+
+    [Fact]
+    public async Task Validation_problems_keep_field_codes_and_get_a_localized_detail()
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Post, "/api/v1/auth/login")
+        {
+            Content = JsonContent.Create(new { email = "", password = "" }),
+        };
+        request.Headers.AcceptLanguage.ParseAdd("en");
+
+        var response = await Client.SendAsync(request, TestContext.Current.CancellationToken);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        var problem = await response.Content.ReadFromJsonAsync<JsonElement>(TestContext.Current.CancellationToken);
+        problem.GetProperty("code").GetString().ShouldBe("Validation.Failed");
+        problem.GetProperty("detail").GetString().ShouldBe("Some fields in the form need to be corrected.");
+        problem.GetProperty("errors").EnumerateObject().ShouldNotBeEmpty();
+    }
+
+    private static async Task<(JsonElement Body, string? Language)> ProblemAsync(HttpClient client, string path, string? acceptLanguage)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Get, path);
+        if (acceptLanguage is not null)
+        {
+            request.Headers.TryAddWithoutValidation("Accept-Language", acceptLanguage);
+        }
+        var response = await client.SendAsync(request, TestContext.Current.CancellationToken);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>(TestContext.Current.CancellationToken);
+        return (body, response.Content.Headers.ContentLanguage.SingleOrDefault());
+    }
+
     [Theory]
     [InlineData(ErrorType.Validation, 400)]
     [InlineData(ErrorType.Unauthorized, 401)]

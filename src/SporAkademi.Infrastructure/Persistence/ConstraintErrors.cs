@@ -53,6 +53,9 @@ internal static class ConstraintErrors
         // DEC-343: a concurrent delivery of the same notification or result won; the retry sees it applied.
         [PaymentNotificationConfiguration.EventKeyIndex] = PersistenceErrors.ConcurrencyConflict,
         [PaymentConfiguration.OnlinePaymentIndex] = PersistenceErrors.ConcurrencyConflict,
+        // DEC-419: a concurrent refund request (same key: replayed by the caller; another key: refused).
+        [PaymentRefundConfiguration.IdempotencyKeyIndex] = IdempotencyErrors.InProgress,
+        [PaymentRefundConfiguration.ActivePaymentIndex] = PaymentRefundErrors.InProgress,
         // Two photos uploaded for one student at the same time: the later one retries (DEC-325).
         [Students.StudentDocumentConfiguration.OnePhotoIndex] = PersistenceErrors.ConcurrencyConflict,
     };

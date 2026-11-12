@@ -14,20 +14,36 @@ import {
 import { Api } from '../../api/api';
 import {
   apiV1PaymentsIdCancelPost,
+  apiV1PaymentsIdRefundPost,
+  apiV1PaymentsIdRefundResolvePost,
   apiV1PaymentsPost,
   apiV1StudentsGet,
   apiV1StudentsIdEnrollmentsGet,
 } from '../../api/functions';
-import { EnrollmentDto, PaymentDto, PaymentMethod, StudentListItemDto } from '../../api/models';
+import {
+  EnrollmentDto,
+  MoneyDto,
+  PaymentDto,
+  PaymentMethod,
+  StudentListItemDto,
+} from '../../api/models';
 import { fieldErrors, problemMessage, toProblem } from '../../core/api/problem';
 import { formatDate } from '../../core/format/format';
 import { errorMessages, interpolate, ui } from '../../core/i18n/tr';
-import { displayMoney, isPositive, money, parseMoneyInput } from '../../core/money/money';
+import {
+  displayMoney,
+  fromKurus,
+  isPositive,
+  money,
+  parseMoneyInput,
+  toKurus,
+} from '../../core/money/money';
 import { SchoolClock } from '../../core/time/school-clock';
-import { periodLabel } from './billing-format';
+import { newIdempotencyKey, periodLabel } from './billing-format';
 
 export const RECORD_PAYMENT_TITLE_ID = 'record-payment-title';
 export const CANCEL_PAYMENT_TITLE_ID = 'cancel-payment-title';
+export const REFUND_PAYMENT_TITLE_ID = 'refund-payment-title';
 export const PAYMENT_SEARCH_DEBOUNCE_MS = 300;
 
 const dialogClass =
@@ -560,6 +576,364 @@ export class CancelPaymentDialog {
       } else {
         this.error.set(problemMessage(problem));
         this.focus('cancel-error');
+      }
+      this.saving.set(false);
+    }
+  }
+
+  private focus(id: string): void {
+    afterNextRender(() => this.host.nativeElement.querySelector<HTMLElement>(`#${id}`)?.focus(), {
+      injector: this.injector,
+    });
+  }
+}
+
+/** What a refund does to the due, from the live overpayment (DEC-420); exact in kuruş. */
+export function refundEffect(amount: MoneyDto, overpaidBy: MoneyDto | null | undefined): string {
+  const over = overpaidBy ? toKurus(overpaidBy.amount) : 0n;
+  const paid = toKurus(amount.amount);
+  if (over <= 0n) {
+    return ui.billing.refundReopens;
+  }
+  if (over >= paid) {
+    return ui.billing.refundOverpaid;
+  }
+  return interpolate(ui.billing.refundPartlyReopens, {
+    over: displayMoney(overpaidBy),
+    remaining: displayMoney(fromKurus(paid - over)),
+  });
+}
+
+/** What the refund dialog closes with when the provider's answer is not known yet (the refund stays pending). */
+export const REFUND_PENDING = 'refundPending' as const;
+/** What the refund dialog closes with when someone else refunded (or is refunding) the payment first. */
+export const REFUND_ALREADY_HANDLED = 'refundAlreadyHandled' as const;
+export type RefundPaymentResult =
+  PaymentDto | typeof REFUND_PENDING | typeof REFUND_ALREADY_HANDLED;
+
+/** The payment to refund: what the dialog shows and the id it posts to. */
+export interface RefundPaymentData {
+  payment: Pick<PaymentDto, 'id' | 'studentFirstName' | 'studentLastName' | 'period' | 'amount'>;
+  /**
+   * How much the due's recorded payments exceed what it owes now (PaymentDto.overpaidBy, live, DEC-420): the refund
+   * leaves the due paid when it is at least the amount, reopens part of it when smaller, all of it when absent.
+   */
+  overpaidBy?: MoneyDto | null;
+}
+
+/**
+ * P3-13 (DEC-416 – DEC-419): refunds an online payment in full through the provider, with a required reason. One
+ * Idempotency-Key per request, reused when the same refund is submitted again, so a double click or a retry after a
+ * network error never asks the provider twice.
+ */
+@Component({
+  selector: 'app-refund-payment-dialog',
+  changeDetection: ChangeDetectionStrategy.OnPush,
+  template: `
+    <form [class]="dialogClass" (submit)="$event.preventDefault(); save()" novalidate>
+      <h2 [id]="titleId" class="text-lg font-semibold">{{ text.refundTitle }}</h2>
+      <p class="mt-2 text-sm text-muted-foreground">{{ description }}</p>
+      <p id="refund-effect" class="mt-2 text-sm">{{ effect }}</p>
+      @if (error()) {
+        <p
+          id="refund-error"
+          role="alert"
+          tabindex="-1"
+          class="mt-3 rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive"
+        >
+          {{ error() }}
+        </p>
+      }
+      <div class="mt-4">
+        <label class="field-label" for="refund-reason">{{ text.refundReason }}</label>
+        <textarea
+          id="refund-reason"
+          class="input h-auto min-h-24 py-2"
+          rows="3"
+          maxlength="500"
+          [value]="reason()"
+          (input)="reason.set($any($event.target).value); reasonError.set(null)"
+          [attr.aria-invalid]="!!reasonError()"
+          [attr.aria-describedby]="
+            'refund-reason-hint' + (reasonError() ? ' refund-reason-error' : '')
+          "
+        ></textarea>
+        <p id="refund-reason-hint" class="mt-1.5 text-xs text-muted-foreground">
+          {{ text.refundReasonHint }}
+        </p>
+        @if (reasonError(); as m) {
+          <p id="refund-reason-error" class="field-error">{{ m }}</p>
+        }
+      </div>
+      <div class="mt-6 flex flex-wrap justify-end gap-2">
+        <button type="button" class="btn btn-secondary" (click)="ref.close()">
+          {{ actions.cancel }}
+        </button>
+        <button type="submit" class="btn btn-destructive" [disabled]="saving()">
+          {{ text.refundConfirm }}
+        </button>
+      </div>
+    </form>
+  `,
+})
+export class RefundPaymentDialog {
+  private readonly api = inject(Api);
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
+  private readonly injector = inject(Injector);
+  protected readonly ref = inject<DialogRef<RefundPaymentResult>>(DialogRef);
+  private readonly data = inject<RefundPaymentData>(DIALOG_DATA);
+  private readonly payment = this.data.payment;
+
+  protected readonly dialogClass = dialogClass;
+  protected readonly titleId = REFUND_PAYMENT_TITLE_ID;
+  protected readonly text = ui.billing;
+  protected readonly actions = ui.actions;
+  protected readonly description = interpolate(ui.billing.refundText, {
+    student: `${this.payment.studentFirstName} ${this.payment.studentLastName}`,
+    period: periodLabel(this.payment.period),
+    amount: displayMoney(this.payment.amount),
+  });
+  protected readonly effect = refundEffect(this.payment.amount, this.data.overpaidBy);
+  protected readonly reason = signal('');
+  protected readonly reasonError = signal<string | null>(null);
+  protected readonly saving = signal(false);
+  protected readonly error = signal<string | null>(null);
+  /** The key of the request being made; the same reason sent again reuses it (a replay). */
+  private key = newIdempotencyKey();
+  private keyReason: string | null = null;
+
+  protected async save(): Promise<void> {
+    if (this.saving()) {
+      return;
+    }
+    const reason = this.reason().trim();
+    if (!reason) {
+      this.reasonError.set(errorMessages['Refund.ReasonRequired']);
+      this.focus('refund-reason');
+      return;
+    }
+    if (this.keyReason !== null && this.keyReason !== reason) {
+      // Another body is another request; the API would refuse the old key (Idempotency.KeyReused).
+      this.key = newIdempotencyKey();
+    }
+    this.keyReason = reason;
+    this.saving.set(true);
+    this.error.set(null);
+    try {
+      const result = await this.api.invoke(apiV1PaymentsIdRefundPost, {
+        id: this.payment.id,
+        'Idempotency-Key': this.key,
+        body: { reason },
+      });
+      if (result.status === 'Refunded') {
+        this.ref.close(result);
+      } else if (result.refund?.status === 'Pending') {
+        this.ref.close(REFUND_PENDING);
+      } else {
+        // The replay of a request the provider declined: trying again is a new request.
+        this.renewKey();
+        this.showError(errorMessages['Refund.ProviderDeclined']);
+      }
+    } catch (err) {
+      const problem = toProblem(err);
+      if (problem.code === 'Refund.AlreadyRefunded' || problem.code === 'Refund.InProgress') {
+        // Someone else refunded it first (or is refunding it); the list reloads.
+        this.ref.close(REFUND_ALREADY_HANDLED);
+        return;
+      }
+      if (problem.code === 'Refund.ProviderDeclined') {
+        this.renewKey();
+      }
+      if (problem.code === 'Refund.ReasonRequired' || fieldErrors(problem)['reason']) {
+        this.reasonError.set(problemMessage(problem));
+        this.focus('refund-reason');
+        this.saving.set(false);
+        return;
+      }
+      this.showError(problemMessage(problem));
+    }
+  }
+
+  private renewKey(): void {
+    this.key = newIdempotencyKey();
+    this.keyReason = null;
+  }
+
+  private showError(message: string): void {
+    this.error.set(message);
+    this.focus('refund-error');
+    this.saving.set(false);
+  }
+
+  private focus(id: string): void {
+    afterNextRender(() => this.host.nativeElement.querySelector<HTMLElement>(`#${id}`)?.focus(), {
+      injector: this.injector,
+    });
+  }
+}
+
+export const RESOLVE_REFUND_TITLE_ID = 'resolve-refund-title';
+/** What the resolve dialog closes with when the refund is no longer waiting for review (someone settled it first). */
+export const REFUND_NOT_IN_REVIEW = 'refundNotInReview' as const;
+export type ResolveRefundResult = PaymentDto | typeof REFUND_NOT_IN_REVIEW;
+
+export interface ResolveRefundData {
+  payment: Pick<PaymentDto, 'id' | 'studentFirstName' | 'studentLastName' | 'period' | 'amount'>;
+}
+
+/**
+ * P3-13 (DEC-418): settles a refund the system could not settle ("İnceleme gerekli") by hand, after the School Admin
+ * checked the provider panel: the money is back or it is not, with a required internal note. No default choice.
+ */
+@Component({
+  selector: 'app-resolve-refund-dialog',
+  changeDetection: ChangeDetectionStrategy.OnPush,
+  template: `
+    <form [class]="dialogClass" (submit)="$event.preventDefault(); save()" novalidate>
+      <h2 [id]="titleId" class="text-lg font-semibold">{{ text.refundResolveTitle }}</h2>
+      <p class="mt-2 text-sm text-muted-foreground">{{ description }}</p>
+      @if (error()) {
+        <p
+          id="resolve-error"
+          role="alert"
+          tabindex="-1"
+          class="mt-3 rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive"
+        >
+          {{ error() }}
+        </p>
+      }
+      <fieldset
+        class="mt-4"
+        [attr.aria-invalid]="!!choiceError()"
+        [attr.aria-describedby]="choiceError() ? 'resolve-choice-error' : null"
+      >
+        <legend class="field-label">{{ text.refundResolveChoice }}</legend>
+        <label class="mt-2 flex items-start gap-2 text-sm">
+          <input
+            id="resolve-refunded"
+            type="radio"
+            name="resolve-outcome"
+            class="mt-1"
+            [checked]="refunded() === true"
+            (change)="refunded.set(true); choiceError.set(null)"
+          />
+          <span>
+            {{ text.refundResolveRefunded }}
+            <span class="block text-xs text-muted-foreground">{{
+              text.refundResolveRefundedHint
+            }}</span>
+          </span>
+        </label>
+        <label class="mt-2 flex items-start gap-2 text-sm">
+          <input
+            id="resolve-not-refunded"
+            type="radio"
+            name="resolve-outcome"
+            class="mt-1"
+            [checked]="refunded() === false"
+            (change)="refunded.set(false); choiceError.set(null)"
+          />
+          <span>
+            {{ text.refundResolveNotRefunded }}
+            <span class="block text-xs text-muted-foreground">{{
+              text.refundResolveNotRefundedHint
+            }}</span>
+          </span>
+        </label>
+        @if (choiceError(); as m) {
+          <p id="resolve-choice-error" class="field-error">{{ m }}</p>
+        }
+      </fieldset>
+      <div class="mt-4">
+        <label class="field-label" for="resolve-note">{{ text.refundResolveNote }}</label>
+        <textarea
+          id="resolve-note"
+          class="input h-auto min-h-24 py-2"
+          rows="3"
+          maxlength="500"
+          [value]="note()"
+          (input)="note.set($any($event.target).value); noteError.set(null)"
+          [attr.aria-invalid]="!!noteError()"
+          [attr.aria-describedby]="'resolve-note-hint' + (noteError() ? ' resolve-note-error' : '')"
+        ></textarea>
+        <p id="resolve-note-hint" class="mt-1.5 text-xs text-muted-foreground">
+          {{ text.refundResolveNoteHint }}
+        </p>
+        @if (noteError(); as m) {
+          <p id="resolve-note-error" class="field-error">{{ m }}</p>
+        }
+      </div>
+      <div class="mt-6 flex flex-wrap justify-end gap-2">
+        <button type="button" class="btn btn-secondary" (click)="ref.close()">
+          {{ actions.cancel }}
+        </button>
+        <button type="submit" class="btn btn-primary" [disabled]="saving()">
+          {{ text.refundResolveConfirm }}
+        </button>
+      </div>
+    </form>
+  `,
+})
+export class ResolveRefundDialog {
+  private readonly api = inject(Api);
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
+  private readonly injector = inject(Injector);
+  protected readonly ref = inject<DialogRef<ResolveRefundResult>>(DialogRef);
+  private readonly payment = inject<ResolveRefundData>(DIALOG_DATA).payment;
+
+  protected readonly dialogClass = dialogClass;
+  protected readonly titleId = RESOLVE_REFUND_TITLE_ID;
+  protected readonly text = ui.billing;
+  protected readonly actions = ui.actions;
+  protected readonly description = interpolate(ui.billing.refundResolveText, {
+    student: `${this.payment.studentFirstName} ${this.payment.studentLastName}`,
+    period: periodLabel(this.payment.period),
+    amount: displayMoney(this.payment.amount),
+  });
+  protected readonly refunded = signal<boolean | null>(null);
+  protected readonly choiceError = signal<string | null>(null);
+  protected readonly note = signal('');
+  protected readonly noteError = signal<string | null>(null);
+  protected readonly saving = signal(false);
+  protected readonly error = signal<string | null>(null);
+
+  protected async save(): Promise<void> {
+    if (this.saving()) {
+      return;
+    }
+    const refunded = this.refunded();
+    const note = this.note().trim();
+    if (refunded === null) {
+      this.choiceError.set(ui.billing.refundResolveChoiceRequired);
+    }
+    if (!note) {
+      this.noteError.set(errorMessages['Refund.ResolutionNoteRequired']);
+    }
+    if (refunded === null || !note) {
+      this.focus(refunded === null ? 'resolve-refunded' : 'resolve-note');
+      return;
+    }
+    this.saving.set(true);
+    this.error.set(null);
+    try {
+      const resolved = await this.api.invoke(apiV1PaymentsIdRefundResolvePost, {
+        id: this.payment.id,
+        body: { refunded, note },
+      });
+      this.ref.close(resolved);
+    } catch (err) {
+      const problem = toProblem(err);
+      if (problem.code === 'Refund.NotInReview') {
+        // Settled meanwhile (by someone else or the provider check); the list reloads.
+        this.ref.close(REFUND_NOT_IN_REVIEW);
+        return;
+      }
+      if (problem.code === 'Refund.ResolutionNoteRequired' || fieldErrors(problem)['note']) {
+        this.noteError.set(problemMessage(problem));
+        this.focus('resolve-note');
+      } else {
+        this.error.set(problemMessage(problem));
+        this.focus('resolve-error');
       }
       this.saving.set(false);
     }

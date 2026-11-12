@@ -248,6 +248,7 @@ function statusTone(status: string): string {
 
 function PaymentsSection({ childId }: { childId: string }) {
   const payments = usePayments(childId);
+  const timeZone = useSession().user?.schoolTimeZone ?? null;
   const items = payments.data?.pages.flatMap((page) => page.items) ?? [];
   return (
     <Section id="odemeler" title={text.payments.title}>
@@ -263,17 +264,36 @@ function PaymentsSection({ childId }: { childId: string }) {
             className="divide-y divide-border rounded-lg border border-border text-sm"
             data-testid="payments"
           >
-            {items.map((payment) => (
-              <li key={payment.id} className="flex items-center justify-between gap-3 px-3 py-2">
-                <span>
-                  {formatPeriod(payment.period)}
-                  <span className="block text-xs text-muted-foreground">
-                    {formatDate(payment.paidOn)} · {text.payments.methods[payment.method] ?? payment.method}
+            {items.map((payment) => {
+              // P3-13 (DEC-423): a refunded payment stays in the history; the money was returned to the card.
+              const refunded = payment.status === 'Refunded';
+              return (
+                <li
+                  key={payment.id}
+                  className="flex items-center justify-between gap-3 px-3 py-2"
+                  data-testid={`payment-${payment.id}`}
+                >
+                  <span>
+                    {formatPeriod(payment.period)}
+                    {refunded && <span className="badge badge-info ml-2">{text.payments.refunded}</span>}
+                    <span className="block text-xs text-muted-foreground">
+                      {formatDate(payment.paidOn)} · {text.payments.methods[payment.method] ?? payment.method}
+                    </span>
+                    {refunded && payment.refundedAt && (
+                      <span className="block text-xs text-muted-foreground">
+                        {format(text.payments.refundedOn, {
+                          date: formatDateTime(payment.refundedAt, timeZone),
+                        })}
+                      </span>
+                    )}
                   </span>
-                </span>
-                <span className="font-semibold">{formatMoney(payment.amount.amount)}</span>
-              </li>
-            ))}
+                  <span className={refunded ? 'text-muted-foreground line-through' : 'font-semibold'}>
+                    {refunded && <span className="sr-only">{text.payments.refunded}: </span>}
+                    {formatMoney(payment.amount.amount)}
+                  </span>
+                </li>
+              );
+            })}
           </ul>
           {payments.hasNextPage && (
             <button

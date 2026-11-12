@@ -1541,6 +1541,9 @@ Yoklamanın kaydedilmesi neden `POST` değil `PUT`: aynı istek iki kez gönderi
 | `GET` | `/payments` | Ödemeleri listeler (`?studentId=&groupId=&period=&status=`) | SA | US-23 |
 | `POST` | `/payments` | Elle ödeme kaydı | SA | US-23 |
 | `POST` | `/payments/{id}/cancel` | Gerekçeyle iptal; düzenleme ve silme yok | SA | US-23 |
+| `POST` | `/payments/{id}/refund` | Online ödemenin tamamını sağlayıcı üzerinden gerekçeyle iade eder; `Idempotency-Key` zorunlu; `200` iade edildi, `202` sonuç bekleniyor (P3-13, DEC-416 – DEC-425) | SA | US-23 |
+| `POST` | `/payments/{id}/refund/check` | "Sağlayıcıda kontrol et": bekleyen iadeyi sağlayıcının ödeme detayına göre sonuçlandırır; para döndüyse `200`, dönmediyse (son deneme 10 dakikadan eskiyse) `422 Refund.ProviderDeclined`, aksi halde veya cevap yoksa `202` (DEC-418) | SA | US-23 |
+| `POST` | `/payments/{id}/refund/resolve` | İncelemedeki iadeyi elle sonuçlandırır (`refunded`, zorunlu iç not); kim ve ne zaman saklanır (DEC-418) | SA | US-23 |
 | `GET` | `/dues/outstanding` | Ödenmemiş borçlar (`?groupId=&period=`) | SA | US-24 |
 | `POST` | `/online-payments` | Bir borcun (kayıt + dönem) kalanı için online ödeme başlatır; `Idempotency-Key` başlığı zorunlu, tekrarında aynı deneme `200` + `Idempotent-Replayed` (P2-F1, DEC-341) | SA | US-23 |
 | `GET` | `/online-payments` | Online ödeme denemeleri (`?enrollmentId=&period=&status=`) | SA | US-23 |
@@ -1564,6 +1567,17 @@ Yoklamanın kaydedilmesi neden `POST` değil `PUT`: aynı istek iki kez gönderi
 | Metot | Yol | Açıklama | Rol | Hikaye |
 | --- | --- | --- | --- | --- |
 | `GET` | `/dashboard` | Okul Admini ana sayfasının tüm sayıları tek yanıtta: KPI'lar, son 6 ayın tahsilat/borç serisi, son 8 haftanın devam oranı, branş bazında kayıtlar, en dolu 10 grup, bugünkü antrenmanlar (DEC-210) | SA | — |
+
+##### 2.12a Raporlar — `Reports` (okuma modeli, faz 3, P3-09)
+
+Parametreler: `from`, `to` (`YYYY-MM`; varsayılan son 6 ay, en çok 12 ay, son 24 ay içinde, bu aydan ileri değil; DEC-406), devam ve dolulukta `by` (`group` | `sport` | `coach`), `sportId`, `coachId` (gruplara inme; başka okulunki `404`). Yanıtlar yalnız toplam veri içerir (DEC-409).
+
+| Metot | Yol | Açıklama | Rol | Hikaye |
+| --- | --- | --- | --- | --- |
+| `GET` | `/reports/attendance` | Aylık devam oranı ve geldi/geç/gelmedi/mazeretli sayıları; satır ve okul toplamı (DEC-406, DEC-409) | SA | P3-09 |
+| `GET` | `/reports/occupancy` | Ay sonu (bu ay: bugün) kayıtlı, açık grupların kapasitesi ve doluluk (DEC-407) | SA | P3-09 |
+| `GET` | `/reports/revenue` | Dönem başına liste tutarı, kardeş indirimi, tahakkuk, tahsilat, kalan; geciken borçların yaşlandırması (DEC-408) | SA | P3-09 |
+| `GET` | `/reports/{attendance,occupancy,revenue}/csv` | Aynı rapor CSV olarak (UTF-8 BOM, `;`, formül kaçışı); hesap başına dakikada 10 (`429`, DEC-411) | SA | P3-09 |
 
 ##### 2.13 Belgeler — `Students` (faz 2, P2-F6)
 
@@ -1755,7 +1769,7 @@ API'nin döndüğü tüm hata ve uyarı kodlarının kataloğu. Kurallar:
 | `BillingRules.NotFound` | NotFound | Bu ay için aidat kuralı sürümü bulunamadı. | P2-F8 |
 | `BillingRules.AlreadyStarted` | BusinessRule | Başlamış bir aidat kuralı sürümü geri alınamaz. | P2-F8 |
 | `Payment.OnlinePaymentInProgress` | Conflict | Bu borç için açık bir online ödeme var. Sonuçlanmasını veya bağlantının süresinin dolmasını bekleyin. | P2-F1 |
-| `Payment.OnlineNotCancellable` | BusinessRule | Online ödemeler buradan iptal edilemez; iade ödeme sağlayıcısı üzerinden yapılır. | P2-F1 |
+| `Payment.OnlineNotCancellable` | BusinessRule | Online ödemeler buradan iptal edilemez; iade ödeme sağlayıcısı üzerinden yapılır (`POST /payments/{id}/refund`, P3-13). | P2-F1 |
 | `OnlinePayment.NotFound` | NotFound | Online ödeme bulunamadı. | P2-F1 |
 | `OnlinePayment.NothingDue` | BusinessRule | Bu dönem için ödenecek borç yok. | P2-F1 |
 | `OnlinePayment.PeriodInFuture` | BusinessRule | Gelecek bir dönemin aidatı henüz ödenemez. | P2-F1 |
@@ -1765,9 +1779,25 @@ API'nin döndüğü tüm hata ve uyarı kodlarının kataloğu. Kurallar:
 | `OnlinePayment.ProviderMismatch` | BusinessRule | Ödeme sağlayıcısının bildirimi bu ödemeyle eşleşmiyor. | P2-F1 |
 | `OnlinePayment.Disabled` | BusinessRule | Online ödeme bu ortamda yapılandırılmamış. | P2-F1 |
 | `OnlinePayment.InvalidSignature` | Unauthorized | Bildirim imzası geçersiz. | P2-F1 |
+| `Refund.ReasonRequired` | Validation | İade gerekçesi zorunludur. | P3-13 |
+| `Refund.NotOnline` | BusinessRule | Sadece online alınan ödemeler iade edilebilir; nakit veya havale ödeme elle iade edilip kaydı iptal edilir. | P3-13 |
+| `Refund.AlreadyRefunded` | BusinessRule | Bu ödeme zaten iade edilmiş. | P3-13 |
+| `Refund.NotRefundable` | BusinessRule | Bu ödeme iade edilemez. | P3-13 |
+| `Refund.InProgress` | Conflict | Bu ödemenin iadesi sürüyor. | P3-13 |
+| `Refund.NotPending` | BusinessRule | Bu iadenin sonucu zaten belli. | P3-13 |
+| `Refund.ProviderDeclined` | BusinessRule | Ödeme sağlayıcısı iadeyi kabul etmedi. | P3-13 |
+| `Refund.NotFound` | NotFound | İade bulunamadı. | P3-13 |
+| `Refund.NotInReview` | BusinessRule | Bu iade incelemede değil. | P3-13 |
+| `Refund.ResolutionNoteRequired` | Validation | Not zorunludur. | P3-13 |
 | `Idempotency.KeyRequired` | Validation | İstek anahtarı eksik. | P2-F1 |
 | `Idempotency.KeyInvalid` | Validation | İstek anahtarı geçersiz. | P2-F1 |
 | `Idempotency.KeyReused` | BusinessRule | Bu istek anahtarı başka bir işlem için kullanılmış. | P2-F1 |
+
+#### Raporlar — `Reports`
+
+| Kod | Tür | Türkçe mesaj | Hikaye |
+| --- | --- | --- | --- |
+| `Report.InvalidRange` | Validation | Ay aralığı en çok 12 ay olabilir; son 24 ayın içinde olmalı ve bu aydan ileri gidemez. | P3-09 |
 | `Idempotency.InProgress` | Conflict | Aynı işlem şu anda sürüyor. | P2-F1 |
 
 ---

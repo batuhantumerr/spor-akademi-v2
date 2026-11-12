@@ -2,6 +2,7 @@ import { Moon, Sun } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { text } from '../i18n/tr';
 import { useTheme } from '../theme/theme';
+import { LanguageSwitcher } from '../ui/LanguageSwitcher';
 
 /** Centered single-card layout of the pages that need no session (login, password, payment pages). */
 export function PublicLayout({
@@ -21,9 +22,10 @@ export function PublicLayout({
           {text.app.name}
           <span className="ml-2 text-xs font-medium text-muted-foreground">{text.app.tagline}</span>
         </span>
+        <LanguageSwitcher className="ml-auto" />
         <button
           type="button"
-          className="btn btn-ghost btn-icon ml-auto"
+          className="btn btn-ghost btn-icon"
           aria-label={text.theme.toggle}
           title={theme.dark ? text.theme.light : text.theme.dark}
           onClick={theme.toggle}

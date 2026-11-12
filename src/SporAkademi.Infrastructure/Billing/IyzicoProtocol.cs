@@ -24,6 +24,17 @@ internal static class IyzicoProtocol
     }
 
     /// <summary>
+    /// The URI path that IYZWSv2 signs: the request path up to (not including) its query string. The official SDKs
+    /// (iyzipay-dotnet `IyzipayResourceV2.FindUriPath`, MIT) cut the URL at `?`, so query parameters are never signed.
+    /// </summary>
+    public static string SignedPath(string pathAndQuery)
+    {
+        ArgumentNullException.ThrowIfNull(pathAndQuery);
+        var query = pathAndQuery.IndexOf('?', StringComparison.Ordinal);
+        return query < 0 ? pathAndQuery : pathAndQuery[..query];
+    }
+
+    /// <summary>
     /// The hosted-checkout (Checkout Form) webhook signature:
     /// <c>hex(HMACSHA256(secretKey, secretKey + iyziEventType + iyziPaymentId + token + paymentConversationId + status))</c>.
     /// </summary>

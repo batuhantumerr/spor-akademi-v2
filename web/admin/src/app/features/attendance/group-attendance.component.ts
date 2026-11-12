@@ -17,11 +17,13 @@ import { GroupAttendanceMonthDto, MonthCellDto, MonthSessionDto } from '../../ap
 import { problemMessage, toProblem } from '../../core/api/problem';
 import { STATUSES, isMark, statusTone } from '../../core/attendance/attendance';
 import { formatDate, formatTime } from '../../core/format/format';
-import { LOCALE } from '../../core/i18n/locale';
+import { perLocale } from '../../core/i18n/locale';
 import { interpolate, ui } from '../../core/i18n/tr';
 import { SchoolClock } from '../../core/time/school-clock';
 
-const monthFormatter = new Intl.DateTimeFormat(LOCALE, { month: 'long', year: 'numeric' });
+const monthFormatter = perLocale(
+  (l) => new Intl.DateTimeFormat(l, { month: 'long', year: 'numeric' }),
+);
 
 /** "2027-01" ± n months. */
 export function addMonths(month: string, n: number): string {
@@ -214,7 +216,7 @@ export class GroupAttendanceComponent {
   protected readonly error = signal<string | null>(null);
   protected readonly monthLabel = computed(() => {
     const [y, m] = this.month().split('-').map(Number);
-    return monthFormatter.format(new Date(y, m - 1, 1));
+    return monthFormatter().format(new Date(y, m - 1, 1));
   });
   protected readonly caption = computed(() =>
     interpolate(this.text.matrixCaption, { month: this.monthLabel() }),

@@ -17,13 +17,15 @@ import {
   apiV1EnrollmentsPost,
   apiV1GroupsGet,
   apiV1GroupsIdEnrollmentsGet,
+  apiV1PaymentsGet,
   apiV1StudentsGet,
 } from '../../api/functions';
-import { EnrollmentDto, GroupDto, StudentListItemDto } from '../../api/models';
+import { EnrollmentDto, GroupDto, PaymentDto, StudentListItemDto } from '../../api/models';
 import { problemMessage, toProblem } from '../../core/api/problem';
 import { formatDate } from '../../core/format/format';
 import { errorMessages, interpolate, ui } from '../../core/i18n/tr';
 import { SchoolClock } from '../../core/time/school-clock';
+import { periodLabel } from '../billing/billing-format';
 import { EnrollTarget, enrollProblem } from './enrollment-errors';
 import { GroupChangeHint } from './group-change-hint';
 
@@ -547,6 +549,15 @@ export interface EndEnrollmentData {
           <p id="end-date-error" class="field-error">{{ m }}</p>
         }
       </div>
+      @if (prepaidWarning(); as warning) {
+        <p
+          id="end-prepaid-warning"
+          role="note"
+          class="mt-4 rounded-lg border border-warning/40 bg-warning/10 p-3 text-sm"
+        >
+          {{ warning }}
+        </p>
+      }
       <div class="mt-6 flex flex-wrap justify-end gap-2">
         <button type="button" class="btn btn-secondary" (click)="ref.close()">
           {{ actions.cancel }}
@@ -577,6 +588,43 @@ export class EndEnrollmentDialog {
   protected readonly dateError = signal<string | null>(null);
   protected readonly saving = signal(false);
   protected readonly error = signal<string | null>(null);
+  /** Recorded payments of this enrollment (DEC-422); empty when they could not be read. */
+  private readonly payments = signal<PaymentDto[]>([]);
+  /**
+   * P3-13 (DEC-184, DEC-422): months paid in advance beyond the end month. Ending does not refund them; the warning
+   * points to the refund (online payments) or a refund by hand (cash and transfer). Warning only.
+   */
+  protected readonly prepaidWarning = computed(() => {
+    const endMonth = (this.date() || this.today()).slice(0, 7);
+    const months = [
+      ...new Set(
+        this.payments()
+          .filter((p) => p.enrollmentId === this.enrollment.id && p.period > endMonth)
+          .map((p) => p.period),
+      ),
+    ].sort();
+    return months.length === 0
+      ? null
+      : interpolate(this.text.prepaidWarning, { months: months.map(periodLabel).join(', ') });
+  });
+
+  constructor() {
+    void this.loadPayments();
+  }
+
+  private async loadPayments(): Promise<void> {
+    try {
+      const page = await this.api.invoke(apiV1PaymentsGet, {
+        studentId: this.enrollment.studentId,
+        status: 'Recorded',
+        page: 1,
+        pageSize: 100,
+      });
+      this.payments.set(page.items);
+    } catch {
+      // The warning is a convenience; ending works without it.
+    }
+  }
 
   protected async save(): Promise<void> {
     if (this.saving()) {

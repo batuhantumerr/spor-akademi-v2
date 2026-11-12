@@ -83,9 +83,11 @@ internal sealed class CacheInvalidationInterceptor(ICurrentUser currentUser, Cac
             case School school:
                 yield return TenantCacheKey.AreaTag(school.Id, CacheArea.School);
                 yield return TenantCacheKey.AreaTag(school.Id, CacheArea.Dashboard);
+                yield return TenantCacheKey.AreaTag(school.Id, CacheArea.Reports);
                 break;
             case ITenantScoped scoped:
                 yield return TenantCacheKey.AreaTag(scoped.TenantId, CacheArea.Dashboard);
+                yield return TenantCacheKey.AreaTag(scoped.TenantId, CacheArea.Reports);
                 if (AreaOf(scoped) is { } area)
                 {
                     yield return TenantCacheKey.AreaTag(scoped.TenantId, area);
@@ -94,12 +96,13 @@ internal sealed class CacheInvalidationInterceptor(ICurrentUser currentUser, Cac
                 break;
             default:
                 // A child entity (e.g. a group fee) belongs to its own tenant column's school or, without one, to the
-                // request's school (the tenant write guard enforces that), so that school's dashboard is stale.
+                // request's school (the tenant write guard enforces that), so that school's dashboard and reports are stale.
                 // Known gap (DEC-313): a Platform Admin request has no school, so a tenant-less child row it writes
                 // invalidates nothing; the dashboard's 1-minute lifetime bounds the staleness.
                 if (fallbackTenant is { } tenant && tenant != Guid.Empty)
                 {
                     yield return TenantCacheKey.AreaTag(SchoolId.From(tenant), CacheArea.Dashboard);
+                    yield return TenantCacheKey.AreaTag(SchoolId.From(tenant), CacheArea.Reports);
                 }
 
                 break;

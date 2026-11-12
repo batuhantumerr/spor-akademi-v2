@@ -128,14 +128,14 @@ Veli yalnızca **kendi çocuklarını** görür. Bu, okul izolasyonunun yanında
   - Bağlantı koptuğunda istemci yeniden bağlanır ve listeyi yeniler.
 
 ### 3.4 Raporlar (P3-F4)
-- [ ] P3-09 **Okul Admini raporları.**
+- [x] P3-09 **Okul Admini raporları.** (DEC-406 – DEC-413)
   - Devam oranı: grup, branş ve antrenör bazında, aylık.
   - Doluluk eğilimi.
   - Gelir: tahakkuk ve tahsilat, kardeş indiriminin etkisi, geciken borçlar.
   - Grafikler erişilebilir olur; her rapor CSV olarak dışa aktarılabilir.
 
 ### 3.5 Dil, erişilebilirlik ve diğerleri
-- [ ] P3-10 **Çoklu dil (TR/EN)**, admin ve veli uygulamasında.
+- [x] P3-10 **Çoklu dil (TR/EN)**, admin ve veli uygulamasında. (DEC-426 – DEC-431)
   - API hata mesajları `Accept-Language` başlığına göre döner.
   - Tarih ve para biçimleri seçilen dile uyar; varsayılan dil Türkçe.
 - [ ] P3-11 **WCAG 2.2 AA denetimi** (P3-F6).
@@ -143,7 +143,7 @@ Veli yalnızca **kendi çocuklarını** görür. Bu, okul izolasyonunun yanında
   - axe ile otomatik tarama, ardından klavye ve ekran okuyucuyla elle kontrol.
   - Bulgular düzeltilir; rapor `docs/` altına yazılır.
 - [x] P3-12 **Okul başına alt alan adı değerlendirmesi** (P3-F7). Sonuç bir ADR olarak kaydedilir. (ADR-0013, DEC-381: şimdi yapılmaz)
-- [ ] P3-13 **Online ödeme iadesi.**
+- [x] P3-13 **Online ödeme iadesi.** (DEC-416 – DEC-425)
   - Okul Admini, ödemenin tamamını sağlayıcı üzerinden iade eder ve gerekçe girer.
   - Fazla ödeme ve peşin ödenmiş kaydın erken bitirilmesi durumlarını da kapsar (onay listesi, soru 14).
 

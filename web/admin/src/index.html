@@ -20,6 +20,22 @@
           (pref === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
         document.documentElement.classList.add(dark ? 'dark' : 'light');
       })();
+      // P3-10: the stored or browser language before first paint (same rule as core/i18n/language.ts).
+      (function () {
+        var lang = null;
+        try {
+          lang = localStorage.getItem('sa-language');
+        } catch (e) {}
+        if (lang !== 'tr' && lang !== 'en') {
+          var first = (
+            (navigator.languages && navigator.languages[0]) ||
+            navigator.language ||
+            ''
+          ).toLowerCase();
+          lang = first === 'en' || first.indexOf('en-') === 0 ? 'en' : 'tr';
+        }
+        document.documentElement.lang = lang;
+      })();
     </script>
     <style>
       html.light,
@@ -68,7 +84,15 @@
   <body>
     <app-root>
       <!-- Replaced when Angular renders; shown while the session is being restored. -->
-      <div class="boot-loading" role="status" aria-live="polite">Yükleniyor…</div>
+      <div class="boot-loading" role="status" aria-live="polite">
+        <span lang="tr">Yükleniyor…</span>
+        <script>
+          if (document.documentElement.lang === 'en') {
+            document.currentScript.previousElementSibling.textContent = 'Loading…';
+            document.currentScript.previousElementSibling.lang = 'en';
+          }
+        </script>
+      </div>
     </app-root>
   </body>
 </html>

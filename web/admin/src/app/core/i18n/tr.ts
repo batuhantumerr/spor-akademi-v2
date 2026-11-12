@@ -1,8 +1,12 @@
+import { enErrorMessages, enUi } from './en';
+import { localized } from './localized';
+
 /**
- * All user-facing Turkish text lives here (NFR-CMP-02), so an English file can be added in phase 3
- * without touching components. Error messages are keyed by the API's stable error codes (appendix E).
+ * All user-facing Turkish text lives here (NFR-CMP-02); the English dictionary is en.ts with exactly the same keys
+ * (P3-10, DEC-426). Components import `ui` and `errorMessages` from this file: they read the active
+ * language on every access. Error messages are keyed by the API's stable error codes (appendix E).
  */
-export const errorMessages: Readonly<Record<string, string>> = {
+const trErrorMessages = {
   'Validation.Failed': 'Formda düzeltilmesi gereken alanlar var.',
   'Concurrency.Conflict':
     'Bu kayıt siz düzenlerken başka biri tarafından değiştirildi. Sayfayı yenileyip tekrar deneyin.',
@@ -20,6 +24,8 @@ export const errorMessages: Readonly<Record<string, string>> = {
   'BirthYearRange.Invalid': 'Başlangıç yılı bitiş yılından büyük olamaz.',
   'Money.Invalid': 'Geçerli bir tutar girin.',
   'YearMonth.Invalid': 'Geçerli bir dönem (yıl ve ay) girin.',
+  'Report.InvalidRange':
+    'Ay aralığı en çok 12 ay olabilir; son 24 ayın içinde olmalı ve bu aydan ileri gidemez.',
   'Field.Required': 'Bu alan zorunludur.',
   'Field.TooLong': 'Bu alan çok uzun.',
   'Field.Invalid': 'Bu alanın değeri geçerli değil.',
@@ -117,6 +123,18 @@ export const errorMessages: Readonly<Record<string, string>> = {
   'Payment.FeeNotDefined': 'Bu grup için bu dönemde tanımlı bir aidat yok.',
   'Payment.AlreadyCancelled': 'Bu ödeme zaten iptal edilmiş.',
   'Payment.CancelReasonRequired': 'İptal gerekçesi zorunludur.',
+  'Refund.ReasonRequired': 'İade gerekçesi zorunludur.',
+  'Refund.NotOnline':
+    'Sadece online alınan ödemeler iade edilebilir. Nakit veya havale ödemeyi elle iade edip kaydı iptal edin.',
+  'Refund.AlreadyRefunded': 'Bu ödeme zaten iade edilmiş.',
+  'Refund.NotRefundable': 'Bu ödeme iade edilemez.',
+  'Refund.InProgress': 'Bu ödemenin iadesi sürüyor. Sonucunu bekleyin.',
+  'Refund.NotPending': 'Bu iadenin sonucu zaten belli.',
+  'Refund.ProviderDeclined':
+    'Ödeme sağlayıcısı iadeyi kabul etmedi. Sağlayıcı panelini kontrol edip daha sonra tekrar deneyin.',
+  'Refund.NotFound': 'İade bulunamadı.',
+  'Refund.NotInReview': 'Bu iade incelemede değil.',
+  'Refund.ResolutionNoteRequired': 'Not zorunludur.',
   'BillingRules.PeriodInPast': 'Geçmiş bir dönemin aidat kuralları değiştirilemez.',
   'BillingRules.AlreadyDefined': 'Bu dönem için aidat kuralları zaten tanımlı.',
   'BillingRules.InvalidPercent': 'İndirim oranı 0 ile 100 arasında bir tam sayı olmalı.',
@@ -143,9 +161,9 @@ export const errorMessages: Readonly<Record<string, string>> = {
   'Idempotency.InProgress': 'Aynı işlem şu anda sürüyor. Birkaç saniye sonra tekrar deneyin.',
   'Network.Unavailable':
     'Sunucuya ulaşılamıyor. İnternet bağlantınızı kontrol edip tekrar deneyin.',
-};
+} satisfies Record<string, string>;
 
-export const ui = {
+const trUi = {
   appName: 'Spor Akademi',
   appTagline: 'Spor okulları için yönetim paneli',
   nav: {
@@ -170,6 +188,7 @@ export const ui = {
     settings: 'Ayarlar',
     dataRetention: 'Veri saklama',
     billingRules: 'Aidat kuralları',
+    reports: 'Raporlar',
   },
   roles: {
     PlatformAdmin: 'Platform yöneticisi',
@@ -181,6 +200,9 @@ export const ui = {
     dark: 'Koyu tema',
     system: 'Sistem teması',
     toggle: 'Temayı değiştir',
+  },
+  language: {
+    change: 'Dili değiştir',
   },
   shell: {
     mainMenu: 'Ana menü',
@@ -669,7 +691,10 @@ export const ui = {
     dueLabel: '{student} · {group}',
     status: 'Durum',
     allStatuses: 'Tüm durumlar',
-    statuses: { Recorded: 'Kayıtlı', Cancelled: 'İptal' } as Record<string, string>,
+    statuses: { Recorded: 'Kayıtlı', Cancelled: 'İptal', Refunded: 'İade edildi' } as Record<
+      string,
+      string
+    >,
     cancel: 'İptal et',
     cancelTitle: 'Ödeme iptal edilsin mi?',
     cancelText:
@@ -679,6 +704,60 @@ export const ui = {
       'Gerekçeye kişi adı veya başka kişisel veri yazmayın; ödeme kayıtları değişmez ve gerekçe silinmez.',
     cancelled: 'Ödeme iptal edildi.',
     cancelledBecause: 'İptal: {reason}',
+    refund: 'İade et',
+    refundRetry: 'İadeyi tekrar dene',
+    refundTitle: 'Ödeme iade edilsin mi?',
+    refundText:
+      '{student} · {period} · {amount}. Tutarın tamamı ödeme sağlayıcısı üzerinden ödemenin yapıldığı karta iade edilir.',
+    refundReopens:
+      'İade edilen ödeme bu dönemin borcundan düşer: dönem başka ödemelerle karşılanmıyorsa borç yeniden açılır.',
+    refundOverpaid: 'Bu dönem başka ödemelerle de karşılanıyor: iadeden sonra borç ödenmiş kalır.',
+    refundPartlyReopens:
+      'Bu dönem {over} fazla ödenmiş; iadeden sonra {remaining} borç yeniden açılır.',
+    overpaid: 'Fazla ödeme',
+    overpaidBy: '{amount} fazla ödenmiş',
+    refundCheck: 'Sağlayıcıda kontrol et',
+    refundCheckLabel: 'Sağlayıcıda kontrol et: {student}, {period}',
+    refundCheckSucceeded: 'Sağlayıcı iadeyi doğruladı; ödeme iade edildi.',
+    refundCheckNotRefunded:
+      'Sağlayıcıda iade görünmüyor; iade başarısız sayıldı. Gerekirse iadeyi tekrar deneyin.',
+    refundCheckPending: 'Sağlayıcıya ulaşılamadı; iade beklemede kaldı.',
+    refundCheckTooSoon: 'Sağlayıcıya az önce soruldu; biraz sonra tekrar deneyin.',
+    refundNeedsReview: 'İnceleme gerekli',
+    refundNeedsReviewHint: 'Sağlayıcı iadeyi sonuçlandıramadı; sağlayıcıda kontrol edin.',
+    refundResolve: 'Elle sonuçlandır',
+    refundResolveLabel: 'Elle sonuçlandır: {student}, {period}',
+    refundResolveTitle: 'İade elle sonuçlandırılsın mı?',
+    refundResolveText:
+      '{student} · {period} · {amount}. Bu iade otomatik olarak sonuçlandırılamadı. Ödeme sağlayıcısının panelinde paranın karta dönüp dönmediğini kontrol edin ve sonucu seçin.',
+    refundResolveChoice: 'Sağlayıcı panelinde ne görünüyor?',
+    refundResolveRefunded: 'Para karta iade edildi',
+    refundResolveRefundedHint: 'Ödeme iade edilmiş sayılır, veliye bildirim gider.',
+    refundResolveNotRefunded: 'Para iade edilmedi',
+    refundResolveNotRefundedHint:
+      'İade başarısız sayılır; gerekirse iadeyi tekrar deneyebilirsiniz.',
+    refundResolveChoiceRequired: 'Bir sonuç seçin.',
+    refundResolveNote: 'Not',
+    refundResolveNoteHint:
+      'Neye göre karar verdiğinizi yazın (ör. sağlayıcı panelindeki durum). Kişi adı veya başka kişisel veri yazmayın; not silinmez ve veliye gösterilmez.',
+    refundResolveConfirm: 'Sonuçlandır',
+    refundResolvedRefunded: 'İade elle sonuçlandırıldı: ödeme iade edildi.',
+    refundResolvedFailed: 'İade elle sonuçlandırıldı: iade başarısız sayıldı.',
+    refundResolvedBecause: 'Elle sonuçlandırma notu: {note}',
+    refundReason: 'İade gerekçesi',
+    refundReasonHint:
+      'Gerekçeye kişi adı veya başka kişisel veri yazmayın; gerekçe silinmez ve veliye gösterilmez.',
+    refundConfirm: 'İade et',
+    refunded: 'Ödeme iade edildi.',
+    refundPending: 'İade sağlayıcıya iletildi, sonuç bekleniyor.',
+    refundedBecause: 'İade gerekçesi: {reason}',
+    refundStatuses: {
+      Pending: 'İade bekliyor',
+      Succeeded: 'İade edildi',
+      Failed: 'İade başarısız',
+    } as Record<string, string>,
+    refundFailure: 'Sağlayıcı kodu: {code}',
+    refundLabel: '{action}: {student}, {period}',
     noPayments: 'Bu filtrelere uyan ödeme yok.',
     dues: 'Ödenmemiş borçlar',
     duesDescription: 'Aidatı tam ödenmemiş kayıtlar.',
@@ -716,7 +795,8 @@ export const ui = {
     } as Record<string, string>,
     failure: 'Neden: {code}',
     overpaid: 'Fazla ödeme',
-    overpaidHint: 'Bu dönem başka bir ödemeyle de ödenmiş; fazlası elle iade edilmeli.',
+    overpaidHint:
+      'Bu dönem başka bir ödemeyle de ödenmiş; fazlası "İade et" ile karta iade edilebilir.',
     copyLink: 'Bağlantıyı kopyala',
     copyLinkLabel: 'Ödeme bağlantısını kopyala: {student}, {period}',
     linkCopied: 'Ödeme bağlantısı kopyalandı.',
@@ -893,6 +973,8 @@ export const ui = {
     endText: '{student} öğrencisinin {group} kaydı seçilen tarihte sona erer.',
     endDateLabel: 'Bitiş tarihi',
     endDateHint: 'Başlangıç tarihinden önce olamaz, bugünden sonra olamaz.',
+    prepaidWarning:
+      'Bu kayıt için bitişten sonraki aylara ödeme alınmış: {months}. Kaydı bitirmek ödemeyi geri vermez; online ödemeleri Ödemeler sayfasında "İade et" ile iade edin, nakit veya havale ödemeleri elle iade edip kaydı iptal edin.',
     endedToast: 'Kayıt sonlandırıldı.',
     capacity: 'Kontenjan',
     capacityValue: '{used} / {capacity}',
@@ -916,6 +998,84 @@ export const ui = {
     title: 'Gruplarım',
     description: 'Size atanmış aktif gruplar.',
     empty: 'Size atanmış grup yok.',
+  },
+  reports: {
+    description: 'Devam, doluluk ve gelir; aylara göre, CSV olarak indirilebilir.',
+    tabs: { attendance: 'Devam', occupancy: 'Doluluk', revenue: 'Gelir' },
+    tabsLabel: 'Rapor türü',
+    from: 'Başlangıç ayı',
+    to: 'Bitiş ayı',
+    presets: 'Hazır aralıklar',
+    lastMonths: 'Son {count} ay',
+    by: 'Gruplama',
+    dimensions: { group: 'Grup', sport: 'Branş', coach: 'Antrenör' } as Record<string, string>,
+    noCoach: 'Antrenör atanmamış',
+    schoolTotal: 'Tüm okul',
+    total: 'Toplam',
+    download: 'CSV indir',
+    downloading: 'İndiriliyor…',
+    downloadLabel: 'CSV indir: {report} raporu',
+    downloadFailed: 'CSV indirilemedi.',
+    loading: 'Rapor yükleniyor…',
+    noValue: '—',
+    drill: 'Gruplarını göster',
+    drillLabel: 'Gruplarını göster: {name}',
+    filteredBySport: '{name} branşının grupları',
+    filteredByCoach: '{name} antrenörünün grupları',
+    clearFilter: 'Filtreyi kaldır',
+    chartLimit:
+      'Grafikte okul geneli ve en çok kaydı olan {count} satır gösterilir; tüm satırlar tabloda.',
+    attendance: {
+      title: 'Aylık devam oranı',
+      subtitle: 'Geldi ve geç / sayılan yoklama; mazeretli sayılmaz',
+      tableTitle: 'Devam oranı tablosu',
+      empty: 'Seçilen aralıkta yoklama kaydı yok.',
+      counted: '{count} yoklama',
+      summary: '{from} – {to} arasında okul geneli devam oranı {rate}; {count} yoklama sayıldı.',
+    },
+    occupancy: {
+      title: 'Doluluk eğilimi',
+      subtitle: 'Ay sonundaki kayıtlar ve açık grupların kapasitesi (bu ay: bugün)',
+      tableTitle: 'Doluluk tablosu',
+      empty: 'Seçilen aralıkta açık grup yok.',
+      enrolled: 'Kayıtlı',
+      capacity: 'Kapasite',
+      utilisation: 'Doluluk',
+      fill: '{enrolled}/{capacity}',
+      summary: '{period} sayımında {enrolled} kayıt, {capacity} kapasite; doluluk {rate}.',
+      note: 'Kapasite geçmişi tutulmadığı için her ayda grubun bugünkü kapasitesi kullanılır.',
+    },
+    revenue: {
+      title: 'Tahakkuk ve tahsilat',
+      subtitle: 'Döneme göre; tutarlar borç listesiyle aynı hesaplanır',
+      tableTitle: 'Aylık gelir tablosu',
+      period: 'Dönem',
+      listFees: 'Liste tutarı',
+      siblingDiscount: 'Kardeş indirimi',
+      groupChangeWaived: 'Grup değişikliğinde alınmayan',
+      accrued: 'Tahakkuk',
+      collectedForPeriod: 'Döneme tahsilat',
+      outstanding: 'Kalan borç',
+      collectedInMonth: 'Ay içinde tahsil edilen',
+      collectionRate: 'Tahsil oranı',
+      siblingHint: '{count} aidatta kardeş indirimi',
+      kpiRangeHint: '{from} – {to}',
+      summary:
+        '{from} – {to} arasında tahakkuk {accrued}, döneme tahsilat {collected}, kalan {outstanding}.',
+      overdue: {
+        title: 'Geciken borçlar',
+        subtitle: '{date} itibarıyla, son ödeme günü her ayın {day}. günü; son 24 ay',
+        bucket: 'Gecikme',
+        days: '{from}–{to} gün',
+        daysOpen: '{from} gün ve üzeri',
+        dues: 'Borç sayısı',
+        amount: 'Tutar',
+        total: 'Gecikmiş toplam',
+        notYetDue: 'Vadesi gelmemiş',
+        summary: 'Toplam {count} gecikmiş borç, {amount}.',
+        link: 'Ödenmemiş borçlar listesine git',
+      },
+    },
   },
   dashboard: {
     description: '{date} itibarıyla okulunuzun özeti.',
@@ -1048,6 +1208,25 @@ export const ui = {
     postedAt: 'Yayımlanma: {date}',
   },
 };
+
+/** The shape every language must have; en.ts is type-checked against it (same keys, compile time). */
+export type UiText = typeof trUi;
+export type ErrorMessageText = Record<keyof typeof trErrorMessages, string>;
+
+/** UI text in the active language (DEC-426). */
+export const ui: UiText = localized<UiText>({ tr: trUi, en: enUi });
+
+/** Messages for the API's error codes in the active language; unknown codes are `undefined`. */
+export const errorMessages: Readonly<Record<string, string>> = localized<Record<string, string>>({
+  tr: trErrorMessages,
+  en: enErrorMessages,
+});
+
+/** The raw dictionaries, for the key-parity and coverage tests. */
+export const dictionaries = {
+  tr: { ui: trUi, errors: trErrorMessages },
+  en: { ui: enUi, errors: enErrorMessages },
+} as const;
 
 /** Fills <c>{name}</c> placeholders from the problem's <c>args</c>. */
 export function interpolate(template: string, args: Record<string, unknown> | undefined): string {

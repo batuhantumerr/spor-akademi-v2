@@ -30,7 +30,8 @@ import { ui } from '../core/i18n/tr';
 import { ThemeService } from '../core/theme/theme.service';
 import { MENU_NAVIGATION_STATE } from '../core/routing/menu-navigation';
 import { navigationFor } from './navigation';
-import { LOCALE } from '../core/i18n/locale';
+import { LanguageSwitcherComponent } from '../shared/ui/language-switcher.component';
+import { locale } from '../core/i18n/locale';
 
 /** Tailwind's `lg` breakpoint: the sidebar is a fixed rail above it and a drawer below. */
 const DESKTOP_QUERY = '(min-width: 64rem)';
@@ -53,6 +54,7 @@ const DESKTOP_QUERY = '(min-width: 64rem)';
     LucideSun,
     LucideTrophy,
     LucideX,
+    LanguageSwitcherComponent,
   ],
   host: { '(document:keydown.escape)': 'closeMenu()' },
   template: `
@@ -178,6 +180,7 @@ const DESKTOP_QUERY = '(min-width: 64rem)';
             <svg lucideMenu></svg>
           </button>
           <div class="ml-auto flex items-center gap-1">
+            <app-language-switcher />
             <button
               type="button"
               class="btn btn-ghost btn-icon"
@@ -259,7 +262,7 @@ export class ShellComponent {
   protected readonly initials = computed(() => {
     const user = this.auth.user();
     return user
-      ? `${user.firstName.charAt(0)}${user.lastName.charAt(0)}`.toLocaleUpperCase(LOCALE)
+      ? `${user.firstName.charAt(0)}${user.lastName.charAt(0)}`.toLocaleUpperCase(locale())
       : '';
   });
 

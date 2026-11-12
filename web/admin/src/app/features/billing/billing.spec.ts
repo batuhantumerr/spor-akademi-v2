@@ -16,6 +16,8 @@ import {
   CancelPaymentDialog,
   PAYMENT_SEARCH_DEBOUNCE_MS,
   RecordPaymentDialog,
+  RefundPaymentDialog,
+  ResolveRefundDialog,
 } from './billing-dialogs';
 import { DuesPage } from './dues.page';
 import { GroupFeesComponent } from './group-fees.component';
@@ -477,6 +479,159 @@ describe('billing dialogs', () => {
     await settle(fixture);
     expect(close).toHaveBeenCalled();
   });
+
+  const refundData = {
+    payment: {
+      id: 'p1',
+      studentFirstName: 'Ayşe',
+      studentLastName: 'Yılmaz',
+      period: '2026-11',
+      amount: tl('1250.00'),
+    },
+  };
+
+  it('requires a refund reason, warns about personal data and that the due reopens', async () => {
+    await open(RefundPaymentDialog, refundData);
+    expect(root.textContent).toContain('Ayşe Yılmaz · Kasım 2026 · ₺1.250,00');
+    expect(root.querySelector('#refund-effect')?.textContent).toContain(ui.billing.refundReopens);
+    expect(root.querySelector('#refund-reason-hint')?.textContent).toContain(
+      ui.billing.refundReasonHint,
+    );
+    await submit();
+    backend.expectNone('/api/v1/payments/p1/refund');
+    expect(root.querySelector('#refund-reason-error')?.textContent).toContain(
+      errorMessages['Refund.ReasonRequired'],
+    );
+    expect(document.activeElement).toBe(root.querySelector('#refund-reason'));
+  });
+
+  it('says the due stays paid when the live overpayment covers the amount', async () => {
+    await open(RefundPaymentDialog, { ...refundData, overpaidBy: tl('1250.00') });
+    expect(root.querySelector('#refund-effect')?.textContent).toContain(ui.billing.refundOverpaid);
+  });
+
+  it('says how much of the due reopens when the overpayment is smaller than the amount', async () => {
+    await open(RefundPaymentDialog, { ...refundData, overpaidBy: tl('250.00') });
+    const effect = root.querySelector('#refund-effect')?.textContent ?? '';
+    expect(effect).toContain('₺250,00');
+    expect(effect).toContain('₺1.000,00');
+    expect(effect).not.toContain(ui.billing.refundOverpaid);
+  });
+
+  it('says the due reopens without an overpayment', async () => {
+    await open(RefundPaymentDialog, { ...refundData, overpaidBy: null });
+    expect(root.querySelector('#refund-effect')?.textContent).toContain(ui.billing.refundReopens);
+  });
+
+  it('sends the same Idempotency-Key when the same refund is retried and closes when refunded', async () => {
+    await open(RefundPaymentDialog, refundData);
+    await type('refund-reason', '  Kayıt erken bitti  ');
+    await submit();
+    const first = backend.expectOne('/api/v1/payments/p1/refund');
+    expect(first.request.body).toEqual({ reason: 'Kayıt erken bitti' });
+    const key = first.request.headers.get('Idempotency-Key');
+    expect(key).toMatch(/^[A-Za-z0-9._:-]{8,100}$/);
+    first.flush(null, { status: 0, statusText: '' });
+    await settle(fixture);
+    await settle(fixture);
+    expect(document.activeElement).toBe(root.querySelector('#refund-error'));
+
+    await submit();
+    const retry = backend.expectOne('/api/v1/payments/p1/refund');
+    expect(retry.request.headers.get('Idempotency-Key')).toBe(key);
+    retry.flush({ id: 'p1', status: 'Refunded', refund: { status: 'Succeeded' } });
+    await settle(fixture);
+    expect(close).toHaveBeenCalledWith(expect.objectContaining({ status: 'Refunded' }));
+  });
+
+  it('closes as pending when the provider answer is unknown (202)', async () => {
+    await open(RefundPaymentDialog, refundData);
+    await type('refund-reason', 'Kayıt erken bitti');
+    await submit();
+    backend
+      .expectOne('/api/v1/payments/p1/refund')
+      .flush(
+        { id: 'p1', status: 'Recorded', refund: { status: 'Pending' } },
+        { status: 202, statusText: 'Accepted' },
+      );
+    await settle(fixture);
+    expect(close).toHaveBeenCalledWith('refundPending');
+  });
+
+  it('shows a declined refund and retries it with a new key; closes when someone else refunded', async () => {
+    await open(RefundPaymentDialog, refundData);
+    await type('refund-reason', 'Kayıt erken bitti');
+    await submit();
+    const declined = backend.expectOne('/api/v1/payments/p1/refund');
+    const key = declined.request.headers.get('Idempotency-Key');
+    declined.flush(
+      { code: 'Refund.ProviderDeclined' },
+      { status: 422, statusText: 'Unprocessable Entity' },
+    );
+    await settle(fixture);
+    expect(root.querySelector('#refund-error')?.textContent).toContain(
+      errorMessages['Refund.ProviderDeclined'],
+    );
+    expect(close).not.toHaveBeenCalled();
+
+    await submit();
+    const retry = backend.expectOne('/api/v1/payments/p1/refund');
+    expect(retry.request.headers.get('Idempotency-Key')).not.toBe(key);
+    retry.flush({ code: 'Refund.AlreadyRefunded' }, { status: 422, statusText: 'Unprocessable' });
+    await settle(fixture);
+    expect(close).toHaveBeenCalledWith('refundAlreadyHandled');
+  });
+
+  const choose = async (id: string) => {
+    const radio = root.querySelector('#' + id) as HTMLInputElement;
+    radio.checked = true;
+    radio.dispatchEvent(new Event('change'));
+    await settle(fixture);
+  };
+
+  it('requires an outcome and a note before settling a refund by hand (DEC-418)', async () => {
+    await open(ResolveRefundDialog, refundData);
+    expect(root.textContent).toContain('Ayşe Yılmaz · Kasım 2026 · ₺1.250,00');
+    expect(root.querySelector('#resolve-note-hint')?.textContent).toContain(
+      ui.billing.refundResolveNoteHint,
+    );
+    // No default choice: the admin must say what the provider panel shows.
+    expect((root.querySelector('#resolve-refunded') as HTMLInputElement).checked).toBe(false);
+    expect((root.querySelector('#resolve-not-refunded') as HTMLInputElement).checked).toBe(false);
+    await submit();
+    backend.expectNone('/api/v1/payments/p1/refund/resolve');
+    expect(root.querySelector('#resolve-choice-error')?.textContent).toContain(
+      ui.billing.refundResolveChoiceRequired,
+    );
+    expect(root.querySelector('#resolve-note-error')?.textContent).toContain(
+      errorMessages['Refund.ResolutionNoteRequired'],
+    );
+
+    await choose('resolve-refunded');
+    await submit();
+    backend.expectNone('/api/v1/payments/p1/refund/resolve');
+
+    await type('resolve-note', '  Panelde iade görünüyor  ');
+    await submit();
+    const post = backend.expectOne('/api/v1/payments/p1/refund/resolve');
+    expect(post.request.method).toBe('POST');
+    expect(post.request.body).toEqual({ refunded: true, note: 'Panelde iade görünüyor' });
+    post.flush({ id: 'p1', status: 'Refunded' });
+    await settle(fixture);
+    expect(close).toHaveBeenCalledWith(expect.objectContaining({ status: 'Refunded' }));
+  });
+
+  it('settles a refund as not refunded and closes when it is no longer in review', async () => {
+    await open(ResolveRefundDialog, refundData);
+    await choose('resolve-not-refunded');
+    await type('resolve-note', 'Panelde iade yok');
+    await submit();
+    const post = backend.expectOne('/api/v1/payments/p1/refund/resolve');
+    expect(post.request.body).toEqual({ refunded: false, note: 'Panelde iade yok' });
+    post.flush({ code: 'Refund.NotInReview' }, { status: 422, statusText: 'Unprocessable' });
+    await settle(fixture);
+    expect(close).toHaveBeenCalledWith('refundNotInReview');
+  });
 });
 
 describe('PaymentsPage', () => {
@@ -511,6 +666,9 @@ describe('PaymentsPage', () => {
       cancelReason: 'Yanlış dönem',
       cancelledBy: 'u1',
       cancelledAt: '2026-11-06T10:00:00Z',
+      onlinePaymentId: null,
+      refund: null,
+      overpaidBy: null,
     };
     backend
       .expectOne((r) => r.url === '/api/v1/payments')
@@ -538,6 +696,212 @@ describe('PaymentsPage', () => {
     expect(root.textContent).toContain(ui.billing.noPayments);
     backend.verify();
   });
+
+  it('offers a refund only for recorded online payments and shows refund states (P3-13)', async () => {
+    const open = vi.fn().mockReturnValue({ closed: of(refundedPayment) });
+    const toast = { success: vi.fn(), error: vi.fn() };
+    TestBed.configureTestingModule({
+      imports: [PaymentsPage],
+      providers: providers([
+        { provide: Dialog, useValue: { open } },
+        { provide: ToastService, useValue: toast },
+      ]),
+    });
+    const fixture = TestBed.createComponent(PaymentsPage);
+    const backend = TestBed.inject(HttpTestingController);
+    await settle(fixture);
+    backend
+      .expectOne((r) => r.url === '/api/v1/groups')
+      .flush({ items: [], page: 1, pageSize: 100, totalCount: 0, totalPages: 0 });
+    const refund = {
+      id: 'r1',
+      reason: 'Kayıt erken bitti',
+      requestedBy: 'u1',
+      requestedAt: '2026-11-10T10:00:00Z',
+      attempts: 1,
+      needsReview: false,
+      resolvedBy: null,
+      resolvedAt: null,
+      resolutionNote: null,
+    };
+    const items: PaymentDto[] = [
+      onlinePayment('cash', { method: 'Cash', onlinePaymentId: null }),
+      onlinePayment('online'),
+      onlinePayment('failed', {
+        refund: {
+          ...refund,
+          status: 'Failed',
+          completedAt: '2026-11-10T10:00:01Z',
+          failureCode: 'FakeRefundDeclined',
+        },
+      }),
+      onlinePayment('pending', {
+        refund: { ...refund, status: 'Pending', completedAt: null, failureCode: null },
+      }),
+      { ...refundedPayment, id: 'done' },
+    ];
+    backend
+      .expectOne((r) => r.url === '/api/v1/payments')
+      .flush({ items, page: 1, pageSize: 25, totalCount: items.length, totalPages: 1 });
+    await settle(fixture);
+
+    const root = fixture.nativeElement as HTMLElement;
+    const row = (id: string) => root.querySelector(`[data-testid="payment-${id}"]`) as HTMLElement;
+    const buttons = (id: string) =>
+      [...row(id).querySelectorAll('button')].map((b) => b.textContent?.trim());
+    expect(buttons('cash')).toEqual([ui.billing.cancel]);
+    expect(buttons('online')).toEqual([ui.billing.refund]);
+    expect(buttons('failed')).toEqual([ui.billing.refundRetry]);
+    expect(row('failed').textContent).toContain(ui.billing.refundStatuses['Failed']);
+    expect(row('failed').textContent).toContain('FakeRefundDeclined');
+    expect(buttons('pending')).toEqual([ui.billing.refundCheck]);
+    expect(row('pending').textContent).toContain(ui.billing.refundStatuses['Pending']);
+    expect(buttons('done')).toEqual([]);
+    expect(row('done').querySelector('[data-testid="status-Refunded"]')?.textContent).toContain(
+      ui.billing.statuses['Refunded'],
+    );
+    expect(row('done').textContent).toContain('İade gerekçesi: Kayıt erken bitti');
+
+    (row('online').querySelector('button') as HTMLButtonElement).click();
+    await settle(fixture);
+    expect(open.mock.calls[0][1].data.payment.id).toBe('online');
+    expect(open.mock.calls[0][1].data.overpaidBy).toBeNull();
+    expect(toast.success).toHaveBeenCalledWith(ui.billing.refunded);
+    backend
+      .expectOne((r) => r.url === '/api/v1/payments')
+      .flush({ items: [], page: 1, pageSize: 25, totalCount: 0, totalPages: 0 });
+
+    const status = root.querySelector('#pay-filter-status') as HTMLSelectElement;
+    expect([...status.options].map((o) => o.value)).toContain('Refunded');
+    backend.verify();
+  });
+});
+
+describe('PaymentsPage refund recovery', () => {
+  it('marks overpayments, flags refunds needing review and checks them at the provider', async () => {
+    const toast = { success: vi.fn(), error: vi.fn() };
+    TestBed.configureTestingModule({
+      imports: [PaymentsPage],
+      providers: providers([
+        { provide: Dialog, useValue: { open: vi.fn() } },
+        { provide: ToastService, useValue: toast },
+      ]),
+    });
+    const fixture = TestBed.createComponent(PaymentsPage);
+    const backend = TestBed.inject(HttpTestingController);
+    await settle(fixture);
+    backend
+      .expectOne((r) => r.url === '/api/v1/groups')
+      .flush({ items: [], page: 1, pageSize: 100, totalCount: 0, totalPages: 0 });
+    const items: PaymentDto[] = [
+      onlinePayment('over', { overpaidBy: tl('1250.00') }),
+      {
+        ...refundedPayment,
+        id: 'settled',
+        refund: {
+          ...refundedPayment.refund!,
+          resolvedBy: 'u2',
+          resolvedAt: '2026-11-11T09:00:00Z',
+          resolutionNote: 'Panelde iade görünüyor',
+        },
+      },
+      onlinePayment('review', {
+        refund: {
+          id: 'r1',
+          status: 'Pending',
+          reason: 'Kayıt erken bitti',
+          requestedBy: 'u1',
+          requestedAt: '2026-11-10T10:00:00Z',
+          completedAt: null,
+          failureCode: null,
+          attempts: 2,
+          needsReview: true,
+          resolvedBy: null,
+          resolvedAt: null,
+          resolutionNote: null,
+        },
+      }),
+    ];
+    backend
+      .expectOne((r) => r.url === '/api/v1/payments')
+      .flush({ items, page: 1, pageSize: 25, totalCount: items.length, totalPages: 1 });
+    await settle(fixture);
+
+    const root = fixture.nativeElement as HTMLElement;
+    const row = (id: string) =>
+      root.querySelector('[data-testid="payment-' + id + '"]') as HTMLElement;
+    expect(row('over').querySelector('[data-testid="overpaid"]')?.textContent).toContain(
+      ui.billing.overpaid,
+    );
+    expect(row('over').textContent).toContain('₺1.250,00 fazla ödenmiş');
+    expect(
+      row('review').querySelector('[data-testid="refund-needs-review"]')?.textContent,
+    ).toContain(ui.billing.refundNeedsReview);
+    expect(row('review').querySelector('[data-testid="overpaid"]')).toBeNull();
+    // Settling by hand is only for a refund the system gave up on.
+    expect(row('review').querySelector('[data-testid="refund-resolve"]')?.textContent).toContain(
+      ui.billing.refundResolve,
+    );
+    expect(row('over').querySelector('[data-testid="refund-resolve"]')).toBeNull();
+    expect(
+      row('settled').querySelector('[data-testid="refund-resolution-note"]')?.textContent,
+    ).toContain('Elle sonuçlandırma notu: Panelde iade görünüyor');
+    expect(row('settled').querySelector('[data-testid="refund-resolve"]')).toBeNull();
+
+    (row('review').querySelector('[data-testid="refund-check"]') as HTMLButtonElement).click();
+    await settle(fixture);
+    const check = backend.expectOne('/api/v1/payments/review/refund/check');
+    expect(check.request.method).toBe('POST');
+    check.flush({ code: 'Refund.ProviderDeclined' }, { status: 422, statusText: 'Unprocessable' });
+    await settle(fixture);
+    expect(toast.error).toHaveBeenCalledWith(ui.billing.refundCheckNotRefunded);
+    backend
+      .expectOne((r) => r.url === '/api/v1/payments')
+      .flush({ items: [], page: 1, pageSize: 25, totalCount: 0, totalPages: 0 });
+    backend.verify();
+  });
+});
+
+function onlinePayment(id: string, overrides: Partial<PaymentDto> = {}): PaymentDto {
+  return {
+    id,
+    enrollmentId: 'e1',
+    studentId: 'st1',
+    studentFirstName: 'Ayşe',
+    studentLastName: 'Yılmaz',
+    groupId: 'g1',
+    groupName: 'U12 Mavi',
+    period: '2026-11',
+    amount: tl('1250.00'),
+    method: 'Online',
+    paidOn: '2026-11-05',
+    status: 'Recorded',
+    cancelReason: null,
+    cancelledBy: null,
+    cancelledAt: null,
+    onlinePaymentId: 'op1',
+    refund: null,
+    overpaidBy: null,
+    ...overrides,
+  };
+}
+
+const refundedPayment: PaymentDto = onlinePayment('refunded', {
+  status: 'Refunded',
+  refund: {
+    id: 'r9',
+    status: 'Succeeded',
+    reason: 'Kayıt erken bitti',
+    requestedBy: 'u1',
+    requestedAt: '2026-11-10T10:00:00Z',
+    completedAt: '2026-11-10T10:00:01Z',
+    failureCode: null,
+    attempts: 1,
+    needsReview: false,
+    resolvedBy: null,
+    resolvedAt: null,
+    resolutionNote: null,
+  },
 });
 
 describe('DuesPage', () => {

@@ -193,6 +193,10 @@ public sealed partial class CrossTenantEndpointTests(DatabaseFixture database) :
             (Admin, "/api/v1/guardians" + ListQueries["/api/v1/guardians"], _a.Guardian),
             (Admin, "/api/v1/dues/outstanding", _a.UnpaidStudent),
             (Admin, "/api/v1/dashboard", _a.Group),
+            (Admin, "/api/v1/reports/attendance", _a.Group),
+            (Admin, "/api/v1/reports/occupancy", _a.Group),
+            (Admin, "/api/v1/reports/attendance?by=sport", _a.Sport),
+            (Admin, "/api/v1/reports/occupancy?by=coach", _a.Coach),
             (Admin, "/api/v1/settings/billing-rules", _a.BillingRules),
             (ayse, "/api/v1/me", _a.Coach),
             (ayse, "/api/v1/me/groups", _a.Group),
@@ -287,6 +291,12 @@ public sealed partial class CrossTenantEndpointTests(DatabaseFixture database) :
         [
             "/api/v1/coaches",
             "/api/v1/dashboard",
+            "/api/v1/reports/attendance",
+            "/api/v1/reports/attendance/csv",
+            "/api/v1/reports/occupancy",
+            "/api/v1/reports/occupancy/csv",
+            "/api/v1/reports/revenue",
+            "/api/v1/reports/revenue/csv",
             "/api/v1/dues/outstanding",
             "/api/v1/facilities",
             "/api/v1/groups",
@@ -467,10 +477,17 @@ public sealed partial class CrossTenantEndpointTests(DatabaseFixture database) :
             ["POST /api/v1/enrollments/{id:guid}/end"] = (new { date = "2027-01-14" }, ""),
             ["GET /api/v1/payments/{id:guid}"] = (null, ""),
             ["POST /api/v1/payments/{id:guid}/cancel"] = (new { reason = "Hack" }, ""),
+            // P3-13: refunding another school's payment is "not found" (with a valid key, so validation passes).
+            ["POST /api/v1/payments/{id:guid}/refund"] = (new { reason = "Hack" }, ""),
+            ["POST /api/v1/payments/{id:guid}/refund/check"] = (null, ""),
+            ["POST /api/v1/payments/{id:guid}/refund/resolve"] = (new { refunded = true, note = "Hack" }, ""),
             ["GET /api/v1/online-payments/{id:guid}"] = (null, ""),
             ["DELETE /api/v1/settings/billing-rules/{effectiveFrom}"] = (null, ""),
         };
-        return probes.ToDictionary(p => p.Key, p => new Probe(p.Key, p.Value.Body, p.Value.Query, 404, NotFoundOf(p.Key.Split(' ')[1])), StringComparer.Ordinal);
+        return probes.ToDictionary(
+            p => p.Key,
+            p => new Probe(p.Key, p.Value.Body, p.Value.Query, 404, NotFoundOf(p.Key.Split(' ')[1]), p.Key.EndsWith("/refund", StringComparison.Ordinal) ? IdempotencyKey : null),
+            StringComparer.Ordinal);
     }
 
     /// <summary>

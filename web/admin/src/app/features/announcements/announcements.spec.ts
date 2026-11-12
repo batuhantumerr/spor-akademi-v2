@@ -434,7 +434,7 @@ describe('coach announcements', () => {
     const { routes } = await import('../../app.routes');
     const coach = routes[2].children!.find((r) => r.path === 'coach')!;
     const route = coach.children!.find((r) => r.path === 'announcements')!;
-    expect(route.title).toBe(ui.announcements.title);
+    expect((route.title as () => string)()).toBe(ui.announcements.title);
     expect(coach.canActivate?.length).toBe(1);
     const component = await (route.loadComponent as () => Promise<unknown>)();
     expect(component).toBe(CoachAnnouncementsPage);

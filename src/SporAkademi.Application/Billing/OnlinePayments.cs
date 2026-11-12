@@ -16,7 +16,10 @@ using SporAkademi.Domain.SharedKernel;
 
 namespace SporAkademi.Application.Billing;
 
-/// <summary>An online payment attempt for the School Admin (P2-F1): the due, the amount, where it stands and the checkout link.</summary>
+/// <summary>
+/// An online payment attempt for the School Admin (P2-F1): the due, the amount, where it stands and the checkout link.
+/// <c>RefundStatus</c> is the latest refund request of its payment (P3-13), if any.
+/// </summary>
 public sealed record OnlinePaymentDto(
     Guid Id,
     Guid EnrollmentId,
@@ -35,7 +38,8 @@ public sealed record OnlinePaymentDto(
     DateTimeOffset? CompletedAt,
     string? FailureCode,
     Guid? PaymentId,
-    bool Overpaid);
+    bool Overpaid,
+    PaymentRefundStatus? RefundStatus);
 
 public sealed record OnlinePaymentFilter(EnrollmentId? EnrollmentId, YearMonth? Period, OnlinePaymentStatus? Status);
 
@@ -352,12 +356,13 @@ internal sealed class ExpireOnlinePaymentHandler(IOnlinePaymentRepository online
 }
 
 /// <summary>Adds student and group names from the Students and Groups contracts, in batches.</summary>
-internal sealed class OnlinePaymentViews(IStudentDirectory students, IGroupDirectory groups, IPaymentProviders providers, TimeProvider clock)
+internal sealed class OnlinePaymentViews(IStudentDirectory students, IGroupDirectory groups, IPaymentProviders providers, RefundViews refunds, TimeProvider clock)
 {
     public async Task<IReadOnlyList<OnlinePaymentDto>> ToDtosAsync(IReadOnlyList<OnlinePayment> items, CancellationToken cancellationToken)
     {
         var studentNames = await students.GetManyAsync([.. items.Select(p => p.StudentId.Value).Distinct()], cancellationToken);
         var groupNames = await groups.GetManyAsync([.. items.Select(p => p.GroupId.Value).Distinct()], cancellationToken);
+        var latestRefunds = await refunds.LatestAsync(items.Where(p => p.PaymentId is not null).Select(p => p.PaymentId!.Value), cancellationToken);
         var now = clock.GetUtcNow();
         return
         [
@@ -385,7 +390,8 @@ internal sealed class OnlinePaymentViews(IStudentDirectory students, IGroupDirec
                     p.CompletedAt,
                     p.FailureCode,
                     p.PaymentId?.Value,
-                    p.Overpaid);
+                    p.Overpaid,
+                    p.PaymentId is { } paymentId && latestRefunds.TryGetValue(paymentId, out var refund) ? refund.Status : null);
             }),
         ];
     }

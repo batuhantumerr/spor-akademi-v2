@@ -1,10 +1,16 @@
-/** Display formats (NFR-CMP-03, same as web/admin core/format): dates gg.AA.yyyy, 24-hour times, money ₺1.250,00. */
+import { locale, perLocale } from '../i18n/language';
 
-const LOCALE = 'tr-TR';
+/**
+ * Display formats (NFR-CMP-03, same as web/admin core/format) in the active language (P3-10): Turkish dates
+ * gg.AA.yyyy and money ₺1.250,00; English (en-GB) dd/mm/yyyy and ₺1,250.00. Times are 24-hour in both; money is
+ * always Turkish lira.
+ */
 
-const dateFormatter = new Intl.DateTimeFormat(LOCALE, { day: '2-digit', month: '2-digit', year: 'numeric' });
-const dayMonthFormatter = new Intl.DateTimeFormat(LOCALE, { day: 'numeric', month: 'long' });
-const periodFormatter = new Intl.DateTimeFormat(LOCALE, { month: 'long', year: 'numeric' });
+const dateFormatter = perLocale(
+  (l) => new Intl.DateTimeFormat(l, { day: '2-digit', month: '2-digit', year: 'numeric' }),
+);
+const dayMonthFormatter = perLocale((l) => new Intl.DateTimeFormat(l, { day: 'numeric', month: 'long' }));
+const periodFormatter = perLocale((l) => new Intl.DateTimeFormat(l, { month: 'long', year: 'numeric' }));
 const dateTimeOptions: Intl.DateTimeFormatOptions = {
   day: '2-digit',
   month: '2-digit',
@@ -13,13 +19,19 @@ const dateTimeOptions: Intl.DateTimeFormatOptions = {
   minute: '2-digit',
   hourCycle: 'h23',
 };
-const moneyFormatter = new Intl.NumberFormat(LOCALE, {
-  style: 'currency',
-  currency: 'TRY',
-  minimumFractionDigits: 2,
-  maximumFractionDigits: 2,
-});
-const percentFormatter = new Intl.NumberFormat(LOCALE, { style: 'percent', maximumFractionDigits: 0 });
+const moneyFormatter = perLocale(
+  (l) =>
+    new Intl.NumberFormat(l, {
+      style: 'currency',
+      currency: 'TRY',
+      currencyDisplay: 'narrowSymbol',
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }),
+);
+const percentFormatter = perLocale(
+  (l) => new Intl.NumberFormat(l, { style: 'percent', maximumFractionDigits: 0 }),
+);
 
 function localDate(isoDate: string): Date {
   const [year = 1970, month = 1, day = 1] = isoDate.slice(0, 10).split('-').map(Number);
@@ -28,12 +40,12 @@ function localDate(isoDate: string): Date {
 
 /** An ISO date (`YYYY-MM-DD`) without any time-zone shift. */
 export function formatDate(isoDate: string | null | undefined): string {
-  return isoDate ? dateFormatter.format(localDate(isoDate)) : '—';
+  return isoDate ? dateFormatter().format(localDate(isoDate)) : '—';
 }
 
-/** An ISO date as "10 Ocak" (short notices about a recent day). */
+/** An ISO date as "10 Ocak" / "10 January" (short notices about a recent day). */
 export function formatDayMonth(isoDate: string): string {
-  return dayMonthFormatter.format(localDate(isoDate));
+  return dayMonthFormatter().format(localDate(isoDate));
 }
 
 /** An instant (`2026-11-11T08:00:00Z`) in the given IANA zone (the school's), or the browser's. */
@@ -41,17 +53,17 @@ export function formatDateTime(instant: string, timeZone?: string | null): strin
   const date = new Date(instant);
   if (timeZone) {
     try {
-      return new Intl.DateTimeFormat(LOCALE, { ...dateTimeOptions, timeZone }).format(date);
+      return new Intl.DateTimeFormat(locale(), { ...dateTimeOptions, timeZone }).format(date);
     } catch {
       // Unknown zone in this browser: the local time below.
     }
   }
-  return new Intl.DateTimeFormat(LOCALE, dateTimeOptions).format(date);
+  return new Intl.DateTimeFormat(locale(), dateTimeOptions).format(date);
 }
 
-/** A billing period `YYYY-MM` as "Kasım 2026". */
+/** A billing period `YYYY-MM` as "Kasım 2026" / "November 2026". */
 export function formatPeriod(period: string): string {
-  return /^\d{4}-\d{2}$/.test(period) ? periodFormatter.format(localDate(`${period}-01`)) : period;
+  return /^\d{4}-\d{2}$/.test(period) ? periodFormatter().format(localDate(`${period}-01`)) : period;
 }
 
 /** `HH:mm`; trims seconds if the server ever sends them. */
@@ -61,11 +73,12 @@ export function formatTime(time: string | null | undefined): string {
 
 /** API money (text, DEC-066) as `₺1.250,00`; never through floating-point sums. */
 export function formatMoney(amount: string | null | undefined): string {
-  return amount ? moneyFormatter.format(Number(amount)) : '—';
+  // A decimal string is formatted exactly (Intl.NumberFormat v3), never through floating point.
+  return amount ? moneyFormatter().format(amount as Intl.StringNumericLiteral) : '—';
 }
 
 export function formatPercent(ratio: number): string {
-  return percentFormatter.format(ratio);
+  return percentFormatter().format(ratio);
 }
 
 /** `"1250.5"` → 125050n kuruş. */

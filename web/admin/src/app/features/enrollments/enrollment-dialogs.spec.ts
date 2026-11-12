@@ -4,7 +4,7 @@ import { HttpTestingController, provideHttpClientTesting } from '@angular/common
 import { Type, signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 
-import { EnrollmentDto, GroupDto } from '../../api/models';
+import { EnrollmentDto, GroupDto, PaymentDto } from '../../api/models';
 import { AuthService } from '../../core/auth/auth.service';
 import { errorMessages, ui } from '../../core/i18n/tr';
 import { SchoolClock } from '../../core/time/school-clock';
@@ -101,6 +101,8 @@ describe('enrollment dialogs', () => {
   const close = vi.fn();
   /** The school's fee rules versions the dialogs read for the group-change hint (P2-F8); null fails the request. */
   let rules: unknown[] | null = [];
+  /** The student's recorded payments the end dialog reads (P3-13); null fails the request. */
+  let payments: Partial<PaymentDto>[] | null = [];
 
   async function open<T>(component: Type<T>, data: unknown): Promise<void> {
     close.mockReset();
@@ -126,11 +128,20 @@ describe('enrollment dialogs', () => {
         request.flush(rules);
       }
     }
+    // P3-13: the end dialog reads the student's recorded payments for the prepaid warning; null fails the request.
+    for (const request of backend.match((r) => r.url === '/api/v1/payments')) {
+      if (payments === null) {
+        request.flush({ code: 'Unexpected.Error' }, { status: 500, statusText: 'Server Error' });
+      } else {
+        request.flush(page(payments));
+      }
+    }
     await settle(fixture);
   }
 
   afterEach(() => {
     rules = [];
+    payments = [];
     root?.remove();
     backend.verify();
   });
@@ -446,6 +457,43 @@ describe('enrollment dialogs', () => {
       rules = null;
       await open(EndEnrollmentDialog, { enrollment });
       expect(hint()).toBe(ui.enrollments.overlapHint);
+    });
+  });
+
+  describe('prepaid months warning (P3-13, DEC-422)', () => {
+    const warning = () => root.querySelector('#end-prepaid-warning')?.textContent?.trim();
+
+    it('lists months of this enrollment paid beyond the end month and points to the refund', async () => {
+      payments = [
+        { enrollmentId: 'e1', period: '9999-02' },
+        { enrollmentId: 'e1', period: '9999-01' },
+        { enrollmentId: 'e1', period: '9999-01' },
+        { enrollmentId: 'e1', period: '2026-09' },
+        { enrollmentId: 'other', period: '9999-03' },
+      ];
+      await open(EndEnrollmentDialog, { enrollment });
+      const text = warning();
+      expect(text).toContain('Ocak 9999, Şubat 9999');
+      expect(text).toContain('İade et');
+      expect(text).not.toContain('Mart 9999');
+      expect(text).not.toContain('Eylül 2026');
+    });
+
+    it('recomputes the warning for the chosen end date', async () => {
+      payments = [{ enrollmentId: 'e1', period: '2026-10' }];
+      await open(EndEnrollmentDialog, { enrollment });
+      expect(warning()).toBeUndefined();
+      const date = el('end-date');
+      date.value = '2026-09-15';
+      date.dispatchEvent(new Event('input'));
+      await settle(fixture);
+      expect(warning()).toContain('Ekim 2026');
+    });
+
+    it('shows nothing when the payments cannot be read', async () => {
+      payments = null;
+      await open(EndEnrollmentDialog, { enrollment });
+      expect(warning()).toBeUndefined();
     });
   });
 

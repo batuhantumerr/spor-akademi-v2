@@ -8,6 +8,7 @@ import { HttpTestingController, provideHttpClientTesting } from '@angular/common
 import { TestBed } from '@angular/core/testing';
 import { Router, provideRouter } from '@angular/router';
 
+import { setLanguage } from '../i18n/language';
 import { authInterceptor } from './auth.interceptor';
 import { AuthService } from './auth.service';
 
@@ -41,6 +42,18 @@ describe('authInterceptor', () => {
     auth.refresh().subscribe();
     backend.expectOne('/api/v1/auth/refresh').flush({ accessToken: token, expiresIn: 900 });
   }
+
+  it('sends the UI language as Accept-Language to the API only (P3-10)', () => {
+    http.get('/api/v1/sports').subscribe();
+    expect(backend.expectOne('/api/v1/sports').request.headers.get('Accept-Language')).toBe('tr');
+
+    setLanguage('en');
+    http.get('/api/v1/sports').subscribe();
+    expect(backend.expectOne('/api/v1/sports').request.headers.get('Accept-Language')).toBe('en');
+
+    http.get('/assets/x.json').subscribe();
+    expect(backend.expectOne('/assets/x.json').request.headers.has('Accept-Language')).toBe(false);
+  });
 
   it('refreshes once on 401 and retries with the new token', () => {
     let body: unknown;
