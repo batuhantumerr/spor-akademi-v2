@@ -11,6 +11,7 @@ import { apiUrl, appPort, appUrl, parentPort, parentUrl } from './e2e/support/ur
  * - Phone-sized Chromium and WebKit run the coach attendance flow (NFR-USA-01, NFR-PRF-03).
  * - A phone-sized Chromium runs the parent flow in the parent app (P3-05, P3-06): invitation e-mail, password,
  *   sign-in, child, attendance, dues and online payment. E-mail goes to the run's Mailpit (scripts/e2e.sh).
+ *   The phase 3 exit spec (P3-R1) also opens a desktop admin context next to the parent's page.
  * - One worker, no retries: login and refresh are rate limited per client IP (10/min, NFR-SEC-14),
  *   and every browser reaches the API through the same local proxy address (e2e/serve.mjs).
  */

@@ -148,7 +148,7 @@ Veli yalnızca **kendi çocuklarını** görür. Bu, okul izolasyonunun yanında
   - Fazla ödeme ve peşin ödenmiş kaydın erken bitirilmesi durumlarını da kapsar (onay listesi, soru 14).
 
 ### Sürüm hazırlığı
-- [ ] P3-R1 **Çıkış kriterlerinin e2e testleriyle doğrulanması.**
+- [x] P3-R1 **Çıkış kriterlerinin e2e testleriyle doğrulanması.** (`web/admin/e2e/parent/phase3-exit.e2e.ts`)
   - Veli daveti kabul eder, çocuğunun yoklamasını görür ve borcunu online öder.
   - Duyuru veliye anlık olarak ulaşır.
   - Uygulama iki dilde de çalışır.
