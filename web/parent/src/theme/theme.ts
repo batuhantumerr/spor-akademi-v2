@@ -46,14 +46,28 @@ function notify(): void {
   for (const listener of listeners) listener();
 }
 
+/** The one MediaQueryList the listener is registered on; kept referenced so the browser cannot collect it. */
+let systemQuery: MediaQueryList | null = null;
+
+/**
+ * One system-theme listener, on one MediaQueryList, while any component listens. Each matchMedia call returns a new
+ * list: registering on one and removing from another left stale or lost listeners, and with two subscribers the first
+ * unmount removed the shared listener (P3-11: the payment and offline pages kept a stale theme after a navigation).
+ * Subscribing also applies the current theme, in case the system theme changed while nothing listened.
+ */
 function subscribe(listener: () => void): () => void {
+  if (listeners.size === 0 && typeof window.matchMedia === 'function') {
+    systemQuery = window.matchMedia('(prefers-color-scheme: dark)');
+    systemQuery.addEventListener('change', notify);
+    applyTheme();
+  }
   listeners.add(listener);
-  const media =
-    typeof window.matchMedia === 'function' ? window.matchMedia('(prefers-color-scheme: dark)') : null;
-  media?.addEventListener('change', notify);
   return () => {
     listeners.delete(listener);
-    media?.removeEventListener('change', notify);
+    if (listeners.size === 0) {
+      systemQuery?.removeEventListener('change', notify);
+      systemQuery = null;
+    }
   };
 }
 

@@ -18,6 +18,8 @@ const ci = !!process.env['CI'];
 const adminSpecs = /[\\/]admin[\\/][^\\/]+\.e2e\.ts$/;
 const coachSpecs = /[\\/]coach[\\/][^\\/]+\.e2e\.ts$/;
 const parentSpecs = /[\\/]parent[\\/][^\\/]+\.e2e\.ts$/;
+const a11yAdminSpecs = /[\\/]a11y[\\/]admin-[^\\/]+\.e2e\.ts$/;
+const a11yParentSpecs = /[\\/]a11y[\\/]parent-[^\\/]+\.e2e\.ts$/;
 
 const required = [
   'E2E_API_CONNECTION',
@@ -95,6 +97,23 @@ export default defineConfig({
         baseURL: parentUrl,
         // P3-07: Chromium refuses to register a service worker from a self-signed certificate even with
         // ignoreHTTPSErrors; the browser-wide flag lets the parent app's worker run against the per-run certificate.
+        launchOptions: { args: ['--ignore-certificate-errors'] },
+      },
+    },
+    // P3-11 (DEC-436): the WCAG 2.2 AA audit. Desktop Chromium; each screen is also scanned at 360 px and 320 px by
+    // resizing the same page, in both languages and themes (e2e/support/wcag.ts).
+    {
+      name: 'a11y',
+      testMatch: a11yAdminSpecs,
+      use: { ...devices['Desktop Chrome'], actionTimeout: 15_000 },
+    },
+    {
+      name: 'a11y-parent',
+      testMatch: a11yParentSpecs,
+      use: {
+        ...devices['Desktop Chrome'],
+        actionTimeout: 15_000,
+        baseURL: parentUrl,
         launchOptions: { args: ['--ignore-certificate-errors'] },
       },
     },

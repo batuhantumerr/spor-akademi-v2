@@ -17,11 +17,29 @@
   }
 
   * {
-    @apply border-border outline-ring/50;
+    @apply border-border outline-ring;
   }
 
   body {
     @apply bg-background text-foreground font-sans antialiased;
+  }
+
+  /* A page container that receives focus after a route change (DEC-438) is not a control: no focus ring. */
+  main:focus {
+    outline: none;
+  }
+
+  /* WCAG 2.4.11: a control scrolled into view by Tab stops clear of the sticky header and, on phones, of the
+     bottom tab bar (AppShell). */
+  html {
+    scroll-padding-top: 4.5rem;
+    scroll-padding-bottom: calc(5rem + env(safe-area-inset-bottom));
+  }
+
+  @media (min-width: 40rem) {
+    html {
+      scroll-padding-bottom: 1rem;
+    }
   }
 
   h1 {
@@ -44,7 +62,7 @@
 
 @layer components {
   .btn {
-    @apply inline-flex items-center justify-center gap-2 rounded-md text-sm font-semibold whitespace-nowrap transition-all duration-200 select-none focus-visible:ring-2 focus-visible:ring-primary/50 focus-visible:outline-none active:scale-95 disabled:pointer-events-none disabled:opacity-40 [&_svg]:size-4;
+    @apply inline-flex items-center justify-center gap-2 rounded-md text-sm font-semibold whitespace-nowrap transition duration-200 select-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background focus-visible:outline-none active:scale-95 disabled:pointer-events-none disabled:opacity-40 [&_svg]:size-4;
     @apply h-10 px-5;
   }
 
@@ -74,7 +92,7 @@
 
   /* 16px text on phones: iOS zooms into smaller inputs on focus. */
   .input {
-    @apply h-10 w-full rounded-md border border-border bg-card/50 px-3 text-[length:calc(16rem/14)] text-foreground transition-colors placeholder:text-muted-foreground focus-visible:border-primary focus-visible:ring-[3px] focus-visible:ring-primary/20 focus-visible:outline-none aria-invalid:border-destructive sm:text-sm;
+    @apply h-10 w-full rounded-md border border-control-border bg-card/50 px-3 text-[length:calc(16rem/14)] text-foreground transition-colors placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-1 focus-visible:ring-ring focus-visible:outline-none aria-invalid:border-destructive sm:text-sm;
   }
 
   .field-label {

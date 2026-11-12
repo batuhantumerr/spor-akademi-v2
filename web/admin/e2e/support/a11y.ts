@@ -1,6 +1,8 @@
 import AxeBuilder from '@axe-core/playwright';
 import { Page, TestInfo, expect } from '@playwright/test';
 
+import { settle } from './wcag';
+
 /**
  * NFR-USA-02: automated axe check of the page as it is now (WCAG 2.x A/AA rules). Only serious and
  * critical findings fail the test; minor and moderate ones are attached to the report for review.
@@ -11,11 +13,7 @@ export async function expectNoSeriousA11yViolations(
   name: string,
 ): Promise<void> {
   // Colours are only meaningful once dialogs and buttons have finished their (finite) transitions.
-  await page.waitForFunction(() =>
-    document
-      .getAnimations()
-      .every((a) => a.playState !== 'running' || a.effect?.getTiming().iterations === Infinity),
-  );
+  await settle(page);
   const results = await new AxeBuilder({ page })
     .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])
     .analyze();

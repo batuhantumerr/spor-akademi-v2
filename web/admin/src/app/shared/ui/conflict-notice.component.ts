@@ -29,7 +29,7 @@ let nextId = 0;
       tabindex="-1"
       role="group"
       [attr.aria-labelledby]="titleId"
-      class="conflict-notice rounded-lg border border-warning/30 bg-warning/10 p-3 text-sm text-warning outline-none focus-visible:ring-2 focus-visible:ring-warning/50"
+      class="conflict-notice rounded-lg border border-warning/30 bg-warning/10 p-3 text-sm text-warning outline-none focus-visible:ring-2 focus-visible:ring-warning"
     >
       <p [id]="titleId" class="font-semibold">{{ text.title }}</p>
       <div aria-live="polite">

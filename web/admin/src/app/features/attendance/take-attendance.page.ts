@@ -97,7 +97,7 @@ import { ToastService } from '../../shared/ui/toast.service';
                   <div class="grid grid-cols-4 gap-1.5">
                     @for (status of statuses; track status) {
                       <label
-                        class="relative flex min-h-12 cursor-pointer items-center justify-center rounded-lg border px-1 text-center text-sm font-semibold select-none has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-primary/50"
+                        class="relative flex min-h-12 cursor-pointer items-center justify-center rounded-lg border px-1 text-center text-sm font-semibold select-none has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-ring"
                         [class]="
                           marks()[student.studentId] === status
                             ? tone[status] + ' ' + selectedCue
@@ -126,7 +126,7 @@ import { ToastService } from '../../shared/ui/toast.service';
 
           <!-- Sticky save bar: always reachable with a thumb, whatever the scroll position. -->
           <div
-            class="fixed inset-x-0 bottom-0 z-20 border-t border-border bg-card/95 p-3 backdrop-blur lg:left-auto lg:w-[calc(100%-16rem)]"
+            class="save-bar fixed inset-x-0 bottom-0 z-20 border-t border-border bg-card/95 p-3 backdrop-blur lg:left-auto lg:w-[calc(100%-16rem)]"
           >
             <div class="mx-auto flex max-w-xl items-center justify-between gap-3">
               <p class="text-sm font-medium" aria-live="polite">{{ markedText() }}</p>

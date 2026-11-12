@@ -110,7 +110,7 @@ export const enText: ParentText = {
     siblingDiscount: 'Sibling discount {percent}%',
     groupChange: 'Group change: this month was charged in the previous group',
     pay: 'Pay online',
-    payLabel: 'Pay the {period} monthly fee online ({amount})',
+    payLabel: 'Pay online: {period} monthly fee ({amount})',
     paying: 'Opening the payment page…',
     badCheckout: 'The payment page couldn’t be opened. Please try again.',
   },
