@@ -145,6 +145,14 @@ jobs:
           npx playwright install --with-deps chromium firefox webkit
       - name: End-to-end tests (all browser projects)
         run: bash scripts/e2e.sh
+      # P3-11: the WCAG 2.2 AA audit report (every finding, also the non-blocking ones) on every run.
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: a11y-report
+          path: web/admin/test-results/a11y/
+          if-no-files-found: ignore
+          retention-days: 14
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: failure()
         with:
@@ -176,6 +184,8 @@ jobs:
           fi
       - name: Theme tokens are the same in admin and parent (P3-04)
         run: bash scripts/check-theme-tokens.sh
+      - name: Theme token contrast meets WCAG 2.2 AA in both themes (P3-11, DEC-440)
+        run: node scripts/check-contrast.mjs
       - name: UI text only in the dictionaries (P3-10, DEC-429)
         run: node scripts/check-i18n.mjs
       - name: Secret scan (gitleaks, pinned binary + checksum, DEC-200)
