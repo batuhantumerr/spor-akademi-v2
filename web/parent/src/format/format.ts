@@ -3,6 +3,7 @@
 const LOCALE = 'tr-TR';
 
 const dateFormatter = new Intl.DateTimeFormat(LOCALE, { day: '2-digit', month: '2-digit', year: 'numeric' });
+const dayMonthFormatter = new Intl.DateTimeFormat(LOCALE, { day: 'numeric', month: 'long' });
 const periodFormatter = new Intl.DateTimeFormat(LOCALE, { month: 'long', year: 'numeric' });
 const dateTimeOptions: Intl.DateTimeFormatOptions = {
   day: '2-digit',
@@ -28,6 +29,11 @@ function localDate(isoDate: string): Date {
 /** An ISO date (`YYYY-MM-DD`) without any time-zone shift. */
 export function formatDate(isoDate: string | null | undefined): string {
   return isoDate ? dateFormatter.format(localDate(isoDate)) : '—';
+}
+
+/** An ISO date as "10 Ocak" (short notices about a recent day). */
+export function formatDayMonth(isoDate: string): string {
+  return dayMonthFormatter.format(localDate(isoDate));
 }
 
 /** An instant (`2026-11-11T08:00:00Z`) in the given IANA zone (the school's), or the browser's. */

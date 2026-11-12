@@ -7,13 +7,13 @@ import {
   inject,
   signal,
 } from '@angular/core';
-import { LucideCircleAlert, LucideCircleCheck, LucideX } from '@lucide/angular';
+import { LucideBell, LucideCircleAlert, LucideCircleCheck, LucideX } from '@lucide/angular';
 
 import { ui } from '../../core/i18n/tr';
 
 export interface Toast {
   id: number;
-  kind: 'success' | 'error';
+  kind: 'success' | 'error' | 'info';
   message: string;
 }
 
@@ -23,7 +23,7 @@ interface Timer {
   startedAt: number;
 }
 
-export const TOAST_DURATION_MS = { success: 4000, error: 7000 } as const;
+export const TOAST_DURATION_MS = { success: 4000, error: 7000, info: 6000 } as const;
 
 /** Short-lived notifications for completed or failed actions. */
 @Injectable({ providedIn: 'root' })
@@ -39,6 +39,14 @@ export class ToastService implements OnDestroy {
 
   error(message: string): void {
     this.push('error', message);
+  }
+
+  /** Something happened elsewhere (e.g. a real-time notification); shown once while it is visible. */
+  info(message: string): void {
+    if (this.toasts().some((t) => t.kind === 'info' && t.message === message)) {
+      return;
+    }
+    this.push('info', message);
   }
 
   dismiss(id: number): void {
@@ -102,13 +110,13 @@ export class ToastService implements OnDestroy {
 }
 
 /**
- * Toast stack. Successes are announced through one persistent polite live region; errors are
- * role="alert" so they interrupt. Hovering or focusing the stack pauses the timers.
+ * Toast stack. Successes and notices are announced through one persistent polite live region;
+ * errors are role="alert" so they interrupt. Nothing takes focus. Hovering or focusing the stack pauses the timers.
  */
 @Component({
   selector: 'app-toasts',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [LucideCircleAlert, LucideCircleCheck, LucideX],
+  imports: [LucideBell, LucideCircleAlert, LucideCircleCheck, LucideX],
   template: `
     <div
       class="pointer-events-none fixed right-4 bottom-4 z-50 flex w-[min(24rem,calc(100vw-2rem))] flex-col gap-2"
@@ -134,12 +142,18 @@ export class ToastService implements OnDestroy {
           </button>
         </div>
       }
-      <div role="status" class="flex flex-col gap-2">
-        @for (toast of successes(); track toast.id) {
+      <div role="status" aria-live="polite" class="flex flex-col gap-2">
+        @for (toast of notices(); track toast.id) {
           <div
-            class="pointer-events-auto flex items-start gap-3 rounded-xl border border-success/40 bg-card p-3 text-sm shadow-lg"
+            class="pointer-events-auto flex items-start gap-3 rounded-xl border bg-card p-3 text-sm shadow-lg"
+            [class]="toast.kind === 'info' ? 'border-primary/40' : 'border-success/40'"
+            [attr.data-kind]="toast.kind"
           >
-            <svg lucideCircleCheck class="mt-0.5 size-4 shrink-0 text-success"></svg>
+            @if (toast.kind === 'info') {
+              <svg lucideBell class="mt-0.5 size-4 shrink-0 text-primary" aria-hidden="true"></svg>
+            } @else {
+              <svg lucideCircleCheck class="mt-0.5 size-4 shrink-0 text-success"></svg>
+            }
             <p class="flex-1 text-foreground">{{ toast.message }}</p>
             <button
               type="button"
@@ -161,8 +175,8 @@ export class ToastsComponent {
   protected readonly errors = computed(() =>
     this.toasts.toasts().filter((t) => t.kind === 'error'),
   );
-  protected readonly successes = computed(() =>
-    this.toasts.toasts().filter((t) => t.kind === 'success'),
+  protected readonly notices = computed(() =>
+    this.toasts.toasts().filter((t) => t.kind !== 'error'),
   );
   private readonly holds = new Set<'pointer' | 'focus'>();
 

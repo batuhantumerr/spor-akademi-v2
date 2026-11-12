@@ -10,6 +10,7 @@ import { ErrorPage } from './pages/ErrorPage';
 import { NotFoundPage } from './pages/NotFoundPage';
 import { PaymentResultPage } from './pages/payments/PaymentResultPage';
 import { SandboxCheckoutPage } from './pages/payments/SandboxCheckoutPage';
+import { RootLayout } from './pwa/notices';
 
 /**
  * Route table, shared by the browser router (main.tsx) and the memory router in tests. Public pages: login and
@@ -18,6 +19,8 @@ import { SandboxCheckoutPage } from './pages/payments/SandboxCheckoutPage';
  */
 export const routes: RouteObject[] = [
   {
+    // Connection and new-version notices above every page (P3-07).
+    element: <RootLayout />,
     errorElement: <ErrorPage />,
     children: [
       {

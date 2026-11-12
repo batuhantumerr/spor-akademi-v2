@@ -3,7 +3,7 @@ import { HttpTestingController, provideHttpClientTesting } from '@angular/common
 import { TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
 
-import { AuthService, CurrentUser } from './auth.service';
+import { AuthService, CurrentUser, REFRESH_LOCK } from './auth.service';
 
 const user: CurrentUser = {
   id: 'u1',
@@ -151,6 +151,111 @@ describe('AuthService', () => {
       stale.flush({ accessToken: 'late-token', expiresIn: 900 });
       requests[0].flush({ accessToken: 'fresh-token', expiresIn: 900 });
       expect(auth.token()).toBe('fresh-token');
+    });
+  });
+
+  describe('cross-tab refresh lock (P3-08)', () => {
+    /** Grants one exclusive lock at a time, in request order, like navigator.locks. */
+    class FakeLocks {
+      readonly names: string[] = [];
+      private tail: Promise<unknown> = Promise.resolve();
+
+      request(name: string, _options: LockOptions, callback: () => unknown): Promise<unknown> {
+        this.names.push(name);
+        const run = this.tail.then(() => callback());
+        this.tail = run.catch(() => undefined);
+        return run;
+      }
+    }
+
+    let locks: FakeLocks;
+    const flushMicrotasks = () => new Promise((resolve) => setTimeout(resolve));
+
+    beforeEach(() => {
+      locks = new FakeLocks();
+      Object.defineProperty(navigator, 'locks', { configurable: true, value: locks });
+    });
+
+    afterEach(() => {
+      delete (navigator as unknown as Record<string, unknown>)['locks'];
+    });
+
+    /** A second tab: its own AuthService on the same origin (same lock manager). */
+    function otherTab(): AuthService {
+      return TestBed.runInInjectionContext(() => new AuthService());
+    }
+
+    it('refreshes under the exclusive lock', async () => {
+      let result: string | null | undefined;
+      auth.refresh().subscribe((token) => (result = token));
+      expect(locks.names).toEqual([REFRESH_LOCK]);
+      await flushMicrotasks();
+      backend.expectOne('/api/v1/auth/refresh').flush({ accessToken: 'locked', expiresIn: 900 });
+      expect(result).toBe('locked');
+      expect(auth.token()).toBe('locked');
+    });
+
+    it('serializes refreshes of two tabs', async () => {
+      const second = otherTab();
+      const tokens: (string | null)[] = [];
+      auth.refresh().subscribe((t) => tokens.push(t));
+      second.refresh().subscribe((t) => tokens.push(t));
+      await flushMicrotasks();
+
+      // The second tab waits for the lock while the first call is open.
+      const first = backend.match('/api/v1/auth/refresh');
+      expect(first.length).toBe(1);
+      first[0].flush({ accessToken: 'tab-1', expiresIn: 900 });
+      await flushMicrotasks();
+
+      backend.expectOne('/api/v1/auth/refresh').flush({ accessToken: 'tab-2', expiresIn: 900 });
+      expect(tokens).toEqual(['tab-1', 'tab-2']);
+      expect(second.token()).toBe('tab-2');
+    });
+
+    it('skips the call when the session ended while waiting for the lock', async () => {
+      const second = otherTab();
+      auth.refresh().subscribe();
+      let result: string | null | undefined;
+      second.refresh().subscribe((t) => (result = t));
+      await flushMicrotasks();
+      const first = backend.expectOne('/api/v1/auth/refresh');
+
+      second.forgetSession();
+      first.flush({ accessToken: 'tab-1', expiresIn: 900 });
+      await flushMicrotasks();
+
+      backend.expectNone('/api/v1/auth/refresh');
+      expect(result).toBeNull();
+      expect(second.token()).toBeNull();
+    });
+
+    it('still ends the session when the cookie is rejected under the lock', async () => {
+      let result: string | null | undefined;
+      auth.refresh().subscribe((t) => (result = t));
+      await flushMicrotasks();
+      backend
+        .expectOne('/api/v1/auth/refresh')
+        .flush(null, { status: 401, statusText: 'Unauthorized' });
+      expect(result).toBeNull();
+      expect(auth.token()).toBeNull();
+    });
+
+    it('rethrows network errors under the lock without ending the session', async () => {
+      let failed = false;
+      auth.refresh().subscribe({ error: () => (failed = true) });
+      await flushMicrotasks();
+      backend.expectOne('/api/v1/auth/refresh').flush(null, { status: 0, statusText: '' });
+      expect(failed).toBe(true);
+    });
+
+    it('runs the call directly when the Web Locks API is missing', () => {
+      Object.defineProperty(navigator, 'locks', { configurable: true, value: undefined });
+      auth.refresh().subscribe();
+      // Issued synchronously on subscribe, without a lock.
+      backend.expectOne('/api/v1/auth/refresh').flush({ accessToken: 'direct', expiresIn: 900 });
+      expect(locks.names).toEqual([]);
+      expect(auth.token()).toBe('direct');
     });
   });
 });

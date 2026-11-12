@@ -31,6 +31,7 @@ interface Arranged {
   guardianEmail: string;
   announcement: string;
   enrollmentId: string;
+  groupId: string;
 }
 
 let arranged: Arranged;
@@ -129,6 +130,7 @@ test.beforeAll(async () => {
     guardianEmail,
     announcement,
     enrollmentId: enrollment.id,
+    groupId: group.id,
   };
 });
 
@@ -217,6 +219,66 @@ test('an invited parent sets a password, signs in, sees the child and pays the d
       .filter((p) => p.enrollmentId === arranged.enrollmentId)
       .map((p) => [p.method, p.amount.amount]),
   ).toEqual([['Online', fee]]);
+
+  // P3-08: an announcement published now reaches the open app live (SignalR, after the outbox delivers it): a
+  // polite notice, and the child's announcement list reloads by itself.
+  const live = unique('Canlı duyuru', testInfo);
+  await admin!.post(`/api/v1/groups/${arranged.groupId}/announcements`, {
+    title: live,
+    body: 'Anlık.',
+  });
+  await expect(page.getByText('Yeni duyuru yayımlandı')).toBeVisible({
+    timeout: 30_000,
+  });
+  await expect(page.getByRole('region', { name: 'Duyurular' }).getByText(live)).toBeVisible();
+
+  // P3-07 (DEC-394): installable, and the service worker caches the app shell only. Offline, a reload still opens
+  // the app (from the cache), which says "Bağlantı yok" and shows none of the family's data: no API answer was
+  // ever cached.
+  const manifestHref = await page.locator('link[rel="manifest"]').getAttribute('href');
+  expect(manifestHref).toBe('/manifest.webmanifest');
+  const manifestResponse = await page.request.get(manifestHref!);
+  expect(manifestResponse.headers()['content-type']).toContain('application/manifest+json');
+  const manifest = (await manifestResponse.json()) as {
+    name: string;
+    start_url: string;
+    scope: string;
+    display: string;
+    icons: { sizes: string; purpose: string }[];
+  };
+  expect(manifest).toMatchObject({
+    name: 'Spor Akademi Veli',
+    start_url: '/',
+    scope: '/',
+    display: 'standalone',
+  });
+  expect(manifest.icons.map((icon) => `${icon.sizes} ${icon.purpose}`)).toEqual(
+    expect.arrayContaining(['192x192 any', '512x512 any', '192x192 maskable', '512x512 maskable']),
+  );
+  const workerUrl = await page.evaluate(
+    async () => (await navigator.serviceWorker.ready).active?.scriptURL,
+  );
+  expect(workerUrl).toBe(`${new URL(page.url()).origin}/sw.js`);
+  const cachedPaths = await page.evaluate(async () => {
+    const paths: string[] = [];
+    for (const name of await caches.keys()) {
+      const requests = await (await caches.open(name)).keys();
+      paths.push(...requests.map((request) => new URL(request.url).pathname));
+    }
+    return paths;
+  });
+  expect(cachedPaths).toContain('/index.html');
+  expect(cachedPaths.filter((path) => /^\/(api|health)(\/|$)/i.test(path))).toEqual([]);
+
+  await context.setOffline(true);
+  await page.reload();
+  await expect(page.getByRole('heading', { level: 1, name: 'Bağlantı yok' })).toBeVisible();
+  await expect(page.getByText(arranged.childName)).toHaveCount(0);
+  await expect(page.getByText(arranged.announcement)).toHaveCount(0);
+  await expectNoSeriousA11yViolations(page, testInfo, 'parent-offline');
+  // Back online, the app restores the session by itself (one refresh call) and loads the data again.
+  await context.setOffline(false);
+  await expect(page.getByRole('heading', { level: 1, name: arranged.childName })).toBeVisible();
 
   // Sign out: the cookie is gone.
   // The app ends the session locally first, then tells the server, which deletes the cookie.

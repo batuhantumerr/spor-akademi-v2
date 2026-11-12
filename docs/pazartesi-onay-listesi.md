@@ -87,6 +87,7 @@ Aşağıdaki metin karar anındaki hâliyle kayıt olarak bırakıldı.
 - **Production belge deposu ve SSE (DEC-320).** Sağlayıcı seçimi (soru 19) ve `Storage:ServerSideEncryption` (varsayılan `true`, SSE-S3/AES256; SeaweedFS ve AWS S3 kabul eder, başlığı reddeden servis için sağlayıcıya göre ayarlanır).
 - **CSP `img-src` (güvenlik listesi, Fikirler 12).** CSP gelince fotoğraf küçük resmi doğrudan imzalı URL'den yüklendiği için depo origin'i `img-src`'ye eklenmeli. CSP ve güvenlik başlıkları (NFR-SEC-13) ile HTTPS/HSTS (NFR-SEC-02) de Deploy bloğu veya Faz 4.
 - **Production'da Valkey (DEC-310, DEC-316).** Yerelde isteğe bağlı; production'da L2 olarak çalıştırılıp çalıştırılmayacağı (yoksa sadece bellek) ve parolası Deploy bloğunda karara bağlanır.
+- **SignalR hub'ı Caddy'de (P3-08, DEC-399, DEC-402).** `/hubs/*` API'ye `reverse_proxy` ile yönlendirilmeli (WebSocket upgrade'i Caddy kendiliğinden taşır; nginx imajları `/hubs`'a `404` döner). Caddy erişim logunda sorgu dizesindeki `access_token` silinmeli (`log { format filter { request>uri query { delete access_token } } }`), çünkü tarayıcı WebSocket'i token'ı orada taşır. Birden çok API instance'ı çalışacaksa Valkey backplane için `ConnectionStrings__Cache` verilmeli; kullanıcı başına bağlantı sınırı instance başınadır (DEC-400).
 - **Canlı ödeme (DEC-345).** iyzico canlı adresi şu an uygulamayı başlatmıyor; canlı ödeme Deploy bloğu ve sahip onayı ister.
 
 ## 4. Paketler ve lisanslar
