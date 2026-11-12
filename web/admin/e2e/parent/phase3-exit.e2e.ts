@@ -154,7 +154,7 @@ test('phase 3 exit: invitation, attendance, online payment, live announcement, t
     await expectNoSeriousA11yViolations(page, testInfo, 'parent-child-paid');
 
     // Paid in the admin panel: the guardian's account is active, the payment is listed once as Online, the due is gone.
-    await admin.goto(`/students/${arranged.studentId}`);
+    await navigateInApp(admin, `/students/${arranged.studentId}`);
     await expect(badge).toHaveText('Aktif');
     await nav(admin, 'Ödemeler');
     await expect(admin.getByRole('heading', { level: 1, name: 'Ödemeler' })).toBeVisible();
@@ -195,7 +195,7 @@ test('phase 3 exit: invitation, attendance, online payment, live announcement, t
       (window as unknown as { __p3r1?: string }).__p3r1 = 'same document';
     });
     const parentUrlBefore = page.url();
-    await admin.goto(`/groups/${arranged.groupId}`);
+    await navigateInApp(admin, `/groups/${arranged.groupId}`);
     await expect(admin.getByRole('heading', { level: 1, name: arranged.groupName })).toBeVisible();
     const live = unique('Canlı çıkış duyurusu', testInfo);
     const form = admin.getByRole('region', { name: 'Grup duyuruları' });
@@ -263,6 +263,18 @@ async function desktopAdminContext(browser: Browser): Promise<BrowserContext> {
     locale: 'tr-TR',
     timezoneId: 'Europe/Istanbul',
   });
+}
+
+/**
+ * Moves within the admin SPA without a document load. A reload restores the session through the refresh cookie; doing
+ * that repeatedly in one long test races the app's own token refresh, which is not what this test is about.
+ */
+async function navigateInApp(page: Page, path: string): Promise<void> {
+  await page.evaluate((target) => {
+    history.pushState(null, '', target);
+    window.dispatchEvent(new PopStateEvent('popstate', { state: null }));
+  }, path);
+  await expect(page).toHaveURL((url) => url.pathname === path);
 }
 
 async function nav(page: Page, label: string): Promise<void> {
