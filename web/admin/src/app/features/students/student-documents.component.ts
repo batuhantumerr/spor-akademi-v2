@@ -161,7 +161,7 @@ import { acceptFor, checkFile, formatSize } from './document-files';
             @for (d of documents(); track d.id) {
               <li class="flex items-center justify-between gap-3 py-2">
                 <div class="min-w-0 text-sm">
-                  <p class="truncate font-medium">
+                  <p class="font-medium break-all">
                     {{ d.fileName }}
                     <span class="badge badge-muted ml-1">{{ text.types[d.type] }}</span>
                   </p>

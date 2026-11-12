@@ -1,9 +1,9 @@
-import { screen } from '@testing-library/react';
+import { act, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { text } from '../i18n/tr';
 import { renderApp } from '../test/render-app';
-import { applyTheme, readPreference, THEME_STORAGE_KEY } from './theme';
+import { applyTheme, readPreference, THEME_STORAGE_KEY, useTheme } from './theme';
 
 function mockSystemDark(dark: boolean): void {
   vi.stubGlobal(
@@ -66,5 +66,45 @@ describe('theme', () => {
 
     expect(document.documentElement).toHaveClass('light');
     expect(localStorage.getItem(THEME_STORAGE_KEY)).toBe('light');
+  });
+});
+
+describe('theme subscription (P3-11)', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('keeps following the system theme when one of two components stops listening', () => {
+    // One MediaQueryList like the browser's: a listener registered twice is kept once.
+    const registered = new Set<() => void>();
+    let dark = false;
+    const list = {
+      get matches() {
+        return dark;
+      },
+      media: '(prefers-color-scheme: dark)',
+      addEventListener: (_: string, listener: () => void) => registered.add(listener),
+      removeEventListener: (_: string, listener: () => void) => registered.delete(listener),
+    };
+    vi.stubGlobal(
+      'matchMedia',
+      vi.fn(() => list),
+    );
+    function Listener() {
+      useTheme();
+      return null;
+    }
+    const layout = render(<Listener />);
+    const page = render(<Listener />);
+    page.unmount();
+
+    dark = true;
+    act(() => {
+      for (const listener of registered) listener();
+    });
+
+    expect(document.documentElement).toHaveClass('dark');
+    layout.unmount();
+    expect(registered.size).toBe(0);
   });
 });

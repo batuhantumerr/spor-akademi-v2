@@ -27,6 +27,8 @@
   --destructive-foreground: #ffffff;
   --border: #e2e8f0;
   --input: #ffffff;
+  /* Form control borders: 3:1 against card and background (WCAG 1.4.11, DEC-440). */
+  --control-border: #7c8799;
   --ring: #2563eb;
   --success: #13733a;
   --warning: #a34c06;
@@ -59,6 +61,7 @@
   --destructive-foreground: #121620;
   --border: #2d3748;
   --input: #1a202c;
+  --control-border: #64748b;
   --ring: #60a5fa;
   --success: #4ade80;
   --warning: #f39c12;
@@ -94,6 +97,7 @@
   --color-destructive-foreground: var(--destructive-foreground);
   --color-border: var(--border);
   --color-input: var(--input);
+  --color-control-border: var(--control-border);
   --color-ring: var(--ring);
   --color-success: var(--success);
   --color-warning: var(--warning);
@@ -131,11 +135,21 @@
   }
 
   * {
-    @apply border-border outline-ring/50;
+    @apply border-border outline-ring;
   }
 
   body {
     @apply bg-background text-foreground font-sans antialiased;
+  }
+
+  /* A page container that receives focus after a route change (DEC-438) is not a control: no focus ring. */
+  main:focus {
+    outline: none;
+  }
+
+  /* WCAG 2.4.11: a control scrolled into view by Tab stops above the fixed save bar (take attendance). */
+  main:has(.save-bar) {
+    scroll-padding-bottom: 6rem;
   }
 
   h1 {
@@ -168,7 +182,7 @@
 
 @layer components {
   .btn {
-    @apply inline-flex items-center justify-center gap-2 rounded-md text-sm font-semibold whitespace-nowrap transition-all duration-200 select-none focus-visible:ring-2 focus-visible:ring-primary/50 focus-visible:outline-none active:scale-95 disabled:pointer-events-none disabled:opacity-40 [&_svg]:size-4;
+    @apply inline-flex items-center justify-center gap-2 rounded-md text-sm font-semibold whitespace-nowrap transition duration-200 select-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background focus-visible:outline-none active:scale-95 disabled:pointer-events-none disabled:opacity-40 [&_svg]:size-4;
     @apply h-10 px-5;
   }
 
@@ -205,7 +219,7 @@
   }
 
   .input {
-    @apply h-10 w-full rounded-md border border-border bg-card/50 px-3 text-sm text-foreground transition-colors placeholder:text-muted-foreground focus-visible:border-primary focus-visible:ring-[3px] focus-visible:ring-primary/20 focus-visible:outline-none aria-invalid:border-destructive;
+    @apply h-10 w-full rounded-md border border-control-border bg-card/50 px-3 text-sm text-foreground transition-colors placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-1 focus-visible:ring-ring focus-visible:outline-none aria-invalid:border-destructive;
   }
 
   .field-label {
@@ -240,8 +254,10 @@
     @apply border-border bg-card/50 text-muted-foreground;
   }
 
+  /* relative: visually hidden (sr-only, absolute) text in a wide table stays inside the scroll box instead of widening
+     the page at 320 px (WCAG 1.4.10, P3-11). */
   .table-shell {
-    @apply w-full overflow-x-auto rounded-xl border border-border bg-card;
+    @apply relative w-full overflow-x-auto rounded-xl border border-border bg-card focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background focus-visible:outline-none;
   }
 
   .data-table {

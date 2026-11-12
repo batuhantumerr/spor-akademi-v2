@@ -94,7 +94,7 @@ import { FACILITY_FORM_TITLE_ID, FacilityFormDialog } from './facility-form.dial
             >
               <div class="flex items-start justify-between gap-3">
                 <div class="min-w-0">
-                  <h2 class="truncate text-base font-semibold">{{ facility.name }}</h2>
+                  <h2 class="text-base font-semibold break-words">{{ facility.name }}</h2>
                   <p class="mt-0.5 text-xs text-muted-foreground">
                     {{ text.types[facility.type] }}
                   </p>
