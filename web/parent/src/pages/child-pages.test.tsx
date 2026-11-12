@@ -124,11 +124,25 @@ describe('child detail', () => {
               amount: { amount: '900.00', currency: 'TRY' },
               method: 'Online',
               paidOn: '2026-10-05',
+              status: 'Recorded',
+              refundedAt: null,
+            },
+            {
+              id: 'p2',
+              enrollmentId: ENROLLMENT_ID,
+              groupId: 'g',
+              groupName: 'U10 Yüzme',
+              period: '2026-09',
+              amount: { amount: '800.00', currency: 'TRY' },
+              method: 'Online',
+              paidOn: '2026-09-05',
+              status: 'Refunded',
+              refundedAt: '2026-11-09T07:00:00Z',
             },
           ],
           page: 1,
           pageSize: 10,
-          totalCount: 1,
+          totalCount: 2,
           totalPages: 1,
         },
         announcements: {
@@ -165,7 +179,14 @@ describe('child detail', () => {
 
     const payments = screen.getByRole('region', { name: text.payments.title });
     expect(await within(payments).findByText('Ekim 2026')).toBeInTheDocument();
-    expect(within(payments).getByText(/Online/)).toBeInTheDocument();
+    const paid = within(payments).getByTestId('payment-p1');
+    expect(paid).toHaveTextContent('Online');
+    expect(paid).not.toHaveTextContent(text.payments.refunded);
+    // P3-13: a refunded payment stays in the history, marked, with when the money went back to the card.
+    const refunded = within(payments).getByTestId('payment-p2');
+    expect(refunded).toHaveTextContent(text.payments.refunded);
+    expect(refunded).toHaveTextContent('Karta iade: 09.11.2026 10:00');
+    expect(within(refunded).getByText('₺800,00', { exact: false })).toHaveClass('line-through');
 
     const announcements = screen.getByRole('region', { name: text.announcements.title });
     expect(await within(announcements).findByText('Havuz bakımı')).toBeInTheDocument();
