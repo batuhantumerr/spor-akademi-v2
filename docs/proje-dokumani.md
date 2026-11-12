@@ -1568,6 +1568,17 @@ Yoklamanın kaydedilmesi neden `POST` değil `PUT`: aynı istek iki kez gönderi
 | --- | --- | --- | --- | --- |
 | `GET` | `/dashboard` | Okul Admini ana sayfasının tüm sayıları tek yanıtta: KPI'lar, son 6 ayın tahsilat/borç serisi, son 8 haftanın devam oranı, branş bazında kayıtlar, en dolu 10 grup, bugünkü antrenmanlar (DEC-210) | SA | — |
 
+##### 2.12a Raporlar — `Reports` (okuma modeli, faz 3, P3-09)
+
+Parametreler: `from`, `to` (`YYYY-MM`; varsayılan son 6 ay, en çok 12 ay, son 24 ay içinde, bu aydan ileri değil; DEC-406), devam ve dolulukta `by` (`group` | `sport` | `coach`), `sportId`, `coachId` (gruplara inme; başka okulunki `404`). Yanıtlar yalnız toplam veri içerir (DEC-409).
+
+| Metot | Yol | Açıklama | Rol | Hikaye |
+| --- | --- | --- | --- | --- |
+| `GET` | `/reports/attendance` | Aylık devam oranı ve geldi/geç/gelmedi/mazeretli sayıları; satır ve okul toplamı (DEC-406, DEC-409) | SA | P3-09 |
+| `GET` | `/reports/occupancy` | Ay sonu (bu ay: bugün) kayıtlı, açık grupların kapasitesi ve doluluk (DEC-407) | SA | P3-09 |
+| `GET` | `/reports/revenue` | Dönem başına liste tutarı, kardeş indirimi, tahakkuk, tahsilat, kalan; geciken borçların yaşlandırması (DEC-408) | SA | P3-09 |
+| `GET` | `/reports/{attendance,occupancy,revenue}/csv` | Aynı rapor CSV olarak (UTF-8 BOM, `;`, formül kaçışı); hesap başına dakikada 10 (`429`, DEC-411) | SA | P3-09 |
+
 ##### 2.13 Belgeler — `Students` (faz 2, P2-F6)
 
 | Metot | Yol | Açıklama | Rol | Hikaye |
@@ -1781,6 +1792,12 @@ API'nin döndüğü tüm hata ve uyarı kodlarının kataloğu. Kurallar:
 | `Idempotency.KeyRequired` | Validation | İstek anahtarı eksik. | P2-F1 |
 | `Idempotency.KeyInvalid` | Validation | İstek anahtarı geçersiz. | P2-F1 |
 | `Idempotency.KeyReused` | BusinessRule | Bu istek anahtarı başka bir işlem için kullanılmış. | P2-F1 |
+
+#### Raporlar — `Reports`
+
+| Kod | Tür | Türkçe mesaj | Hikaye |
+| --- | --- | --- | --- |
+| `Report.InvalidRange` | Validation | Ay aralığı en çok 12 ay olabilir; son 24 ayın içinde olmalı ve bu aydan ileri gidemez. | P3-09 |
 | `Idempotency.InProgress` | Conflict | Aynı işlem şu anda sürüyor. | P2-F1 |
 
 ---
