@@ -239,7 +239,7 @@ Ek: başka okulun kaydı → `404`; `IgnoreQueryFilters()` sadece `Tenancy`'de; 
 
 - Kendi `Identity` modülümüz; kriptografi kendimiz yazılmaz (`PasswordHasher`, .NET JWT).
 - Access token: HS256 JWT, 15 dk, bellekte; claim'ler `sub`, `role`, `tenant_id`, `pwd_change_required`, `jti`; kişisel veri yok.
-- Refresh token: 256 bit opak, DB'de SHA-256 hash'i; `HttpOnly; Secure; SameSite=Strict; Path=/api/v1/auth`; rotation, aile, reuse detection, mutlak 30 gün.
+- Refresh token: 256 bit opak, DB'de SHA-256 hash'i; `HttpOnly; Secure; SameSite=Strict; Path=/api/v1/auth`; rotation, aile, reuse detection (kaybolan yanıt için 30 sn tolerans, DEC-446), mutlak 30 gün.
 - Angular ve API aynı origin (`/api`), CORS yok; refresh/çıkış sadece `POST` + `X-Requested-With`.
 - Kabul edilen sınır: pasif kullanıcının access token'ı en fazla 15 dk geçerli.
 
