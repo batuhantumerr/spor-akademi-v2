@@ -11,6 +11,7 @@ import {
   signal,
   untracked,
 } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { LucideMegaphone } from '@lucide/angular';
 
 import { Api } from '../../api/api';
@@ -18,6 +19,7 @@ import { apiV1GroupsIdAnnouncementsGet, apiV1GroupsIdAnnouncementsPost } from '.
 import { AnnouncementDto, GroupDto } from '../../api/models';
 import { fieldErrors, problemMessage, toProblem } from '../../core/api/problem';
 import { errorMessages, interpolate, ui } from '../../core/i18n/tr';
+import { RealtimeService } from '../../core/realtime/realtime.service';
 import { PagedList } from '../../shared/data/paged-list';
 import { PaginationComponent } from '../../shared/ui/pagination.component';
 import { ToastService } from '../../shared/ui/toast.service';
@@ -192,6 +194,16 @@ export class GroupAnnouncementsComponent {
       this.groupId();
       untracked(() => void this.list.reset());
     });
+    // Another admin published to this group, or a reconnect: reload silently, keeping the page (P3-08).
+    // The admin's own publish reloads the list itself.
+    inject(RealtimeService)
+      .announcementsChanged(() => this.group().id)
+      .pipe(takeUntilDestroyed())
+      .subscribe(() => {
+        if (!this.publishing()) {
+          void this.list.load();
+        }
+      });
   }
 
   protected message(field: Field): string | null {
