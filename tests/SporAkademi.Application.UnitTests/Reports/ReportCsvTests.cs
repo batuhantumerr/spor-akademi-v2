@@ -133,6 +133,18 @@ public sealed class ReportRangeTests
         ReportRange.Resolve(from, to, March2027).Error.ShouldBe(ReportErrors.InvalidRange);
 
     [Fact]
+    public void The_report_horizon_is_the_dues_horizon_so_no_valid_range_outruns_the_dues_summary()
+    {
+        // The revenue report reads the dues summary, which throws for a longer window (a 500): one source, one value.
+        ReportRange.HorizonMonths.ShouldBe(SporAkademi.Application.Billing.OutstandingDues.HorizonMonths);
+
+        var oldest = YearMonth.From(March2027.FirstDay.AddMonths(1 - ReportRange.HorizonMonths));
+        ReportRange.Resolve(oldest.ToString(), oldest.ToString(), March2027).IsSuccess.ShouldBeTrue();
+        var beyond = YearMonth.From(oldest.FirstDay.AddMonths(-1)).ToString();
+        ReportRange.Resolve(beyond, beyond, March2027).Error.ShouldBe(ReportErrors.InvalidRange);
+    }
+
+    [Fact]
     public void Head_counts_are_taken_at_month_end_and_today_in_the_current_month()
     {
         var today = new DateOnly(2027, 3, 10);
