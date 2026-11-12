@@ -69,7 +69,9 @@ Radius: `--radius: 0.25rem`; `sm = r-2px`, `md = r`, `lg = r+2px`, `xl = r+4px`.
 - Kök: `h-screen flex overflow-hidden bg-background`.
 - Sidebar: `fixed h-full border-r`, açık `w-64`, kapalı `w-20`; `lg` altında `bg-black/50` arka planlı çekmece. Üstte `h-16 px-4 border-b` logo alanı (`h-8 w-8 rounded-lg bg-primary/10 border border-primary/20`). Bölüm başlıkları `text-xs font-bold uppercase tracking-widest text-muted-foreground`.
 - Menü öğesi: `flex h-9 items-center gap-2.5 px-3 rounded-lg text-sm font-medium`; aktif `bg-gradient-to-r from-primary/20 to-primary/5 text-primary border border-primary/30 shadow-lg shadow-primary/5`; pasif `text-muted-foreground hover:text-foreground hover:bg-muted/50`.
-- Header: `sticky top-0 h-16 border-b border-border/50 bg-card/80 backdrop-blur-xl px-2 sm:px-6`; sağda tema düğmesi ve kullanıcı menüsü.
+- Header: `sticky top-0 h-16 border-b border-border/50 bg-card/80 backdrop-blur-xl px-2 sm:px-6`; sağda dil seçici, tema düğmesi ve hesap düğmeleri.
+- Dil seçici (P3-10, DEC-428): `btn btn-ghost` (admin `h-9 px-2.5`, veli `btn-sm`), `languages` ikonu ve öbür dilin kendi dilindeki adı ("English" / "Türkçe", `lang` öznitelikli); admin'de kabuk başlığında ve giriş sayfasında tema düğmesinin solunda, veli uygulamasında başlıkta ve oturumsuz sayfaların düzeninde.
+- Metinler yalnız sözlüklerde (`web/admin/src/app/core/i18n/tr.ts` + `en.ts`, `web/parent/src/i18n/tr.ts` + `en.ts`); tarih, sayı ve yüzde `Intl` ile etkin dilde, para her dilde `₺` (DEC-426, DEC-427). Yeni metin eklerken iki sözlüğe de eklenir; `node scripts/check-i18n.mjs` şablona yazılmış metni yakalar.
 - İçerik: `flex-1 overflow-y-auto p-4 md:p-6`.
 - Sayfa başlığı: `h1.text-xl.font-bold.tracking-tight` + `p.text-sm.text-muted-foreground`; aksiyonlar `flex flex-col md:flex-row md:items-center justify-between gap-4`.
 
