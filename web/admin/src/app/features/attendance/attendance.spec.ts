@@ -315,7 +315,7 @@ describe('GroupAttendanceComponent', () => {
 
     const cells = root.querySelectorAll('tbody td [role="img"]');
     expect(cells[0].getAttribute('aria-label')).toBe('Geldi');
-    expect(cells[0].className).toContain('bg-success/15');
+    expect(cells[0].className).toContain('bg-success/10');
     expect(cells[1].getAttribute('aria-label')).toBe(ui.attendance.notRecorded);
     expect(cells[2].getAttribute('aria-label')).toBe(ui.attendance.notEnrolled);
     expect(cells[2].classList.contains('cell-not-enrolled')).toBe(true);

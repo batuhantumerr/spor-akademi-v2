@@ -53,7 +53,7 @@ import { interpolate, ui } from '../../core/i18n/tr';
           @for (entry of roster(); track $index) {
             <li class="card flex items-center justify-between gap-3 p-3">
               <div class="min-w-0">
-                <p class="truncate text-base font-semibold">
+                <p class="text-base font-semibold break-words">
                   {{ entry.firstName }} {{ entry.lastName }}
                 </p>
                 <p class="text-sm text-muted-foreground">{{ birthYear(entry) }}</p>

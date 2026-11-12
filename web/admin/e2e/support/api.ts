@@ -47,8 +47,13 @@ export class ApiClient {
     return this.send<T>('GET', path, undefined, 200);
   }
 
-  post<T>(path: string, body: unknown, status = 201): Promise<T> {
-    return this.send<T>('POST', path, body, status);
+  post<T>(
+    path: string,
+    body: unknown,
+    status = 201,
+    headers: Record<string, string> = {},
+  ): Promise<T> {
+    return this.send<T>('POST', path, body, status, headers);
   }
 
   put<T>(path: string, body: unknown, status = 200): Promise<T> {
@@ -59,11 +64,17 @@ export class ApiClient {
     await this.context.dispose();
   }
 
-  private async send<T>(method: string, path: string, body: unknown, status: number): Promise<T> {
+  private async send<T>(
+    method: string,
+    path: string,
+    body: unknown,
+    status: number,
+    headers: Record<string, string> = {},
+  ): Promise<T> {
     const response = await this.context.fetch(path, {
       method,
       data: body,
-      headers: { Authorization: `Bearer ${this.token}` },
+      headers: { ...headers, Authorization: `Bearer ${this.token}` },
     });
     await expectStatus(response, status, `${method} ${path}`);
     return (await response.json()) as T;

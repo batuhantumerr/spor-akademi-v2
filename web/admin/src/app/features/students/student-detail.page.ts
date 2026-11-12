@@ -106,7 +106,7 @@ import { StudentDocumentsComponent } from './student-documents.component';
           {{ anonymizedNote(s.anonymizedAt) }}
         </p>
       }
-      <div class="grid gap-4 lg:grid-cols-2">
+      <div class="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <section class="card p-4" aria-labelledby="profile-title">
           <h2 id="profile-title" class="mb-3 text-base font-semibold">{{ text.profile }}</h2>
           <dl class="grid grid-cols-2 gap-3 text-sm">

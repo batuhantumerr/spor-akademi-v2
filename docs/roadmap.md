@@ -138,7 +138,7 @@ Veli yalnızca **kendi çocuklarını** görür. Bu, okul izolasyonunun yanında
 - [x] P3-10 **Çoklu dil (TR/EN)**, admin ve veli uygulamasında. (DEC-426 – DEC-431)
   - API hata mesajları `Accept-Language` başlığına göre döner.
   - Tarih ve para biçimleri seçilen dile uyar; varsayılan dil Türkçe.
-- [ ] P3-11 **WCAG 2.2 AA denetimi** (P3-F6).
+- [x] P3-11 **WCAG 2.2 AA denetimi** (P3-F6). Rapor: [erisilebilirlik-denetimi.md](erisilebilirlik-denetimi.md). (DEC-436 – DEC-443; ekran okuyucuyla elle tur sahipte)
   - Önemli ekranların listesi çıkarılır.
   - axe ile otomatik tarama, ardından klavye ve ekran okuyucuyla elle kontrol.
   - Bulgular düzeltilir; rapor `docs/` altına yazılır.

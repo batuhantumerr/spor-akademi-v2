@@ -13,6 +13,7 @@ import { fieldErrors, problemMessage, toProblem } from '../../core/api/problem';
 import { AuthService } from '../../core/auth/auth.service';
 import { errorMessages, ui } from '../../core/i18n/tr';
 import { focusFirstInvalid } from '../../shared/forms/focus-first-invalid';
+import { LanguageSwitcherComponent } from '../../shared/ui/language-switcher.component';
 
 function matchingPasswords(group: AbstractControl): ValidationErrors | null {
   return group.get('newPassword')?.value === group.get('confirm')?.value
@@ -24,9 +25,11 @@ function matchingPasswords(group: AbstractControl): ValidationErrors | null {
 @Component({
   selector: 'app-change-password-page',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [ReactiveFormsModule, LucideCircleAlert, LucideKeyRound],
+  imports: [LanguageSwitcherComponent, ReactiveFormsModule, LucideCircleAlert, LucideKeyRound],
   template: `
-    <div class="flex min-h-dvh items-center justify-center bg-background p-6">
+    <main class="relative flex min-h-dvh items-center justify-center bg-background p-6">
+      <!-- The language can be changed on every page reached from an e-mail link or a first sign-in (DEC-439). -->
+      <div class="absolute top-4 right-4"><app-language-switcher /></div>
       <div class="card w-full max-w-md p-6 shadow-sm sm:p-8">
         <div class="mb-6 flex items-center gap-3">
           <div
@@ -106,7 +109,7 @@ function matchingPasswords(group: AbstractControl): ValidationErrors | null {
           </button>
         </form>
       </div>
-    </div>
+    </main>
   `,
 })
 export class ChangePasswordPage {

@@ -4,6 +4,26 @@ export function tokenFromFragment(fragment: string): string | null {
   return token && token.length <= 128 ? token : null;
 }
 
+/** The token of the link this visit opened; memory only, never stored. */
+let linkToken: string | null = null;
+
+/**
+ * The single-use token of an invitation or reset link: read from the fragment when the page opens it, then kept in
+ * memory, because the page removes the fragment at once. A language switch re-mounts the routed pages (DEC-426), and
+ * the re-mounted page must still have the token (P3-11, DEC-439); a parent who switches to English must not lose
+ * the link.
+ */
+export function takeLinkToken(fragment: string): string | null {
+  const fresh = tokenFromFragment(fragment);
+  if (fresh) linkToken = fresh;
+  return linkToken;
+}
+
+/** Drops the remembered token once it is used or refused. */
+export function forgetLinkToken(): void {
+  linkToken = null;
+}
+
 /** Pages for signed-out visitors: returning to them after a login would bounce between the guards. */
 const GUEST_PATHS = ['/login', '/forgot-password', '/reset-password'];
 
