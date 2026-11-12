@@ -59,6 +59,13 @@ const DESKTOP_QUERY = '(min-width: 64rem)';
   host: { '(document:keydown.escape)': 'closeMenu()' },
   template: `
     <div class="flex h-dvh overflow-hidden bg-background">
+      <!-- WCAG 2.4.1: the first Tab stop skips the menu; a click handler, not a #fragment, so the router stays put. -->
+      <a
+        href="#main-content"
+        class="sr-only z-50 rounded-md bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground focus:not-sr-only focus:fixed focus:top-3 focus:left-3"
+        (click)="skipToContent($event)"
+        >{{ text.shell.skipToContent }}</a
+      >
       @if (mobileOpen()) {
         <!-- Pointer-only backdrop: keyboard users close the drawer with Escape or the X button. -->
         <button
@@ -96,7 +103,7 @@ const DESKTOP_QUERY = '(min-width: 64rem)';
           }
           <button
             type="button"
-            class="absolute top-5 -right-3 hidden size-6 place-items-center rounded-full border border-border bg-card text-muted-foreground shadow-sm hover:text-primary lg:grid"
+            class="absolute top-5 -right-3 z-50 hidden size-6 place-items-center rounded-full border border-border bg-card text-muted-foreground shadow-sm hover:text-primary lg:grid"
             aria-controls="app-sidebar"
             [attr.aria-expanded]="!collapsed()"
             [attr.aria-label]="collapsed() ? text.shell.expand : text.shell.collapse"
@@ -227,7 +234,12 @@ const DESKTOP_QUERY = '(min-width: 64rem)';
           </div>
         </header>
 
-        <main class="flex-1 overflow-y-auto p-4 md:p-6">
+        <main
+          #main
+          id="main-content"
+          tabindex="-1"
+          class="flex-1 overflow-y-auto p-4 focus:outline-none md:p-6"
+        >
           <div class="mx-auto w-full max-w-7xl">
             <router-outlet />
           </div>
@@ -243,6 +255,7 @@ export class ShellComponent {
   private readonly injector = inject(Injector);
   private readonly menuButton = viewChild.required<ElementRef<HTMLButtonElement>>('menuButton');
   private readonly closeButton = viewChild.required<ElementRef<HTMLButtonElement>>('closeButton');
+  private readonly main = viewChild.required<ElementRef<HTMLElement>>('main');
 
   protected readonly isDesktop = signal(false);
   protected readonly collapsed = signal(false);
@@ -294,6 +307,11 @@ export class ShellComponent {
     }
     this.mobileOpen.set(false);
     afterNextRender(() => this.menuButton().nativeElement.focus(), { injector: this.injector });
+  }
+
+  protected skipToContent(event: Event): void {
+    event.preventDefault();
+    this.main().nativeElement.focus();
   }
 
   protected logout(): void {

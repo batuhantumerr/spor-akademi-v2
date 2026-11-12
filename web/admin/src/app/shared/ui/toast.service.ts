@@ -116,6 +116,7 @@ export class ToastService implements OnDestroy {
 @Component({
   selector: 'app-toasts',
   changeDetection: ChangeDetectionStrategy.OnPush,
+  host: { '(document:keydown.escape)': 'dismissAll()' },
   imports: [LucideBell, LucideCircleAlert, LucideCircleCheck, LucideX],
   template: `
     <div
@@ -134,7 +135,7 @@ export class ToastService implements OnDestroy {
           <p class="flex-1 text-foreground">{{ toast.message }}</p>
           <button
             type="button"
-            class="text-muted-foreground hover:text-foreground"
+            class="-m-1 grid size-6 shrink-0 place-items-center rounded-md text-muted-foreground hover:text-foreground"
             [attr.aria-label]="common.close"
             (click)="toasts.dismiss(toast.id)"
           >
@@ -157,7 +158,7 @@ export class ToastService implements OnDestroy {
             <p class="flex-1 text-foreground">{{ toast.message }}</p>
             <button
               type="button"
-              class="text-muted-foreground hover:text-foreground"
+              class="-m-1 grid size-6 shrink-0 place-items-center rounded-md text-muted-foreground hover:text-foreground"
               [attr.aria-label]="common.close"
               (click)="toasts.dismiss(toast.id)"
             >
@@ -180,6 +181,19 @@ export class ToastsComponent {
     this.toasts.toasts().filter((t) => t.kind !== 'error'),
   );
   private readonly holds = new Set<'pointer' | 'focus'>();
+
+  /**
+   * WCAG 2.4.11: a toast may sit over the focused control; Escape clears the stack without moving focus. With a
+   * dialog open, Escape belongs to the dialog.
+   */
+  protected dismissAll(): void {
+    if (document.querySelector('[role="dialog"], [role="alertdialog"]')) {
+      return;
+    }
+    for (const toast of this.toasts.toasts()) {
+      this.toasts.dismiss(toast.id);
+    }
+  }
 
   protected hold(reason: 'pointer' | 'focus', active: boolean): void {
     if (active) {

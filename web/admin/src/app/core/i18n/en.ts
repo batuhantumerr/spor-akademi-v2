@@ -215,6 +215,7 @@ export const enUi: UiText = {
     logout: 'Sign out',
     changePassword: 'Change password',
     account: 'Account',
+    skipToContent: 'Skip to main content',
   },
   login: {
     title: 'Sign in',
@@ -299,7 +300,7 @@ export const enUi: UiText = {
   },
   studentForm: {
     title: 'Student registration',
-    description: 'Required fields are marked. Students under 18 need at least one guardian.',
+    description: 'Required fields are marked with *. Students under 18 need at least one guardian.',
     back: 'Back to students',
     studentSection: 'Student details',
     contactSection: 'Student’s contact details',

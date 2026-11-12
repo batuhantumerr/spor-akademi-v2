@@ -3,7 +3,7 @@ import { useEffect, useRef, useState, type SubmitEvent } from 'react';
 import { Link } from 'react-router';
 import { api } from '../../api/client';
 import { errorMessage, toApiError, unwrap } from '../../api/errors';
-import { tokenFromFragment } from '../../auth/links';
+import { forgetLinkToken, takeLinkToken } from '../../auth/links';
 import { session } from '../../auth/session';
 import { errorMessages, text } from '../../i18n/tr';
 import { Notice, PublicLayout } from '../../layout/PublicLayout';
@@ -18,7 +18,7 @@ const MIN_LENGTH = 12;
  */
 export function ResetPasswordPage() {
   useDocumentTitle(text.resetPassword.title);
-  const [token] = useState(() => tokenFromFragment(window.location.hash));
+  const [token] = useState(() => takeLinkToken(window.location.hash));
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
   const [touched, setTouched] = useState(false);
@@ -65,9 +65,12 @@ export function ResetPasswordPage() {
       );
       // Setting the password revoked every session (P2-F4); an open one in this tab is stale.
       session.forget();
+      forgetLinkToken();
       setDone(true);
     } catch (failure) {
-      setTokenRejected(toApiError(failure).code === 'Auth.ResetTokenInvalid');
+      const rejected = toApiError(failure).code === 'Auth.ResetTokenInvalid';
+      if (rejected) forgetLinkToken();
+      setTokenRejected(rejected);
       setError(errorMessage(failure));
     } finally {
       setSubmitting(false);

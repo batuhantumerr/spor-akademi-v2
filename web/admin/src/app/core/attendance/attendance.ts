@@ -21,8 +21,8 @@ export function isMark(status: AttendanceStatus | null | undefined): status is M
 
 /** Tailwind classes per status, used by the buttons and the month matrix. */
 export const statusTone: Record<Mark, string> = {
-  Present: 'bg-success/15 text-success border-success/40',
-  Absent: 'bg-destructive/15 text-destructive border-destructive/40',
-  Late: 'bg-warning/15 text-warning border-warning/40',
-  Excused: 'bg-info/15 text-info border-info/40',
+  Present: 'bg-success/10 text-success border-success/40',
+  Absent: 'bg-destructive/10 text-destructive border-destructive/40',
+  Late: 'bg-warning/10 text-warning border-warning/40',
+  Excused: 'bg-info/10 text-info border-info/40',
 };

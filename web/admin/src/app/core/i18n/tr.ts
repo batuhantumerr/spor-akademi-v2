@@ -210,6 +210,7 @@ const trUi = {
     logout: 'Çıkış yap',
     changePassword: 'Şifre değiştir',
     account: 'Hesap',
+    skipToContent: 'Ana içeriğe geç',
   },
   login: {
     title: 'Giriş yap',
@@ -299,7 +300,8 @@ const trUi = {
   },
   studentForm: {
     title: 'Öğrenci kaydı',
-    description: 'Zorunlu alanlar işaretlidir. 18 yaşından küçükler için en az bir veli gerekir.',
+    description:
+      'Zorunlu alanlar * ile işaretlidir. 18 yaşından küçükler için en az bir veli gerekir.',
     back: 'Öğrencilere dön',
     studentSection: 'Öğrenci bilgileri',
     contactSection: 'Öğrencinin iletişim bilgileri',
