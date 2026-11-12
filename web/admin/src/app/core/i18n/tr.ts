@@ -699,8 +699,20 @@ export const ui = {
       '{student} · {period} · {amount}. Tutarın tamamı ödeme sağlayıcısı üzerinden ödemenin yapıldığı karta iade edilir.',
     refundReopens:
       'İade edilen ödeme bu dönemin borcundan düşer: dönem başka ödemelerle karşılanmıyorsa borç yeniden açılır.',
-    refundOverpaid:
-      'Bu ödeme fazla ödeme olarak işaretli: dönem başka bir ödemeyle karşılandığı için iadeden sonra borç ödenmiş kalır.',
+    refundOverpaid: 'Bu dönem başka ödemelerle de karşılanıyor: iadeden sonra borç ödenmiş kalır.',
+    refundPartlyReopens:
+      'Bu dönem {over} fazla ödenmiş; iadeden sonra {remaining} borç yeniden açılır.',
+    overpaid: 'Fazla ödeme',
+    overpaidBy: '{amount} fazla ödenmiş',
+    refundCheck: 'Sağlayıcıda kontrol et',
+    refundCheckLabel: 'Sağlayıcıda kontrol et: {student}, {period}',
+    refundCheckSucceeded: 'Sağlayıcı iadeyi doğruladı; ödeme iade edildi.',
+    refundCheckNotRefunded:
+      'Sağlayıcıda iade görünmüyor; iade başarısız sayıldı. Gerekirse iadeyi tekrar deneyin.',
+    refundCheckPending: 'Sağlayıcıya ulaşılamadı; iade beklemede kaldı.',
+    refundCheckTooSoon: 'Sağlayıcıya az önce soruldu; biraz sonra tekrar deneyin.',
+    refundNeedsReview: 'İnceleme gerekli',
+    refundNeedsReviewHint: 'Sağlayıcı iadeyi sonuçlandıramadı; sağlayıcıda kontrol edin.',
     refundReason: 'İade gerekçesi',
     refundReasonHint:
       'Gerekçeye kişi adı veya başka kişisel veri yazmayın; gerekçe silinmez ve veliye gösterilmez.',

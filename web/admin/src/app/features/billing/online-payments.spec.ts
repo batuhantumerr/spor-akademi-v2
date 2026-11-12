@@ -217,6 +217,9 @@ describe('OnlinePaymentsPage', () => {
 
     refundButton('op2')!.click();
     await settle(fixture);
+    // DEC-420: the live overpayment comes from the payment, not the attempt's flag.
+    backend.expectOne('/api/v1/payments/p2').flush({ id: 'p2', overpaidBy: tl('1250.00') });
+    await settle(fixture);
     expect(open.mock.calls[0][1].data).toEqual({
       payment: {
         id: 'p2',
@@ -225,7 +228,7 @@ describe('OnlinePaymentsPage', () => {
         period: '2026-11',
         amount: tl('1250.00'),
       },
-      overpaid: true,
+      overpaidBy: tl('1250.00'),
     });
     expect(toast.success).toHaveBeenCalledWith(ui.billing.refundPending);
     backend.expectOne((r) => r.url === '/api/v1/online-payments').flush(page([]));

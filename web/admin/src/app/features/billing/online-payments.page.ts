@@ -5,8 +5,8 @@ import { LucideCopy, LucideCreditCard, LucideExternalLink } from '@lucide/angula
 import { firstValueFrom } from 'rxjs';
 
 import { Api } from '../../api/api';
-import { apiV1OnlinePaymentsGet } from '../../api/functions';
-import { OnlinePaymentDto, OnlinePaymentStatus } from '../../api/models';
+import { apiV1OnlinePaymentsGet, apiV1PaymentsIdGet } from '../../api/functions';
+import { MoneyDto, OnlinePaymentDto, OnlinePaymentStatus } from '../../api/models';
 import { LOCALE } from '../../core/i18n/locale';
 import { errorMessages, interpolate, ui } from '../../core/i18n/tr';
 import { displayMoney } from '../../core/money/money';
@@ -23,6 +23,7 @@ import {
   RefundPaymentResult,
 } from './billing-dialogs';
 import { periodLabel } from './billing-format';
+import { checkRefundAtProvider } from './refund-check';
 
 type StatusFilter = OnlinePaymentStatus | '';
 
@@ -214,6 +215,17 @@ export function shareableCheckoutUrl(url: string, origin: string): string {
                       {{ refundAction(p) }}
                     </button>
                   }
+                  @if (p.paymentId && p.refundStatus === 'Pending') {
+                    <button
+                      type="button"
+                      class="btn btn-ghost btn-sm"
+                      data-testid="refund-check"
+                      [disabled]="busy()"
+                      (click)="checkRefund(p)"
+                    >
+                      {{ billing.refundCheck }}
+                    </button>
+                  }
                 </td>
               </tr>
             }
@@ -341,7 +353,8 @@ export class OnlinePaymentsPage {
           period: p.period,
           amount: p.amount,
         },
-        overpaid: p.overpaid,
+        // DEC-420: the due's live overpayment, from the payment itself; without it the generic text is shown.
+        overpaidBy: await this.overpaidByOf(p.paymentId),
       };
       const ref = this.dialog.open<RefundPaymentResult>(RefundPaymentDialog, {
         data,
@@ -359,6 +372,28 @@ export class OnlinePaymentsPage {
       await this.list.load();
     } finally {
       this.busy.set(false);
+    }
+  }
+
+  /** DEC-418: "Sağlayıcıda kontrol et" for a pending refund of the attempt's payment. */
+  protected async checkRefund(p: OnlinePaymentDto): Promise<void> {
+    if (this.busy() || !p.paymentId) {
+      return;
+    }
+    this.busy.set(true);
+    try {
+      await checkRefundAtProvider(this.api, this.toasts, p.paymentId);
+      await this.list.load();
+    } finally {
+      this.busy.set(false);
+    }
+  }
+
+  private async overpaidByOf(paymentId: string): Promise<MoneyDto | null> {
+    try {
+      return (await this.api.invoke(apiV1PaymentsIdGet, { id: paymentId })).overpaidBy ?? null;
+    } catch {
+      return null;
     }
   }
 

@@ -31,6 +31,7 @@ import {
   RefundPaymentResult,
 } from './billing-dialogs';
 import { periodLabel } from './billing-format';
+import { checkRefundAtProvider } from './refund-check';
 
 type StatusFilter = PaymentStatus | '';
 
@@ -160,6 +161,14 @@ type StatusFilter = PaymentStatus | '';
                     [attr.data-testid]="'status-' + p.status"
                     >{{ text.statuses[p.status] }}</span
                   >
+                  @if (p.overpaidBy && p.status === 'Recorded') {
+                    <span class="badge badge-warning mt-1" data-testid="overpaid">{{
+                      text.overpaid
+                    }}</span>
+                    <span class="mt-1 block text-xs text-muted-foreground">{{
+                      overpaidText(p)
+                    }}</span>
+                  }
                   @if (p.cancelReason) {
                     <span class="mt-1 block text-xs text-muted-foreground">{{
                       cancelledBecause(p.cancelReason)
@@ -174,6 +183,14 @@ type StatusFilter = PaymentStatus | '';
                         [class.badge-danger]="r.status === 'Failed'"
                         >{{ text.refundStatuses[r.status] }}</span
                       >
+                    }
+                    @if (r.needsReview && r.status === 'Pending') {
+                      <span class="badge badge-danger mt-1" data-testid="refund-needs-review">{{
+                        text.refundNeedsReview
+                      }}</span>
+                      <span class="mt-1 block text-xs text-muted-foreground">{{
+                        text.refundNeedsReviewHint
+                      }}</span>
                     }
                     @if (r.failureCode && r.status === 'Failed') {
                       <span class="mt-1 block text-xs text-muted-foreground">{{
@@ -195,6 +212,18 @@ type StatusFilter = PaymentStatus | '';
                       (click)="refund(p)"
                     >
                       {{ refundAction(p) }}
+                    </button>
+                  }
+                  @if (p.status === 'Recorded' && p.refund?.status === 'Pending') {
+                    <button
+                      type="button"
+                      class="btn btn-ghost btn-sm"
+                      data-testid="refund-check"
+                      [attr.aria-label]="checkLabel(p)"
+                      [disabled]="busy()"
+                      (click)="checkRefund(p)"
+                    >
+                      {{ text.refundCheck }}
                     </button>
                   }
                   @if (p.status === 'Recorded' && p.method !== 'Online') {
@@ -297,7 +326,7 @@ export class PaymentsPage {
 
   protected async refund(payment: PaymentDto): Promise<void> {
     await this.exclusive(async () => {
-      const data: RefundPaymentData = { payment };
+      const data: RefundPaymentData = { payment, overpaidBy: payment.overpaidBy };
       const ref = this.dialog.open<RefundPaymentResult>(RefundPaymentDialog, {
         data,
         ariaLabelledBy: REFUND_PAYMENT_TITLE_ID,
@@ -312,6 +341,25 @@ export class PaymentsPage {
         this.toasts.success(this.text.refunded);
       }
       // Reload either way: a declined refund is shown on the row too.
+      await this.list.load();
+    });
+  }
+
+  protected overpaidText(p: PaymentDto): string {
+    return interpolate(this.text.overpaidBy, { amount: displayMoney(p.overpaidBy) });
+  }
+
+  protected checkLabel(p: PaymentDto): string {
+    return interpolate(this.text.refundCheckLabel, {
+      student: p.studentFirstName + ' ' + p.studentLastName,
+      period: periodLabel(p.period),
+    });
+  }
+
+  /** DEC-418: "Sağlayıcıda kontrol et" for a pending (or review-waiting) refund. */
+  protected async checkRefund(payment: PaymentDto): Promise<void> {
+    await this.exclusive(async () => {
+      await checkRefundAtProvider(this.api, this.toasts, payment.id);
       await this.list.load();
     });
   }

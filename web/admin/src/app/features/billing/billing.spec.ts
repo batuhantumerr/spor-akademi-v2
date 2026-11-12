@@ -504,9 +504,22 @@ describe('billing dialogs', () => {
     expect(document.activeElement).toBe(root.querySelector('#refund-reason'));
   });
 
-  it('says the due stays paid when refunding an overpayment', async () => {
-    await open(RefundPaymentDialog, { ...refundData, overpaid: true });
+  it('says the due stays paid when the live overpayment covers the amount', async () => {
+    await open(RefundPaymentDialog, { ...refundData, overpaidBy: tl('1250.00') });
     expect(root.querySelector('#refund-effect')?.textContent).toContain(ui.billing.refundOverpaid);
+  });
+
+  it('says how much of the due reopens when the overpayment is smaller than the amount', async () => {
+    await open(RefundPaymentDialog, { ...refundData, overpaidBy: tl('250.00') });
+    const effect = root.querySelector('#refund-effect')?.textContent ?? '';
+    expect(effect).toContain('₺250,00');
+    expect(effect).toContain('₺1.000,00');
+    expect(effect).not.toContain(ui.billing.refundOverpaid);
+  });
+
+  it('says the due reopens without an overpayment', async () => {
+    await open(RefundPaymentDialog, { ...refundData, overpaidBy: null });
+    expect(root.querySelector('#refund-effect')?.textContent).toContain(ui.billing.refundReopens);
   });
 
   it('sends the same Idempotency-Key when the same refund is retried and closes when refunded', async () => {
@@ -603,6 +616,7 @@ describe('PaymentsPage', () => {
       cancelledAt: '2026-11-06T10:00:00Z',
       onlinePaymentId: null,
       refund: null,
+      overpaidBy: null,
     };
     backend
       .expectOne((r) => r.url === '/api/v1/payments')
@@ -653,6 +667,7 @@ describe('PaymentsPage', () => {
       requestedBy: 'u1',
       requestedAt: '2026-11-10T10:00:00Z',
       attempts: 1,
+      needsReview: false,
     };
     const items: PaymentDto[] = [
       onlinePayment('cash', { method: 'Cash', onlinePaymentId: null }),
@@ -684,7 +699,7 @@ describe('PaymentsPage', () => {
     expect(buttons('failed')).toEqual([ui.billing.refundRetry]);
     expect(row('failed').textContent).toContain(ui.billing.refundStatuses['Failed']);
     expect(row('failed').textContent).toContain('FakeRefundDeclined');
-    expect(buttons('pending')).toEqual([]);
+    expect(buttons('pending')).toEqual([ui.billing.refundCheck]);
     expect(row('pending').textContent).toContain(ui.billing.refundStatuses['Pending']);
     expect(buttons('done')).toEqual([]);
     expect(row('done').querySelector('[data-testid="status-Refunded"]')?.textContent).toContain(
@@ -695,6 +710,7 @@ describe('PaymentsPage', () => {
     (row('online').querySelector('button') as HTMLButtonElement).click();
     await settle(fixture);
     expect(open.mock.calls[0][1].data.payment.id).toBe('online');
+    expect(open.mock.calls[0][1].data.overpaidBy).toBeNull();
     expect(toast.success).toHaveBeenCalledWith(ui.billing.refunded);
     backend
       .expectOne((r) => r.url === '/api/v1/payments')
@@ -702,6 +718,69 @@ describe('PaymentsPage', () => {
 
     const status = root.querySelector('#pay-filter-status') as HTMLSelectElement;
     expect([...status.options].map((o) => o.value)).toContain('Refunded');
+    backend.verify();
+  });
+});
+
+describe('PaymentsPage refund recovery', () => {
+  it('marks overpayments, flags refunds needing review and checks them at the provider', async () => {
+    const toast = { success: vi.fn(), error: vi.fn() };
+    TestBed.configureTestingModule({
+      imports: [PaymentsPage],
+      providers: providers([
+        { provide: Dialog, useValue: { open: vi.fn() } },
+        { provide: ToastService, useValue: toast },
+      ]),
+    });
+    const fixture = TestBed.createComponent(PaymentsPage);
+    const backend = TestBed.inject(HttpTestingController);
+    await settle(fixture);
+    backend
+      .expectOne((r) => r.url === '/api/v1/groups')
+      .flush({ items: [], page: 1, pageSize: 100, totalCount: 0, totalPages: 0 });
+    const items: PaymentDto[] = [
+      onlinePayment('over', { overpaidBy: tl('1250.00') }),
+      onlinePayment('review', {
+        refund: {
+          id: 'r1',
+          status: 'Pending',
+          reason: 'Kayıt erken bitti',
+          requestedBy: 'u1',
+          requestedAt: '2026-11-10T10:00:00Z',
+          completedAt: null,
+          failureCode: null,
+          attempts: 2,
+          needsReview: true,
+        },
+      }),
+    ];
+    backend
+      .expectOne((r) => r.url === '/api/v1/payments')
+      .flush({ items, page: 1, pageSize: 25, totalCount: items.length, totalPages: 1 });
+    await settle(fixture);
+
+    const root = fixture.nativeElement as HTMLElement;
+    const row = (id: string) =>
+      root.querySelector('[data-testid="payment-' + id + '"]') as HTMLElement;
+    expect(row('over').querySelector('[data-testid="overpaid"]')?.textContent).toContain(
+      ui.billing.overpaid,
+    );
+    expect(row('over').textContent).toContain('₺1.250,00 fazla ödenmiş');
+    expect(
+      row('review').querySelector('[data-testid="refund-needs-review"]')?.textContent,
+    ).toContain(ui.billing.refundNeedsReview);
+    expect(row('review').querySelector('[data-testid="overpaid"]')).toBeNull();
+
+    (row('review').querySelector('[data-testid="refund-check"]') as HTMLButtonElement).click();
+    await settle(fixture);
+    const check = backend.expectOne('/api/v1/payments/review/refund/check');
+    expect(check.request.method).toBe('POST');
+    check.flush({ code: 'Refund.ProviderDeclined' }, { status: 422, statusText: 'Unprocessable' });
+    await settle(fixture);
+    expect(toast.error).toHaveBeenCalledWith(ui.billing.refundCheckNotRefunded);
+    backend
+      .expectOne((r) => r.url === '/api/v1/payments')
+      .flush({ items: [], page: 1, pageSize: 25, totalCount: 0, totalPages: 0 });
     backend.verify();
   });
 });
@@ -725,6 +804,7 @@ function onlinePayment(id: string, overrides: Partial<PaymentDto> = {}): Payment
     cancelledAt: null,
     onlinePaymentId: 'op1',
     refund: null,
+    overpaidBy: null,
     ...overrides,
   };
 }
@@ -740,6 +820,7 @@ const refundedPayment: PaymentDto = onlinePayment('refunded', {
     completedAt: '2026-11-10T10:00:01Z',
     failureCode: null,
     attempts: 1,
+    needsReview: false,
   },
 });
 

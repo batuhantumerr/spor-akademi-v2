@@ -19,11 +19,24 @@ import {
   apiV1StudentsGet,
   apiV1StudentsIdEnrollmentsGet,
 } from '../../api/functions';
-import { EnrollmentDto, PaymentDto, PaymentMethod, StudentListItemDto } from '../../api/models';
+import {
+  EnrollmentDto,
+  MoneyDto,
+  PaymentDto,
+  PaymentMethod,
+  StudentListItemDto,
+} from '../../api/models';
 import { fieldErrors, problemMessage, toProblem } from '../../core/api/problem';
 import { formatDate } from '../../core/format/format';
 import { errorMessages, interpolate, ui } from '../../core/i18n/tr';
-import { displayMoney, isPositive, money, parseMoneyInput } from '../../core/money/money';
+import {
+  displayMoney,
+  fromKurus,
+  isPositive,
+  money,
+  parseMoneyInput,
+  toKurus,
+} from '../../core/money/money';
 import { SchoolClock } from '../../core/time/school-clock';
 import { newIdempotencyKey, periodLabel } from './billing-format';
 
@@ -574,6 +587,22 @@ export class CancelPaymentDialog {
   }
 }
 
+/** What a refund does to the due, from the live overpayment (DEC-420); exact in kuruş. */
+export function refundEffect(amount: MoneyDto, overpaidBy: MoneyDto | null | undefined): string {
+  const over = overpaidBy ? toKurus(overpaidBy.amount) : 0n;
+  const paid = toKurus(amount.amount);
+  if (over <= 0n) {
+    return ui.billing.refundReopens;
+  }
+  if (over >= paid) {
+    return ui.billing.refundOverpaid;
+  }
+  return interpolate(ui.billing.refundPartlyReopens, {
+    over: displayMoney(overpaidBy),
+    remaining: displayMoney(fromKurus(paid - over)),
+  });
+}
+
 /** What the refund dialog closes with when the provider's answer is not known yet (the refund stays pending). */
 export const REFUND_PENDING = 'refundPending' as const;
 /** What the refund dialog closes with when someone else refunded (or is refunding) the payment first. */
@@ -584,8 +613,11 @@ export type RefundPaymentResult =
 /** The payment to refund: what the dialog shows and the id it posts to. */
 export interface RefundPaymentData {
   payment: Pick<PaymentDto, 'id' | 'studentFirstName' | 'studentLastName' | 'period' | 'amount'>;
-  /** The online attempt was flagged as an overpayment (DEC-342): the due stays paid after the refund. */
-  overpaid?: boolean;
+  /**
+   * How much the due's recorded payments exceed what it owes now (PaymentDto.overpaidBy, live, DEC-420): the refund
+   * leaves the due paid when it is at least the amount, reopens part of it when smaller, all of it when absent.
+   */
+  overpaidBy?: MoneyDto | null;
 }
 
 /**
@@ -660,9 +692,7 @@ export class RefundPaymentDialog {
     period: periodLabel(this.payment.period),
     amount: displayMoney(this.payment.amount),
   });
-  protected readonly effect = this.data.overpaid
-    ? ui.billing.refundOverpaid
-    : ui.billing.refundReopens;
+  protected readonly effect = refundEffect(this.payment.amount, this.data.overpaidBy);
   protected readonly reason = signal('');
   protected readonly reasonError = signal<string | null>(null);
   protected readonly saving = signal(false);
