@@ -103,6 +103,12 @@ export const routes: Routes = [
               import('./features/dashboard/dashboard.page').then((m) => m.DashboardPage),
           },
           {
+            path: 'reports',
+            title: ui.nav.reports,
+            loadComponent: () =>
+              import('./features/reports/reports.page').then((m) => m.ReportsPage),
+          },
+          {
             path: 'sports',
             title: ui.nav.sports,
             loadComponent: () =>
