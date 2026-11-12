@@ -151,6 +151,10 @@ describe('AuthService', () => {
         let result: string | null | undefined;
         auth.refresh().subscribe((t) => (result = t));
         backend.expectOne('/api/v1/auth/refresh').flush({ accessToken: token, expiresIn: 900 });
+        // The mismatched cookie's family is revoked on the server.
+        const logout = backend.expectOne('/api/v1/auth/logout');
+        expect(logout.request.method).toBe('POST');
+        logout.flush(null);
 
         expect(result).toBeNull();
         expect(auth.token()).toBeNull();

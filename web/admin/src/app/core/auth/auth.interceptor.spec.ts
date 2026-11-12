@@ -220,6 +220,7 @@ describe('authInterceptor', () => {
 
     backend.expectOne('/api/v1/sports').flush(null, { status: 401, statusText: 'Unauthorized' });
     backend.expectOne('/api/v1/auth/refresh').flush({ accessToken: jwt('u9'), expiresIn: 900 });
+    backend.expectOne('/api/v1/auth/logout').flush(null);
 
     backend.expectNone('/api/v1/sports');
     expect(error?.status).toBe(401);

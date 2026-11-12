@@ -226,7 +226,15 @@ export class AuthService {
         const signedIn = this.currentUser();
         if (signedIn && !sameSubject(response.accessToken, signedIn.id)) {
           // The cookie belongs to someone else (e.g. a very late startup refresh of another person on a shared
-          // computer stored its cookie after this login, DEC-447): never continue with a mismatched identity.
+          // computer stored its cookie after this login, DEC-447): never continue with a mismatched identity, and
+          // revoke that cookie's family so a reload or another tab cannot silently restore the other person.
+          this.http
+            .post<void>('/api/v1/auth/logout', null, {
+              headers: ajaxHeaders(),
+              context: skipAuth(),
+            })
+            .pipe(catchError(() => of(undefined)))
+            .subscribe();
           this.expireSession();
           return null;
         }
