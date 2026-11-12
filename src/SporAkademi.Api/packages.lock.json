@@ -66,8 +66,8 @@
       },
       "AWSSDK.Core": {
         "type": "Transitive",
-        "resolved": "4.0.102.14",
-        "contentHash": "pRYOOIyj40UdQ6G9iq8AOU30sFPqWS/umM/sFTmAl4n1S6AVbVa67DJpJTxD+9qJFqweHPcyVW7Qb4BbUBLJdg=="
+        "resolved": "4.0.102.17",
+        "contentHash": "GgPhSG8GB0ZkQptRifKaHxEDq7quS4frFW4G9y5fMWv1IwNhWIgLeKeekz6s0+KS9Hpm/niwU60Dwuya9PeeTg=="
       },
       "BouncyCastle.Cryptography": {
         "type": "Transitive",
@@ -283,7 +283,7 @@
       "sporakademi.infrastructure": {
         "type": "Project",
         "dependencies": {
-          "AWSSDK.S3": "[4.0.104.8, )",
+          "AWSSDK.S3": "[4.0.104.9, )",
           "EFCore.NamingConventions": "[10.0.1, )",
           "Hangfire.AspNetCore": "[1.8.25, )",
           "Hangfire.PostgreSql": "[1.21.1, )",
@@ -295,16 +295,16 @@
           "Microsoft.Extensions.Diagnostics.HealthChecks.EntityFrameworkCore": "[10.0.14, )",
           "Npgsql.EntityFrameworkCore.PostgreSQL": "[10.0.3, )",
           "SporAkademi.Application": "[1.0.0, )",
-          "StackExchange.Redis": "[2.13.17, )"
+          "StackExchange.Redis": "[2.13.23, )"
         }
       },
       "AWSSDK.S3": {
         "type": "CentralTransitive",
-        "requested": "[4.0.104.8, )",
-        "resolved": "4.0.104.8",
-        "contentHash": "ER6j94bekBn/YWpcUFArckk+JSObzMZHqHvj1djy5KAMeaG71BBDOJvEQNGFRvc4CUITfJmD/9T87t8b+xnlkg==",
+        "requested": "[4.0.104.9, )",
+        "resolved": "4.0.104.9",
+        "contentHash": "6eM22TbT/Rr/Qkd+NHnba57QL7FJg6xA1MEQF8hRJUaDdE/3/MGW0dLVLj6KuYsYox47aosu2T67KcEzCkuFoA==",
         "dependencies": {
-          "AWSSDK.Core": "[4.0.102.14, 5.0.0)"
+          "AWSSDK.Core": "[4.0.102.17, 5.0.0)"
         }
       },
       "EFCore.NamingConventions": {
@@ -451,9 +451,9 @@
       },
       "StackExchange.Redis": {
         "type": "CentralTransitive",
-        "requested": "[2.13.17, )",
-        "resolved": "2.13.17",
-        "contentHash": "P7o7ZDBAmBrOLQEw8Pt44iIA08ioj48smRxn4Jp6yzCu6P3DOSU6lj7f+IOtN3pPvSgC9YufvM92ycukEEBCYQ==",
+        "requested": "[2.13.23, )",
+        "resolved": "2.13.23",
+        "contentHash": "Au7NdOFFkYzQ89WpRCvERQLRebZDRFfuFVpXWX6RebOy8yZwt6x2n4rbup0WkLoaR9Rpzx/S39+BbRyuq8VVoQ==",
         "dependencies": {
           "Pipelines.Sockets.Unofficial": "2.2.16",
           "System.IO.Hashing": "10.0.2"
