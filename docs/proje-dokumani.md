@@ -1448,6 +1448,9 @@ Roller: **PA** = Platform Admin, **SA** = Okul Admini, **CO** = Antrenör, **Her
 | `GET` | `/platform/schools` | Okulları listeler | PA | US-01 |
 | `POST` | `/platform/schools` | Okul ve ilk Okul Admini oluşturur (atomik) | PA | US-01 |
 | `POST` | `/platform/schools/{id}/admins/{userId}/reset-password` | Okul Admininin şifresini sıfırlar | PA | US-05 |
+| `GET` | `/platform/schools/{id}/features` | Okulun feature flag'leri: anahtar, açıklama, etkin değer, global varsayılan, okula özel mi (DEC-580 – DEC-582) | PA | P4-10 |
+| `PUT` | `/platform/schools/{id}/features/{key}` | `{ enabled }` ile okulun kendi değerini yazar; okulun cache'lenmiş bayrakları hemen düşer (DEC-583) | PA | P4-10 |
+| `GET` | `/features` | Çağıranın okulunda açık olan bayrakların anahtarları (`{ enabled: [...] }`). Kapalı bir bayrağın uç noktaları bilinmeyen bir yol gibi `404 Resource.NotFound` döner (DEC-584) | SA, CO, Veli | P4-10 |
 
 ##### 2.3 Antrenörler — `Identity`
 
@@ -1678,6 +1681,7 @@ API'nin döndüğü tüm hata ve uyarı kodlarının kataloğu. Kurallar:
 | `School.SlugTaken` | Conflict | Bu kısa ad başka bir okul tarafından kullanılıyor. | US-01 |
 | `School.InvalidTimeZone` | Validation | Geçerli bir saat dilimi seçin. | US-01 |
 | `School.NotFound` | NotFound | Okul bulunamadı. | US-01 |
+| `Feature.NotFound` | NotFound | Özellik bulunamadı. (Katalogda olmayan bayrak anahtarı.) | P4-10 |
 
 #### Branşlar ve tesisler — `Organization`
 

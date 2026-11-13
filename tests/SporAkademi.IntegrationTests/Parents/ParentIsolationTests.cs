@@ -237,9 +237,10 @@ public sealed partial class ParentIsolationTests(DatabaseFixture database) : Par
 
         parent.ShouldNotBeEmpty();
         parent.Where(e => e.IsAnonymous || !e.Roles.SequenceEqual(["Parent"])).Select(e => e.Key).ShouldBeEmpty();
-        // The parent role reaches nothing outside /api/v1/parent (besides the any-role /me and change-password).
+        // The parent role reaches nothing outside /api/v1/parent (besides the any-role /me and change-password), except
+        // its school's enabled feature flags (P4-10, FeatureFlagTests).
         Endpoints().Where(e => e.Roles.Contains("Parent") && !e.Route.StartsWith("/api/v1/parent/", StringComparison.Ordinal))
-            .Select(e => e.Key).ShouldBeEmpty();
+            .Select(e => e.Key).ShouldBe(["GET /api/v1/features"]);
         parent.Select(e => e.Key).ShouldBe(
         [
             "GET /api/v1/parent/children",

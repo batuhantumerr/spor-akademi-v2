@@ -57,6 +57,7 @@ const trErrorMessages = {
   'School.SlugTaken': 'Bu kısa ad başka bir okul tarafından kullanılıyor.',
   'School.InvalidTimeZone': 'Geçerli bir saat dilimi seçin.',
   'School.NotFound': 'Okul bulunamadı.',
+  'Feature.NotFound': 'Özellik bulunamadı.',
   'Sport.NameTaken': 'Bu adda bir branş zaten var.',
   'Sport.InUse': 'Bu branşa bağlı gruplar olduğu için silinemez. Arşivleyebilirsiniz.',
   'Sport.Archived': 'Arşivlenmiş bir branş için yeni grup oluşturulamaz.',
@@ -710,6 +711,30 @@ const trUi = {
     empty: 'Henüz okul eklenmedi.',
     created: 'Okul oluşturuldu.',
     statuses: { Active: 'Aktif', Deactivated: 'Pasif' } as Record<string, string>,
+    back: 'Okullara dön',
+  },
+  schoolFeatures: {
+    title: 'Özellikler',
+    description:
+      'Okul bazında açılıp kapanan özellikler (kademeli yayın). Kapalı bir özellik okulun menüsünden kalkar ve uç noktası bulunamadı yanıtı verir.',
+    caption: 'Özellik listesi',
+    feature: 'Özellik',
+    state: 'Durum',
+    source: 'Kaynak',
+    on: 'Açık',
+    off: 'Kapalı',
+    fromDefault: 'Varsayılan ({value})',
+    fromSchool: 'Bu okula özel',
+    saved: '{feature} bu okul için {state}.',
+    loadError: 'Özellikler yüklenemedi.',
+    names: {
+      reports: 'Raporlar',
+      'parent-online-payments': 'Veli online ödemesi',
+    } as Record<string, string>,
+    hints: {
+      reports: 'Okul yöneticisinin raporlar sayfası ve CSV dışa aktarımları.',
+      'parent-online-payments': 'Velinin aidatları veli uygulamasından online ödemesi.',
+    } as Record<string, string>,
   },
   coaches: {
     title: 'Antrenörler',

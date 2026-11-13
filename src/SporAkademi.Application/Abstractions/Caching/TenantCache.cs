@@ -25,6 +25,9 @@ public enum CacheArea
 
     /// <summary>The School Admin reports (P3-09, DEC-410); like the dashboard, any write of the school invalidates them.</summary>
     Reports,
+
+    /// <summary>The school's own feature flag values (P4-10, DEC-583). Changes when the Platform Admin sets a value.</summary>
+    Features,
 }
 
 /// <summary>
@@ -92,6 +95,7 @@ public sealed partial class TenantCacheKey
         CacheArea.Facilities => "facilities",
         CacheArea.Dashboard => "dashboard",
         CacheArea.Reports => "reports",
+        CacheArea.Features => "features",
         _ => throw new ArgumentOutOfRangeException(nameof(area), area, "Unknown cache area."),
     };
 

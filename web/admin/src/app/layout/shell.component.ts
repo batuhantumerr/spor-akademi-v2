@@ -26,6 +26,7 @@ import {
 } from '@lucide/angular';
 
 import { AuthService } from '../core/auth/auth.service';
+import { FeatureService } from '../core/features/feature.service';
 import { ui } from '../core/i18n/tr';
 import { ThemeService } from '../core/theme/theme.service';
 import { MENU_NAVIGATION_STATE } from '../core/routing/menu-navigation';
@@ -251,6 +252,7 @@ const DESKTOP_QUERY = '(min-width: 64rem)';
 export class ShellComponent {
   protected readonly auth = inject(AuthService);
   protected readonly theme = inject(ThemeService);
+  private readonly features = inject(FeatureService);
   protected readonly text = ui;
   private readonly injector = inject(Injector);
   private readonly menuButton = viewChild.required<ElementRef<HTMLButtonElement>>('menuButton');
@@ -266,7 +268,9 @@ export class ShellComponent {
   protected readonly rail = computed(() => this.collapsed() && this.isDesktop());
   /** Below lg a closed drawer is off-screen, so it must also leave the tab order. */
   protected readonly drawerHidden = computed(() => !this.isDesktop() && !this.mobileOpen());
-  protected readonly sections = computed(() => navigationFor(this.auth.role()));
+  protected readonly sections = computed(() =>
+    navigationFor(this.auth.role(), (feature) => this.features.isEnabled(feature)),
+  );
   protected readonly roleLabel = computed(() => ui.roles[this.auth.role() ?? ''] ?? '');
   protected readonly fullName = computed(() => {
     const user = this.auth.user();

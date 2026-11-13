@@ -1,5 +1,6 @@
 import { Dialog } from '@angular/cdk/dialog';
 import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/core';
+import { RouterLink } from '@angular/router';
 import { LucideBuilding, LucidePlus } from '@lucide/angular';
 import { firstValueFrom } from 'rxjs';
 
@@ -18,7 +19,7 @@ import { CreatedSchool, SCHOOL_FORM_TITLE_ID, SchoolFormDialog } from './school-
 @Component({
   selector: 'app-schools-page',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [PageHeaderComponent, PaginationComponent, LucideBuilding, LucidePlus],
+  imports: [RouterLink, PageHeaderComponent, PaginationComponent, LucideBuilding, LucidePlus],
   template: `
     <app-page-header [title]="text.title" [description]="text.description">
       <button type="button" class="btn btn-primary" [disabled]="busy()" (click)="create()">
@@ -75,7 +76,11 @@ import { CreatedSchool, SCHOOL_FORM_TITLE_ID, SchoolFormDialog } from './school-
             @for (school of list.items(); track school.id) {
               <tr>
                 <th scope="row">
-                  {{ school.name }}
+                  <a
+                    class="text-primary underline-offset-4 hover:underline"
+                    [routerLink]="['/platform/schools', school.id]"
+                    >{{ school.name }}</a
+                  >
                   <span class="block text-xs font-normal text-muted-foreground">{{
                     school.timeZone
                   }}</span>

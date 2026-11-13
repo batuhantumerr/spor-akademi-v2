@@ -7,6 +7,7 @@ import {
   roleGuard,
   sessionGuard,
 } from './core/auth/auth.guards';
+import { featureGuard } from './core/features/feature.service';
 import { ui } from './core/i18n/tr';
 
 // Titles are functions so they follow the active language (DEC-426); AppTitleStrategy re-reads them on a switch.
@@ -45,6 +46,12 @@ export const routes: Routes = [
             title: () => ui.nav.schools,
             loadComponent: () =>
               import('./features/platform/schools.page').then((m) => m.SchoolsPage),
+          },
+          {
+            path: 'schools/:id',
+            title: () => ui.nav.schools,
+            loadComponent: () =>
+              import('./features/platform/school-detail.page').then((m) => m.SchoolDetailPage),
           },
           {
             path: 'jobs',
@@ -105,6 +112,7 @@ export const routes: Routes = [
           },
           {
             path: 'reports',
+            canActivate: [featureGuard('reports')],
             title: () => ui.nav.reports,
             loadComponent: () =>
               import('./features/reports/reports.page').then((m) => m.ReportsPage),

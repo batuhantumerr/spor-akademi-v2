@@ -1,10 +1,12 @@
 using System.Text;
 using System.Threading.RateLimiting;
 using Microsoft.Net.Http.Headers;
+using SporAkademi.Api.Endpoints.Tenancy;
 using SporAkademi.Api.Errors;
 using SporAkademi.Application.Abstractions.Authentication;
 using SporAkademi.Application.Abstractions.Messaging;
 using SporAkademi.Application.Reports;
+using SporAkademi.Domain.Tenancy;
 
 namespace SporAkademi.Api.Endpoints.Reports;
 
@@ -27,17 +29,19 @@ internal static class ReportEndpoints
 
     public static IEndpointRouteBuilder MapReportEndpoints(this IEndpointRouteBuilder app)
     {
-        var reports = app.MapGroup("/api/v1/reports").WithTags("Reports").RequireRole(Role.SchoolAdmin);
+        // P4-10 (DEC-585): behind the "reports" flag; while it is off for the school every report answers 404.
+        var reports = app.MapGroup("/api/v1/reports").WithTags("Reports").RequireRole(Role.SchoolAdmin)
+            .RequireFeature(FeatureCatalog.Reports);
         reports.MapGet("/attendance", GetAttendance).Produces<AttendanceReportDto>().ProducesProblems(400, 404);
         reports.MapGet("/occupancy", GetOccupancy).Produces<OccupancyReportDto>().ProducesProblems(400, 404);
-        reports.MapGet("/revenue", GetRevenue).Produces<RevenueReportDto>().ProducesProblems(400);
+        reports.MapGet("/revenue", GetRevenue).Produces<RevenueReportDto>().ProducesProblems(400, 404);
 
         reports.MapGet("/attendance/csv", ExportAttendance).Produces(StatusCodes.Status200OK, contentType: "text/csv")
             .ProducesProblems(400, 404, 429).RequireRateLimiting(ExportRateLimitPolicy);
         reports.MapGet("/occupancy/csv", ExportOccupancy).Produces(StatusCodes.Status200OK, contentType: "text/csv")
             .ProducesProblems(400, 404, 429).RequireRateLimiting(ExportRateLimitPolicy);
         reports.MapGet("/revenue/csv", ExportRevenue).Produces(StatusCodes.Status200OK, contentType: "text/csv")
-            .ProducesProblems(400, 429).RequireRateLimiting(ExportRateLimitPolicy);
+            .ProducesProblems(400, 404, 429).RequireRateLimiting(ExportRateLimitPolicy);
         return app;
     }
 

@@ -13,8 +13,8 @@ using SporAkademi.Infrastructure.Persistence;
 namespace SporAkademi.Infrastructure.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    [Migration("20261113094443_AddAuditLog")]
-    partial class AddAuditLog
+    [Migration("20261113095036_AddSchoolFeatures")]
+    partial class AddSchoolFeatures
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -2427,76 +2427,56 @@ namespace SporAkademi.Infrastructure.Migrations
                     b.ToTable("schools", "tenancy");
                 });
 
-            modelBuilder.Entity("SporAkademi.Infrastructure.Audit.AuditEntry", b =>
+            modelBuilder.Entity("SporAkademi.Domain.Tenancy.SchoolFeature", b =>
                 {
                     b.Property<Guid>("Id")
                         .HasColumnType("uuid")
                         .HasColumnName("id");
 
-                    b.Property<string>("Action")
-                        .IsRequired()
-                        .HasMaxLength(16)
-                        .HasColumnType("character varying(16)")
-                        .HasColumnName("action");
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
 
-                    b.Property<string>("CorrelationId")
+                    b.Property<Guid?>("CreatedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("created_by");
+
+                    b.Property<bool>("Enabled")
+                        .HasColumnType("boolean")
+                        .HasColumnName("enabled");
+
+                    b.Property<string>("Key")
+                        .IsRequired()
                         .HasMaxLength(64)
                         .HasColumnType("character varying(64)")
-                        .HasColumnName("correlation_id");
-
-                    b.Property<Guid?>("EntityId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("entity_id");
-
-                    b.Property<string>("EntityType")
-                        .IsRequired()
-                        .HasMaxLength(32)
-                        .HasColumnType("character varying(32)")
-                        .HasColumnName("entity_type");
-
-                    b.PrimitiveCollection<string[]>("Fields")
-                        .IsRequired()
-                        .HasColumnType("text[]")
-                        .HasColumnName("fields");
-
-                    b.Property<DateTimeOffset>("OccurredAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("occurred_at");
-
-                    b.Property<string>("Reason")
-                        .HasMaxLength(32)
-                        .HasColumnType("character varying(32)")
-                        .HasColumnName("reason");
+                        .HasColumnName("key");
 
                     b.Property<Guid>("TenantId")
                         .HasColumnType("uuid")
                         .HasColumnName("tenant_id");
 
-                    b.Property<Guid?>("UserId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("user_id");
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
 
-                    b.Property<string>("UserRole")
-                        .HasMaxLength(32)
-                        .HasColumnType("character varying(32)")
-                        .HasColumnName("user_role");
+                    b.Property<Guid?>("UpdatedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("updated_by");
+
+                    b.Property<uint>("Version")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
 
                     b.HasKey("Id")
-                        .HasName("pk_audit_entries");
+                        .HasName("pk_school_features");
 
-                    b.HasIndex("OccurredAt")
-                        .HasDatabaseName("ix_audit_entries_occurred_at");
+                    b.HasIndex("TenantId", "Key")
+                        .IsUnique()
+                        .HasDatabaseName("ix_school_features_tenant_id_key");
 
-                    b.HasIndex("TenantId", "EntityType", "OccurredAt")
-                        .HasDatabaseName("ix_audit_entries_tenant_id_entity_type_occurred_at");
-
-                    b.HasIndex("TenantId", "OccurredAt", "Id")
-                        .HasDatabaseName("ix_audit_entries_tenant_id_occurred_at_id");
-
-                    b.HasIndex("TenantId", "UserId", "OccurredAt")
-                        .HasDatabaseName("ix_audit_entries_tenant_id_user_id_occurred_at");
-
-                    b.ToTable("audit_entries", "audit");
+                    b.ToTable("school_features", "tenancy");
                 });
 
             modelBuilder.Entity("SporAkademi.Infrastructure.Outbox.OutboxMessage", b =>
@@ -2974,14 +2954,14 @@ namespace SporAkademi.Infrastructure.Migrations
                         .HasConstraintName("fk_student_guardians_students_tenant_id_student_id");
                 });
 
-            modelBuilder.Entity("SporAkademi.Infrastructure.Audit.AuditEntry", b =>
+            modelBuilder.Entity("SporAkademi.Domain.Tenancy.SchoolFeature", b =>
                 {
                     b.HasOne("SporAkademi.Domain.Tenancy.School", null)
                         .WithMany()
                         .HasForeignKey("TenantId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired()
-                        .HasConstraintName("fk_audit_entries_school_tenant_id");
+                        .HasConstraintName("fk_school_features_schools_tenant_id");
                 });
 
             modelBuilder.Entity("SporAkademi.Domain.Attendance.Session", b =>
