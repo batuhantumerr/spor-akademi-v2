@@ -79,3 +79,10 @@ targetRules = ["generic-api-key"]
 condition = "AND"
 paths = ['''^web/parent/src/auth/session\.test\.ts$''']
 regexes = ['''^uzun-bir-sifre-123$''']
+
+[[allowlists]]
+description = "Synthetic header value and wrong password sent by the telemetry and error-tracking scrubbing tests (P4-07)"
+targetRules = ["generic-api-key"]
+condition = "AND"
+paths = ['''^tests/SporAkademi\.IntegrationTests/Observability/(?:ErrorTrackingTests|TelemetryTests)\.cs$''']
+regexes = ['''^(?:header-secret-p407|Yanlis-Iz-Sifresi-41)$''']
