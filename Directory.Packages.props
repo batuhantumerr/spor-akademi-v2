@@ -45,7 +45,17 @@
     <PackageVersion Include="Serilog.Sinks.Seq" Version="9.1.0" />
     <PackageVersion Include="Serilog.Formatting.Compact" Version="3.0.0" />
   </ItemGroup>
+  <ItemGroup Label="Observability (P4-07, DEC-550)">
+    <!-- OpenTelemetry .NET (Apache-2.0): traces and metrics over OTLP; Npgsql's own ActivitySource is used, no extra package. -->
+    <PackageVersion Include="OpenTelemetry.Extensions.Hosting" Version="1.20.1" />
+    <PackageVersion Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" Version="1.20.1" />
+    <PackageVersion Include="OpenTelemetry.Instrumentation.AspNetCore" Version="1.20.2" />
+    <PackageVersion Include="OpenTelemetry.Instrumentation.Http" Version="1.20.2" />
+    <!-- Error tracking (MIT); off without Sentry:Dsn (DEC-556). -->
+    <PackageVersion Include="Sentry.AspNetCore" Version="6.12.1" />
+  </ItemGroup>
   <ItemGroup Label="Testing">
+    <PackageVersion Include="OpenTelemetry.Exporter.InMemory" Version="1.20.1" />
     <PackageVersion Include="xunit.v3.mtp-v2" Version="4.0.2" />
     <PackageVersion Include="Shouldly" Version="4.3.0" />
     <PackageVersion Include="NSubstitute" Version="6.2.0" />

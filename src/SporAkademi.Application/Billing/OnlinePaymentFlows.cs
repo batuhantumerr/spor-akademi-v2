@@ -2,6 +2,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using SporAkademi.Application.Abstractions.Data;
 using SporAkademi.Application.Abstractions.Messaging;
+using SporAkademi.Application.Abstractions.Observability;
 using SporAkademi.Domain.Billing;
 using SporAkademi.Domain.SharedKernel;
 
@@ -114,10 +115,20 @@ public sealed partial class OnlinePaymentNotifications(
         if (notification is null)
         {
             LogInvalidSignature(logger, provider.Name);
-            return Task.FromResult(new NotificationResult(NotificationOutcome.InvalidSignature));
+            return Task.FromResult(Counted(new NotificationResult(NotificationOutcome.InvalidSignature)));
         }
 
         return ReconcileAsync(provider, notification.Token, notification.EventKey, cancellationToken);
+    }
+
+    /// <summary>P4-07 (DEC-552): every answer to a notification is counted by outcome and resulting status (fixed values only).</summary>
+    private static NotificationResult Counted(NotificationResult result)
+    {
+        AppTelemetry.PaymentNotifications.Add(
+            1,
+            new KeyValuePair<string, object?>("outcome", result.Outcome.ToString()),
+            new KeyValuePair<string, object?>("status", result.Status?.ToString() ?? "none"));
+        return result;
     }
 
     /// <summary>The browser returned from the checkout with its token; anyone can send this, so it only triggers a status query.</summary>
@@ -126,7 +137,10 @@ public sealed partial class OnlinePaymentNotifications(
             ? ReconcileAsync(provider, token, eventKey: null, cancellationToken)
             : Task.FromResult(new NotificationResult(NotificationOutcome.Disabled));
 
-    private async Task<NotificationResult> ReconcileAsync(IPaymentProvider provider, string token, string? eventKey, CancellationToken cancellationToken)
+    private async Task<NotificationResult> ReconcileAsync(IPaymentProvider provider, string token, string? eventKey, CancellationToken cancellationToken) =>
+        Counted(await ReconcileOnceAsync(provider, token, eventKey, cancellationToken));
+
+    private async Task<NotificationResult> ReconcileOnceAsync(IPaymentProvider provider, string token, string? eventKey, CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(token) || token.Length > OnlinePayment.ProviderReferenceMaxLength)
         {

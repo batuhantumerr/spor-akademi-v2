@@ -1,8 +1,10 @@
+using System.Diagnostics;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using SporAkademi.Application.Abstractions.Observability;
 using SporAkademi.Application.Abstractions.Outbox;
 using SporAkademi.Infrastructure.Persistence;
 
@@ -82,8 +84,16 @@ internal sealed partial class OutboxProcessor(
         return deleted;
     }
 
+    /// <summary>
+    /// One span per delivery (P4-07, DEC-551): the handler's database and HTTP calls are its children, so a slow or failing
+    /// delivery can be followed end to end; its attributes are the message type and the attempt, never the payload.
+    /// </summary>
     private async Task DeliverAsync(OutboxMessage message, CancellationToken cancellationToken)
     {
+        using var activity = AppTelemetry.StartActivity("outbox.deliver");
+        activity?.SetTag("spor_akademi.outbox.message_type", MessageTypeLabel(message));
+        activity?.SetTag("spor_akademi.outbox.attempt", message.Attempts + 1);
+
         if (!types.TryGet(message.Type, out var type))
         {
             // E.g. written by a newer version during a rolling deploy: retried, then dead-lettered.
@@ -124,6 +134,7 @@ internal sealed partial class OutboxProcessor(
             }
 
             message.MarkProcessed(clock.GetUtcNow());
+            AppTelemetry.OutboxMessages.Add(1, new("result", "delivered"), new("message_type", type.Name));
             LogDelivered(logger, message.Id, message.Type, context.Attempt);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
@@ -156,11 +167,18 @@ internal sealed partial class OutboxProcessor(
         }
     }
 
+    /// <summary>A registered type's name, otherwise <c>unknown</c>: a stored type name is not trusted as a metric label.</summary>
+    private string MessageTypeLabel(OutboxMessage message) => types.TryGet(message.Type, out var type) ? type.Name : "unknown";
+
     private void Fail(OutboxMessage message, string error)
     {
         var now = clock.GetUtcNow();
         var delay = OutboxRetryPolicy.Delay(message.Attempts + 1, Options.BaseRetryDelay, Options.MaxRetryDelay, Random.Shared.NextDouble());
         message.RecordFailure(error, now, Options.MaxAttempts, delay);
+        var result = message.DeadLetteredAt is null ? "retried" : "dead_lettered";
+        AppTelemetry.OutboxMessages.Add(1, new("result", result), new("message_type", MessageTypeLabel(message)));
+        // The error is a code or an exception type, never an exception message.
+        Activity.Current?.SetStatus(ActivityStatusCode.Error, error);
 
         if (message.DeadLetteredAt is not null)
         {

@@ -89,6 +89,7 @@ Aşağıdaki metin karar anındaki hâliyle kayıt olarak bırakıldı.
 - **CSP `img-src` (güvenlik listesi, Fikirler 12).** CSP gelince fotoğraf küçük resmi doğrudan imzalı URL'den yüklendiği için depo origin'i `img-src`'ye eklenmeli. CSP ve güvenlik başlıkları (NFR-SEC-13) ile HTTPS/HSTS (NFR-SEC-02) de Deploy bloğu veya Faz 4.
 - **Production'da Valkey (DEC-310, DEC-316).** Yerelde isteğe bağlı; production'da L2 olarak çalıştırılıp çalıştırılmayacağı (yoksa sadece bellek) ve parolası Deploy bloğunda karara bağlanır.
 - **SignalR hub'ı Caddy'de (P3-08, DEC-399, DEC-402).** `/hubs/*` API'ye `reverse_proxy` ile yönlendirilmeli (WebSocket upgrade'i Caddy kendiliğinden taşır; nginx imajları `/hubs`'a `404` döner). Caddy erişim logunda sorgu dizesindeki `access_token` silinmeli (`log { format filter { request>uri query { delete access_token } } }`), çünkü tarayıcı WebSocket'i token'ı orada taşır. Birden çok API instance'ı çalışacaksa Valkey backplane için `ConnectionStrings__Cache` verilmeli; kullanıcı başına bağlantı sınırı instance başınadır (DEC-400).
+- **Production yedeği (P4-09, DEC-570 – DEC-577, [geri-yukleme-tatbikati.md](geri-yukleme-tatbikati.md) bölüm 5).** Betikler hazır ve tatbikatı yapıldı. Bağlanması gerekenler: günlük `backup-logical.sh` ve `backup-base.sh` zamanlayıcısı; `BACKUP_POST_HOOK` ile age şifreleme ve sunucu dışına (R2) gönderme; 30 gün saklama; WAL arşivi (`archive_timeout=300`) ve arşivin şifreli olarak en geç 10 dakikada bir sunucu dışına kopyalanması (15 dk RPO); iki yedek rolünün kurulması (`create-backup-role.sql`, parola rotasyonu da bununla), parolalarının gizli anahtar deposuna konması ve `pg_hba.conf`'ta `trust`'sız, role özel satırlar; deploy workflow'unda migration öncesi yedek; aylık production geri yükleme tatbikatı. pgBackRest (MIT) bu betiklerin yerine seçilebilir.
 - **Canlı ödeme (DEC-345).** iyzico canlı adresi şu an uygulamayı başlatmıyor; canlı ödeme Deploy bloğu ve sahip onayı ister.
 
 ## 4. Paketler ve lisanslar
@@ -444,7 +445,7 @@ Soru 14'ün Faz 3 adımı. Sahip kararları agent'a bıraktı (futbol okulu yön
    - *Yönetici:* bir okul kullanıcısı artık veritabanı düzeyinde de başka okulun kullanıcılarını göremez. Girişte bir değişiklik yok.
    - *Yazılımcı:* kimlik akışlarını fonksiyonlara taşımak giriş, refresh, şifre bağlantıları ve Platform Admin uçlarını yeniden yazmak demekti. Platform bayrağı okul tablolarını açmıyor ve okulsuz okul kullanıcısına hiç verilmiyor. Öneri: böyle kalsın.
 2. **Migrator da RLS'ye tabi, kimsede `BYPASSRLS` yok (DEC-522, DEC-528).** Migration'lar bakım anahtarını kendiliğinden açar, veri migration'ları bütün satırları görür.
-   - *Yazılımcı:* yedek (`pg_dump`) artık `--enable-row-security` ve bakım anahtarı ya da `BYPASSRLS`'li ayrı bir yedek rolü istiyor. Öneri: P4-09 tatbikatında ve Deploy bloğunda bu yolla alınsın; yedek rolü kararı sahibin.
+   - *Yazılımcı:* yedek (`pg_dump`) DEC-571'deki ayrı, salt okunur `spor_akademi_backup_dump` rolüyle (`BYPASSRLS` + `pg_read_all_data`, varsayılan `row_security=off`) alınır; P4-09 tatbikatı bunu kanıtlıyor. `--enable-row-security` yolu seçilmedi: bakım ayarı unutulduğunda hata vermeden satırsız yedek üretiyor (tatbikatta denendi) ve yazma yetkili sahip rolünün parolasını yedek sunucusuna koyuyor.
 3. **Bağlantı açılışı başına bir ek gidiş-dönüş (DEC-524).** Ayar her bağlantı açılışında yazılıyor. Politika ifadesi index kullanıyor (testli).
    - *Yazılımcı:* maliyet küçük ama ölçülmedi. Öneri: k6 maddesinde (NFR-PRF-01/02) ölçülsün, gerekirse ayar komutla birleştirilsin.
 4. **Tehdit modeli (DEC-525).** RLS uygulama hatalarına karşı ikinci katmandır. Uygulama rolüyle keyfi SQL çalıştırabilen biri okul ayarını da değiştirebilir. Öneri: kabul; proje dokümanı 5.4 ve Ek C'ye sahip onayından sonra işlensin.
@@ -473,3 +474,43 @@ Soru 14'ün Faz 3 adımı. Sahip kararları agent'a bıraktı (futbol okulu yön
 5. **Veri konumu: ADR-0014 (DEC-544, karar sahipte).** Öneri Türkiye'de barındırma (veritabanı, belgeler, yedekler). AB seçilirse standart sözleşme ve 5 iş günü içinde Kurul'a bildirim gerekir. Deploy bloğundan önce karar.
 6. **Para hareketi sürerken silme yok (DEC-546).** Bitmemiş online ödeme veya iade varken silme `Student.OpenPaymentActivity` ile reddedilir; yönetici sonucu bekler (mutabakat işi açık denemeleri süre sonunda kapatır). Öneri: kabul.
 7. **Aydınlatma metni tek kaynaktan (DEC-543).** HTML sayfaları md'den betikle üretilir, CI farkı yakalar. Metin artık ödeme iptal/iade açıklamalarının serbest metin olduğunu ve silinmediğini yazıyor (DEC-367); hukuki teyitte bu cümleye bakılmalı.
+
+### P4-07 OpenTelemetry ve hata takibi (DEC-550 – DEC-557)
+
+Kararlar `Proposed (agent, 2026-11-13)`. Sahibin bakması gerekenler:
+
+1. **Yerel yığın Jaeger + Prometheus + Perses, `grafana/otel-lgtm` değil (DEC-554).**
+   - *Yazılımcı:* LGTM tek konteyner ve daha tanıdık bir arayüz sunardı. Ama Grafana, Loki ve Tempo AGPL-3.0; repo AGPL'yi yerelde de kullanmıyor (DEC-320). Seçilen üç imaj Apache-2.0. Uygulama yalnız OTLP konuştuğu için backend değişirse kod değişmez.
+   - *Yönetici:* production'daki gözlem servisi (yönetilen bir OTLP servisi ya da kendi kurulumu) ve maliyeti Deploy bloğunda seçilir.
+2. **Alarm eşikleri (DEC-555).** 5xx > %2 (5 dk), p95 > 500 ms (10 dk), dead-letter > 0, dakikada 30'dan fazla başarısız giriş vb.
+   - *Yönetici:* eşikler küçük bir okul trafiğine göre seçildi; gece tek bir hata kimseyi uyandırmaz (trafik koşulu var). Bildirim kanalı ve kimin haber alacağı Deploy bloğunda belirlenir.
+   - *Yazılımcı:* p95 eşiği P4-08'in yük testi ölçümünden sonra route bazında sıkılaştırılabilir.
+3. **Sentry yalnız sunucu tarafında, DSN olmadan kapalı (DEC-556, DEC-557).**
+   - *Yönetici:* Sentry'ye giden olayda kişisel veri yok: exception mesajı, istek gövdesi, header, cookie, query ve kullanıcı gönderilmez. SaaS seçilirse AB veri bölgesi ve KVKK yurt dışı aktarım koşulu Deploy bloğunda değerlendirilir.
+   - *Yazılımcı:* tarayıcı tarafı (Angular/React) eklenmedi. URL'deki token'lar ve session replay KVKK açısından ayrı karar ister; öneri DEC-557'de.
+4. **Metriklerde okul (tenant) etiketi yok (DEC-552).**
+   - *Yönetici:* "hangi okulda hata var" sorusu metrikten değil, trace ve loglardan cevaplanır; loglarda tenant ID zaten var.
+   - *Yazılımcı:* okul sayısı arttıkça seri sayısı artmaz. Metrik deposu okul bazında veri tutmaz.
+5. **Dead-letter'ı yeniden kuyruğa alma aracı yok.** Alarm geliyor, ama şimdilik müdahale SQL ile yapılıyor (`docs/gozlemlenebilirlik.md`). Faz 4 içinde küçük bir Platform Admin uç noktası adayı.
+
+**Yeni paketler ve imajlar:**
+
+| Paket / imaj | Tür | Neden | Lisans | Not |
+| --- | --- | --- | --- | --- |
+| `OpenTelemetry.Extensions.Hosting` 1.20.1 (→ `OpenTelemetry`, `OpenTelemetry.Api`, `OpenTelemetry.Api.ProviderBuilderExtensions`) | NuGet | Trace ve metrik SDK'sı (DEC-550) | Apache-2.0 | 1.21.0 cooldown'da (2026-11-11) |
+| `OpenTelemetry.Exporter.OpenTelemetryProtocol` 1.20.1 | NuGet | OTLP exporter | Apache-2.0 | — |
+| `OpenTelemetry.Instrumentation.AspNetCore` 1.20.2, `OpenTelemetry.Instrumentation.Http` 1.20.2 | NuGet | Gelen istek ve HttpClient span'leri | Apache-2.0 | EF Core ve Hangfire instrumentation beta olduğu için eklenmedi |
+| `OpenTelemetry.Exporter.InMemory` 1.20.1 | NuGet (test) | Telemetri testleri | Apache-2.0 | — |
+| `Sentry.AspNetCore` 6.12.1 (→ `Sentry`, `Sentry.Extensions.Logging`) | NuGet | Sunucu tarafı hata takibi (DEC-556) | MIT | 6.13.0 ve 7.0.0 cooldown'da |
+| `jaegertracing/jaeger:2.23.0` | imaj | `observability` profili: OTLP alıcısı, trace arayüzü (DEC-554) | Apache-2.0 | Tag + digest |
+| `prom/prometheus:v3.16.0` | imaj | `observability` profili: metrikler ve alarm kuralları | Apache-2.0 | Tag + digest |
+| `persesdev/perses:v0.55.1` | imaj | `observability` profili: dashboard'lar | Apache-2.0 | Tag + digest |
+### P4-09 Yedekten geri yükleme tatbikatı (DEC-570 – DEC-577)
+
+1. **Dump rolünde `BYPASSRLS` (DEC-571, DEC-522'ye istisna).** RLS'li şemada migrator ile alınan yedek ya hata veriyor ya da bakım anahtarı unutulursa sessizce satırsız çıkıyor. Bu yüzden iki ayrı yedek rolü kuruldu: yalnız okuyabilen dump rolü (`BYPASSRLS`, `pg_read_all_data`) ve yalnız replication yapabilen taban yedek rolü (`REPLICATION`).
+   - *Yönetici:* yedek her okulun bütün verisini içerir. Yedek parolası sızarsa okunabilir, ama hiçbir şey değiştirilemez.
+   - *Yazılımcı:* alternatif, migrator'ı `app.maintenance=on` ile kullanmaktı. Bu, yazma yetkili şema sahibinin parolasını yedek sunucusuna koyar ve tek bir ayar unutulursa boş yedek üretir. Öneri: ayrı rol kalsın.
+2. **RPO ayarı (DEC-573); NFR-REL-04 tasarlandı, Deploy'da tamamlanır.** `archive_timeout=300`, arşivde en fazla 5 dakikalık boşluk bırakır. 15 dakikalık hedef, arşivin sunucu dışına en geç 10 dakikada bir kopyalanmasına bağlı (Deploy bloğu).
+3. **Tatbikat takvimi (DEC-576, DEC-577).** CI'da her hafta, zorunlu olmayan `restore-drill` workflow'u çalışıyor. Faz geçişlerinde elle tatbikat yapılıyor; Deploy'dan sonra ayda bir production yedeğiyle (sahip). Karar: workflow ruleset'e eklensin mi? Öneri: hayır; haftalık kırmızı sonuç incelenir, PR'ları bekletmez.
+4. **Ölçüm (DEC-577, sentetik veri, tek makine; production süresi değil).** 393 MB'lık RLS'li veritabanı felaketten sonra tam yedekle 19,6 sn'de, PITR ile 19,5 sn'de geri geldi ve kaynakla birebir eşleşti. RTO'yu insan ve altyapı adımları belirliyor; runbook bütçesi yaklaşık 2–2,5 saat, hedef 4 saat.
+5. **Not:** P4-04 (#135) bu PR açıldığında main'de değildi. Tatbikat, #135 yerelde birleştirilerek RLS'li şemada da çalıştırıldı (#135'in güncel hâlinde 27 tabloda `FORCE`, 54 politika korunuyor). #135 merge edildikten sonra CI'daki `restore-drill` aynı şemada tekrar çalışacak.

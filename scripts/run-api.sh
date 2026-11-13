@@ -32,6 +32,15 @@ if (cd "$REPO_ROOT" && docker compose --profile mail ps --status running --servi
 else
   echo "run-api: Mailpit not running (docker compose --profile mail up -d --wait); e-mails are only logged by template name"
 fi
+# Optional (DEC-554): traces and metrics go over OTLP to the local Jaeger when the compose "observability" profile is
+# running (dashboards in Perses, alert rules in Prometheus); otherwise nothing is recorded or exported.
+if (cd "$REPO_ROOT" && docker compose --profile observability ps --status running --services 2>/dev/null | grep -qx jaeger); then
+  export OpenTelemetry__Otlp__Endpoint="http://127.0.0.1:${OTLP_GRPC_HOST_PORT:-54317}"
+  export OpenTelemetry__Otlp__Protocol=grpc
+  echo "run-api: telemetry goes to Jaeger (traces http://127.0.0.1:${JAEGER_UI_HOST_PORT:-56686}, dashboards http://127.0.0.1:${PERSES_HOST_PORT:-58080}, alerts http://127.0.0.1:${PROMETHEUS_HOST_PORT:-57090}/alerts)"
+else
+  echo "run-api: observability profile not running (docker compose --profile observability up -d --wait); telemetry off"
+fi
 export ASPNETCORE_ENVIRONMENT="${ASPNETCORE_ENVIRONMENT:-Development}"
 export ASPNETCORE_URLS="${ASPNETCORE_URLS:-http://127.0.0.1:5080}"
 export Seq__ServerUrl="http://127.0.0.1:${SEQ_HOST_PORT:-5341}"

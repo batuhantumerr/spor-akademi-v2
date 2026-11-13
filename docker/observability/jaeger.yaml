@@ -1,0 +1,54 @@
+# Local observability (P4-07, DEC-554): Jaeger v2 (Apache-2.0) is the single OTLP endpoint of the API.
+# Traces are kept in memory (lost on restart) and shown in Jaeger's UI; metrics are passed on to Prometheus through
+# Jaeger's built-in Prometheus exporter (scraped at jaeger:8889). Local development only: nothing here is a production setup.
+service:
+  extensions: [jaeger_storage, jaeger_query, healthcheckv2]
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [batch]
+      exporters: [jaeger_storage_exporter]
+    metrics:
+      receivers: [otlp]
+      processors: [batch]
+      exporters: [prometheus]
+  telemetry:
+    resource:
+      service.name: jaeger
+    metrics:
+      level: none
+    logs:
+      level: warn
+
+extensions:
+  healthcheckv2:
+    use_v2: true
+    http:
+      endpoint: 0.0.0.0:13133
+  jaeger_query:
+    storage:
+      traces: memstore
+  jaeger_storage:
+    backends:
+      memstore:
+        memory:
+          max_traces: 50000
+
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+
+processors:
+  batch: {}
+
+exporters:
+  jaeger_storage_exporter:
+    trace_storage: memstore
+  prometheus:
+    endpoint: 0.0.0.0:8889
+    # Series of an API that stopped are dropped after 5 minutes, so "no data" alerts can fire.
+    metric_expiration: 5m

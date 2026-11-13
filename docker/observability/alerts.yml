@@ -1,0 +1,111 @@
+# Alert rules (P4-07, DEC-555). Thresholds and their reasons are in docs/karar-gunlugu-v2.md (DEC-555) and
+# docs/gozlemlenebilirlik.md. Locally they are evaluated by Prometheus and shown at /alerts (no Alertmanager, nobody is
+# notified); who is notified and how in production is decided in the Deploy block. Every series is for all schools together:
+# metrics carry no tenant label.
+groups:
+  - name: spor-akademi-api
+    rules:
+      - alert: ApiHighErrorRate
+        expr: |
+          (
+            sum(rate(http_server_request_duration_seconds_count{job="spor-akademi-api", http_response_status_code=~"5.."}[5m]))
+            /
+            sum(rate(http_server_request_duration_seconds_count{job="spor-akademi-api"}[5m]))
+          ) > 0.02
+          and sum(rate(http_server_request_duration_seconds_count{job="spor-akademi-api"}[5m])) > 0.05
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: More than 2% of API requests fail with a 5xx for 5 minutes.
+          description: Check Sentry for the exception type and Jaeger for the failing route's traces.
+
+      - alert: ApiSlowP95
+        expr: |
+          histogram_quantile(0.95,
+            sum by (le) (rate(http_server_request_duration_seconds_bucket{job="spor-akademi-api", http_route!="", http_route!~"/hubs/.*|/jobs/.*"}[5m]))
+          ) > 0.5
+          and sum(rate(http_server_request_duration_seconds_count{job="spor-akademi-api"}[5m])) > 0.05
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: The API's p95 latency is above 500 ms for 10 minutes (budget NFR-PRF-01, read 300 ms, write 500 ms).
+          # Excluded: SignalR (/hubs/..., long polling waits by design), the Hangfire panel (/jobs/{**path}) and requests
+          # matching no route (http_route is empty: 404/405, answered without work).
+          description: The dashboard's per-route p95 shows which route; Jaeger shows its slowest traces.
+
+      - alert: ApiNotReady
+        expr: min(spor_akademi_health_status{job="spor-akademi-api", check="overall"}) < 2
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "/health/ready has been Degraded or Unhealthy for 5 minutes."
+          description: "spor_akademi_health_status by check names the failing check (database, storage, outbox, jobs, billing-close)."
+
+      - alert: ApiDatabaseUnhealthy
+        expr: min(spor_akademi_health_status{job="spor-akademi-api", check="database"}) == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: The API cannot reach the database for 2 minutes.
+
+      - alert: ApiMetricsMissing
+        expr: absent(spor_akademi_health_status{job="spor-akademi-api", check="overall"})
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: No health metrics from the API for 10 minutes (the API is down or cannot export).
+          description: The external uptime check on /health/ready (NFR-OBS-03) is the primary down alarm; this is a backup.
+
+  - name: spor-akademi-outbox
+    rules:
+      - alert: OutboxDeadLetters
+        expr: max(spor_akademi_outbox_dead_lettered{job="spor-akademi-api"}) > 0
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: Outbox messages are dead-lettered; their side effects (e-mail, notification, payment follow-up) did not happen.
+          description: The messages stay in outbox.messages with their last error; fix the cause, then requeue them (runbook in docs/gozlemlenebilirlik.md).
+
+      - alert: OutboxBacklog
+        expr: max(spor_akademi_outbox_overdue_seconds{job="spor-akademi-api"}) > 300
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: A due outbox message has waited more than 5 minutes; nothing is delivering the outbox.
+          description: Check the job server (Hangfire panel /jobs) and the outbox health check.
+
+  - name: spor-akademi-security
+    rules:
+      - alert: LoginFailureSpike
+        expr: sum(rate(spor_akademi_auth_login_failures_total{job="spor-akademi-api"}[5m])) * 60 > 30
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: More than 30 failed logins per minute for 5 minutes (brute force or credential stuffing).
+          description: The reason label shows whether accounts are being locked (Auth.AccountLocked) or passwords guessed.
+
+      - alert: RateLimitRejections
+        expr: sum(rate(aspnetcore_rate_limiting_requests_total{job="spor-akademi-api", aspnetcore_rate_limiting_result!="acquired"}[5m])) * 60 > 60
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: More than 60 requests per minute are rejected by rate limiting for 10 minutes.
+
+  - name: spor-akademi-payments
+    rules:
+      - alert: PaymentProviderUnavailable
+        expr: sum(increase(spor_akademi_payments_online_notifications_total{job="spor-akademi-api", outcome="ProviderUnavailable"}[15m])) >= 3
+        labels:
+          severity: warning
+        annotations:
+          summary: The payment provider could not be queried for at least 3 notifications in 15 minutes.
+          description: Payments are reconciled later by the reconcile job; check the provider's status page.
