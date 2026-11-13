@@ -175,7 +175,9 @@ public sealed class FeatureFlagTests(DatabaseFixture database) : IntegrationTest
         (await CodeAsync(on)).ShouldNotBe("Resource.NotFound");
         off.StatusCode.ShouldBe(HttpStatusCode.NotFound);
         (await CodeAsync(off)).ShouldBe("Resource.NotFound");
-        (await CodeAsync(status)).ShouldBe("Resource.NotFound");
+        // The status of a payment already under way stays readable (DEC-584): here an unknown payment, not a hidden route.
+        status.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        (await CodeAsync(status)).ShouldNotBe("Resource.NotFound");
         (await EnabledAsync(await parent.GetAsync("/api/v1/features", Ct))).ShouldNotContain("parent-online-payments");
     }
 
@@ -222,6 +224,39 @@ public sealed class FeatureFlagTests(DatabaseFixture database) : IntegrationTest
         asA.ShouldBe(1);
         platform.ShouldBe(3);
         moved.ShouldBe(0);
+    }
+
+    [Fact]
+    public async Task A_school_scope_can_read_but_never_write_its_own_values()
+    {
+        await SetAsync(_schoolA, "reports", enabled: false);
+
+        Task<T> AsSchoolA<T>(Func<AppDbContext, Task<T>> work) =>
+            InScopeAsync(sp =>
+            {
+                sp.GetRequiredService<BackgroundTenantContext>().Enter(_schoolA.Value);
+                return work(sp.GetRequiredService<AppDbContext>());
+            });
+
+        var read = await AsSchoolA(db => db.Database
+            .SqlQuery<int>($"SELECT count(*)::int AS \"Value\" FROM tenancy.school_features").SingleAsync(Ct));
+        var updated = await AsSchoolA(db => db.Database
+            .ExecuteSqlAsync($"UPDATE tenancy.school_features SET enabled = true WHERE tenant_id = {_schoolA.Value}", Ct));
+        var deleted = await AsSchoolA(db => db.Database
+            .ExecuteSqlAsync($"DELETE FROM tenancy.school_features WHERE tenant_id = {_schoolA.Value}", Ct));
+        var inserted = await Should.ThrowAsync<Npgsql.PostgresException>(() => AsSchoolA(db => db.Database.ExecuteSqlAsync(
+            $"""
+            INSERT INTO tenancy.school_features (id, tenant_id, key, enabled, created_at, updated_at)
+            VALUES ({Guid.CreateVersion7()}, {_schoolA.Value}, 'parent-online-payments', false, now(), now())
+            """,
+            Ct)));
+
+        read.ShouldBe(1);
+        updated.ShouldBe(0);
+        deleted.ShouldBe(0);
+        inserted.SqlState.ShouldBe(Npgsql.PostgresErrorCodes.InsufficientPrivilege);
+        var rows = await AcrossSchoolsAsync(db => db.Set<SchoolFeature>().AsNoTracking().ToListAsync(Ct));
+        rows.ShouldHaveSingleItem().Enabled.ShouldBeFalse();
     }
 
     [Fact]

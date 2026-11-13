@@ -50,9 +50,9 @@ internal static class ParentEndpoints
             .Produces<ParentOnlinePaymentDto>()
             .ProducesProblems(400, 404, 409, 422)
             .RequireFeature(FeatureCatalog.ParentOnlinePayments);
-        // P4-10 (DEC-585): the dues list stays; only paying online is behind the "parent-online-payments" flag.
-        parent.MapGet("/online-payments/{id:guid}", GetOnlinePayment).Produces<ParentOnlinePaymentDto>().ProducesProblems(404)
-            .RequireFeature(FeatureCatalog.ParentOnlinePayments);
+        // P4-10 (DEC-584): only starting a payment is behind the "parent-online-payments" flag; the status of a payment
+        // already under way stays readable when the flag is switched off meanwhile.
+        parent.MapGet("/online-payments/{id:guid}", GetOnlinePayment).Produces<ParentOnlinePaymentDto>().ProducesProblems(404);
         return app;
     }
 

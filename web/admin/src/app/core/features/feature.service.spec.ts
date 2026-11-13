@@ -120,4 +120,21 @@ describe('FeatureService (P4-10)', () => {
     const result = await guard;
     expect(TestBed.inject(Router).serializeUrl(result as UrlTree)).toBe('/dashboard');
   });
+
+  it('lets the page open when the flags cannot be loaded, and tries again next time', async () => {
+    const features = TestBed.inject(FeatureService);
+    TestBed.tick();
+    const guard = TestBed.runInInjectionContext(() =>
+      featureGuard('reports')({} as never, {} as never),
+    ) as Promise<boolean | UrlTree>;
+    backend.expectOne('/api/v1/features').error(new ProgressEvent('error'));
+
+    expect(await guard).toBe(true);
+    expect(features.isEnabled('reports')).toBe(false);
+
+    const retry = features.load();
+    backend.expectOne('/api/v1/features').flush({ enabled: ['reports'] });
+    await retry;
+    expect(features.isEnabled('reports')).toBe(true);
+  });
 });

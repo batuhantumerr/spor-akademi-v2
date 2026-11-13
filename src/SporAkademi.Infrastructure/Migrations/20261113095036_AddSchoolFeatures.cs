@@ -48,11 +48,14 @@ namespace SporAkademi.Infrastructure.Migrations
 
             // P4-10 (DEC-581): a school reads its own values; the Platform Admin (platform scope) reads and writes all.
             migrationBuilder.Sql(RowLevelSecurity.ForPlatformTable("tenancy", "school_features"));
+            // Defense in depth: a school's scope reads its values but cannot write them; only the Platform Admin can.
+            migrationBuilder.Sql(RowLevelSecurity.PlatformWritesOnly("tenancy", "school_features"));
         }
 
         /// <inheritdoc />
         protected override void Down(MigrationBuilder migrationBuilder)
         {
+            migrationBuilder.Sql(RowLevelSecurity.DropPlatformWritesOnly("tenancy", "school_features"));
             migrationBuilder.Sql(RowLevelSecurity.Drop("tenancy", "school_features"));
 
             migrationBuilder.DropTable(

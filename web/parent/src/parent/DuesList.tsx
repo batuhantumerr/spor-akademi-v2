@@ -1,11 +1,12 @@
 import { CreditCard } from 'lucide-react';
+import { useQueryClient } from '@tanstack/react-query';
 import { useEffect, useRef, useState } from 'react';
-import { errorMessage } from '../api/errors';
+import { errorMessage, toApiError } from '../api/errors';
 import { formatMoney, formatPeriod } from '../format/format';
 import { format, text } from '../i18n/tr';
 import { owedTotal } from './summary';
 import { browser, checkoutTarget } from './checkout';
-import { startOnlinePayment, type Due } from './queries';
+import { parentKeys, startOnlinePayment, type Due } from './queries';
 
 const dueKey = (due: Due) => `${due.enrollmentId}|${due.period}`;
 
@@ -18,6 +19,7 @@ const dueKey = (due: Due) => `${due.enrollmentId}|${due.period}`;
 export function DuesList({ dues, canPay }: { dues: readonly Due[]; canPay?: boolean | undefined }) {
   // One Idempotency-Key per due and page visit: a retry after a lost answer reuses it and gets the same attempt.
   const keys = useRef(new Map<string, string>());
+  const queryClient = useQueryClient();
   const [busy, setBusy] = useState<string | null>(null);
 
   // Back from the checkout may restore this page from the back/forward cache with a button still busy.
@@ -56,8 +58,14 @@ export function DuesList({ dues, canPay }: { dues: readonly Due[]; canPay?: bool
       }
       browser.assign(target);
     } catch (failure) {
-      setError({ key, message: errorMessage(failure) });
+      // P4-10 (DEC-584): the school switched online payment off after this page loaded; the start answers like an
+      // unknown route. Say so, and reload the flags so the buttons give way to the note.
+      const hidden = toApiError(failure).code === 'Resource.NotFound';
+      setError({ key, message: hidden ? text.dues.payUnavailable : errorMessage(failure) });
       setBusy(null);
+      if (hidden) {
+        void queryClient.invalidateQueries({ queryKey: parentKeys.features() });
+      }
     }
   }
 

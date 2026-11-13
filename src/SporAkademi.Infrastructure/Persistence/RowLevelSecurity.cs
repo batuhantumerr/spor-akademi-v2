@@ -35,6 +35,30 @@ public static class RowLevelSecurity
     public static string ForOwnedTable(string schema, string table, string parentTable, string foreignKey) =>
         Policies(schema, table, $"EXISTS (SELECT 1 FROM {parentTable} parent WHERE parent.id = {table}.{foreignKey})");
 
+    /// <summary>
+    /// P4-10 (DEC-581): on a platform table that only work without a school may change (the feature flag values the
+    /// Platform Admin sets), restrictive policies refuse INSERT, UPDATE and DELETE in a school's scope, so a school user
+    /// can still read its own rows but never write them, even if the application tried. The owner's maintenance switch
+    /// stays open for data migrations. Restrictive policies are ANDed with <c>tenant_isolation</c>.
+    /// </summary>
+    public static string PlatformWritesOnly(string schema, string table)
+    {
+        const string condition = "tenancy.is_platform_scope() OR tenancy.is_maintenance()";
+        return $"""
+            CREATE POLICY platform_insert ON {schema}.{table} AS RESTRICTIVE FOR INSERT WITH CHECK ({condition});
+            CREATE POLICY platform_update ON {schema}.{table} AS RESTRICTIVE FOR UPDATE USING ({condition}) WITH CHECK ({condition});
+            CREATE POLICY platform_delete ON {schema}.{table} AS RESTRICTIVE FOR DELETE USING ({condition});
+            """;
+    }
+
+    /// <summary>Reverts <see cref="PlatformWritesOnly"/>.</summary>
+    public static string DropPlatformWritesOnly(string schema, string table) =>
+        $"""
+        DROP POLICY IF EXISTS platform_insert ON {schema}.{table};
+        DROP POLICY IF EXISTS platform_update ON {schema}.{table};
+        DROP POLICY IF EXISTS platform_delete ON {schema}.{table};
+        """;
+
     /// <summary>Reverts <see cref="ForTenantTable"/>, <see cref="ForPlatformTable"/> or <see cref="ForOwnedTable"/>.</summary>
     public static string Drop(string schema, string table) =>
         $"""

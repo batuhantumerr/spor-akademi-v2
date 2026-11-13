@@ -239,6 +239,24 @@ describe('child detail', () => {
     expect(assign).not.toHaveBeenCalled();
   });
 
+  it('explains a payment refused because online payment was switched off meanwhile (P4-10)', async () => {
+    signIn();
+    const api = fakeApi({
+      ...childRoutes({ dues: [due()] }),
+      [PAY]: () => problem(404, 'Resource.NotFound'),
+    });
+    renderApp(`/cocuk/${CHILD_ID}`);
+    const pay = await screen.findByRole('button', { name: /aidatını online öde/ });
+    api.on('GET /api/v1/features', () => json({ enabled: ['reports'] }));
+
+    await userEvent.click(pay);
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(text.dues.payUnavailable);
+    expect(await screen.findByTestId('pay-unavailable')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /aidatını online öde/ })).not.toBeInTheDocument();
+    expect(api.callsTo('GET /api/v1/features').length).toBeGreaterThanOrEqual(2);
+  });
+
   it('hides online payment while the school has it switched off (P4-10)', async () => {
     signIn();
     const api = fakeApi(childRoutes({ dues: [due()], features: ['reports'] }));

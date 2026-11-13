@@ -75,13 +75,19 @@ export class FeatureService {
   }
 }
 
-/** Route guard: a disabled feature's page sends the user to their home page (the API hides it too). */
+/**
+ * Route guard: a disabled feature's page sends the user to their home page. If the flags could not be loaded (network
+ * error), the page is allowed and the API decides: a disabled feature's endpoints answer 404 anyway, and the next
+ * navigation tries the flags again.
+ */
 export function featureGuard(key: FeatureKey): CanActivateFn {
   return async () => {
     const features = inject(FeatureService);
     const auth = inject(AuthService);
     const router = inject(Router);
     await features.load();
-    return features.isEnabled(key) ? true : router.parseUrl(auth.homeFor(auth.role()));
+    return !features.loaded() || features.isEnabled(key)
+      ? true
+      : router.parseUrl(auth.homeFor(auth.role()));
   };
 }
