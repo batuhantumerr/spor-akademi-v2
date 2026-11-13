@@ -73,7 +73,7 @@ internal sealed class HybridTenantCache(HybridCache cache, ResilientDistributedC
 /// <summary>
 /// Lifetimes per area (DEC-314). The instance that saves a change drops its own L1 entries at once; other API
 /// instances keep a warm L1 entry until its L1 lifetime ends, so they see the change up to that late (lists 1 min,
-/// dashboard 30 s, reports 1 min, a school's time zone 10 min). The L2 lifetime bounds an invalidation lost during a Valkey outage
+/// dashboard 30 s, reports 1 min, feature flags 1 min, a school's time zone 10 min). The L2 lifetime bounds an invalidation lost during a Valkey outage
 /// (DEC-315), hence at most 30 min.
 /// </summary>
 internal static class CachePolicies
@@ -89,6 +89,9 @@ internal static class CachePolicies
         CacheArea.Dashboard => (TimeSpan.FromMinutes(1), TimeSpan.FromSeconds(30)),
         // DEC-410: reports are heavier to build and read less often; a write of the school still drops them at once.
         CacheArea.Reports => (TimeSpan.FromMinutes(5), TimeSpan.FromMinutes(1)),
+        // DEC-583: the gate of every flagged request reads it; the instance that saves a change drops it at once, other
+        // instances follow within the L1 lifetime.
+        CacheArea.Features => (TimeSpan.FromMinutes(30), TimeSpan.FromMinutes(1)),
         _ => throw new ArgumentOutOfRangeException(nameof(area), area, "Unknown cache area."),
     };
 

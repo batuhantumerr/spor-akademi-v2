@@ -1,6 +1,7 @@
 using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.Mvc;
 using SporAkademi.Api.Endpoints.Billing;
+using SporAkademi.Api.Endpoints.Tenancy;
 using SporAkademi.Api.Errors;
 using SporAkademi.Application.Abstractions;
 using SporAkademi.Application.Abstractions.Authentication;
@@ -12,6 +13,7 @@ using SporAkademi.Application.Enrollments;
 using SporAkademi.Application.Students;
 using SporAkademi.Domain.Billing;
 using SporAkademi.Domain.Students;
+using SporAkademi.Domain.Tenancy;
 
 namespace SporAkademi.Api.Endpoints.Parents;
 
@@ -46,8 +48,11 @@ internal static class ParentEndpoints
         parent.MapPost("/online-payments", StartOnlinePayment)
             .Produces<ParentOnlinePaymentDto>(StatusCodes.Status201Created)
             .Produces<ParentOnlinePaymentDto>()
-            .ProducesProblems(400, 404, 409, 422);
-        parent.MapGet("/online-payments/{id:guid}", GetOnlinePayment).Produces<ParentOnlinePaymentDto>().ProducesProblems(404);
+            .ProducesProblems(400, 404, 409, 422)
+            .RequireFeature(FeatureCatalog.ParentOnlinePayments);
+        // P4-10 (DEC-585): the dues list stays; only paying online is behind the "parent-online-payments" flag.
+        parent.MapGet("/online-payments/{id:guid}", GetOnlinePayment).Produces<ParentOnlinePaymentDto>().ProducesProblems(404)
+            .RequireFeature(FeatureCatalog.ParentOnlinePayments);
         return app;
     }
 

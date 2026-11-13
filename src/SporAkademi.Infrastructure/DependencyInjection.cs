@@ -86,6 +86,12 @@ public static class DependencyInjection
         services.AddSingleton<IPasswordHasher, AspNetPasswordHasher>();
         services.AddSingleton<IRefreshTokenFactory, RefreshTokenFactory>();
         services.AddScoped<ISchoolRepository, SchoolRepository>();
+        services.AddScoped<ISchoolFeatureRepository, SchoolFeatureRepository>();
+        services.AddSingleton<IFeatureDefaults, ConfiguredFeatureDefaults>();
+        services.AddOptions<FeatureOptions>()
+            .Bind(configuration.GetSection(FeatureOptions.Section))
+            .Validate(o => o.IsValid(), "Features:Defaults must name known feature flags with true or false.")
+            .ValidateOnStart();
         services.AddScoped<ICoachDirectory, CoachDirectory>();
         services.AddSingleton<PlatformAdminSeed>();
         services.AddHostedService(provider => provider.GetRequiredService<PlatformAdminSeed>());

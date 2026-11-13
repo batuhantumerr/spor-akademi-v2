@@ -35,8 +35,11 @@ public sealed class RowLevelSecurityTests(DatabaseFixture database) : IdentityTe
         ["identity.refresh_tokens"] = "identity.users",
     };
 
-    /// <summary>Platform tables (DEC-105, DEC-302): a school sees its own rows; work without a school sees them all.</summary>
-    private static readonly string[] PlatformTables = ["identity.users", "outbox.messages", "tenancy.schools"];
+    /// <summary>
+    /// Platform tables (DEC-105, DEC-302): a school sees its own rows; work without a school sees them all. The feature
+    /// flag values are written by the Platform Admin and read by their school (P4-10, DEC-581).
+    /// </summary>
+    private static readonly string[] PlatformTables = ["identity.users", "outbox.messages", "tenancy.schools", "tenancy.school_features"];
 
     private static CancellationToken Ct => TestContext.Current.CancellationToken;
 
