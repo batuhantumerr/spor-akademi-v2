@@ -1,0 +1,61 @@
+name: restore-drill
+
+# P4-09 (NFR-REL-04, DEC-576): the backup and restore drill (scripts/backup/drill.sh) once a week, by hand, and on
+# pull requests that change the backup scripts, the PostgreSQL image or init script, or the migrations. Not a
+# required check: it never lengthens the required jobs, and a red run is looked at, not merged around.
+on:
+  schedule:
+    - cron: "30 3 * * 1"
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - scripts/backup/**
+      - docker/postgres/**
+      - compose.yaml
+      - src/SporAkademi.Infrastructure/Migrations/**
+      - .github/workflows/restore-drill.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: restore-drill-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+  DOTNET_NOLOGO: "1"
+  DOTNET_CLI_UI_LANGUAGE: en
+
+jobs:
+  drill:
+    runs-on: ubuntu-24.04
+    # The drill itself takes about two minutes with the default filler; restore and build take most of the rest.
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Lint the backup scripts
+        run: shellcheck --severity=warning scripts/backup/*.sh
+      - uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6.1.0
+        with:
+          global-json-file: global.json
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.nuget/packages
+          key: nuget-drill-${{ runner.os }}-${{ hashFiles('**/packages.lock.json', '.config/dotnet-tools.json') }}
+      - name: Restore
+        run: |
+          dotnet tool restore
+          dotnet restore src/SporAkademi.DemoSeed/SporAkademi.DemoSeed.csproj --locked-mode
+      - name: Restore drill (full backup and point in time)
+        env:
+          DRILL_REPORT: ${{ runner.temp }}/restore-drill.md
+        run: bash scripts/backup/drill.sh
+      - name: Timings in the job summary
+        if: always()
+        run: |
+          if [ -f "$RUNNER_TEMP/restore-drill.md" ]; then
+            { echo "## Geri yükleme tatbikatı"; echo; cat "$RUNNER_TEMP/restore-drill.md"; } >>"$GITHUB_STEP_SUMMARY"
+          fi
