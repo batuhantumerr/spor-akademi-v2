@@ -5,6 +5,9 @@ name: spor-akademi-v2
 services:
   postgres:
     image: postgres:18.6-alpine@sha256:123b17998ccaf47e53b502e8c6a1e79afd8f579c6f3eec83c563da026f957395
+    # P4-08 (DEC-563): pg_stat_statements is loaded so the most frequent and slowest queries can be listed (the
+    # extension itself is created only in the load test database, by scripts/perf/run-k6.sh).
+    command: ["postgres", "-c", "shared_preload_libraries=pg_stat_statements", "-c", "pg_stat_statements.track=top"]
     environment:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
       SPOR_AKADEMI_DB: spor_akademi
@@ -162,6 +165,73 @@ services:
     depends_on:
       prometheus:
         condition: service_healthy
+
+  # Load test (P4-08, DEC-564, DEC-565): optional, only with `--profile scale` (scripts/perf/run-k6.sh starts it). Two API
+  # instances (Release image, docker/api/Dockerfile) on the load test database spor_akademi_perf, sharing the Valkey L2
+  # cache and SignalR backplane (`--profile cache`), behind Caddy (Apache-2.0) as the reverse proxy. Only here are the
+  # rate limits raised: one k6 process signs every account in from one address (DEC-561); the image defaults stay. The
+  # APIs trust X-Forwarded-For only from the proxy's fixed address (DEC-507). Ports listen on 127.0.0.1 only.
+  api-1: &perf-api
+    build:
+      context: .
+      dockerfile: docker/api/Dockerfile
+    image: spor-akademi-api:perf
+    profiles: ["scale"]
+    environment:
+      ASPNETCORE_ENVIRONMENT: LoadTest
+      ConnectionStrings__App: Host=postgres;Port=5432;Database=spor_akademi_perf;Username=spor_akademi_app;Password=${SPOR_AKADEMI_APP_PASSWORD:-};Maximum Pool Size=${PERF_DB_POOL_SIZE:-40}
+      ConnectionStrings__Cache: valkey:6379,password=${VALKEY_PASSWORD:-}
+      Jwt__SigningKey: ${JWT_SIGNING_KEY:-}
+      ForwardedHeaders__KnownProxies__0: 172.30.208.10
+      # scripts/perf/run-k6.sh --checks sets the production values (DEC-504, DEC-388) to observe the limits themselves.
+      RateLimiting__UserPermitsPerMinute: ${PERF_USER_PERMITS:-1000000}
+      RateLimiting__SchoolWritePermitsPerMinute: ${PERF_SCHOOL_WRITE_PERMITS:-1000000}
+      RateLimiting__AnonymousPermitsPerMinute: ${PERF_ANONYMOUS_PERMITS:-1000000}
+      RateLimiting__AuthPermitsPerMinute: ${PERF_AUTH_PERMITS:-1000000}
+      RateLimiting__ParentPermitsPerMinute: ${PERF_PARENT_PERMITS:-1000000}
+    networks: [default, perf]
+    ports:
+      - "127.0.0.1:${PERF_API_1_HOST_PORT:-58181}:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      valkey:
+        condition: service_healthy
+
+  api-2:
+    <<: *perf-api
+    ports:
+      - "127.0.0.1:${PERF_API_2_HOST_PORT:-58182}:8080"
+
+  proxy:
+    image: caddy:2.11.8-alpine@sha256:f6228111e5fafa1a5238258d0858e103f10599b8d1659a146e7726681a002bb9
+    profiles: ["scale"]
+    environment:
+      # The hub's load balancing: cookie affinity (DEC-565); round_robin shows why it is needed.
+      HUB_LB_POLICY: ${PERF_HUB_LB_POLICY:-cookie}
+    volumes:
+      - ./perf/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+    networks:
+      perf:
+        ipv4_address: 172.30.208.10
+    ports:
+      - "127.0.0.1:${PERF_PROXY_HOST_PORT:-58180}:8080"
+    depends_on: [api-1, api-2]
+
+  # k6 (AGPL-3.0, DEC-560): only run as a separate tool container, never linked into or shipped with the application.
+  k6:
+    image: grafana/k6:2.3.0@sha256:2dd4756ec6e14e62778916e1eb850108e4b499304c02df56760fa0bdb0fba0b8
+    profiles: ["k6"]
+    volumes:
+      - ./perf/k6:/perf
+    working_dir: /perf
+    networks: [perf]
+
+networks:
+  perf:
+    ipam:
+      config:
+        - subnet: 172.30.208.0/24
 
 volumes:
   postgres-data:

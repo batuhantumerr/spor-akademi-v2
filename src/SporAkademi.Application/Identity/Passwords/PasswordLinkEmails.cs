@@ -117,11 +117,37 @@ internal sealed class SendPasswordResetEmail(PasswordLinkMailer mailer) : IOutbo
     }
 }
 
+/// <summary>P4-03 (DEC-512): tells the owner that the password of their account changed. No link, token or password.</summary>
+internal sealed partial class SendPasswordChangedEmail(
+    IUserRepository users,
+    IEmailSender emailSender,
+    ILogger<SendPasswordChangedEmail> logger) : IOutboxMessageHandler<PasswordChangedMessage>
+{
+    public async Task Handle(PasswordChangedMessage message, OutboxMessageContext context, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(message);
+        ArgumentNullException.ThrowIfNull(context);
+        var user = await users.GetByIdAsync(UserId.From(message.UserId), cancellationToken);
+        if (user is null || user.Status != UserStatus.Active)
+        {
+            return;
+        }
+
+        var email = IdentityEmails.PasswordChanged(user);
+        await emailSender.SendAsync(email, cancellationToken);
+        LogSent(logger, email.Template, message.UserId, context.MessageId);
+    }
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "E-mail {Template} sent to user {UserId} (outbox message {MessageId})")]
+    private static partial void LogSent(ILogger logger, string template, Guid userId, Guid messageId);
+}
+
 /// <summary>The Turkish identity e-mails (DEC-350). The welcome e-mail never contains the temporary password (DEC-351).</summary>
 internal static class IdentityEmails
 {
     public const string WelcomeTemplate = "identity.welcome";
     public const string PasswordResetTemplate = "identity.password-reset";
+    public const string PasswordChangedTemplate = "identity.password-changed";
     public const string ParentInvitationTemplate = "identity.parent-invitation";
 
     /// <summary>P3-02 (DEC-383): no child's name and no password; only the school, the login and the link.</summary>
@@ -150,6 +176,14 @@ internal static class IdentityEmails
             .Paragraph("Bu e-postayı beklemiyorsanız okulunuzun yöneticisine haber verin.")
             .Build(WelcomeTemplate, user.Email.Value, "Spor Akademi hesabınız açıldı");
     }
+
+    /// <summary>P4-03 (DEC-512): says only that it happened, never the password and never a link an attacker could mimic.</summary>
+    public static EmailMessage PasswordChanged(User user) =>
+        new EmailBody($"Merhaba {user.FirstName} {user.LastName},")
+            .Paragraph("Spor Akademi hesabınızın şifresi değiştirildi. Bütün cihazlardaki oturumlarınız kapandı.")
+            .Paragraph("Bu değişikliği siz yaptıysanız bir şey yapmanız gerekmez.")
+            .Paragraph("Siz yapmadıysanız hesabınız başkasının eline geçmiş olabilir: okul yöneticinizle hemen iletişime geçin ve giriş sayfasındaki \"Şifremi unuttum\" ile şifrenizi yeniden belirleyin.")
+            .Build(PasswordChangedTemplate, user.Email.Value, "Spor Akademi şifreniz değiştirildi");
 
     public static EmailMessage PasswordReset(User user, Uri setPassword) =>
         new EmailBody($"Merhaba {user.FirstName} {user.LastName},")

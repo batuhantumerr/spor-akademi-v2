@@ -79,7 +79,11 @@ public sealed class SecurityHeadersTests(DatabaseFixture database) : Integration
     [Trait("Story", "P4-01")]
     public async Task Production_sends_hsts_over_https_only()
     {
-        using var production = Api.WithWebHostBuilder(builder => builder.UseEnvironment("Production"));
+        using var production = Api.WithWebHostBuilder(builder =>
+        {
+            builder.UseEnvironment("Production");
+            ApiFactory.UseProductionRateLimits(builder);
+        });
         using var client = production.CreateClient();
 
         using var https = new HttpRequestMessage(HttpMethod.Get, "https://api.example.test/health/live");
@@ -99,6 +103,7 @@ public sealed class SecurityHeadersTests(DatabaseFixture database) : Integration
         {
             builder.UseEnvironment("Production");
             RemoteAddress.Enable(builder);
+            ApiFactory.UseProductionRateLimits(builder);
             builder.UseSetting("ForwardedHeaders:KnownProxies:0", "10.0.0.5");
         });
         using var client = production.CreateClient();

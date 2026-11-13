@@ -2,6 +2,7 @@ using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.AspNetCore.SignalR.StackExchangeRedis;
 using Microsoft.Extensions.Options;
+using SporAkademi.Api.Security;
 using SporAkademi.Application.Abstractions.Realtime;
 using StackExchange.Redis;
 
@@ -55,7 +56,7 @@ internal static class RealtimeSetup
         services.AddRateLimiter(options => options.AddPolicy(RateLimitPolicy, context =>
             context.Request.Path.Value?.EndsWith("/negotiate", StringComparison.OrdinalIgnoreCase) == true
                 ? RateLimitPartition.GetFixedWindowLimiter(
-                    context.User.FindFirst("sub")?.Value ?? context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+                    context.User.FindFirst("sub")?.Value ?? ApiRateLimiting.ClientNetwork(context.Connection.RemoteIpAddress),
                     _ => new FixedWindowRateLimiterOptions { PermitLimit = NegotiationsPerMinute, Window = TimeSpan.FromMinutes(1), QueueLimit = 0 })
                 : RateLimitPartition.GetNoLimiter("transport")));
 

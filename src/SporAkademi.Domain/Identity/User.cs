@@ -24,7 +24,12 @@ public enum UserStatus
     Deactivated,
 }
 
-public sealed record PasswordChanged(UserId UserId) : IDomainEvent;
+/// <summary>
+/// The account's password changed. <paramref name="FirstPassword"/> is true when the user just chose their own first
+/// password (replacing a temporary one, or following a welcome or invitation link): that is not news worth an e-mail
+/// (P4-03, DEC-512).
+/// </summary>
+public sealed record PasswordChanged(UserId UserId, bool FirstPassword = false) : IDomainEvent;
 
 public sealed record UserDeactivated(UserId UserId, SchoolId? TenantId) : IDomainEvent;
 
@@ -418,12 +423,13 @@ public sealed class User : AggregateRoot<UserId>
             return Result.Failure<RefreshToken>(AuthErrors.AccountInactive);
         }
 
+        var first = MustChangePassword;
         PasswordHash = newPasswordHash;
         MustChangePassword = false;
         ClearFailedLogins();
         RevokeAllRefreshTokens(now);
         _passwordTokens.Clear();
-        Raise(new PasswordChanged(Id));
+        Raise(new PasswordChanged(Id, first));
         return Result.Success(StartSession(refreshTokenHash, now));
     }
 
@@ -474,13 +480,14 @@ public sealed class User : AggregateRoot<UserId>
             return Result.Failure(AuthErrors.ResetTokenInvalid);
         }
 
+        var first = token.Purpose != PasswordTokenPurpose.Reset;
         PasswordHash = newPasswordHash;
         MustChangePassword = false;
         ClearFailedLogins();
         LockoutEndsAt = null;
         RevokeAllRefreshTokens(now);
         _passwordTokens.Clear();
-        Raise(new PasswordChanged(Id));
+        Raise(new PasswordChanged(Id, first));
         return Result.Success();
     }
 
@@ -494,6 +501,7 @@ public sealed class User : AggregateRoot<UserId>
         LockoutEndsAt = null;
         RevokeAllRefreshTokens(now);
         _passwordTokens.Clear();
+        Raise(new PasswordChanged(Id));
     }
 
     /// <summary>Re-hashes the password with current parameters after a successful verification.</summary>

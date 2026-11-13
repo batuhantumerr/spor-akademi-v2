@@ -70,6 +70,8 @@ Kurallar `docker/observability/alerts.yml`'dedir, eşiklerin gerekçesi DEC-555'
 | `OutboxDeadLetters` | dead-letter > 0, 1 dk | warning |
 | `OutboxBacklog` | vadesi gelmiş mesaj > 5 dk bekliyor | warning |
 | `LoginFailureSpike` | başarısız giriş > 30/dk, 5 dk | warning |
+| `RefreshFailureSpike` | refresh `401` > 30/dk, 5 dk (süresi dolan oturum ya da tekrar kullanılan token; P4-03, DEC-513) | warning |
+| `AuthorizationFailureSpike` | `/api` `403` > 30/dk, 5 dk (rolün erişemediği yola deneme; P4-03, DEC-513) | warning |
 | `RateLimitRejections` | rate limit reddi > 60/dk, 10 dk | warning |
 | `PaymentProviderUnavailable` | 15 dk'da ≥ 3 bildirim sağlayıcıya sorulamadı | warning |
 

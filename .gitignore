@@ -28,3 +28,6 @@ Thumbs.db
 
 # Agent worktrees
 .claude/worktrees/
+
+# Load test output (P4-08): manifest of the seeded accounts and k6 results
+perf/k6/out/

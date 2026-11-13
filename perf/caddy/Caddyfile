@@ -1,0 +1,31 @@
+# P4-08 (NFR-SCL-01, DEC-564, DEC-565): the load test's reverse proxy in front of two API instances. Plain HTTP inside the
+# compose network (TLS is the Deploy block's Caddy). The API is round robin: consecutive requests of one client land on
+# different instances, so nothing may depend on the instance that served the previous one. The SignalR hub is the one
+# exception: negotiate and the WebSocket that follows must reach the same instance (the connection lives in its memory),
+# so the hub path gets cookie affinity (HUB_LB_POLICY, round_robin only to demonstrate the failure).
+{
+	admin off
+	auto_https off
+}
+
+:8080 {
+	# Clients' own X-Forwarded-* headers are replaced, never passed on (DEC-507).
+	handle /hubs/* {
+		reverse_proxy api-1:8080 api-2:8080 {
+			lb_policy {$HUB_LB_POLICY:cookie}
+			health_uri /health/live
+			health_interval 5s
+			header_down X-Served-By {http.reverse_proxy.upstream.hostport}
+		}
+	}
+
+	handle {
+		reverse_proxy api-1:8080 api-2:8080 {
+			lb_policy round_robin
+			health_uri /health/live
+			health_interval 5s
+			# Which instance answered: lets the checks see the spread (load test only).
+			header_down X-Served-By {http.reverse_proxy.upstream.hostport}
+		}
+	}
+}

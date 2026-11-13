@@ -330,7 +330,7 @@ internal sealed class GetStudentAttendanceHandler(
         // Records can only exist in groups the student was enrolled in, so the periods name every group.
         var groupIds = periods.Select(p => p.GroupId).Distinct().ToList();
         var groupInfos = await groups.GetManyAsync([.. groupIds.Select(g => g.Value)], cancellationToken);
-        var stored = await sessions.ListOfGroupsAsync(groupIds, from, to, cancellationToken);
+        var stored = await sessions.ListOfGroupsForStudentAsync(groupIds, query.StudentId, from, to, cancellationToken);
         var localNow = await tenancy.LocalNowAsync(currentUser.RequireTenant(), cancellationToken);
 
         var rows = new List<StudentSessionDto>();

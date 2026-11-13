@@ -515,6 +515,29 @@ Kararlar `Proposed (agent, 2026-11-13)`. Sahibin bakması gerekenler:
 4. **Ölçüm (DEC-577, sentetik veri, tek makine; production süresi değil).** 393 MB'lık RLS'li veritabanı felaketten sonra tam yedekle 19,6 sn'de, PITR ile 19,5 sn'de geri geldi ve kaynakla birebir eşleşti. RTO'yu insan ve altyapı adımları belirliyor; runbook bütçesi yaklaşık 2–2,5 saat, hedef 4 saat.
 5. **Not:** P4-04 (#135) bu PR açıldığında main'de değildi. Tatbikat, #135 yerelde birleştirilerek RLS'li şemada da çalıştırıldı (#135'in güncel hâlinde 27 tabloda `FORCE`, 54 politika korunuyor). #135 merge edildikten sonra CI'daki `restore-drill` aynı şemada tekrar çalışacak.
 
+### P4-08 Yük testi ve performans bütçesi (DEC-560 – DEC-569)
+
+1. **Bütçe tutuyor (`docs/performans.md`).** 300 eşzamanlı kullanıcı, 14 okul, 5 845 öğrenci: okuma p95 12,9 ms (hedef 300), yazma p95 72,5 ms (hedef 500), hata %0. İki API örneğiyle de aynı.
+   - *Yönetici:* yerel makinede, sentetik veriyle ölçüldü. Production donanımı ve ağı farklı olacak, ama pay çok geniş.
+   - *Yazılımcı:* kapasite sınırını bulan stres testi yapılmadı; Deploy sunucusunda yapılması önerilir.
+2. **k6 AGPL-3.0, yalnız ayrı konteyner olarak (DEC-560).** Uygulamaya bağlanmıyor ve dağıtılmıyor; repoda yalnız bizim senaryolarımız var. Karar: bu kullanım kabul mü?
+   - *Yönetici:* lisans yükümlülüğü değiştirilmiş k6'yı başkalarına sunmaya bağlı; biz yalnız aracı çalıştırıyoruz.
+   - *Yazılımcı:* alternatif Gatling (Apache-2.0, JVM). Gerekirse senaryolar taşınabilir; eşikler ve karışım `docs/performans.md`'de.
+3. **Rate limit'ler yalnız yük testi ortamında yükseltiliyor (DEC-561).** Giriş ve veli API'si limitleri artık yapılandırılabilir; varsayılanlar production değerleri (10 ve 60).
+4. **SignalR birden çok örnekte hub yakınlığı ister (DEC-565).** Deploy'da birden çok API örneği çalıştırılırsa Caddy'de `/hubs/*` için `lb_policy cookie` zorunlu. Round robin'de canlı bildirim bağlantılarının hepsi kuruluşta başarısız oldu.
+   - *Yazılımcı:* alternatif, istemcilerde `skipNegotiation` + yalnız WebSocket. Long polling yedeği kaybolur, öneri proxy yakınlığı.
+5. **RLS'nin bedeli ölçüldü, değişiklik yok (DEC-567).** İstek başına ~1 ms; en büyük kalem bağlantı açılışı başına `set_config`. Üç optimizasyon değerlendirildi, biri güvenlik nedeniyle reddedildi. Karar: veritabanı ayrı sunucuya taşınınca yeniden ölçülsün.
+6. **Rate limit'te bulunan hata düzeltildi (DEC-569).** Aynı istemci adresinin iki yazımı (IPv4-mapped) ve IPv6 adres değiştirme, giriş sınırını aşmaya izin veriyordu. Bu yalnız iki örnek testinde göründü.
+7. **CI'da elle tetiklenen `load-smoke` workflow'u (DEC-568).** Zorunlu değil, PR'da çalışmaz. Karar: ruleset'e eklenmesin (paylaşımlı runner'da p95 gürültülü).
+8. **`pg_stat_statements` compose PostgreSQL'inde yüklü (DEC-563).** Yerel konteyner bir kez yeniden başlar; uygulama rolüne yetki verilmedi. Production'da da açılması Deploy bloğu için önerilir.
+
+**Yeni imajlar (yalnız yerel/CI aracı, uygulama paketi yok):**
+
+| İmaj | Neden | Lisans | Not |
+| --- | --- | --- | --- |
+| `grafana/k6:2.3.0` | Yük testi (DEC-560) | AGPL-3.0 | Ayrı konteyner, `k6` profili; tag + digest. 2.4.0 cooldown'da |
+| `caddy:2.11.8-alpine` | Yük testinin reverse proxy'si, `scale` profili (DEC-564) | Apache-2.0 | Tag + digest; Deploy bloğundaki Caddy ile aynı ürün |
+
 ### P4-10 Feature flag'ler (DEC-580 – DEC-585)
 
 1. **Paket yok, küçük kendi servisimiz (DEC-580).** `Microsoft.FeatureManagement` değerlendirildi, eklenmedi. Okul başına veritabanı değeri için pakette de özel provider ve ayrı bir 404 kapısı yazmak gerekiyordu.
@@ -532,3 +555,19 @@ Kararlar `Proposed (agent, 2026-11-13)`. Sahibin bakması gerekenler:
    - *Yönetici:* önceden `e2e` zorunlu olduğu için denetim de kapıdaydı; ruleset'e eklenince kapsam aynı kalır, `e2e` yaklaşık yarıya iner (10,5–13 dk yerine ~6 dk 20 sn; `a11y` paralel ~9 dk, PR #140 CI koşusu).
 2. **Çıkışla yarışan eski token'ın yeniden denemesi (DEC-594).** Çıkış her iki sırada da kazanıyor (DEC-593). Ancak çıkışla yarışıp `409` alan sekmenin tek yeniden denemesi, belgelenmiş yeniden kullanım kuralı gereği kullanıcının diğer cihazlarındaki oturumları da kapatıyor. Davranış değişmedi.
    - *Yazılımcı:* yalnız çıkışla kapanan ailede alarmı kapatmak, iptal nedenini saklamayı (migration) gerektirir. Onay ya da "değiştirelim" kararı.
+
+### P4-03 OWASP Top 10 ve ASVS L2 incelemesi (DEC-510 – DEC-518)
+
+Sonuç: **yüksek bulgu yok.** Ayrıntı ve kanıt `guvenlik-kontrol-listesi.md` Bölüm 4'te.
+
+1. **MFA ne zaman (DEC-517, soru 33).** Yönetici hesapları (özellikle tüm okulları gören Platform Admin) yalnız şifreyle korunuyor; ASVS L2 yönetici MFA ister. Öneri: gerçek veriden önce en az Platform Admin için TOTP, Faz 5'in ilk işi.
+   - *Yönetici:* bir yöneticinin şifresi sızarsa saldırgan bütün okulların kayıtlarına girer; MFA bunu tek başına kapatır. Yönetici için giriş bir adım uzar.
+   - *Yazılımcı:* TOTP (RFC 6238, yeni paket gerektirebilir), kurtarma kodları ve "telefon kayboldu" akışı tasarım ister; küçük bir iş değil. Onay ya da zamanlama kararı.
+2. **Oturum süresi (DEC-517).** ASVS L2 yeniden girişi 12 saatte (ya da 30 dk hareketsizlikte) ister; bizde 7 gün kayan / 30 gün mutlak. Veli uygulaması (mobil) için sık giriş istenmiyor.
+   - *Yönetici:* çalınan bir cihaz bir hafta açık kalabilir. Yönetici rolleri için süreyi kısaltmak (ör. 12 saat) veli deneyimini etkilemez.
+   - *Yazılımcı:* rol bazlı oturum süresi küçük bir değişiklik. Onay ya da "kısaltalım" kararı.
+3. **Şifre değişikliği e-postası (DEC-512, yeni davranış).** Şifre değişince, sıfırlanınca ya da yönetici geçici şifre verince hesabın e-postasına bildirim gider. İlk şifre seçimi (karşılama ya da davet) bildirim üretmez. *Yönetici:* hesap ele geçirilirse sahibi fark eder. Öneri: kabul.
+4. **Yükleme eşzamanlılık sınırı (DEC-514).** Okul başına 3 eşzamanlı yükleme; fazlası `429`. *Yönetici:* toplu fotoğraf yüklemesinde bir kerede en çok 3 dosya işlenir, ekran kalanı yeniden dener. Öneri: kabul; sayı `RateLimiting:ConcurrentUploadsPerSchool` ile değişir.
+5. **Deploy bloğu için yeni maddeler (DEC-516, DEC-518).** `AllowedHosts` alan adlarıyla verilmeli; Caddy erişim günlüğünde sorgu dizesi (arama terimi) atılmalı; JWT anahtarı için döndürme runbook'u; yeni alarmlar (`RefreshFailureSpike`, `AuthorizationFailureSpike`) için bildirim kanalı mevcut alarmlarla birlikte.
+6. **Başka okulun e-postası sızıntısı (DEC-516, O5).** Okul Admini bir antrenör eklerken adres başka bir okulda kayıtlıysa `409` alır; yani adresin sistemde olduğunu öğrenir. Kapatmak ürün değişikliği (okul başına e-posta ya da giriş formunda okul seçimi). Öneri: şimdilik kabul.
+7. **Trivy/gitleaks checksum (DEC-515).** Zaten sabitti; resmi dosyalarla doğrulandı, ek iş yok. CI'da `persist-credentials: false` ve bağlam değerlerinin ortam değişkeniyle verilmesi eklendi; `ci.yml` değiştiği için bu PR code-owner incelemesine girer.

@@ -168,7 +168,7 @@ Migration ekleyen işler (RLS → audit log → KVKK başvuruları) art arda yap
   - Admin ve veli nginx imajlarında `frame-ancestors` yerine tam CSP: `default-src 'self'`, SignalR için `connect-src`, belge küçük resmi için depo origin'i `img-src`'de.
   - HSTS yalnız HTTPS'te ve Production'da; `check-security-headers.sh` yeni başlıkları da doğrular.
 - [x] P4-02 **API rate limiting.** Kullanıcı bazında genel sınır ve okul bazında yazma sınırı; `429`, `Retry-After` ve sabit hata kodu. Faz 1'deki giriş sınırları korunur. (DEC-503 – DEC-507)
-- [ ] P4-03 **OWASP Top 10 (2021) ve ASVS L2 incelemesi.**
+- [x] P4-03 **OWASP Top 10 (2021) ve ASVS L2 incelemesi** (DEC-510 – DEC-518; `docs/guvenlik-kontrol-listesi.md` Bölüm 4). Yüksek bulgu yok.
   - Her kategori için bulgu, kanıt ve düzeltme `docs/guvenlik-kontrol-listesi.md`'ye yazılır; yüksek bulgu açık kalmaz.
   - Trivy checksum'ının workflow'a sabitlenmesi yeniden değerlendirilir.
 
@@ -191,7 +191,7 @@ Migration ekleyen işler (RLS → audit log → KVKK başvuruları) art arda yap
   - Trace (ASP.NET Core, HttpClient, EF/Npgsql, Hangfire, outbox), metrik ve log OTLP ile; kişisel veri ve token taşınmaz.
   - Yerelde compose profiliyle dashboard ve alarm kuralları.
   - Sentry ile hata takibi: SDK entegre edilir ve testle doğrulanır; DSN ortam yapılandırmasından gelir, yoksa gönderim kapalıdır (anahtar repoda yok, gerçek DSN Deploy bloğunda).
-- [ ] P4-08 **k6 ile yük testi ve performans bütçesi** (NFR-PRF-01, -02).
+- [x] P4-08 **k6 ile yük testi ve performans bütçesi** (NFR-PRF-01, -02). (DEC-560 – DEC-569; `perf/k6/`, `scripts/perf/`, `docs/performans.md`)
   - Okuma p95 < 300 ms, yazma p95 < 500 ms; demo verisiyle yerelde ölçülür, sonuçlar `docs/`'a yazılır.
   - N+1 sorgular ve eksik index'ler düzeltilir; regresyon için sorgu sayısı testleri.
   - Durumsuzluk (NFR-SCL-01): yük testi proxy arkasında iki API örneğiyle de koşar; oturum, SignalR ve rate limit sayaçlarının davranışı belgelenir.
