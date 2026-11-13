@@ -23,6 +23,17 @@ internal sealed class RateLimitingOptions
     /// <summary>All <c>/api</c> requests without a valid token from one client IP.</summary>
     [Range(1, int.MaxValue)]
     public int AnonymousPermitsPerMinute { get; set; } = 120;
+
+    /// <summary>
+    /// Sign-in, refresh and password change attempts per client IP and endpoint (NFR-SEC-14). Raised only for a load test,
+    /// which signs many accounts in from one address (P4-08, DEC-561); the production value is the default.
+    /// </summary>
+    [Range(1, int.MaxValue)]
+    public int AuthPermitsPerMinute { get; set; } = 10;
+
+    /// <summary>Requests per parent account over all parent endpoints (DEC-388); like the sign-in limit, raised only for a load test.</summary>
+    [Range(1, int.MaxValue)]
+    public int ParentPermitsPerMinute { get; set; } = 60;
 }
 
 /// <summary>

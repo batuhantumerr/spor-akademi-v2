@@ -1,5 +1,6 @@
 using System.Threading.RateLimiting;
 using SporAkademi.Api.Errors;
+using SporAkademi.Api.Security;
 using SporAkademi.Application.Abstractions;
 using SporAkademi.Application.Abstractions.Authentication;
 using SporAkademi.Application.Abstractions.Messaging;
@@ -47,7 +48,7 @@ internal static class StudentEndpoints
 
     public static IServiceCollection AddInvitationRateLimiting(this IServiceCollection services) =>
         services.AddRateLimiter(options => options.AddPolicy(InvitationRateLimitPolicy, context => RateLimitPartition.GetFixedWindowLimiter(
-            context.User.FindFirst("sub")?.Value ?? context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+            context.User.FindFirst("sub")?.Value ?? ApiRateLimiting.ClientNetwork(context.Connection.RemoteIpAddress),
             _ => new FixedWindowRateLimiterOptions { PermitLimit = InvitationsPerWindow, Window = InvitationWindow, QueueLimit = 0 })));
 
     public static IEndpointRouteBuilder MapStudentEndpoints(this IEndpointRouteBuilder app)
