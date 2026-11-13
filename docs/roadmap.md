@@ -154,3 +154,13 @@ Veli yalnızca **kendi çocuklarını** görür. Bu, okul izolasyonunun yanında
   - Uygulama iki dilde de çalışır.
   - WCAG raporunda açık kritik bulgu kalmaz.
 - [ ] P3-R2 Faz 3 geçişi ve `v0.3.0` etiketi (sahip)
+
+## Faz 4 — Production sağlamlaştırma (`v0.4.0`)
+
+### 4.1 Güvenlik (P4-F1)
+- [x] P4-01 **Güvenlik başlıkları ve tam CSP** (NFR-SEC-13, NFR-SEC-02). (DEC-500 – DEC-502)
+  - API'nin her yanıtında güvenlik başlıkları ve `default-src 'none'` CSP; `/jobs` paneline ayrı politika; HSTS yalnız Production'da ve HTTPS'te.
+  - Admin ve veli imajlarında tam CSP (satır içi script yok) ve `Permissions-Policy`; depo origin'i `STORAGE_PUBLIC_ORIGIN` ile; CI'da birebir denetim, e2e'de CSP ihlali testi kırar.
+- [x] P4-02 **API rate limiting** (NFR-SEC-14). (DEC-503 – DEC-506)
+  - Mevcut uç nokta sınırlarına ek olarak kullanıcı başına genel sınır, okul başına yazma sınırı ve token'sız istekler için IP sınırı; `RateLimiting` bölümünden ayarlanır.
+  - `429` + `Request.TooManyRequests` + `Retry-After`; webhook ve health muaf; sınırlar instance başına (Valkey'e taşıma kararı DEC-506).

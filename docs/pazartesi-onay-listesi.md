@@ -421,3 +421,19 @@ Soru 14'ün Faz 3 adımı. Sahip kararları agent'a bıraktı (futbol okulu yön
 3. **Kapanmış ayın ödemesi de iade edilebilir (DEC-421).** Donmuş borç değişmez, borç yeniden açık görünür. Yasaklamak okulu sistem dışı iadeye iterdi.
 4. **Erken bitirmede uyarı, otomatik iade yok (DEC-422).** Kayıt bitirme penceresi peşin ödenmiş ayları listeler; iade kararı okulda kalır.
 5. **Açık konu (DEC-418, DEC-424):** iyzico iadesi gerçek sandbox'ta denenmedi (anahtar yok). Sonucu kaybolan iade artık ödeme detayıyla kurtarılıyor: iyzico'nun her reddi kontrol ediliyor, kesin değilse iade "İnceleme gerekli" olarak bekliyor ve yönetici "Sağlayıcıda kontrol et" ile sonuçlandırıyor. iyzico iade uç noktası, ret kodları ve raporlama API'sinin alanları gerçek sandbox denemesinde DEC-345'teki imza konusuyla birlikte doğrulanmalı.
+
+## 11. Faz 4 (2026-11-13)
+
+### P4-01 Güvenlik başlıkları ve tam CSP (DEC-500 – DEC-502)
+
+1. **Admin'de stil için `'unsafe-inline'` (DEC-502).** Veli uygulamasında satır içi stil tamamen kapalı; admin'de Angular CDK diyalogları ve ECharts araç ipuçları satır içi stil kullandığı için açık. Script tarafı iki uygulamada da yalnız kendi origin'inden.
+   - *Yazılımcı:* nonce, nginx'in her yanıtta `index.html`'i yeniden yazmasını ve önbelleği kapatmasını gerektirirdi; stil enjeksiyonu tek başına kod çalıştırmaz. Onay ya da "nonce'a geçelim" kararı.
+2. **HSTS: 1 yıl, alt alan adları ve preload yok (DEC-501).** Alan adları Deploy bloğunda kesinleşince `includeSubDomains` yeniden değerlendirilir. Başlık, proxy arkasında `UseForwardedHeaders` eklenince çıkar (Deploy bloğu); istersen HSTS'yi Caddy de verebilir.
+3. **Depo origin'i (DEC-502).** Admin imajı `STORAGE_PUBLIC_ORIGIN` ister (ör. `https://dosya.alanadi`); boşsa fotoğraf küçük resimleri görünmez. Deploy'da `Storage:PublicUrl`'ün origin'iyle aynı verilmeli.
+
+### P4-02 API rate limiting (DEC-503 – DEC-506)
+
+1. **Varsayılan limitler (DEC-504):** kullanıcı başına dakikada 300 istek, okul başına dakikada 300 yazma, token'sız istekler için IP başına dakikada 120. `RateLimiting` bölümünden değişir.
+   - *Yönetici:* en yoğun ekranlarda bile bir kişi dakikada 100 isteği zor geçer; sınır yalnız betikleri ve ele geçirilmiş hesabı yavaşlatır.
+2. **Sınırlar instance başına, Valkey'de değil (DEC-506).** İki instance'la etkili sınır iki katına kadar çıkabilir. Kalıcı olarak birden fazla instance çalıştırıldığında giriş ve okul yazma sınırları Valkey'e taşınır. Onay ya da "şimdi taşıyalım" kararı.
+3. **Proxy arkasında IP (Deploy bloğu).** `UseForwardedHeaders` eklenmeden bütün anonim trafik proxy'nin IP'sinden sayılır (tek bütçe).
