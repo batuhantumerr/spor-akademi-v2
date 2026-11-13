@@ -156,7 +156,7 @@ internal sealed class GetStudentDataExportHandler(
     IGuardianRepository guardians,
     IStudentDocumentRepository documents,
     IStudentDataExportReadModel others,
-    IDocumentStorage storage,
+    Lazy<IDocumentStorage> storage,
     TimeProvider timeProvider) : IQueryHandler<GetStudentDataExportQuery, StudentDataExportDto>
 {
     public async Task<Result<StudentDataExportDto>> Handle(GetStudentDataExportQuery query, CancellationToken cancellationToken)
@@ -180,7 +180,7 @@ internal sealed class GetStudentDataExportHandler(
         var exportedDocuments = files.Select(d =>
         {
             var view = DocumentViews.ToDto(d);
-            var link = DocumentViews.Link(storage, d);
+            var link = DocumentViews.Link(storage.Value, d);
             return new ExportedDocumentDto(view.Id, view.Type, view.ContentType, view.FileName, view.SizeBytes, view.UploadedAt, link.Url, link.ExpiresAt);
         }).ToList();
 

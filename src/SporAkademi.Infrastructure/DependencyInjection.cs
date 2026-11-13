@@ -190,6 +190,8 @@ internal static class DocumentStorageRegistration
         services.AddSingleton(new StorageClock(TimeProvider.System));
         services.AddSingleton<S3Clients>();
         services.AddSingleton<IDocumentStorage, S3DocumentStorage>();
+        // P4-06 (DEC-548): resolved only when a link is needed, so work without documents runs without a configured store.
+        services.AddTransient(provider => new Lazy<IDocumentStorage>(provider.GetRequiredService<IDocumentStorage>));
         return services;
     }
 }
