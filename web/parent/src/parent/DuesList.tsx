@@ -11,9 +11,11 @@ const dueKey = (due: Due) => `${due.enrollmentId}|${due.period}`;
 
 /**
  * The child's unpaid dues (the same rows as the School Admin's list, DEC-385) with the list fee and the reason of a
- * discount, and an online payment per row (DEC-386).
+ * discount, and an online payment per row (DEC-386). P4-10: the pay buttons need the school's
+ * `parent-online-payments` flag; while it is unknown (`canPay` undefined) they are not shown, and when it is off a
+ * note says so.
  */
-export function DuesList({ dues }: { dues: readonly Due[] }) {
+export function DuesList({ dues, canPay }: { dues: readonly Due[]; canPay?: boolean | undefined }) {
   // One Idempotency-Key per due and page visit: a retry after a lost answer reuses it and gets the same attempt.
   const keys = useRef(new Map<string, string>());
   const [busy, setBusy] = useState<string | null>(null);
@@ -62,6 +64,11 @@ export function DuesList({ dues }: { dues: readonly Due[] }) {
   const total = owedTotal(dues);
   return (
     <div className="space-y-3">
+      {canPay === false && (
+        <p className="text-sm text-muted-foreground" data-testid="pay-unavailable">
+          {text.dues.payUnavailable}
+        </p>
+      )}
       {total && (
         <p className="text-sm font-semibold" data-testid="dues-total">
           {format(text.dues.total, { amount: formatMoney(total) })}
@@ -111,19 +118,21 @@ export function DuesList({ dues }: { dues: readonly Due[] }) {
                   {error.message}
                 </p>
               )}
-              <button
-                type="button"
-                className="btn btn-primary mt-3 w-full sm:w-auto"
-                disabled={busy !== null}
-                aria-label={format(text.dues.payLabel, {
-                  period,
-                  amount: formatMoney(due.remaining.amount),
-                })}
-                onClick={() => void pay(due)}
-              >
-                <CreditCard aria-hidden="true" />
-                {busy === key ? text.dues.paying : text.dues.pay}
-              </button>
+              {canPay && (
+                <button
+                  type="button"
+                  className="btn btn-primary mt-3 w-full sm:w-auto"
+                  disabled={busy !== null}
+                  aria-label={format(text.dues.payLabel, {
+                    period,
+                    amount: formatMoney(due.remaining.amount),
+                  })}
+                  onClick={() => void pay(due)}
+                >
+                  <CreditCard aria-hidden="true" />
+                  {busy === key ? text.dues.paying : text.dues.pay}
+                </button>
+              )}
             </li>
           );
         })}

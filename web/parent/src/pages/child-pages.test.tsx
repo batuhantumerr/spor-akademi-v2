@@ -239,6 +239,17 @@ describe('child detail', () => {
     expect(assign).not.toHaveBeenCalled();
   });
 
+  it('hides online payment while the school has it switched off (P4-10)', async () => {
+    signIn();
+    const api = fakeApi(childRoutes({ dues: [due()], features: ['reports'] }));
+    renderApp(`/cocuk/${CHILD_ID}`);
+
+    expect(await screen.findByTestId('pay-unavailable')).toHaveTextContent(text.dues.payUnavailable);
+    expect(screen.getAllByTestId('due-row')).toHaveLength(1);
+    expect(screen.queryByRole('button', { name: /aidatını online öde/ })).not.toBeInTheDocument();
+    expect(api.callsTo(PAY)).toHaveLength(0);
+  });
+
   it('reads as not found for a child that is not linked to the account', async () => {
     signIn();
     fakeApi(childRoutes({}));

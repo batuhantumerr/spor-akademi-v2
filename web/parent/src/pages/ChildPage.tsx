@@ -17,6 +17,7 @@ import {
   useAttendance,
   useChildren,
   useDues,
+  useFeature,
   usePayments,
   useSchedule,
   type ChildAttendance,
@@ -101,6 +102,7 @@ function failure(error: unknown, retry: () => void) {
 
 function DuesSection({ childId }: { childId: string }) {
   const dues = useDues(childId);
+  const canPay = useFeature('parent-online-payments');
   return (
     <Section id="aidatlar" title={text.dues.title}>
       {dues.isPending ? (
@@ -108,7 +110,7 @@ function DuesSection({ childId }: { childId: string }) {
       ) : dues.isError ? (
         failure(dues.error, () => void dues.refetch())
       ) : (
-        <DuesList dues={dues.data} />
+        <DuesList dues={dues.data} canPay={canPay} />
       )}
     </Section>
   );
