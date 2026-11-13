@@ -1,6 +1,9 @@
 using System.Data.Common;
 using System.Net.Http.Json;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
+using Microsoft.EntityFrameworkCore.Migrations.Operations;
 using Microsoft.Extensions.DependencyInjection;
 using Npgsql;
 using SporAkademi.Application.Billing;
@@ -21,13 +24,16 @@ namespace SporAkademi.IntegrationTests.Tenancy;
 [Trait("Story", "P4-04")]
 public sealed class RowLevelSecurityTests(DatabaseFixture database) : IdentityTest(database)
 {
-    /// <summary>Tables without a <c>tenant_id</c> column on purpose: each is reached only through its tenant-scoped parent.</summary>
-    private static readonly string[] NotTenantScoped =
-    [
-        "groups.group_fees", // owned by groups.groups (fee history of one group)
-        "identity.password_tokens", // owned by identity.users
-        "identity.refresh_tokens", // owned by identity.users
-    ];
+    /// <summary>
+    /// Tables without a <c>tenant_id</c> column on purpose (DEC-527): each belongs to a row of its parent, and its policy
+    /// shows a row only while the parent row is visible (the parent's own policy decides).
+    /// </summary>
+    private static readonly Dictionary<string, string> OwnedTables = new(StringComparer.Ordinal)
+    {
+        ["groups.group_fees"] = "groups.groups",
+        ["identity.password_tokens"] = "identity.users",
+        ["identity.refresh_tokens"] = "identity.users",
+    };
 
     /// <summary>Platform tables (DEC-105, DEC-302): a school sees its own rows; work without a school sees them all.</summary>
     private static readonly string[] PlatformTables = ["identity.users", "outbox.messages", "tenancy.schools"];
@@ -35,7 +41,7 @@ public sealed class RowLevelSecurityTests(DatabaseFixture database) : IdentityTe
     private static CancellationToken Ct => TestContext.Current.CancellationToken;
 
     [Fact]
-    public async Task Every_tenant_table_forces_row_level_security_with_a_tenant_policy()
+    public async Task Every_table_forces_row_level_security_with_a_policy_that_reads_the_school()
     {
         var tables = await RowsAsync(
             Database.MigratorConnectionString,
@@ -44,9 +50,12 @@ public sealed class RowLevelSecurityTests(DatabaseFixture database) : IdentityTe
                    c.relrowsecurity,
                    c.relforcerowsecurity,
                    EXISTS (SELECT 1 FROM pg_attribute a WHERE a.attrelid = c.oid AND a.attname = 'tenant_id' AND NOT a.attisdropped),
-                   EXISTS (SELECT 1 FROM pg_policies p WHERE p.schemaname = n.nspname AND p.tablename = c.relname
-                           AND p.policyname = 'tenant_isolation' AND p.cmd = 'ALL' AND p.permissive = 'PERMISSIVE'
-                           AND p.roles = '{public}' AND p.qual IS NOT NULL AND p.with_check IS NOT NULL)
+                   (SELECT p.qual || ' | ' || p.with_check FROM pg_policies p
+                    WHERE p.schemaname = n.nspname AND p.tablename = c.relname AND p.policyname = 'tenant_isolation'
+                      AND p.cmd = 'ALL' AND p.permissive = 'PERMISSIVE' AND p.roles = '{public}'),
+                   (SELECT p.qual || ' | ' || p.with_check FROM pg_policies p
+                    WHERE p.schemaname = n.nspname AND p.tablename = c.relname AND p.policyname = 'maintenance'
+                      AND p.cmd = 'ALL' AND p.roles = ARRAY[pg_get_userbyid(c.relowner)]::name[])
             FROM pg_class c
             JOIN pg_namespace n ON n.oid = c.relnamespace
             WHERE c.relkind IN ('r', 'p')
@@ -58,26 +67,61 @@ public sealed class RowLevelSecurityTests(DatabaseFixture database) : IdentityTe
         tables.Count.ShouldBeGreaterThan(20);
         foreach (var row in tables)
         {
-            var (name, enabled, forced, hasTenant, hasPolicy) = ((string)row[0]!, (bool)row[1]!, (bool)row[2]!, (bool)row[3]!, (bool)row[4]!);
-            if (hasTenant || PlatformTables.Contains(name))
+            var (name, enabled, forced, hasTenant) = ((string)row[0]!, (bool)row[1]!, (bool)row[2]!, (bool)row[3]!);
+            var (policy, maintenance) = ((string?)row[4], (string?)row[5]);
+
+            // A new table without its policy fails here: call RowLevelSecurity.ForTenantTable in its migration.
+            enabled.ShouldBeTrue($"{name} must enable row level security");
+            forced.ShouldBeTrue($"{name} must force row level security (the owner too)");
+            policy.ShouldNotBeNull($"{name} must have the tenant_isolation policy");
+            maintenance.ShouldNotBeNull($"{name} must have the owner's maintenance policy");
+            maintenance.ShouldContain("is_maintenance()");
+
+            // The condition must read the school: USING (true) would pass every other check.
+            if (OwnedTables.TryGetValue(name, out var parent))
             {
-                // A new tenant table without its policy fails here: add it to the row level security migration pattern.
-                enabled.ShouldBeTrue($"{name} must enable row level security");
-                forced.ShouldBeTrue($"{name} must force row level security (the owner too)");
-                hasPolicy.ShouldBeTrue($"{name} must have the tenant_isolation policy");
+                policy.ShouldContain($"FROM {parent}", Case.Sensitive, $"{name} must follow its parent {parent}");
             }
             else
             {
-                NotTenantScoped.ShouldContain(name, $"{name} has no tenant_id: scope it to a school, or list it here with the reason");
+                (hasTenant || PlatformTables.Contains(name)).ShouldBeTrue($"{name} has no tenant_id: scope it to a school, or list it with its parent");
+                policy.Split(" | ").ShouldAllBe(condition => condition.Contains("current_tenant_id()"));
+                if (PlatformTables.Contains(name))
+                {
+                    policy.Split(" | ").ShouldAllBe(condition => condition.Contains("is_platform_scope()"));
+                }
+                else
+                {
+                    policy.ShouldNotContain("is_platform_scope()");
+                }
             }
         }
 
         // The lists stay current: every listed table still exists.
         var names = tables.Select(r => (string)r[0]!).ToList();
-        foreach (var listed in NotTenantScoped.Concat(PlatformTables))
+        foreach (var listed in OwnedTables.Keys.Concat(PlatformTables))
         {
             names.ShouldContain(listed);
         }
+    }
+
+    [Fact]
+    public async Task Owned_rows_follow_their_parent()
+    {
+        var schoolA = await SeedSchoolAsync("okul-a");
+        var schoolB = await SeedSchoolAsync("okul-b");
+        await SeedUserAsync("coach-a@example.com", UserRole.Coach, schoolA);
+        await SeedUserAsync("coach-b@example.com", UserRole.Coach, schoolB);
+        await LoginOkAsync("coach-a@example.com");
+        await LoginOkAsync("coach-b@example.com");
+
+        var asA = await AsSchoolAsync(schoolA, db => db.Database
+            .SqlQuery<int>($"SELECT count(DISTINCT user_id)::int AS \"Value\" FROM identity.refresh_tokens").SingleAsync(Ct));
+        var platform = await InScopeAsync(sp => sp.GetRequiredService<AppDbContext>().Database
+            .SqlQuery<int>($"SELECT count(DISTINCT user_id)::int AS \"Value\" FROM identity.refresh_tokens").SingleAsync(Ct));
+
+        asA.ShouldBe(1);
+        platform.ShouldBe(2);
     }
 
     [Fact]
@@ -219,6 +263,41 @@ public sealed class RowLevelSecurityTests(DatabaseFixture database) : IdentityTe
     }
 
     [Fact]
+    public async Task A_data_migration_run_by_the_migrator_sees_every_school()
+    {
+        await TwoSchoolsWithSportsAsync();
+        const string check = "DO $$ BEGIN IF (SELECT count(*) FROM organization.sports) <> 2 THEN RAISE EXCEPTION 'row level security hid rows'; END IF; END $$;";
+
+        // The SQL every migration is generated into (bundle, ef.sh, script): it turns the owner's maintenance switch on.
+        var options = new DbContextOptionsBuilder<AppDbContext>()
+            .UseNpgsql(Database.PlainMigratorConnectionString)
+            .UseSnakeCaseNamingConvention()
+            .Options;
+        await using var db = new AppDbContext(options, new AnonymousCurrentUser());
+        var sql = string.Join('\n', db.GetService<IMigrationsSqlGenerator>().Generate([new SqlOperation { Sql = check }]).Select(c => c.CommandText));
+
+        sql.ShouldStartWith("SET app.maintenance = 'on';");
+        await RowsAsync(Database.PlainMigratorConnectionString, sql);
+        // Without it the migrator, bound by FORCE ROW LEVEL SECURITY, sees no school's rows.
+        (await RowsAsync(Database.PlainMigratorConnectionString, "SELECT count(*) FROM organization.sports")).Single()[0].ShouldBe(0L);
+    }
+
+    [Fact]
+    public async Task Anonymous_endpoints_ignore_a_bearer_token_of_another_school()
+    {
+        var schoolA = await SeedSchoolAsync("okul-a");
+        var schoolB = await SeedSchoolAsync("okul-b");
+        await SeedUserAsync("coach-b@example.com", UserRole.Coach, schoolB);
+        var session = await LoginOkAsync("coach-b@example.com");
+
+        // A stale or foreign access token on an anonymous call must not narrow it to that school (DEC-526).
+        Http.Authorize(TestTokens.Create(Guid.CreateVersion7(), "SchoolAdmin", schoolA.Value, Api.Clock.GetUtcNow()));
+
+        (await LoginAsync("coach-b@example.com", OwnPassword)).StatusCode.ShouldBe(System.Net.HttpStatusCode.OK);
+        (await RefreshAsync(session.RefreshToken)).StatusCode.ShouldBe(System.Net.HttpStatusCode.OK);
+    }
+
+    [Fact]
     public async Task A_school_user_cannot_be_written_into_another_school()
     {
         var schoolA = await SeedSchoolAsync("okul-a");
@@ -265,7 +344,14 @@ public sealed class RowLevelSecurityTests(DatabaseFixture database) : IdentityTe
     public async Task A_pooled_connection_does_not_keep_the_previous_school()
     {
         var (schoolA, _) = await TwoSchoolsWithSportsAsync();
-        var pooled = new NpgsqlConnectionStringBuilder(Database.AppConnectionString) { MaxPoolSize = 1, ApplicationName = "rls-pool-test" }.ConnectionString;
+        // One physical connection, and Npgsql's reset on return (DISCARD ALL) switched off: whatever the session holds
+        // is still there for the next scope, so only the interceptor can clear the previous school.
+        var pooled = new NpgsqlConnectionStringBuilder(Database.AppConnectionString)
+        {
+            MaxPoolSize = 1,
+            NoResetOnClose = true,
+            ApplicationName = "rls-pool-test",
+        }.ConnectionString;
         await using var api = new ApiFactory(pooled, storage: Database.Storage.Settings);
 
         int firstPid;
@@ -275,12 +361,14 @@ public sealed class RowLevelSecurityTests(DatabaseFixture database) : IdentityTe
             var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
             firstPid = await db.Database.SqlQuery<int>($"SELECT pg_backend_pid() AS \"Value\"").SingleAsync(Ct);
             (await db.Set<Sport>().CountAsync(Ct)).ShouldBe(1);
+            await db.Database.ExecuteSqlAsync($"SELECT set_config('app.leftover', 'yes', false)", Ct);
         }
 
         await using (var scope = api.Services.CreateAsyncScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
             (await db.Database.SqlQuery<int>($"SELECT pg_backend_pid() AS \"Value\"").SingleAsync(Ct)).ShouldBe(firstPid);
+            (await db.Database.SqlQuery<string>($"SELECT current_setting('app.leftover', true) AS \"Value\"").SingleAsync(Ct)).ShouldBe("yes");
             (await db.Set<Sport>().IgnoreQueryFilters().CountAsync(Ct)).ShouldBe(0);
             (await db.Database.SqlQuery<string>($"SELECT coalesce(current_setting('app.tenant_id', true), '') AS \"Value\"").SingleAsync(Ct)).ShouldBe(string.Empty);
         }

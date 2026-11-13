@@ -27,7 +27,15 @@ public static class RowLevelSecurity
     public static string ForPlatformTable(string schema, string table, string tenantColumn = "tenant_id") =>
         Policies(schema, table, $"{tenantColumn} = tenancy.current_tenant_id() OR tenancy.is_platform_scope()");
 
-    /// <summary>Reverts <see cref="ForTenantTable"/> or <see cref="ForPlatformTable"/>.</summary>
+    /// <summary>
+    /// A table without a school column whose rows belong to a row of <paramref name="parentTable"/> (DEC-527): a row is
+    /// visible and writable only while its parent row is, under the parent's own policy. <paramref name="foreignKey"/>
+    /// is the column holding the parent's <c>id</c> (its primary key, so the check is one index lookup).
+    /// </summary>
+    public static string ForOwnedTable(string schema, string table, string parentTable, string foreignKey) =>
+        Policies(schema, table, $"EXISTS (SELECT 1 FROM {parentTable} parent WHERE parent.id = {table}.{foreignKey})");
+
+    /// <summary>Reverts <see cref="ForTenantTable"/>, <see cref="ForPlatformTable"/> or <see cref="ForOwnedTable"/>.</summary>
     public static string Drop(string schema, string table) =>
         $"""
         DROP POLICY IF EXISTS maintenance ON {schema}.{table};

@@ -42,6 +42,9 @@ public sealed partial class DatabaseFixture : IAsyncLifetime
     /// </summary>
     public string MigratorConnectionString => Connection("spor_akademi_migrator", MigratorPassword, "-c app.maintenance=on");
 
+    /// <summary>The migrator without the maintenance switch, as a bare connection (P4-04).</summary>
+    public string PlainMigratorConnectionString => Connection("spor_akademi_migrator", MigratorPassword);
+
     public async ValueTask InitializeAsync()
     {
         await Task.WhenAll(_container.StartAsync(), Storage.StartAsync().AsTask());

@@ -68,6 +68,11 @@ namespace SporAkademi.Infrastructure.Migrations
             migrationBuilder.Sql(RowLevelSecurity.ForPlatformTable("outbox", "messages"));
             migrationBuilder.Sql(RowLevelSecurity.ForPlatformTable("tenancy", "schools", tenantColumn: "id"));
 
+            // Tables without a school column follow their parent row (DEC-527).
+            migrationBuilder.Sql(RowLevelSecurity.ForOwnedTable("groups", "group_fees", "groups.groups", "group_id"));
+            migrationBuilder.Sql(RowLevelSecurity.ForOwnedTable("identity", "refresh_tokens", "identity.users", "user_id"));
+            migrationBuilder.Sql(RowLevelSecurity.ForOwnedTable("identity", "password_tokens", "identity.users", "user_id"));
+
             // The only reads across schools. They run as the owner (the migrator) and turn the maintenance switch on
             // only around their one query, and return what their caller needs and nothing else. The switch is
             // transaction-local and opens nothing for the application role (the maintenance policy is the owner's).
@@ -120,6 +125,9 @@ namespace SporAkademi.Infrastructure.Migrations
                 DROP FUNCTION IF EXISTS billing.find_checkout_target(text, text);
                 """);
 
+            migrationBuilder.Sql(RowLevelSecurity.Drop("identity", "password_tokens"));
+            migrationBuilder.Sql(RowLevelSecurity.Drop("identity", "refresh_tokens"));
+            migrationBuilder.Sql(RowLevelSecurity.Drop("groups", "group_fees"));
             migrationBuilder.Sql(RowLevelSecurity.Drop("tenancy", "schools"));
             migrationBuilder.Sql(RowLevelSecurity.Drop("outbox", "messages"));
             migrationBuilder.Sql(RowLevelSecurity.Drop("identity", "users"));
