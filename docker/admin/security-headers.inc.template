@@ -1,0 +1,19 @@
+# Security headers of every admin response (NFR-SEC-13). Included by each location of default.conf, because an
+# add_header in a location replaces the server's headers. The image's entrypoint renders this template into
+# /etc/nginx/conf.d/security-headers.inc (envsubst, only STORAGE_PUBLIC_ORIGIN; 19-check-storage-origin.sh has
+# checked it). The e2e server (web/admin/e2e/serve.mjs) reads this file too, so the e2e suite runs under this policy.
+#
+# P2-F4 (DEC-352): the set-password page must never leak its URL to another site (Referrer-Policy).
+# nosniff: files are served only as their declared type. frame-ancestors 'none' (and X-Frame-Options for older
+# browsers): no site may frame the app, so a form cannot be clickjacked.
+# P4-01 (DEC-502): the full Content-Security-Policy. Scripts, connections (the API and the SignalR WebSocket share
+# the origin, ADR-0006) and forms (the sandbox checkout posts to /api/v1/payment-callbacks) stay on this origin.
+# Styles also allow 'unsafe-inline': Angular CDK (dialogs) adds its styles as <style> elements at run time, and
+# ECharts writes its tooltips with style attributes. img-src: photo thumbnails load straight from the document
+# store through signed URLs (DEC-323), so its public origin is configurable; data: and blob: for images the app
+# makes itself. Permissions-Policy: the app uses no device feature.
+add_header Referrer-Policy "no-referrer" always;
+add_header X-Content-Type-Options "nosniff" always;
+add_header X-Frame-Options "DENY" always;
+add_header Permissions-Policy "accelerometer=(), camera=(), display-capture=(), geolocation=(), gyroscope=(), magnetometer=(), microphone=(), midi=(), payment=(), usb=()" always;
+add_header Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: ${STORAGE_PUBLIC_ORIGIN}; connect-src 'self'; font-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'" always;

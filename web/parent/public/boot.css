@@ -1,0 +1,16 @@
+/*
+ * Before the app's styles load: the theme's page colours. A file and not an inline <style>, like boot.js (P4-01,
+ * DEC-502): the parent app's policy allows no inline style at all. nginx serves it with no-cache.
+ */
+html.light,
+html.light body {
+  background: #f8fafc;
+  color: #0f172a;
+  color-scheme: light;
+}
+html.dark,
+html.dark body {
+  background: #121620;
+  color: #edf2f7;
+  color-scheme: dark;
+}
