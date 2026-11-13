@@ -15,6 +15,7 @@ const trText = {
     loading: 'Yükleniyor…',
     retry: 'Tekrar dene',
     back: 'Geri',
+    privacyNotice: 'Kişisel verilerin işlenmesi hakkında aydınlatma metni',
   },
   theme: {
     toggle: 'Temayı değiştir',

@@ -14,6 +14,7 @@ export const enText: ParentText = {
     loading: 'Loading…',
     retry: 'Try again',
     back: 'Back',
+    privacyNotice: 'Privacy notice on the processing of personal data',
   },
   theme: {
     toggle: 'Change theme',
