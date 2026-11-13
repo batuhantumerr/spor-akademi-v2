@@ -4,6 +4,7 @@ using SporAkademi.Application.Abstractions.Authentication;
 using SporAkademi.Application.Abstractions.Behaviors;
 using SporAkademi.Application.Abstractions.Data;
 using SporAkademi.Application.Abstractions.Messaging;
+using SporAkademi.Application.Abstractions.Observability;
 using SporAkademi.Application.Identity;
 using SporAkademi.Application.Identity.Login;
 using SporAkademi.Application.Identity.Passwords;
@@ -113,6 +114,12 @@ internal static partial class IdentityEndpoints
         CancellationToken cancellationToken)
     {
         var result = await handler.Handle(new LoginCommand(request.Email, request.Password), cancellationToken);
+        if (result.IsFailure)
+        {
+            // P4-07 (DEC-552): by error code only; a rise is a brute-force or credential-stuffing signal.
+            AppTelemetry.LoginFailures.Add(1, new KeyValuePair<string, object?>("reason", result.Error.Code));
+        }
+
         return result.IsSuccess
             ? StartSession(httpContext, result.Value, timeProvider.GetUtcNow())
             : ProblemResults.Problem(result.Error);

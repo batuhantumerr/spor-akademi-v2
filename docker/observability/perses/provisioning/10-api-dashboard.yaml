@@ -1,0 +1,248 @@
+# API dashboard (P4-07, DEC-554): error rate, latency, health, outbox and security signals. The thresholds marked on
+# the panels are the alert rules' (docker/observability/alerts.yml, DEC-555). Metrics carry no tenant: all schools together.
+kind: Dashboard
+metadata:
+  name: api
+  project: spor-akademi
+spec:
+  display:
+    name: Spor Akademi API
+  duration: 1h
+  refreshInterval: 30s
+  variables: []
+  panels:
+    errorRate:
+      kind: Panel
+      spec:
+        display:
+          name: 5xx oranı (alarm > %2)
+        plugin:
+          kind: TimeSeriesChart
+          spec:
+            yAxis:
+              format:
+                unit: percent-decimal
+        queries:
+          - kind: TimeSeriesQuery
+            spec:
+              plugin:
+                kind: PrometheusTimeSeriesQuery
+                spec:
+                  query: sum(rate(http_server_request_duration_seconds_count{job="spor-akademi-api", http_response_status_code=~"5.."}[5m])) / sum(rate(http_server_request_duration_seconds_count{job="spor-akademi-api"}[5m]))
+                  seriesNameFormat: 5xx
+    requests:
+      kind: Panel
+      spec:
+        display:
+          name: İstek/sn (durum koduna göre)
+        plugin:
+          kind: TimeSeriesChart
+          spec:
+            legend:
+              position: bottom
+        queries:
+          - kind: TimeSeriesQuery
+            spec:
+              plugin:
+                kind: PrometheusTimeSeriesQuery
+                spec:
+                  query: sum by (http_response_status_code) (rate(http_server_request_duration_seconds_count{job="spor-akademi-api"}[5m]))
+                  seriesNameFormat: "{{http_response_status_code}}"
+    latencyP95:
+      kind: Panel
+      spec:
+        display:
+          name: p95 gecikme (alarm > 500 ms)
+        plugin:
+          kind: TimeSeriesChart
+          spec:
+            yAxis:
+              format:
+                unit: seconds
+        queries:
+          - kind: TimeSeriesQuery
+            spec:
+              plugin:
+                kind: PrometheusTimeSeriesQuery
+                spec:
+                  query: histogram_quantile(0.95, sum by (le) (rate(http_server_request_duration_seconds_bucket{job="spor-akademi-api", http_route!="", http_route!~"/hubs/.*|/jobs/.*"}[5m])))
+                  seriesNameFormat: p95
+    latencyByRoute:
+      kind: Panel
+      spec:
+        display:
+          name: p95 gecikme, en yavaş 10 route
+        plugin:
+          kind: TimeSeriesChart
+          spec:
+            legend:
+              position: right
+            yAxis:
+              format:
+                unit: seconds
+        queries:
+          - kind: TimeSeriesQuery
+            spec:
+              plugin:
+                kind: PrometheusTimeSeriesQuery
+                spec:
+                  query: topk(10, histogram_quantile(0.95, sum by (le, http_route, http_request_method) (rate(http_server_request_duration_seconds_bucket{job="spor-akademi-api", http_route!="", http_route!~"/hubs/.*|/jobs/.*"}[5m]))))
+                  seriesNameFormat: "{{http_request_method}} {{http_route}}"
+    health:
+      kind: Panel
+      spec:
+        display:
+          name: Hazırlık (2 sağlıklı, 1 Degraded, 0 Unhealthy)
+        plugin:
+          kind: TimeSeriesChart
+          spec:
+            legend:
+              position: bottom
+        queries:
+          - kind: TimeSeriesQuery
+            spec:
+              plugin:
+                kind: PrometheusTimeSeriesQuery
+                spec:
+                  query: min by (check) (spor_akademi_health_status{job="spor-akademi-api"})
+                  seriesNameFormat: "{{check}}"
+    outboxBacklog:
+      kind: Panel
+      spec:
+        display:
+          name: Outbox bekleyen ve dead-letter (alarm > 0)
+        plugin:
+          kind: TimeSeriesChart
+          spec:
+            legend:
+              position: bottom
+        queries:
+          - kind: TimeSeriesQuery
+            spec:
+              plugin:
+                kind: PrometheusTimeSeriesQuery
+                spec:
+                  query: max(spor_akademi_outbox_pending{job="spor-akademi-api"})
+                  seriesNameFormat: bekleyen
+          - kind: TimeSeriesQuery
+            spec:
+              plugin:
+                kind: PrometheusTimeSeriesQuery
+                spec:
+                  query: max(spor_akademi_outbox_dead_lettered{job="spor-akademi-api"})
+                  seriesNameFormat: dead-letter
+    outboxDeliveries:
+      kind: Panel
+      spec:
+        display:
+          name: Outbox teslimleri/dk (sonuca göre)
+        plugin:
+          kind: TimeSeriesChart
+          spec:
+            legend:
+              position: bottom
+        queries:
+          - kind: TimeSeriesQuery
+            spec:
+              plugin:
+                kind: PrometheusTimeSeriesQuery
+                spec:
+                  query: sum by (result) (rate(spor_akademi_outbox_messages_total{job="spor-akademi-api"}[5m])) * 60
+                  seriesNameFormat: "{{result}}"
+    loginFailures:
+      kind: Panel
+      spec:
+        display:
+          name: Başarısız giriş/dk (alarm > 30)
+        plugin:
+          kind: TimeSeriesChart
+          spec:
+            legend:
+              position: bottom
+        queries:
+          - kind: TimeSeriesQuery
+            spec:
+              plugin:
+                kind: PrometheusTimeSeriesQuery
+                spec:
+                  query: sum by (reason) (rate(spor_akademi_auth_login_failures_total{job="spor-akademi-api"}[5m])) * 60
+                  seriesNameFormat: "{{reason}}"
+    rateLimited:
+      kind: Panel
+      spec:
+        display:
+          name: Rate limit reddi/dk (alarm > 60)
+        plugin:
+          kind: TimeSeriesChart
+          spec: {}
+        queries:
+          - kind: TimeSeriesQuery
+            spec:
+              plugin:
+                kind: PrometheusTimeSeriesQuery
+                spec:
+                  query: sum(rate(aspnetcore_rate_limiting_requests_total{job="spor-akademi-api", aspnetcore_rate_limiting_result!="acquired"}[5m])) * 60
+                  seriesNameFormat: reddedilen
+    payments:
+      kind: Panel
+      spec:
+        display:
+          name: Online ödeme bildirimleri/saat (sonuca göre)
+        plugin:
+          kind: TimeSeriesChart
+          spec:
+            legend:
+              position: bottom
+        queries:
+          - kind: TimeSeriesQuery
+            spec:
+              plugin:
+                kind: PrometheusTimeSeriesQuery
+                spec:
+                  query: sum by (outcome, status) (rate(spor_akademi_payments_online_notifications_total{job="spor-akademi-api"}[15m])) * 3600
+                  seriesNameFormat: "{{outcome}} {{status}}"
+    exceptions:
+      kind: Panel
+      spec:
+        display:
+          name: Beklenmeyen exception'lar/dk (türe göre)
+        plugin:
+          kind: TimeSeriesChart
+          spec:
+            legend:
+              position: bottom
+        queries:
+          - kind: TimeSeriesQuery
+            spec:
+              plugin:
+                kind: PrometheusTimeSeriesQuery
+                spec:
+                  query: sum by (error_type) (rate(aspnetcore_diagnostics_exceptions_total{job="spor-akademi-api"}[5m])) * 60
+                  seriesNameFormat: "{{error_type}}"
+  layouts:
+    - kind: Grid
+      spec:
+        display:
+          title: İstekler
+        items:
+          - { x: 0, y: 0, width: 8, height: 8, content: { $ref: "#/spec/panels/errorRate" } }
+          - { x: 8, y: 0, width: 8, height: 8, content: { $ref: "#/spec/panels/requests" } }
+          - { x: 16, y: 0, width: 8, height: 8, content: { $ref: "#/spec/panels/latencyP95" } }
+          - { x: 0, y: 8, width: 16, height: 8, content: { $ref: "#/spec/panels/latencyByRoute" } }
+          - { x: 16, y: 8, width: 8, height: 8, content: { $ref: "#/spec/panels/exceptions" } }
+    - kind: Grid
+      spec:
+        display:
+          title: Sağlık ve outbox
+        items:
+          - { x: 0, y: 0, width: 8, height: 8, content: { $ref: "#/spec/panels/health" } }
+          - { x: 8, y: 0, width: 8, height: 8, content: { $ref: "#/spec/panels/outboxBacklog" } }
+          - { x: 16, y: 0, width: 8, height: 8, content: { $ref: "#/spec/panels/outboxDeliveries" } }
+    - kind: Grid
+      spec:
+        display:
+          title: Güvenlik ve ödeme
+        items:
+          - { x: 0, y: 0, width: 8, height: 8, content: { $ref: "#/spec/panels/loginFailures" } }
+          - { x: 8, y: 0, width: 8, height: 8, content: { $ref: "#/spec/panels/rateLimited" } }
+          - { x: 16, y: 0, width: 8, height: 8, content: { $ref: "#/spec/panels/payments" } }
