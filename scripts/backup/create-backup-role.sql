@@ -19,18 +19,24 @@
 \else
   \set db spor_akademi
 \endif
-\if :{?dump_password}
+-- Unset and empty both stop the script (exit 3): an empty password would leave the role without one. Checked in the
+-- client shell, so the password is never sent to the server just to be tested.
+\set dump_password_set `[ -n "$SPOR_AKADEMI_BACKUP_DUMP_PASSWORD" ] && echo true || echo false`
+\set replication_password_set `[ -n "$SPOR_AKADEMI_BACKUP_REPLICATION_PASSWORD" ] && echo true || echo false`
+\if :dump_password_set
 \else
-  DO $$ BEGIN RAISE EXCEPTION 'SPOR_AKADEMI_BACKUP_DUMP_PASSWORD is not set'; END $$;
+  DO $$ BEGIN RAISE EXCEPTION 'SPOR_AKADEMI_BACKUP_DUMP_PASSWORD is not set or empty'; END $$;
 \endif
-\if :{?replication_password}
+\if :replication_password_set
 \else
-  DO $$ BEGIN RAISE EXCEPTION 'SPOR_AKADEMI_BACKUP_REPLICATION_PASSWORD is not set'; END $$;
+  DO $$ BEGIN RAISE EXCEPTION 'SPOR_AKADEMI_BACKUP_REPLICATION_PASSWORD is not set or empty'; END $$;
 \endif
 
 SET client_min_messages = 'warning';
 SET log_statement = 'none';
 SET log_min_error_statement = 'panic';
+SET log_min_duration_statement = -1;
+SET log_duration = off;
 SET password_encryption = 'scram-sha-256';
 
 SELECT format('CREATE ROLE %I', role_name)

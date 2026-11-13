@@ -22,6 +22,8 @@ target="$archive_dir/$file_name"
 
 already_archived() {
   if cmp -s "$source_path" "$target"; then
+    # An earlier attempt may have linked the name and then failed before the directory fsync.
+    sync "$archive_dir"
     return 0
   fi
   echo "error: $file_name is already archived with different content." >&2
