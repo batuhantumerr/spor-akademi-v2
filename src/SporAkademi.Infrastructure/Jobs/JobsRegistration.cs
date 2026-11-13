@@ -47,6 +47,7 @@ internal static class JobsRegistration
         services.AddScoped<StudentAnonymizationJob>();
         services.AddScoped<DuesReminderJob>();
         services.AddScoped<BillingPeriodCloseJob>();
+        services.AddScoped<Audit.AuditRetentionJob>();
         services.AddSingleton<JobsDashboardSessions>();
         services.AddSingleton<PanelSessionRevocationInterceptor>();
         services.AddScoped<IJobsDashboardAccess, JobsDashboardAccess>();

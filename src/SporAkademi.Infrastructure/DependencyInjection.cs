@@ -3,12 +3,14 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
+using SporAkademi.Application.Abstractions.Auditing;
 using SporAkademi.Application.Abstractions.Authentication;
 using SporAkademi.Application.Abstractions.Data;
 using SporAkademi.Application.Abstractions.Outbox;
 using SporAkademi.Application.Abstractions.Storage;
 using SporAkademi.Application.Announcements;
 using SporAkademi.Application.Attendance;
+using SporAkademi.Application.Audit;
 using SporAkademi.Application.Billing;
 using SporAkademi.Application.Enrollments;
 using SporAkademi.Application.Enrollments.Contracts;
@@ -25,6 +27,7 @@ using SporAkademi.Application.Tenancy;
 using SporAkademi.Application.Tenancy.Contracts;
 using SporAkademi.Infrastructure.Announcements;
 using SporAkademi.Infrastructure.Attendance;
+using SporAkademi.Infrastructure.Audit;
 using SporAkademi.Infrastructure.Billing;
 using SporAkademi.Infrastructure.Caching;
 using SporAkademi.Infrastructure.Enrollments;
@@ -60,6 +63,12 @@ public static class DependencyInjection
         services.Decorate<ICurrentUser, BackgroundAwareCurrentUser>();
         services.TryAddSingleton(TimeProvider.System);
         services.AddScoped<AuditingInterceptor>();
+        // P4-05: the personal data audit log. The API supplies the request's correlation id first.
+        services.TryAddScoped<IRequestCorrelation, NoRequestCorrelation>();
+        services.AddScoped<AuditTrailBuffer>();
+        services.AddScoped<PersonalDataAuditInterceptor>();
+        services.AddScoped<IAuditTrail, AuditTrail>();
+        services.AddScoped<IAuditLogReadModel, AuditLogReadModel>();
         services.AddScoped<TenantWriteGuardInterceptor>();
         services.AddScoped<PlatformDataScope>();
         services.AddScoped<TenantSessionInterceptor>();
@@ -73,6 +82,8 @@ public static class DependencyInjection
             .UseSnakeCaseNamingConvention()
             .AddInterceptors(
                 provider.GetRequiredService<TenantSessionInterceptor>(),
+                // Before the write guard, so the audit entries it adds are guarded like any other row.
+                provider.GetRequiredService<PersonalDataAuditInterceptor>(),
                 provider.GetRequiredService<TenantWriteGuardInterceptor>(),
                 provider.GetRequiredService<AuditingInterceptor>(),
                 provider.GetRequiredService<CacheInvalidationInterceptor>(),
@@ -113,6 +124,7 @@ public static class DependencyInjection
         services.AddScoped<IGuardianRepository, GuardianRepository>();
         services.AddScoped<IAnonymizationRunRepository, AnonymizationRunRepository>();
         services.AddScoped<IStudentDocumentRepository, StudentDocumentRepository>();
+        services.AddScoped<Application.Students.Privacy.IStudentDataExportReadModel, StudentDataExportReadModel>();
         services.AddDocumentStorage(configuration);
         services.AddScoped<IStudentReminderContacts, StudentReminderContacts>();
         services.AddScoped<IStudentSiblings, StudentSiblings>();

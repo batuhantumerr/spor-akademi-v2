@@ -36,7 +36,7 @@ public sealed class RowLevelSecurityTests(DatabaseFixture database) : IdentityTe
     };
 
     /// <summary>Platform tables (DEC-105, DEC-302): a school sees its own rows; work without a school sees them all.</summary>
-    private static readonly string[] PlatformTables = ["identity.users", "outbox.messages", "tenancy.schools"];
+    private static readonly string[] PlatformTables = ["audit.audit_entries", "identity.users", "outbox.messages", "tenancy.schools"];
 
     private static CancellationToken Ct => TestContext.Current.CancellationToken;
 
@@ -335,6 +335,7 @@ public sealed class RowLevelSecurityTests(DatabaseFixture database) : IdentityTe
             """);
         grants.Select(r => (string)r[0]!).ShouldBe(
         [
+            "audit.purge_expired app=true public=false",
             "billing.count_schools_with_open_period app=true public=false",
             "billing.find_checkout_target app=true public=false",
         ]);

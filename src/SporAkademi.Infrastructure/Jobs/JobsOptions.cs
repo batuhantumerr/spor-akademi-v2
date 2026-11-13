@@ -40,6 +40,9 @@ public sealed class JobsOptions
     /// </summary>
     public string BillingPeriodCloseCron { get; set; } = "0 1 * * *";
 
+    /// <summary>P4-05 (DEC-536): audit entries past the two-year retention, 02:30 UTC, after the anonymization run.</summary>
+    public string AuditRetentionCron { get; set; } = "30 2 * * *";
+
     /// <summary>One outbox run delivers batches until one is not full, at most this many.</summary>
     public int MaxOutboxBatchesPerRun { get; set; } = 50;
 
@@ -60,6 +63,7 @@ public sealed class JobsOptions
         && AnonymizationBatchSize is > 0 and <= 1_000
         && IsCron(DuesReminderCron)
         && IsCron(BillingPeriodCloseCron)
+        && IsCron(AuditRetentionCron)
         && MaxOutboxBatchesPerRun is > 0 and <= 10_000
         && HeartbeatWarning > TimeSpan.Zero
         && Dashboard.SessionLifetime > TimeSpan.Zero
