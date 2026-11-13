@@ -55,7 +55,7 @@ public sealed class QueryCountTests(DatabaseFixture database) : ParentTest(datab
         { "GET /reports/revenue", 5, 5 },
         { "GET /me/sessions (coach)", 2, 2 },
         { "GET /groups/{id}/sessions/{key}/attendance (coach)", 4, 4 },
-        { "PUT /groups/{id}/sessions/{key}/attendance (coach)", 11, 5 },
+        { "PUT /groups/{id}/sessions/{key}/attendance (coach)", 10, 5 },
         { "POST /payments", 12, 4 },
         { "GET /parent/children (parent)", 1, 1 },
         { "GET /parent/children/{id}/dues (parent)", 7, 7 },
@@ -69,10 +69,12 @@ public sealed class QueryCountTests(DatabaseFixture database) : ParentTest(datab
     {
         await GrowAsync(2);
         var call = await PrepareAsync(endpoint);
+        await WarmAsync(endpoint, call);
         var small = await Api.Queries.MeasureAsync(() => SucceedsAsync(endpoint, call));
 
         await GrowAsync(6);
         call = await PrepareAsync(endpoint);
+        await WarmAsync(endpoint, call);
         var large = await Api.Queries.MeasureAsync(() => SucceedsAsync(endpoint, call));
 
         TestContext.Current.TestOutputHelper?.WriteLine($"{endpoint}: {large.Commands.Count} commands, {large.Openings} openings");
@@ -122,9 +124,6 @@ public sealed class QueryCountTests(DatabaseFixture database) : ParentTest(datab
     /// <summary>The request to measure; what a write needs first (the attendance list, the enrollment) is read here, unmeasured.</summary>
     private async Task<Func<Task<HttpResponseMessage>>> PrepareAsync(string endpoint)
     {
-        // The school's feature flags (P4-10) are cached and rarely change: warmed for both measurements alike, so a
-        // flag-gated endpoint is measured the way almost every request finds it.
-        (await Admin.GetAsync(Url("/api/v1/features"), Ct)).EnsureSuccessStatusCode();
 
         switch (endpoint)
         {
@@ -164,6 +163,24 @@ public sealed class QueryCountTests(DatabaseFixture database) : ParentTest(datab
     {
         var sheet = await _coach.GetFromJsonAsync<JsonElement>($"/api/v1/groups/{_group}/sessions/{SessionKey}/attendance", Ct);
         return [.. sheet.GetProperty("students").EnumerateArray().Select(s => (object)new { studentId = s.GetProperty("studentId").GetGuid(), status })];
+    }
+
+    /// <summary>
+    /// The same request once, unmeasured, so both measurements find the small caches (school time zone, feature flags,
+    /// sports and facilities) as almost every request does. Not for the dashboard and the reports: they are cached as a
+    /// whole (DEC-311, DEC-410), so their cost is the miss; the growth's writes invalidate them before each measurement
+    /// (DEC-313), and only the feature flags they are gated by (P4-10) are warmed.
+    /// </summary>
+    private async Task WarmAsync(string endpoint, Func<Task<HttpResponseMessage>> call)
+    {
+        if (endpoint == "GET /dashboard" || endpoint.StartsWith("GET /reports/", StringComparison.Ordinal))
+        {
+            (await Admin.GetAsync(Url("/api/v1/features"), Ct)).EnsureSuccessStatusCode();
+        }
+        else
+        {
+            await SucceedsAsync(endpoint, call);
+        }
     }
 
     private static async Task SucceedsAsync(string endpoint, Func<Task<HttpResponseMessage>> call)
