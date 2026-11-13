@@ -421,3 +421,36 @@ Soru 14'ün Faz 3 adımı. Sahip kararları agent'a bıraktı (futbol okulu yön
 3. **Kapanmış ayın ödemesi de iade edilebilir (DEC-421).** Donmuş borç değişmez, borç yeniden açık görünür. Yasaklamak okulu sistem dışı iadeye iterdi.
 4. **Erken bitirmede uyarı, otomatik iade yok (DEC-422).** Kayıt bitirme penceresi peşin ödenmiş ayları listeler; iade kararı okulda kalır.
 5. **Açık konu (DEC-418, DEC-424):** iyzico iadesi gerçek sandbox'ta denenmedi (anahtar yok). Sonucu kaybolan iade artık ödeme detayıyla kurtarılıyor: iyzico'nun her reddi kontrol ediliyor, kesin değilse iade "İnceleme gerekli" olarak bekliyor ve yönetici "Sağlayıcıda kontrol et" ile sonuçlandırıyor. iyzico iade uç noktası, ret kodları ve raporlama API'sinin alanları gerçek sandbox denemesinde DEC-345'teki imza konusuyla birlikte doğrulanmalı.
+
+## 11. Faz 4 (2026-11-13)
+
+### P4-07 OpenTelemetry ve hata takibi (DEC-550 – DEC-557)
+
+Kararlar `Proposed (agent, 2026-11-13)`. Sahibin bakması gerekenler:
+
+1. **Yerel yığın Jaeger + Prometheus + Perses, `grafana/otel-lgtm` değil (DEC-554).**
+   - *Yazılımcı:* LGTM tek konteyner ve daha tanıdık bir arayüz sunardı. Ama Grafana, Loki ve Tempo AGPL-3.0; repo AGPL'yi yerelde de kullanmıyor (DEC-320). Seçilen üç imaj Apache-2.0. Uygulama yalnız OTLP konuştuğu için backend değişirse kod değişmez.
+   - *Yönetici:* production'daki gözlem servisi (yönetilen bir OTLP servisi ya da kendi kurulumu) ve maliyeti Deploy bloğunda seçilir.
+2. **Alarm eşikleri (DEC-555).** 5xx > %2 (5 dk), p95 > 500 ms (10 dk), dead-letter > 0, dakikada 30'dan fazla başarısız giriş vb.
+   - *Yönetici:* eşikler küçük bir okul trafiğine göre seçildi; gece tek bir hata kimseyi uyandırmaz (trafik koşulu var). Bildirim kanalı ve kimin haber alacağı Deploy bloğunda belirlenir.
+   - *Yazılımcı:* p95 eşiği P4-08'in yük testi ölçümünden sonra route bazında sıkılaştırılabilir.
+3. **Sentry yalnız sunucu tarafında, DSN olmadan kapalı (DEC-556, DEC-557).**
+   - *Yönetici:* Sentry'ye giden olayda kişisel veri yok: exception mesajı, istek gövdesi, header, cookie, query ve kullanıcı gönderilmez. SaaS seçilirse AB veri bölgesi ve KVKK yurt dışı aktarım koşulu Deploy bloğunda değerlendirilir.
+   - *Yazılımcı:* tarayıcı tarafı (Angular/React) eklenmedi. URL'deki token'lar ve session replay KVKK açısından ayrı karar ister; öneri DEC-557'de.
+4. **Metriklerde okul (tenant) etiketi yok (DEC-552).**
+   - *Yönetici:* "hangi okulda hata var" sorusu metrikten değil, trace ve loglardan cevaplanır; loglarda tenant ID zaten var.
+   - *Yazılımcı:* okul sayısı arttıkça seri sayısı artmaz. Metrik deposu okul bazında veri tutmaz.
+5. **Dead-letter'ı yeniden kuyruğa alma aracı yok.** Alarm geliyor, ama şimdilik müdahale SQL ile yapılıyor (`docs/gozlemlenebilirlik.md`). Faz 4 içinde küçük bir Platform Admin uç noktası adayı.
+
+**Yeni paketler ve imajlar:**
+
+| Paket / imaj | Tür | Neden | Lisans | Not |
+| --- | --- | --- | --- | --- |
+| `OpenTelemetry.Extensions.Hosting` 1.20.1 (→ `OpenTelemetry`, `OpenTelemetry.Api`, `OpenTelemetry.Api.ProviderBuilderExtensions`) | NuGet | Trace ve metrik SDK'sı (DEC-550) | Apache-2.0 | 1.21.0 cooldown'da (2026-11-11) |
+| `OpenTelemetry.Exporter.OpenTelemetryProtocol` 1.20.1 | NuGet | OTLP exporter | Apache-2.0 | — |
+| `OpenTelemetry.Instrumentation.AspNetCore` 1.20.2, `OpenTelemetry.Instrumentation.Http` 1.20.2 | NuGet | Gelen istek ve HttpClient span'leri | Apache-2.0 | EF Core ve Hangfire instrumentation beta olduğu için eklenmedi |
+| `OpenTelemetry.Exporter.InMemory` 1.20.1 | NuGet (test) | Telemetri testleri | Apache-2.0 | — |
+| `Sentry.AspNetCore` 6.12.1 (→ `Sentry`, `Sentry.Extensions.Logging`) | NuGet | Sunucu tarafı hata takibi (DEC-556) | MIT | 6.13.0 ve 7.0.0 cooldown'da |
+| `jaegertracing/jaeger:2.23.0` | imaj | `observability` profili: OTLP alıcısı, trace arayüzü (DEC-554) | Apache-2.0 | Tag + digest |
+| `prom/prometheus:v3.16.0` | imaj | `observability` profili: metrikler ve alarm kuralları | Apache-2.0 | Tag + digest |
+| `persesdev/perses:v0.55.1` | imaj | `observability` profili: dashboard'lar | Apache-2.0 | Tag + digest |

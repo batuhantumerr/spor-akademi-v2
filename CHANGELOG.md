@@ -8,6 +8,7 @@ Bu dosya [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) biçimini ve [
 
 #### Faz 4 — Production sağlamlaştırma
 - Faz 3 geçişi sahip tarafından onaylandı (2026-11-13); Faz 4 planı roadmap'e yazıldı.
+- **OpenTelemetry ve hata takibi (P4-07):** API trace (ASP.NET Core, HttpClient, Npgsql, Hangfire işleri, outbox teslimleri, SignalR yayını) ve metrikleri (hata oranı, gecikme, sağlık, outbox, başarısız giriş, rate limit, ödeme bildirimleri) OTLP ile gönderir. Endpoint yapılandırılmamışsa hiçbir şey kaydedilmez. Span'ler dışarı çıkmadan önce temizlenir; query string, header, SQL parametresi ve kişisel veri taşımaz. Loglar `TraceId` taşır. Yerelde `observability` compose profili (Jaeger, Prometheus, Perses; hepsi Apache-2.0), repodaki dashboard ve alarm kurallarıyla gelir. Sentry entegre edildi: `Sentry:Dsn` yoksa kapalı, varsa kişisel veri temizlenerek gönderir. Ayrıntı: `docs/gozlemlenebilirlik.md` (DEC-550 – DEC-557).
 
 ## [0.3.0] - 2026-11-13
 

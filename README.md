@@ -104,6 +104,18 @@ bash scripts/run-api.sh                         # depo çalışıyorsa Storage__
 - API ayarları `Storage__ServiceUrl`, `Storage__AccessKey`, `Storage__SecretKey`, `Storage__Bucket` (isteğe bağlı `Storage__PublicUrl`: tarayıcı depoya başka bir adresten ulaşıyorsa imzalı bağlantıların adresi); `Storage__ServerSideEncryption` (varsayılan `true`, SSE-S3) sağlayıcıya bağlıdır: SeaweedFS ve AWS S3 destekler, desteklemeyen bir serviste `false` yapılıp şifreleme servisin kendi ayarıyla sağlanır (DEC-320); `run-api.sh` bunları, depo çalışıyorsa `.env`'den verir.
 - Yüklemeler API üzerinden geçer ve içerik (magic bytes ve yapı) kontrol edilir; açma bağlantıları 5 dakikalık imzalı URL'lerdir (DEC-321 – DEC-323). Silinen belgenin dosyası commit'ten sonra outbox mesajıyla silinir; başarısız silme yeniden denenir (DEC-325).
 
+### Gözlemlenebilirlik (P4-07)
+
+Trace ve metrikler OTLP ile gider, beklenmeyen hatalar Sentry'ye; endpoint veya DSN yoksa ikisi de kapalıdır. Yerelde isteğe bağlı `observability` profili (Jaeger, Prometheus, Perses; Apache-2.0, sadece `127.0.0.1`):
+
+```bash
+bash scripts/setup-env.sh                              # eski bir .env'e sadece eksik port anahtarlarını ekler
+docker compose --profile observability up -d --wait    # Jaeger + Prometheus + Perses
+bash scripts/run-api.sh                                # Jaeger çalışıyorsa API'yi ona bağlar
+```
+
+Trace'ler http://127.0.0.1:56686, dashboard http://127.0.0.1:58080, alarmlar http://127.0.0.1:57090/alerts. Ayrıntı: [docs/gozlemlenebilirlik.md](docs/gozlemlenebilirlik.md).
+
 ### Demo verisi (P1-38)
 
 ```bash
