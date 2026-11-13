@@ -70,6 +70,20 @@ public sealed class ErrorTrackingTests(DatabaseFixture database) : IntegrationTe
         }
     }
 
+    /// <summary>The other tests replace the transport to watch it; here the API's own choice is checked.</summary>
+    [Theory]
+    [InlineData(null, true)]
+    [InlineData(FakeDsn, false)]
+    public void Without_a_dsn_the_transport_discards_everything(string? dsn, bool discards)
+    {
+        using var api = SentryApi(transport: null, dsn);
+
+        var options = api.Services.GetRequiredService<Microsoft.Extensions.Options.IOptions<SentryAspNetCoreOptions>>().Value;
+
+        (options.Transport?.GetType().Name == "DiscardingTransport").ShouldBe(discards);
+        options.Dsn.ShouldBe(dsn ?? string.Empty);
+    }
+
     [Fact]
     public async Task With_a_dsn_an_unexpected_error_is_sent_without_personal_data()
     {
@@ -107,14 +121,17 @@ public sealed class ErrorTrackingTests(DatabaseFixture database) : IntegrationTe
         return await client.SendAsync(request, Ct);
     }
 
-    private WebApplicationFactory<Program> SentryApi(CapturingTransport transport, string? dsn) =>
+    private WebApplicationFactory<Program> SentryApi(CapturingTransport? transport, string? dsn) =>
         Api.WithWebHostBuilder(builder =>
         {
             builder.ConfigureAppConfiguration(config => config.AddInMemoryCollection(new Dictionary<string, string?> { ["Sentry:Dsn"] = dsn }));
             builder.ConfigureTestServices(services =>
             {
                 services.AddSingleton<IStartupFilter>(new DuplicateUserEndpoint());
-                services.PostConfigure<SentryAspNetCoreOptions>(options => options.Transport = transport);
+                if (transport is not null)
+                {
+                    services.PostConfigure<SentryAspNetCoreOptions>(options => options.Transport = transport);
+                }
             });
         });
 

@@ -184,6 +184,11 @@ public sealed class TelemetryTests(DatabaseFixture database) : IdentityTest(data
                      Read(("OpenTelemetry:Otlp:Endpoint", "file:///etc/passwd")),
                      Read(("OTEL_EXPORTER_OTLP_ENDPOINT", "http://127.0.0.1:4317"), ("OTEL_EXPORTER_OTLP_PROTOCOL", "http/json")),
                      Read(("OpenTelemetry:Otlp:Endpoint", "http://127.0.0.1:4317"), ("OpenTelemetry:Tracing:SampleRatio", "2")),
+                     Read(("OpenTelemetry:Otlp:Endpoint", "http://127.0.0.1:4317"), ("OpenTelemetry:Tracing:SampleRatio", "abc")),
+                     Read(("OpenTelemetry:Otlp:Endpoint", "http://127.0.0.1:4317"), ("OpenTelemetry:Metrics:ExportInterval", "abc")),
+                     Read(("OpenTelemetry:Otlp:Endpoint", "http://127.0.0.1:4317"), ("OpenTelemetry:Metrics:ExportInterval", "00:00:00")),
+                     Read(("OpenTelemetry:Otlp:Endpoint", "http://127.0.0.1:4317"), ("OpenTelemetry:Metrics:HealthInterval", "-00:00:30")),
+                     Read(("OpenTelemetry:Otlp:Endpoint", "http://127.0.0.1:4317"), ("OpenTelemetry:Enabled", "evet")),
                  })
         {
             invalid.Enabled.ShouldBeFalse();
@@ -207,15 +212,21 @@ public sealed class TelemetryTests(DatabaseFixture database) : IdentityTest(data
             .Decision.ShouldBe(SamplingDecision.Drop);
     }
 
-    [Fact]
-    public async Task An_unknown_protocol_turns_telemetry_off_and_the_api_still_starts()
+    [Theory]
+    [InlineData("OpenTelemetry:Otlp:Protocol", "http/json")]
+    [InlineData("OpenTelemetry:Metrics:ExportInterval", "abc")]
+    [InlineData("OpenTelemetry:Metrics:ExportInterval", "00:00:00")]
+    [InlineData("OpenTelemetry:Metrics:HealthInterval", "-00:00:30")]
+    [InlineData("OpenTelemetry:Tracing:SampleRatio", "abc")]
+    [InlineData("OpenTelemetry:Enabled", "evet")]
+    public async Task A_malformed_setting_turns_telemetry_off_and_the_api_still_starts(string key, string value)
     {
         var spans = new ConcurrentQueue<Activity>();
         using var api = TelemetryApi(spans: spans, configuration: new Dictionary<string, string?>
         {
             ["OpenTelemetry:Otlp:Endpoint"] = "http://127.0.0.1:9",
-            ["OpenTelemetry:Otlp:Protocol"] = "http/json",
             ["OpenTelemetry:Enabled"] = null,
+            [key] = value,
         });
         using var client = api.CreateClient();
 

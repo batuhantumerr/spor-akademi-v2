@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Globalization;
 using System.Reflection;
 using OpenTelemetry;
 using OpenTelemetry.Context.Propagation;
@@ -128,9 +129,22 @@ internal sealed record TelemetrySettings(
     {
         ArgumentNullException.ThrowIfNull(configuration);
         var section = configuration.GetSection("OpenTelemetry");
-        var metricInterval = section.GetValue("Metrics:ExportInterval", TimeSpan.FromSeconds(15));
-        var healthInterval = section.GetValue("Metrics:HealthInterval", TimeSpan.FromSeconds(30));
-        TelemetrySettings Off(string problem) => new(null, OtlpExportProtocol.Grpc, false, 0, metricInterval, healthInterval, problem);
+        TelemetrySettings Off(string problem) => new(null, OtlpExportProtocol.Grpc, false, 0, DefaultMetricInterval, DefaultHealthInterval, problem);
+
+        if (!TryInterval(section["Metrics:ExportInterval"], DefaultMetricInterval, out var metricInterval))
+        {
+            return Off("OpenTelemetry:Metrics:ExportInterval is not a positive time span (e.g. 00:00:15)");
+        }
+
+        if (!TryInterval(section["Metrics:HealthInterval"], DefaultHealthInterval, out var healthInterval))
+        {
+            return Off("OpenTelemetry:Metrics:HealthInterval is not a positive time span (e.g. 00:00:30)");
+        }
+
+        if (!TryFlag(section["Enabled"], out var enabled))
+        {
+            return Off("OpenTelemetry:Enabled is neither true nor false");
+        }
 
         var endpointText = FirstNonEmpty(section["Otlp:Endpoint"], configuration["OTEL_EXPORTER_OTLP_ENDPOINT"]);
         Uri? endpoint = null;
@@ -152,13 +166,36 @@ internal sealed record TelemetrySettings(
                 return Off("OpenTelemetry:Otlp:Protocol (or OTEL_EXPORTER_OTLP_PROTOCOL) is neither grpc nor http/protobuf");
         }
 
-        var ratio = section.GetValue("Tracing:SampleRatio", 1.0);
-        if (ratio is < 0 or > 1)
+        var ratioText = section["Tracing:SampleRatio"];
+        var ratio = 1.0;
+        if (!string.IsNullOrWhiteSpace(ratioText)
+            && (!double.TryParse(ratioText, NumberStyles.Float, CultureInfo.InvariantCulture, out ratio) || double.IsNaN(ratio) || ratio is < 0 or > 1))
         {
-            return Off("OpenTelemetry:Tracing:SampleRatio is not between 0 and 1");
+            return Off("OpenTelemetry:Tracing:SampleRatio is not a number between 0 and 1");
         }
 
-        return new TelemetrySettings(endpoint, protocol, endpoint is not null || section.GetValue("Enabled", false), ratio, metricInterval, healthInterval);
+        return new TelemetrySettings(endpoint, protocol, endpoint is not null || enabled, ratio, metricInterval, healthInterval);
+    }
+
+    private static readonly TimeSpan DefaultMetricInterval = TimeSpan.FromSeconds(15);
+    private static readonly TimeSpan DefaultHealthInterval = TimeSpan.FromSeconds(30);
+
+    /// <summary>Up to a day; a metric reader takes the interval in milliseconds as an <see cref="int"/>.</summary>
+    private static bool TryInterval(string? text, TimeSpan fallback, out TimeSpan interval)
+    {
+        interval = fallback;
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            return true;
+        }
+
+        return TimeSpan.TryParse(text, CultureInfo.InvariantCulture, out interval) && interval > TimeSpan.Zero && interval <= TimeSpan.FromDays(1);
+    }
+
+    private static bool TryFlag(string? text, out bool flag)
+    {
+        flag = false;
+        return string.IsNullOrWhiteSpace(text) || bool.TryParse(text, out flag);
     }
 
     public Sampler CreateSampler() => Enabled ? new ApiSampler(SampleRatio) : new AlwaysOffSampler();
