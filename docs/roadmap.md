@@ -64,7 +64,7 @@ Kapsamın tamamı ve maddelerin açıklamaları: [proje dokümanı, Ek G](proje-
 - [x] P1-37 MVP güvenlik kontrol listesi
 - [x] P1-38 Demo verisi seed betiği
 - [x] P1-39 CHANGELOG (etiket sahipte)
-- [ ] P1-40 Faz 1 geçişi (sahip)
+- [x] P1-40 Faz 1 geçişi ve `v0.1.0` etiketi (sahip; etiket 2026-11-13, ae38efd)
 
 ## Faz 2 — İş mantığı derinliği (`v0.2.0`)
 
@@ -80,7 +80,7 @@ Kapsamın tamamı ve maddelerin açıklamaları: [proje dokümanı, Ek G](proje-
 ### Sürüm hazırlığı
 - [x] P2-R1 Çıkış kriterlerinin otomatik testlerle doğrulanması ([faz-2-cikis-kriterleri.md](faz-2-cikis-kriterleri.md); online ödeme e2e'si, e2e API'si `Staging` + Fake, DEC-241)
 - [x] P2-R2 Faz 2 geçişi (sahip onayı 2026-11-11)
-- [ ] P2-R3 `v0.2.0` etiketi (sahip)
+- [x] P2-R3 `v0.2.0` etiketi (sahip, 2026-11-13; 6eb0f17)
 
 ## Faz 3 — Veli deneyimi (`v0.3.0`)
 
@@ -153,14 +153,65 @@ Veli yalnızca **kendi çocuklarını** görür. Bu, okul izolasyonunun yanında
   - Duyuru veliye anlık olarak ulaşır.
   - Uygulama iki dilde de çalışır.
   - WCAG raporunda açık kritik bulgu kalmaz.
-- [ ] P3-R2 Faz 3 geçişi ve `v0.3.0` etiketi (sahip)
+- [x] P3-R2 Faz 3 geçişi (sahip onayı 2026-11-13)
+- [x] P3-R3 `v0.3.0` etiketi (sahip, 2026-11-13; `main` 5260643, Faz 0 – Faz 3)
 
 ## Faz 4 — Production sağlamlaştırma (`v0.4.0`)
 
-### 4.1 Güvenlik (P4-F1)
-- [x] P4-01 **Güvenlik başlıkları ve tam CSP** (NFR-SEC-13, NFR-SEC-02). (DEC-500 – DEC-502)
-  - API'nin her yanıtında güvenlik başlıkları ve `default-src 'none'` CSP; `/jobs` paneline ayrı politika; HSTS yalnız Production'da ve HTTPS'te.
-  - Admin ve veli imajlarında tam CSP (satır içi script yok) ve `Permissions-Policy`; depo origin'i `STORAGE_PUBLIC_ORIGIN` ile; CI'da birebir denetim, e2e'de CSP ihlali testi kırar.
-- [x] P4-02 **API rate limiting** (NFR-SEC-14). (DEC-503 – DEC-506)
-  - Mevcut uç nokta sınırlarına ek olarak kullanıcı başına genel sınır, okul başına yazma sınırı ve token'sız istekler için IP sınırı; `RateLimiting` bölümünden ayarlanır.
-  - `429` + `Request.TooManyRequests` + `Retry-After`; webhook ve health muaf; sınırlar instance başına (Valkey'e taşıma kararı DEC-506).
+Ayrıntılar Faz 3 geçişinde (2026-11-13) yazıldı. Amaç: platform gerçek veriye emanet edilecek kadar güvenli, gözlemlenebilir ve hızlı olur. Faz 4 KVKK gereksinimleri tamamlanıp sahip onaylayana kadar yalnız sentetik veri kullanılır (DEC-031). Deploy bloğu (sunucu, Caddy, şifreli yedek betiği) sahipte kalır; buradaki işler yerelde ve CI'da kanıtlanır. Yeni kararlar DEC-500'den başlar.
+
+Migration ekleyen işler (RLS → audit log → KVKK başvuruları) art arda yapılır, diğerleri bunlara paralel ilerler.
+
+### 4.1 Güvenlik (P4-F1; NFR-SEC-01, -13, -14)
+- [x] P4-01 **Güvenlik başlıkları ve tam CSP.** (DEC-500 – DEC-502)
+  - API yanıtlarında güvenlik başlıkları.
+  - Admin ve veli nginx imajlarında `frame-ancestors` yerine tam CSP: `default-src 'self'`, SignalR için `connect-src`, belge küçük resmi için depo origin'i `img-src`'de.
+  - HSTS yalnız HTTPS'te ve Production'da; `check-security-headers.sh` yeni başlıkları da doğrular.
+- [x] P4-02 **API rate limiting.** Kullanıcı bazında genel sınır ve okul bazında yazma sınırı; `429`, `Retry-After` ve sabit hata kodu. Faz 1'deki giriş sınırları korunur. (DEC-503 – DEC-506)
+- [ ] P4-03 **OWASP Top 10 (2021) ve ASVS L2 incelemesi.**
+  - Her kategori için bulgu, kanıt ve düzeltme `docs/guvenlik-kontrol-listesi.md`'ye yazılır; yüksek bulgu açık kalmaz.
+  - Trivy checksum'ının workflow'a sabitlenmesi yeniden değerlendirilir.
+
+### 4.2 Veri koruma (P4-F2 – P4-F4)
+- [ ] P4-04 **PostgreSQL Row Level Security** (ikinci izolasyon katmanı).
+  - Uygulama rolü her bağlantıda okul bağlamını (`set_config`) taşır; tenant'lı her tabloda `FORCE ROW LEVEL SECURITY` ve politika bulunur.
+  - Platform Admin, arka plan işleri ve okullar arası giriş araması için açık ve test edilmiş istisnalar.
+  - Kanıt: EF global filter'ı kapalıyken başka okulun satırı okunamaz ve yazılamaz.
+- [ ] P4-05 **Kişisel veri audit log'u.**
+  - Öğrenci, veli, sağlık belgesi ve kullanıcı verisinin okunması ve değiştirilmesi kaydedilir: kim, ne zaman, hangi kayıt, hangi alanlar (değerler değil).
+  - Audit tablosuna uygulama rolü yalnız ekleme yapabilir; saklama süresi var; Okul Admini için listeleme ekranı.
+- [ ] P4-06 **KVKK ilgili kişi başvuruları** (NFR-PRV-05, -06).
+  - Bir öğrencinin ve velisinin verisi makinece okunur biçimde dışa aktarılır (JSON ve belgeler).
+  - Talep üzerine silme: anonimleştirme altyapısıyla, saklama süresinden bağımsız, audit kaydıyla.
+  - Aydınlatma metni taslağı ve arayüzde bağlantısı (hukuki teyit sahipte).
+  - Gerçek verinin barındırma konumu için ADR (NFR-PRV-07; yurt dışı aktarım koşulları). Seçenekler ve öneri agent tarafından yazılır, karar sahipte.
+
+### 4.3 Operasyon (P4-F5 – P4-F8)
+- [ ] P4-07 **OpenTelemetry ve hata takibi** (NFR-OBS-04).
+  - Trace (ASP.NET Core, HttpClient, EF/Npgsql, Hangfire, outbox), metrik ve log OTLP ile; kişisel veri ve token taşınmaz.
+  - Yerelde compose profiliyle dashboard ve alarm kuralları.
+  - Sentry ile hata takibi: SDK entegre edilir ve testle doğrulanır; DSN ortam yapılandırmasından gelir, yoksa gönderim kapalıdır (anahtar repoda yok, gerçek DSN Deploy bloğunda).
+- [ ] P4-08 **k6 ile yük testi ve performans bütçesi** (NFR-PRF-01, -02).
+  - Okuma p95 < 300 ms, yazma p95 < 500 ms; demo verisiyle yerelde ölçülür, sonuçlar `docs/`'a yazılır.
+  - N+1 sorgular ve eksik index'ler düzeltilir; regresyon için sorgu sayısı testleri.
+  - Durumsuzluk (NFR-SCL-01): yük testi proxy arkasında iki API örneğiyle de koşar; oturum, SignalR ve rate limit sayaçlarının davranışı belgelenir.
+- [ ] P4-09 **Yedekten geri yükleme tatbikatı** (NFR-REL-04).
+  - Yerel yedek alma ve geri yükleme betikleri; WAL arşiviyle point-in-time recovery (15 dakikalık RPO).
+  - Tatbikatta tam yedekten ve belirli bir ana (PITR) geri dönüş denenir.
+  - Tatbikat ölçülür ve süresiyle belgelenir; production yedeği Deploy bloğunda.
+- [ ] P4-10 **Feature flag'ler** (kademeli yayın).
+  - Okul bazında açılıp kapanan bayraklar; Platform Admin yönetir, istemciler bayrakları okur.
+  - Kapalı bayraklı uç nokta `404` döner; bayrak değişikliği cache'i geçersiz kılar.
+
+### 4.4 Faz 3'ten kalan takip işleri
+- [ ] P4-11 **Test ve CI iyileştirmeleri.**
+  - `wcag.ts`'teki `waitForTimeout(500)` koşul beklemesiyle değişir; a11y projeleri ayrı CI job'ına taşınır.
+  - Ay sınırını aşan iade testi (DEC-420); çıkış ile refresh grace replay'i arasında barrier entegrasyon testi.
+
+### Sürüm hazırlığı
+- [ ] P4-R1 **Çıkış kriterlerinin doğrulanması** (`docs/faz-4-cikis-kriterleri.md`).
+  - OWASP incelemesinde açık yüksek bulgu yok; güvenlik başlıkları otomatik kontrol ediliyor.
+  - RLS, uygulama filtresi kapalıyken bile okullar arası okuma ve yazmayı engelliyor.
+  - Kişisel veri erişimi audit log'da; ilgili kişinin verisi dışa aktarılıp silinebiliyor.
+  - Trace ve metrikler dashboard'da görünüyor; yük testi bütçe içinde ve iki API örneğiyle çalışıyor; geri yükleme tatbikatı süresiyle belgeli; bir özellik okul bazında bayrakla açılıp kapanıyor.
+- [ ] P4-R2 Faz 4 geçişi ve `v0.4.0` etiketi (sahip)

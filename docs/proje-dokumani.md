@@ -570,10 +570,10 @@ Projede bir öğrenme günlüğü tutulur: her maddeden sonra kendi cümlelerinl
 | Faz | Sürüm | Durum |
 | --- | --- | --- |
 | 0 — Temel | `v0.0.1` | **Tamamlandı** (2026-11-05) |
-| 1 — MVP | `v0.1.0` | **Devam ediyor** |
-| 2 — İş mantığı derinliği | `v0.2.0` | Online ödeme, Hangfire, outbox, e-posta, anonimleştirme, MinIO, Redis |
-| 3 — Veli deneyimi | `v0.3.0` | React PWA, SignalR, dashboard, i18n, WCAG |
-| 4 — Production sağlamlaştırma | `v0.4.0` | OWASP, RLS, audit log, KVKK başvuruları, OpenTelemetry, k6, feature flag |
+| 1 — MVP | `v0.1.0` | **Tamamlandı** (P1-40 geçişi ve etiket sahipte) |
+| 2 — İş mantığı derinliği | `v0.2.0` | **Tamamlandı** (geçiş 2026-11-11): Online ödeme, Hangfire, outbox, e-posta, anonimleştirme, MinIO, Redis |
+| 3 — Veli deneyimi | `v0.3.0` | **Tamamlandı** (geçiş 2026-11-13): React PWA, SignalR, dashboard, i18n, WCAG |
+| 4 — Production sağlamlaştırma | `v0.4.0` | **Devam ediyor** (2026-11-13): OWASP, RLS, audit log, KVKK başvuruları, OpenTelemetry, k6, feature flag |
 | 5 — Ölçek ve mimari | `v1.0.0` | RabbitMQ, servis ayırma, Azure, Terraform |
 | Deploy bloğu | — | Zamanlanmamış: sunucu, deploy workflow'u, geri alma provası, production compose + Caddy, şifreli yedek betiği, üçüncü taraf imaj taraması |
 
