@@ -2,7 +2,8 @@ namespace SporAkademi.Api.Observability;
 
 /// <summary>
 /// API responses carry tokens, temporary passwords and personal data: no browser or proxy may store them. The job
-/// panel (<c>/jobs</c>, DEC-332) is covered too and may not be framed (its actions are buttons).
+/// panel (<c>/jobs</c>, DEC-332) is covered too; its frame and sniffing headers come from
+/// <see cref="Security.SecurityHeadersMiddleware"/> like every other response (P4-01).
 /// Set when the response starts, so problem responses from later middleware are covered too.
 /// </summary>
 internal sealed class NoStoreMiddleware(RequestDelegate next)
@@ -18,13 +19,6 @@ internal sealed class NoStoreMiddleware(RequestDelegate next)
             context.Response.OnStarting(() =>
             {
                 context.Response.Headers.CacheControl = "no-store";
-                if (jobs)
-                {
-                    context.Response.Headers.XFrameOptions = "DENY";
-                    context.Response.Headers.XContentTypeOptions = "nosniff";
-                    context.Response.Headers["Referrer-Policy"] = "no-referrer";
-                }
-
                 return Task.CompletedTask;
             });
         }

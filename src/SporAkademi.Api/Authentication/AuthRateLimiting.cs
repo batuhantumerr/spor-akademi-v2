@@ -21,7 +21,6 @@ internal static class AuthRateLimiting
     public static IServiceCollection AddAuthRateLimiting(this IServiceCollection services) =>
         services.AddRateLimiter(options =>
         {
-            options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
             options.AddPolicy(Policy, context => RateLimitPartition.GetFixedWindowLimiter(
                 $"{context.Connection.RemoteIpAddress?.ToString() ?? "unknown"} {context.Request.Path.Value}",
                 _ => new FixedWindowRateLimiterOptions
