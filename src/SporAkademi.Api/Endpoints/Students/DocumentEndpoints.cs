@@ -23,7 +23,8 @@ internal static class DocumentEndpoints
         var admin = app.MapGroup("/api/v1").WithTags("Documents").RequireRole(Role.SchoolAdmin);
         admin.MapPost("/students/{id:guid}/documents", Upload)
             .Produces<StudentDocumentDto>(StatusCodes.Status201Created)
-            .ProducesProblems(400, 404, 409, 422)
+            .ProducesProblems(400, 404, 409, 422, 429)
+            .RequireRateLimiting(Security.ApiRateLimiting.UploadPolicy) // P4-03 (DEC-514): the form is held in memory
             .WithMetadata(new RequestSizeLimit(UploadRequestLimit))
             .WithFormOptions(bufferBody: false, memoryBufferThreshold: (int)UploadRequestLimit, multipartBodyLengthLimit: UploadRequestLimit)
             // Bearer tokens only, no cookie authentication on this endpoint, so there is no CSRF to defend against (DEC-321).

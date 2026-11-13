@@ -49,6 +49,7 @@ public sealed class ApiFactory(
                 ["RateLimiting:UserPermitsPerMinute"] = "1000000",
                 ["RateLimiting:SchoolWritePermitsPerMinute"] = "1000000",
                 ["RateLimiting:AnonymousPermitsPerMinute"] = "1000000",
+                ["RateLimiting:ConcurrentUploadsPerSchool"] = "1000",
             })
             .AddInMemoryCollection(storage ?? new Dictionary<string, string?>()));
         builder.ConfigureServices(services =>

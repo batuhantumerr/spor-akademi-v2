@@ -168,7 +168,7 @@ public sealed class LogPrivacyTests(DatabaseFixture database) : IdentityTest(dat
 
         Api.Emails.To(CoachEmail).ShouldHaveSingleItem();
         Api.Emails.To(GuardianEmail).ShouldHaveSingleItem().TextBody.ShouldContain(StudentFirstName);
-        var resetToken = CapturingEmailSender.TokenIn(Api.Emails.To(Email).ShouldHaveSingleItem());
+        var resetToken = CapturingEmailSender.TokenIn(Api.Emails.To(Email).Single(m => m.Template == "identity.password-reset"));
         var welcomeToken = CapturingEmailSender.TokenIn(Api.Emails.To(CoachEmail).Single());
 
         // P2-F1: after the fee reminder was sent (it needs the unpaid due), the due is paid online through the sandbox
@@ -221,6 +221,8 @@ public sealed class LogPrivacyTests(DatabaseFixture database) : IdentityTest(dat
         var events = sink.Rendered();
         events.ShouldContain(e => e.Contains("Anonymization for school", StringComparison.Ordinal) && e.Contains(school.Value.ToString(), StringComparison.Ordinal));
         events.ShouldContain(e => e.Contains("identity.password-reset", StringComparison.Ordinal) && e.Contains("sent", StringComparison.Ordinal));
+        // P4-03 (DEC-512): the password-changed notice names the user by id only.
+        events.ShouldContain(e => e.Contains("identity.password-changed", StringComparison.Ordinal) && e.Contains("sent", StringComparison.Ordinal));
         events.ShouldContain(e => e.Contains("Dues reminder", StringComparison.Ordinal) && e.Contains("sent", StringComparison.Ordinal));
         // The test must see real request logs, otherwise it proves nothing.
         events.ShouldContain(e => e.Contains("LoginCommand", StringComparison.Ordinal) && e.Contains("Auth.InvalidCredentials", StringComparison.Ordinal));

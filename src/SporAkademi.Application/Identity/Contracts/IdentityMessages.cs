@@ -22,3 +22,10 @@ public sealed record PasswordResetRequestedMessage(Guid UserId) : IOutboxMessage
 /// </summary>
 [OutboxMessage("identity.parent-invited.v1")]
 public sealed record ParentInvitedMessage(Guid UserId) : IOutboxMessage;
+
+/// <summary>
+/// The password of an account changed (P4-03, ASVS 2.2.3, DEC-512): the owner is told by e-mail. Ids only; the handler
+/// reads the address when it runs, and the message names no password or link.
+/// </summary>
+[OutboxMessage("identity.password-changed.v1")]
+public sealed record PasswordChangedMessage(Guid UserId) : IOutboxMessage;

@@ -532,3 +532,19 @@ Kararlar `Proposed (agent, 2026-11-13)`. Sahibin bakması gerekenler:
    - *Yönetici:* önceden `e2e` zorunlu olduğu için denetim de kapıdaydı; ruleset'e eklenince kapsam aynı kalır, `e2e` yaklaşık yarıya iner (10,5–13 dk yerine ~6 dk 20 sn; `a11y` paralel ~9 dk, PR #140 CI koşusu).
 2. **Çıkışla yarışan eski token'ın yeniden denemesi (DEC-594).** Çıkış her iki sırada da kazanıyor (DEC-593). Ancak çıkışla yarışıp `409` alan sekmenin tek yeniden denemesi, belgelenmiş yeniden kullanım kuralı gereği kullanıcının diğer cihazlarındaki oturumları da kapatıyor. Davranış değişmedi.
    - *Yazılımcı:* yalnız çıkışla kapanan ailede alarmı kapatmak, iptal nedenini saklamayı (migration) gerektirir. Onay ya da "değiştirelim" kararı.
+
+### P4-03 OWASP Top 10 ve ASVS L2 incelemesi (DEC-510 – DEC-518)
+
+Sonuç: **yüksek bulgu yok.** Ayrıntı ve kanıt `guvenlik-kontrol-listesi.md` Bölüm 4'te.
+
+1. **MFA ne zaman (DEC-517, soru 33).** Yönetici hesapları (özellikle tüm okulları gören Platform Admin) yalnız şifreyle korunuyor; ASVS L2 yönetici MFA ister. Öneri: gerçek veriden önce en az Platform Admin için TOTP, Faz 5'in ilk işi.
+   - *Yönetici:* bir yöneticinin şifresi sızarsa saldırgan bütün okulların kayıtlarına girer; MFA bunu tek başına kapatır. Yönetici için giriş bir adım uzar.
+   - *Yazılımcı:* TOTP (RFC 6238, yeni paket gerektirebilir), kurtarma kodları ve "telefon kayboldu" akışı tasarım ister; küçük bir iş değil. Onay ya da zamanlama kararı.
+2. **Oturum süresi (DEC-517).** ASVS L2 yeniden girişi 12 saatte (ya da 30 dk hareketsizlikte) ister; bizde 7 gün kayan / 30 gün mutlak. Veli uygulaması (mobil) için sık giriş istenmiyor.
+   - *Yönetici:* çalınan bir cihaz bir hafta açık kalabilir. Yönetici rolleri için süreyi kısaltmak (ör. 12 saat) veli deneyimini etkilemez.
+   - *Yazılımcı:* rol bazlı oturum süresi küçük bir değişiklik. Onay ya da "kısaltalım" kararı.
+3. **Şifre değişikliği e-postası (DEC-512, yeni davranış).** Şifre değişince, sıfırlanınca ya da yönetici geçici şifre verince hesabın e-postasına bildirim gider. İlk şifre seçimi (karşılama ya da davet) bildirim üretmez. *Yönetici:* hesap ele geçirilirse sahibi fark eder. Öneri: kabul.
+4. **Yükleme eşzamanlılık sınırı (DEC-514).** Okul başına 3 eşzamanlı yükleme; fazlası `429`. *Yönetici:* toplu fotoğraf yüklemesinde bir kerede en çok 3 dosya işlenir, ekran kalanı yeniden dener. Öneri: kabul; sayı `RateLimiting:ConcurrentUploadsPerSchool` ile değişir.
+5. **Deploy bloğu için yeni maddeler (DEC-516, DEC-518).** `AllowedHosts` alan adlarıyla verilmeli; Caddy erişim günlüğünde sorgu dizesi (arama terimi) atılmalı; JWT anahtarı için döndürme runbook'u; yeni alarmlar (`RefreshFailureSpike`, `AuthorizationFailureSpike`) için bildirim kanalı mevcut alarmlarla birlikte.
+6. **Başka okulun e-postası sızıntısı (DEC-516, O5).** Okul Admini bir antrenör eklerken adres başka bir okulda kayıtlıysa `409` alır; yani adresin sistemde olduğunu öğrenir. Kapatmak ürün değişikliği (okul başına e-posta ya da giriş formunda okul seçimi). Öneri: şimdilik kabul.
+7. **Trivy/gitleaks checksum (DEC-515).** Zaten sabitti; resmi dosyalarla doğrulandı, ek iş yok. CI'da `persist-credentials: false` ve bağlam değerlerinin ortam değişkeniyle verilmesi eklendi; `ci.yml` değiştiği için bu PR code-owner incelemesine girer.
