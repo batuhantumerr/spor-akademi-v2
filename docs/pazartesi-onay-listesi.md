@@ -491,3 +491,26 @@ Kararlar `Proposed (agent, 2026-11-13)`. Sahibin bakması gerekenler:
 3. **Tatbikat takvimi (DEC-576, DEC-577).** CI'da her hafta, zorunlu olmayan `restore-drill` workflow'u çalışıyor. Faz geçişlerinde elle tatbikat yapılıyor; Deploy'dan sonra ayda bir production yedeğiyle (sahip). Karar: workflow ruleset'e eklensin mi? Öneri: hayır; haftalık kırmızı sonuç incelenir, PR'ları bekletmez.
 4. **Ölçüm (DEC-577, sentetik veri, tek makine; production süresi değil).** 393 MB'lık RLS'li veritabanı felaketten sonra tam yedekle 19,6 sn'de, PITR ile 19,5 sn'de geri geldi ve kaynakla birebir eşleşti. RTO'yu insan ve altyapı adımları belirliyor; runbook bütçesi yaklaşık 2–2,5 saat, hedef 4 saat.
 5. **Not:** P4-04 (#135) bu PR açıldığında main'de değildi. Tatbikat, #135 yerelde birleştirilerek RLS'li şemada da çalıştırıldı (#135'in güncel hâlinde 27 tabloda `FORCE`, 54 politika korunuyor). #135 merge edildikten sonra CI'daki `restore-drill` aynı şemada tekrar çalışacak.
+
+### P4-08 Yük testi ve performans bütçesi (DEC-560 – DEC-569)
+
+1. **Bütçe tutuyor (`docs/performans.md`).** 300 eşzamanlı kullanıcı, 14 okul, 5 845 öğrenci: okuma p95 12,9 ms (hedef 300), yazma p95 72,5 ms (hedef 500), hata %0. İki API örneğiyle de aynı.
+   - *Yönetici:* yerel makinede, sentetik veriyle ölçüldü. Production donanımı ve ağı farklı olacak, ama pay çok geniş.
+   - *Yazılımcı:* kapasite sınırını bulan stres testi yapılmadı; Deploy sunucusunda yapılması önerilir.
+2. **k6 AGPL-3.0, yalnız ayrı konteyner olarak (DEC-560).** Uygulamaya bağlanmıyor ve dağıtılmıyor; repoda yalnız bizim senaryolarımız var. Karar: bu kullanım kabul mü?
+   - *Yönetici:* lisans yükümlülüğü değiştirilmiş k6'yı başkalarına sunmaya bağlı; biz yalnız aracı çalıştırıyoruz.
+   - *Yazılımcı:* alternatif Gatling (Apache-2.0, JVM). Gerekirse senaryolar taşınabilir; eşikler ve karışım `docs/performans.md`'de.
+3. **Rate limit'ler yalnız yük testi ortamında yükseltiliyor (DEC-561).** Giriş ve veli API'si limitleri artık yapılandırılabilir; varsayılanlar production değerleri (10 ve 60).
+4. **SignalR birden çok örnekte hub yakınlığı ister (DEC-565).** Deploy'da birden çok API örneği çalıştırılırsa Caddy'de `/hubs/*` için `lb_policy cookie` zorunlu. Round robin'de canlı bildirim bağlantılarının hepsi kuruluşta başarısız oldu.
+   - *Yazılımcı:* alternatif, istemcilerde `skipNegotiation` + yalnız WebSocket. Long polling yedeği kaybolur, öneri proxy yakınlığı.
+5. **RLS'nin bedeli ölçüldü, değişiklik yok (DEC-567).** İstek başına ~1 ms; en büyük kalem bağlantı açılışı başına `set_config`. Üç optimizasyon değerlendirildi, biri güvenlik nedeniyle reddedildi. Karar: veritabanı ayrı sunucuya taşınınca yeniden ölçülsün.
+6. **Rate limit'te bulunan hata düzeltildi (DEC-569).** Aynı istemci adresinin iki yazımı (IPv4-mapped) ve IPv6 adres değiştirme, giriş sınırını aşmaya izin veriyordu. Bu yalnız iki örnek testinde göründü.
+7. **CI'da elle tetiklenen `load-smoke` workflow'u (DEC-568).** Zorunlu değil, PR'da çalışmaz. Karar: ruleset'e eklenmesin (paylaşımlı runner'da p95 gürültülü).
+8. **`pg_stat_statements` compose PostgreSQL'inde yüklü (DEC-563).** Yerel konteyner bir kez yeniden başlar; uygulama rolüne yetki verilmedi. Production'da da açılması Deploy bloğu için önerilir.
+
+**Yeni imajlar (yalnız yerel/CI aracı, uygulama paketi yok):**
+
+| İmaj | Neden | Lisans | Not |
+| --- | --- | --- | --- |
+| `grafana/k6:2.3.0` | Yük testi (DEC-560) | AGPL-3.0 | Ayrı konteyner, `k6` profili; tag + digest. 2.4.0 cooldown'da |
+| `caddy:2.11.8-alpine` | Yük testinin reverse proxy'si, `scale` profili (DEC-564) | Apache-2.0 | Tag + digest; Deploy bloğundaki Caddy ile aynı ürün |
