@@ -7,8 +7,13 @@
 // creates per run: the refresh cookie is `Secure`, and WebKit does not send Secure cookies to
 // http://localhost, so a plain-HTTP server would hide the session restore from the WebKit tests.
 //
-// Usage: E2E_TLS_KEY=<pem> E2E_TLS_CERT=<pem> node e2e/serve.mjs <port> <api-origin> [<build-dir>]
-// <build-dir> defaults to the admin build (dist/admin/browser); the parent app passes ../parent/dist (P3-05).
+// P4-01 (DEC-502): static responses carry the image's security headers, read from the same nginx include file
+// (docker/admin/security-headers.inc.template, docker/parent/security-headers.inc), so the suite runs under the
+// production Content-Security-Policy and a violation fails the test (e2e/support/test.ts). ${NAME} in a value is
+// replaced with that environment variable, like the image's envsubst (empty when unset).
+//
+// Usage: E2E_TLS_KEY=<pem> E2E_TLS_CERT=<pem> node e2e/serve.mjs <port> <api-origin> <build-dir> <headers-file>
+// <build-dir> is the admin build (dist/admin/browser) or the parent app's (../parent/dist, P3-05).
 import { createReadStream, readFileSync, statSync } from 'node:fs';
 import { request } from 'node:http';
 import { connect } from 'node:net';
@@ -16,12 +21,31 @@ import { createServer } from 'node:https';
 import { extname, join, normalize, resolve, sep } from 'node:path';
 
 const [port, apiOrigin] = [Number(process.argv[2]), new URL(process.argv[3])];
-const buildDir = process.argv[4] ?? join('dist', 'admin', 'browser');
+const [buildDir, headersFile] = [process.argv[4], process.argv[5]];
+if (!buildDir || !headersFile) {
+  throw new Error('usage: node e2e/serve.mjs <port> <api-origin> <build-dir> <headers-file>');
+}
 const tls = {
   key: readFileSync(process.env.E2E_TLS_KEY),
   cert: readFileSync(process.env.E2E_TLS_CERT),
 };
 const root = resolve(import.meta.dirname, '..', buildDir);
+
+// `add_header <Name> "<value>" always;` lines of the nginx include file.
+function securityHeaders(path) {
+  const headers = {};
+  const text = readFileSync(resolve(import.meta.dirname, '..', path), 'utf8');
+  for (const [, name, value] of text.matchAll(
+    /^\s*add_header\s+(\S+)\s+"([^"]*)"\s+always;\s*$/gm,
+  )) {
+    headers[name] = value.replace(/\$\{(\w+)\}/g, (_, variable) => process.env[variable] ?? '');
+  }
+  if (!headers['Content-Security-Policy']) {
+    throw new Error(`${path} has no Content-Security-Policy header.`);
+  }
+  return headers;
+}
+const security = securityHeaders(headersFile);
 const types = {
   '.html': 'text/html; charset=utf-8',
   '.js': 'text/javascript; charset=utf-8',
@@ -114,7 +138,10 @@ function handle(req, res) {
   }
   // Hashed assets are served as they are; every other path is a client route (index.html).
   const target = file(path) ?? join(root, 'index.html');
-  res.writeHead(200, { 'Content-Type': types[extname(target)] ?? 'application/octet-stream' });
+  res.writeHead(200, {
+    ...security,
+    'Content-Type': types[extname(target)] ?? 'application/octet-stream',
+  });
   createReadStream(target).pipe(res);
 }
 

@@ -8,8 +8,11 @@
 !src/**
 !web/admin/**
 !docker/admin/nginx.conf
+!docker/admin/security-headers.inc.template
+!docker/admin/19-check-storage-origin.sh
 !web/parent/**
 !docker/parent/nginx.conf
+!docker/parent/security-headers.inc
 **/bin
 **/obj
 web/admin/node_modules

@@ -1625,6 +1625,7 @@ API'nin döndüğü tüm hata ve uyarı kodlarının kataloğu. Kurallar:
 | `Concurrency.Conflict` | Conflict | Bu kayıt siz düzenlerken başka biri tarafından değiştirildi. Sayfayı yenileyip tekrar deneyin. | API §1.7 |
 | `Lock.Timeout` | Conflict | İşlem şu anda yapılamıyor. Lütfen birkaç saniye sonra tekrar deneyin. | ADR-0005 |
 | `Request.TooLarge` | Validation | Gönderilen veri çok büyük. | NFR-SEC-12 |
+| `Request.TooManyRequests` | — (429) | Çok fazla deneme yapıldı. Lütfen biraz bekleyip tekrar deneyin. (Yanıtta `Retry-After`, saniye.) | NFR-SEC-14, DEC-505 |
 | `Unexpected.Error` | — (500) | Beklenmeyen bir hata oluştu. Sorun devam ederse bu kodu destek ekibine iletin: {traceId} | ADR-0007 |
 
 #### Value object'ler (alan bazında doğrulama)
