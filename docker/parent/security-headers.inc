@@ -11,8 +11,11 @@
 # checkout posts to /api/v1/payment-callbacks) stay on this origin; the iyzico checkout is a navigation, which the
 # policy does not restrict. The parent app shows no stored document, so no store origin. Permissions-Policy: the app
 # uses no device feature.
+# NFR-SEC-02 (DEC-501): HSTS, one year, no subdomains or preload. Browsers ignore it over plain HTTP; behind the
+# TLS-terminating proxy it takes effect on the HTTPS origin the user sees.
 add_header Referrer-Policy "no-referrer" always;
 add_header X-Content-Type-Options "nosniff" always;
 add_header X-Frame-Options "DENY" always;
+add_header Strict-Transport-Security "max-age=31536000" always;
 add_header Permissions-Policy "accelerometer=(), camera=(), display-capture=(), geolocation=(), gyroscope=(), magnetometer=(), microphone=(), midi=(), payment=(), usb=()" always;
 add_header Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: blob:; connect-src 'self'; font-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'" always;

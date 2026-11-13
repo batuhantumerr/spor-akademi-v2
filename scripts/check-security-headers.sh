@@ -46,7 +46,8 @@ required=(
   "content-security-policy: $(normalize <<<"$csp" | tr '[:upper:]' '[:lower:]')"
 )
 if [[ "$app" != api ]]; then
-  required+=("permissions-policy: $permissions")
+  # The SPA images always send HSTS (DEC-501): browsers ignore it over plain HTTP, the proxy serves them over HTTPS.
+  required+=("permissions-policy: $permissions" "strict-transport-security: max-age=31536000")
 fi
 
 for path in "${paths[@]}" "$@"; do
@@ -64,8 +65,8 @@ for path in "${paths[@]}" "$@"; do
     fi
   done
   # Nothing tells which version runs here (nginx: server_tokens off; the API sends no Server header at all), and
-  # plain HTTP never gets HSTS (NFR-SEC-02: Production over HTTPS only).
-  forbidden='^(x-powered-by|strict-transport-security):'
+  # the API sends HSTS only over HTTPS (NFR-SEC-02: Production, directly or through a known proxy).
+  forbidden='^(x-powered-by):'
   if [[ "$app" == api ]]; then forbidden='^(server|x-powered-by|strict-transport-security):'; fi
   if grep -E "$forbidden" <<<"$headers" >&2 || grep -E '^server: .*[0-9]' <<<"$headers" >&2; then
     echo "$base$path sends the header above" >&2
