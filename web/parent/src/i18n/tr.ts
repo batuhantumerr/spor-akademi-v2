@@ -114,6 +114,7 @@ const trText = {
     payLabel: '{period} aidatını online öde ({amount})',
     paying: 'Ödeme sayfası açılıyor…',
     badCheckout: 'Ödeme sayfası açılamadı. Lütfen tekrar deneyin.',
+    payUnavailable: 'Online ödeme okulunuzda şu anda kullanılamıyor. Aidatları okulunuza ödeyebilirsiniz.',
   },
   schedule: {
     title: 'Haftalık program',

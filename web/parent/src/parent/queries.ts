@@ -27,7 +27,11 @@ export const parentKeys = {
   dues: (id: string) => [...parentKeys.child(id), 'dues'] as const,
   payments: (id: string) => [...parentKeys.child(id), 'payments'] as const,
   announcements: (id: string) => [...parentKeys.child(id), 'announcements'] as const,
+  features: () => [...parentKeys.all, 'features'] as const,
 };
+
+/** Feature flag keys the parent app reads (P4-10); the catalog is in the API (FeatureCatalog). */
+export type FeatureKey = 'parent-online-payments';
 
 const path = (id: string) => ({ params: { path: { id } } });
 
@@ -92,6 +96,24 @@ export function useAnnouncements(id: string) {
     getNextPageParam: (last) =>
       Number(last.page) < Number(last.totalPages) ? Number(last.page) + 1 : undefined,
   });
+}
+
+/**
+ * The school's enabled feature flags (P4-10, DEC-585). Under the parent root, so they go with the session; they rarely
+ * change, so they stay fresh for five minutes. The API answers 404 for a disabled feature in any case.
+ */
+export function useFeatures() {
+  return useQuery({
+    queryKey: parentKeys.features(),
+    queryFn: ({ signal }) => unwrap(api.GET('/api/v1/features', { signal })),
+    staleTime: 5 * 60_000,
+  });
+}
+
+/** True or false once the flags are known; undefined while they load or could not be loaded. */
+export function useFeature(key: FeatureKey): boolean | undefined {
+  const features = useFeatures();
+  return features.data ? features.data.enabled.includes(key) : undefined;
 }
 
 /**

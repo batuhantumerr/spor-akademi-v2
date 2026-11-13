@@ -113,6 +113,8 @@ export const enText: ParentText = {
     payLabel: 'Pay online: {period} monthly fee ({amount})',
     paying: 'Opening the payment page…',
     badCheckout: 'The payment page couldn’t be opened. Please try again.',
+    payUnavailable:
+      'Online payment isn’t available at your school right now. You can pay the fees at your school.',
   },
   schedule: {
     title: 'Weekly schedule',

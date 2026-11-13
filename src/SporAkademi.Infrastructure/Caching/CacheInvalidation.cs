@@ -85,6 +85,10 @@ internal sealed class CacheInvalidationInterceptor(ICurrentUser currentUser, Cac
                 yield return TenantCacheKey.AreaTag(school.Id, CacheArea.Dashboard);
                 yield return TenantCacheKey.AreaTag(school.Id, CacheArea.Reports);
                 break;
+            case SchoolFeature feature:
+                // P4-10 (DEC-583): written by the Platform Admin, who has no school; the row names the school.
+                yield return TenantCacheKey.AreaTag(feature.TenantId, CacheArea.Features);
+                break;
             case ITenantScoped scoped:
                 yield return TenantCacheKey.AreaTag(scoped.TenantId, CacheArea.Dashboard);
                 yield return TenantCacheKey.AreaTag(scoped.TenantId, CacheArea.Reports);

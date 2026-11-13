@@ -40,6 +40,7 @@ public static class DependencyInjection
         services.AddScoped<Students.IStudentAnonymizer, Students.StudentAnonymizer>();
         services.AddScoped<Students.GuardianAftercare>();
         services.AddScoped<Billing.ParentCheckout>();
+        services.AddScoped<Tenancy.IFeatureFlags, Tenancy.FeatureFlags>();
         return services.AddHandlersFrom(typeof(DependencyInjection).Assembly);
     }
 
