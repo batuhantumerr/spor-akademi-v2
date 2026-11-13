@@ -93,7 +93,7 @@ Adımlar:
 Ortam: tek makine (Windows 11, Docker Desktop), `postgres:18.6-alpine`, yalnız sentetik veri. Sunucu, yedek ve arşiv aynı diskte; ağ üzerinden indirme ve şifre çözme yok. Süreler bu yüzden yalnız veritabanı adımlarının alt sınırıdır, production süresi değildir. Tatbikat iki şemada çalıştırıldı:
 
 - `main` (RLS yok, 10 000 dolgu satırı): A ve B geri yüklemeleri kaynakla birebir eşleşti. 42 tablo ve 21 migration karşılaştırıldı.
-- P4-04 (#135) yerelde birleştirilerek RLS'li şema: 42 tablo, 22 migration, 48 RLS politikası, `FORCE ROW LEVEL SECURITY` açık 24 tablo. İki geri yükleme de kaynakla birebir eşleşti. RLS bayrakları, politikalar ve `SECURITY DEFINER` fonksiyonları korundu.
+- P4-04 (#135) yerelde birleştirilerek RLS'li şema: 42 tablo, 22 migration; #135'in güncel hâlinde 54 RLS politikası ve `FORCE ROW LEVEL SECURITY` açık 27 tablo (ilk koşuda 48 ve 24). Düzeltmelerden sonraki koşu (iki yedek rolü, `trust`'sız `pg_hba.conf`, TCP ve `.pgpass`) 200 000 satırda A için 9,9 sn, B için 7,8 sn sürdü. İki geri yükleme de kaynakla birebir eşleşti. RLS bayrakları, politikalar ve `SECURITY DEFINER` fonksiyonları korundu.
 
 RLS'li şemada iki boyutta ölçüm (saniye):
 
