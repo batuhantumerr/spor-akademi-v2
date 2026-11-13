@@ -503,3 +503,9 @@ Kararlar `Proposed (agent, 2026-11-13)`. Sahibin bakması gerekenler:
 4. **Kapalı özellik `404` döner, menüden kalkar; anlık SignalR bildirimi yok (DEC-584, DEC-585).** Açık bir ekran değişikliği bir sonraki yüklemede ya da girişte görür; API o ana kadar zaten `404` döner.
    - *Yönetici:* bir okulda özelliği kapattığınızda kullanıcı en geç sayfayı yenileyince menünün değiştiğini görür. Öneri: kabul; ihtiyaç olursa bildirim sonra eklenir.
 5. **e2e yok.** Bayrağı kapatıp menünün kaybolması admin ve veli birim testleriyle, `404` ve cache invalidation entegrasyon testleriyle doğrulandı. Paylaşılan e2e okulunda bayrak kapatmak paralel çalışan başka e2e testlerini kırabilirdi. Öneri: gerekirse ayrı bir okulla P4-11'de eklensin.
+### P4-11 Test ve CI iyileştirmeleri (DEC-590 – DEC-594)
+
+1. **Sahip işlemi: `a11y` check'ini ruleset'e ekleyin (DEC-591).** WCAG denetimi `e2e` job'undan ayrı `a11y` job'una taşındı; `a11y` zorunlu değilken bir erişilebilirlik gerilemesi merge'ü durdurmaz.
+   - *Yönetici:* önceden `e2e` zorunlu olduğu için denetim de kapıdaydı; ruleset'e eklenince kapsam aynı kalır, `e2e` yaklaşık yarıya iner (10,5–13 dk yerine ~6 dk 20 sn; `a11y` paralel ~9 dk, PR #140 CI koşusu).
+2. **Çıkışla yarışan eski token'ın yeniden denemesi (DEC-594).** Çıkış her iki sırada da kazanıyor (DEC-593). Ancak çıkışla yarışıp `409` alan sekmenin tek yeniden denemesi, belgelenmiş yeniden kullanım kuralı gereği kullanıcının diğer cihazlarındaki oturumları da kapatıyor. Davranış değişmedi.
+   - *Yazılımcı:* yalnız çıkışla kapanan ailede alarmı kapatmak, iptal nedenini saklamayı (migration) gerektirir. Onay ya da "değiştirelim" kararı.
