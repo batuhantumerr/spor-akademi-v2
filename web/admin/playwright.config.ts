@@ -39,6 +39,18 @@ if (missing.length > 0) {
   );
 }
 
+/**
+ * P4-11 (DEC-591): which projects run. "flows" leaves out the WCAG audit projects (the CI `e2e` job), "a11y" runs only
+ * them (the CI `a11y` job), "all" (the default, `bash scripts/e2e.sh`) runs everything. Selecting by suite instead of
+ * listing project names keeps a newly added flow project in the `e2e` job without touching the workflow.
+ */
+const suite = process.env['E2E_SUITE'] ?? 'all';
+if (!['all', 'flows', 'a11y'].includes(suite)) {
+  throw new Error(`E2E_SUITE must be all, flows or a11y (got "${suite}").`);
+}
+const inSuite = (project: { name?: string }): boolean =>
+  suite === 'all' || (suite === 'a11y') === !!project.name?.startsWith('a11y');
+
 export default defineConfig({
   testDir: './e2e',
   testMatch: '**/*.e2e.ts',
@@ -118,7 +130,7 @@ export default defineConfig({
         launchOptions: { args: ['--ignore-certificate-errors'] },
       },
     },
-  ],
+  ].filter(inSuite),
   webServer: [
     {
       name: 'api',

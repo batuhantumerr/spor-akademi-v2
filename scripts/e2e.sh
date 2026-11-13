@@ -7,12 +7,26 @@
 # global setup seeds its own school and accounts with credentials generated for this run only; the
 # development database (spor_akademi) and a running dev API/app are never touched.
 #
-# Usage: bash scripts/e2e.sh [playwright args]
+# Usage: bash scripts/e2e.sh [--suite=all|flows|a11y] [playwright args]
 #   bash scripts/e2e.sh --project=chromium --project=mobile-chromium
+#   bash scripts/e2e.sh --suite=flows   # everything but the WCAG audit (the CI e2e job, P4-11)
+#   bash scripts/e2e.sh --suite=a11y    # only the WCAG audit projects (the CI a11y job)
+# The default suite is "all".
 # Needs: docker compose up -d --wait, dotnet tool restore, npm ci and npx playwright install in web/admin, npm ci in
 # web/parent. Starts the compose Mailpit (mail profile) for the parent invitation e-mail.
 set -euo pipefail
 source "$(dirname "${BASH_SOURCE[0]}")/lib/env.sh"
+
+# P4-11 (DEC-591): the suite is read by playwright.config.ts; the remaining arguments go to Playwright as they are.
+export E2E_SUITE="${E2E_SUITE:-all}"
+if [[ "${1:-}" == --suite=* ]]; then
+  E2E_SUITE="${1#--suite=}"
+  shift
+fi
+case "$E2E_SUITE" in
+  all | flows | a11y) ;;
+  *) echo "error: --suite must be all, flows or a11y (got \"$E2E_SUITE\")" >&2; exit 1 ;;
+esac
 
 load_env
 require_env SPOR_AKADEMI_MIGRATOR_PASSWORD SPOR_AKADEMI_APP_PASSWORD JWT_SIGNING_KEY
