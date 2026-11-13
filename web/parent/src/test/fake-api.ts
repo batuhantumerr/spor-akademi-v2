@@ -159,6 +159,8 @@ export function childRoutes(data: {
   dues?: unknown[];
   payments?: unknown;
   announcements?: unknown;
+  /** P4-10: the school's enabled flags; every flag is on unless a test says otherwise. */
+  features?: string[];
 }): Record<string, Handler> {
   const base = `/api/v1/parent/children/${CHILD_ID}`;
   return {
@@ -168,5 +170,6 @@ export function childRoutes(data: {
     [`GET ${base}/dues`]: () => json(data.dues ?? []),
     [`GET ${base}/payments`]: () => json(data.payments ?? emptyPage),
     [`GET ${base}/announcements`]: () => json(data.announcements ?? emptyPage),
+    'GET /api/v1/features': () => json({ enabled: data.features ?? ['reports', 'parent-online-payments'] }),
   };
 }

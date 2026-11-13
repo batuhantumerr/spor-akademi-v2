@@ -3,6 +3,7 @@ import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { isSignal } from '@angular/core';
+import { provideRouter } from '@angular/router';
 import { of } from 'rxjs';
 
 import { SchoolListItem } from '../../api/models';
@@ -67,6 +68,7 @@ describe('SchoolsPage', () => {
       providers: [
         provideHttpClient(),
         provideHttpClientTesting(),
+        provideRouter([]),
         { provide: Dialog, useValue: { open } },
         { provide: TemporaryPasswordService, useValue: { show } },
         { provide: ToastService, useValue: { success: vi.fn(), error: vi.fn() } },
@@ -91,6 +93,10 @@ describe('SchoolsPage', () => {
     expect(root.textContent).toContain('ayse@example.test');
     expect(root.textContent).toContain(ui.schools.noAdmin);
     expect(root.querySelector('th[scope="row"]')?.textContent).toContain('Kartal Spor');
+    // P4-10: the name opens the school's page with its feature flags.
+    expect(root.querySelector('th[scope="row"] a')?.getAttribute('href')).toBe(
+      '/platform/schools/s1',
+    );
   });
 
   it('shows the empty state', async () => {

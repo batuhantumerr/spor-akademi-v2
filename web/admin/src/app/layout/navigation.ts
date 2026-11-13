@@ -20,12 +20,15 @@ import {
 } from '@lucide/angular';
 
 import { Role } from '../core/auth/auth.service';
+import { FeatureKey } from '../core/features/feature.service';
 import { ui } from '../core/i18n/tr';
 
 export interface NavItem {
   label: string;
   path: string;
   icon: LucideIconInput;
+  /** P4-10: shown only while this feature flag is on for the user's school. */
+  feature?: FeatureKey;
 }
 
 export interface NavSection {
@@ -33,8 +36,23 @@ export interface NavSection {
   items: NavItem[];
 }
 
-/** Menu per role; routes are added as features land. */
-export function navigationFor(role: Role | null): NavSection[] {
+/**
+ * Menu per role; routes are added as features land. Items behind a feature flag (P4-10) are left out while
+ * `isEnabled` says the flag is off; a section left without items is dropped.
+ */
+export function navigationFor(
+  role: Role | null,
+  isEnabled: (feature: FeatureKey) => boolean = () => true,
+): NavSection[] {
+  return menuFor(role)
+    .map((section) => ({
+      ...section,
+      items: section.items.filter((item) => !item.feature || isEnabled(item.feature)),
+    }))
+    .filter((section) => section.items.length > 0);
+}
+
+function menuFor(role: Role | null): NavSection[] {
   switch (role) {
     case 'PlatformAdmin':
       return [
@@ -50,7 +68,12 @@ export function navigationFor(role: Role | null): NavSection[] {
         {
           items: [
             { label: ui.nav.dashboard, path: '/dashboard', icon: LucideLayoutDashboard },
-            { label: ui.nav.reports, path: '/reports', icon: LucideChartColumn },
+            {
+              label: ui.nav.reports,
+              path: '/reports',
+              icon: LucideChartColumn,
+              feature: 'reports',
+            },
           ],
         },
         {

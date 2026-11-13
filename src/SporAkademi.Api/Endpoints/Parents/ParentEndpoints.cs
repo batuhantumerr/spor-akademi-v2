@@ -2,6 +2,7 @@ using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
 using SporAkademi.Api.Endpoints.Billing;
+using SporAkademi.Api.Endpoints.Tenancy;
 using SporAkademi.Api.Errors;
 using SporAkademi.Api.Security;
 using SporAkademi.Application.Abstractions;
@@ -14,6 +15,7 @@ using SporAkademi.Application.Enrollments;
 using SporAkademi.Application.Students;
 using SporAkademi.Domain.Billing;
 using SporAkademi.Domain.Students;
+using SporAkademi.Domain.Tenancy;
 
 namespace SporAkademi.Api.Endpoints.Parents;
 
@@ -55,7 +57,10 @@ internal static class ParentEndpoints
         parent.MapPost("/online-payments", StartOnlinePayment)
             .Produces<ParentOnlinePaymentDto>(StatusCodes.Status201Created)
             .Produces<ParentOnlinePaymentDto>()
-            .ProducesProblems(400, 404, 409, 422);
+            .ProducesProblems(400, 404, 409, 422)
+            .RequireFeature(FeatureCatalog.ParentOnlinePayments);
+        // P4-10 (DEC-584): only starting a payment is behind the "parent-online-payments" flag; the status of a payment
+        // already under way stays readable when the flag is switched off meanwhile.
         parent.MapGet("/online-payments/{id:guid}", GetOnlinePayment).Produces<ParentOnlinePaymentDto>().ProducesProblems(404);
         return app;
     }

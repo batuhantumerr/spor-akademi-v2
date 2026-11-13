@@ -514,3 +514,21 @@ Kararlar `Proposed (agent, 2026-11-13)`. Sahibin bakması gerekenler:
 | --- | --- | --- | --- |
 | `grafana/k6:2.3.0` | Yük testi (DEC-560) | AGPL-3.0 | Ayrı konteyner, `k6` profili; tag + digest. 2.4.0 cooldown'da |
 | `caddy:2.11.8-alpine` | Yük testinin reverse proxy'si, `scale` profili (DEC-564) | Apache-2.0 | Tag + digest; Deploy bloğundaki Caddy ile aynı ürün |
+
+### P4-10 Feature flag'ler (DEC-580 – DEC-585)
+
+1. **Paket yok, küçük kendi servisimiz (DEC-580).** `Microsoft.FeatureManagement` değerlendirildi, eklenmedi. Okul başına veritabanı değeri için pakette de özel provider ve ayrı bir 404 kapısı yazmak gerekiyordu.
+   - *Yazılımcı:* yüzdelik yayın ya da zaman pencereli bayrak gerekirse paket yeniden değerlendirilir. Öneri: kabul.
+2. **İlk iki bayrak: `reports` ve `parent-online-payments`, ikisi de varsayılan açık (DEC-580, DEC-582).** Bugünkü davranış değişmez; bir okulda raporlar ya da veli ödemesi tek tıkla kapatılabilir.
+   - *Yönetici:* örneğin ödeme sağlayıcısında sorun yaşayan bir okulda veli ödemesi geçici olarak kapatılabilir; veli "okulunuza ödeyebilirsiniz" notunu görür. Öneri: kabul.
+3. **Bayrak tablosu RLS'de platform tablosu (DEC-581).** Platform Admin bütün okulların değerlerini görür ve yazar; okul yalnız kendininkini görür.
+   - *Yazılımcı:* `RowLevelSecurityTests` listesine eklendi. Öneri: kabul.
+4. **Kapalı özellik `404` döner, menüden kalkar; anlık SignalR bildirimi yok (DEC-584, DEC-585).** Açık bir ekran değişikliği bir sonraki yüklemede ya da girişte görür; API o ana kadar zaten `404` döner.
+   - *Yönetici:* bir okulda özelliği kapattığınızda kullanıcı en geç sayfayı yenileyince menünün değiştiğini görür. Öneri: kabul; ihtiyaç olursa bildirim sonra eklenir.
+5. **e2e yok.** Bayrağı kapatıp menünün kaybolması admin ve veli birim testleriyle, `404` ve cache invalidation entegrasyon testleriyle doğrulandı. Paylaşılan e2e okulunda bayrak kapatmak paralel çalışan başka e2e testlerini kırabilirdi. Öneri: gerekirse ayrı bir okulla P4-11'de eklensin.
+### P4-11 Test ve CI iyileştirmeleri (DEC-590 – DEC-594)
+
+1. **Sahip işlemi: `a11y` check'ini ruleset'e ekleyin (DEC-591).** WCAG denetimi `e2e` job'undan ayrı `a11y` job'una taşındı; `a11y` zorunlu değilken bir erişilebilirlik gerilemesi merge'ü durdurmaz.
+   - *Yönetici:* önceden `e2e` zorunlu olduğu için denetim de kapıdaydı; ruleset'e eklenince kapsam aynı kalır, `e2e` yaklaşık yarıya iner (10,5–13 dk yerine ~6 dk 20 sn; `a11y` paralel ~9 dk, PR #140 CI koşusu).
+2. **Çıkışla yarışan eski token'ın yeniden denemesi (DEC-594).** Çıkış her iki sırada da kazanıyor (DEC-593). Ancak çıkışla yarışıp `409` alan sekmenin tek yeniden denemesi, belgelenmiş yeniden kullanım kuralı gereği kullanıcının diğer cihazlarındaki oturumları da kapatıyor. Davranış değişmedi.
+   - *Yazılımcı:* yalnız çıkışla kapanan ailede alarmı kapatmak, iptal nedenini saklamayı (migration) gerektirir. Onay ya da "değiştirelim" kararı.

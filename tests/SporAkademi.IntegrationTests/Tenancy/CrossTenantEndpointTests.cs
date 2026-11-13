@@ -35,6 +35,9 @@ public sealed partial class CrossTenantEndpointTests(DatabaseFixture database) :
     [
         "GET /api/v1/platform/schools/{id:guid}",
         "POST /api/v1/platform/schools/{schoolId:guid}/admins/{userId:guid}/reset-password",
+        // P4-10: a school's feature flags (FeatureFlagTests pins the 403 for school roles).
+        "GET /api/v1/platform/schools/{id:guid}/features",
+        "PUT /api/v1/platform/schools/{id:guid}/features/{key}",
     ];
 
     /// <summary>Writes without a route parameter whose body names no other record, so there is no foreign id to try.</summary>
@@ -280,6 +283,8 @@ public sealed partial class CrossTenantEndpointTests(DatabaseFixture database) :
             "GET /api/v1/me/groups",
             "GET /api/v1/me/sessions",
             "GET /api/v1/me/announcements",
+            // P4-10: the caller's own school's enabled feature flags.
+            "GET /api/v1/features",
         ], ignoreOrder: true);
     }
 
@@ -313,6 +318,7 @@ public sealed partial class CrossTenantEndpointTests(DatabaseFixture database) :
             "/api/v1/settings/data-retention/impact",
             "/api/v1/settings/billing-rules",
             "/api/v1/students",
+            "/api/v1/features",
         ], ignoreOrder: true);
     }
 

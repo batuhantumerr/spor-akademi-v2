@@ -99,6 +99,7 @@ app.MapHealthEndpoints();
 app.MapIdentityEndpoints();
 app.MapCoachEndpoints();
 app.MapSchoolEndpoints();
+app.MapFeatureEndpoints();
 app.MapDataRetentionEndpoints();
 app.MapBillingRulesEndpoints();
 app.MapOrganizationEndpoints();

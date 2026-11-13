@@ -111,9 +111,10 @@ Grafikler (panel ve raporlar): ECharts canvas'ı `role="img"` ve dil izleyen öz
 
 ```bash
 docker compose up -d --wait            # PostgreSQL (bir kez)
-bash scripts/e2e.sh --project=a11y --project=a11y-parent   # yalnız denetim (~5 dk)
-bash scripts/e2e.sh                     # bütün e2e, denetim dahil (CI'daki gibi)
+bash scripts/e2e.sh --suite=a11y       # yalnız denetim (CI'daki a11y job'u, ~9 dk)
+bash scripts/e2e.sh --suite=flows      # denetim hariç akışlar (CI'daki e2e job'u, ~6 dk)
+bash scripts/e2e.sh                     # ikisi birden
 node scripts/check-contrast.mjs --verbose   # tema token kontrastı, iki tema
 ```
 
-Rapor her koşuda `web/admin/test-results/a11y/admin.md` ve `parent.md` (ayrıca `.json`) olarak yazılır, Playwright HTML raporuna eklenir. CI'da `e2e` job'u bunu `a11y-report` artefaktı olarak her koşuda yükler. Yeni bir ekran eklemek için ilgili spec'e bir `test.step` ve `await audit.screen(page, '<ad>')` yeter. Seçenekler (`variants`, `keyboard`, `reflow`, `exclude`) [`wcag.ts`](../web/admin/e2e/support/wcag.ts)'de açıklanıyor.
+Rapor her koşuda `web/admin/test-results/a11y/admin.md` ve `parent.md` (ayrıca `.json`) olarak yazılır, Playwright HTML raporuna eklenir. CI'da denetim ayrı `a11y` job'unda koşar (P4-11, DEC-591) ve raporu `a11y-report` artefaktı olarak her koşuda yükler. Yeni bir ekran eklemek için ilgili spec'e bir `test.step` ve `await audit.screen(page, '<ad>')` yeter. Seçenekler (`variants`, `keyboard`, `reflow`, `exclude`) [`wcag.ts`](../web/admin/e2e/support/wcag.ts)'de açıklanıyor.
