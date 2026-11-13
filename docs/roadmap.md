@@ -210,7 +210,7 @@ Migration ekleyen işler (RLS → audit log → KVKK başvuruları) art arda yap
   - Ay sınırını aşan iade testi (DEC-420); çıkış ile refresh grace replay'i arasında barrier entegrasyon testi.
 
 ### Sürüm hazırlığı
-- [ ] P4-R1 **Çıkış kriterlerinin doğrulanması** (`docs/faz-4-cikis-kriterleri.md`).
+- [x] P4-R1 **Çıkış kriterlerinin doğrulanması** ([faz-4-cikis-kriterleri.md](faz-4-cikis-kriterleri.md)).
   - OWASP incelemesinde açık yüksek bulgu yok; güvenlik başlıkları otomatik kontrol ediliyor.
   - RLS, uygulama filtresi kapalıyken bile okullar arası okuma ve yazmayı engelliyor.
   - Kişisel veri erişimi audit log'da; ilgili kişinin verisi dışa aktarılıp silinebiliyor.
