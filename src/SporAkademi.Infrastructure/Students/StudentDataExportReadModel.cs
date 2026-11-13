@@ -42,6 +42,26 @@ internal sealed class StudentDataExportReadModel(AppDbContext db) : IStudentData
             .OrderBy(p => p.PaidOn).ThenBy(p => p.Id)
             .ToListAsync(cancellationToken);
         return [.. payments.Select(p => new ExportedPaymentDto(
-            p.Id.Value, p.EnrollmentId.Value, p.Period.ToString(), MoneyDto.From(p.Amount), p.Method, p.PaidOn, p.Status))];
+            p.Id.Value, p.EnrollmentId.Value, p.Period.ToString(), MoneyDto.From(p.Amount), p.Method, p.PaidOn, p.Status, p.CancelReason, p.CancelledAt))];
+    }
+
+    public async Task<IReadOnlyList<ExportedRefundDto>> RefundsAsync(StudentId studentId, CancellationToken cancellationToken)
+    {
+        var refunds = await db.Set<PaymentRefund>().AsNoTracking()
+            .Where(r => r.StudentId == studentId)
+            .OrderBy(r => r.RequestedAt).ThenBy(r => r.Id)
+            .ToListAsync(cancellationToken);
+        return [.. refunds.Select(r => new ExportedRefundDto(
+            r.Id.Value, r.PaymentId.Value, MoneyDto.From(r.Amount), r.Status, r.Reason, r.RequestedAt, r.CompletedAt, r.ResolutionNote))];
+    }
+
+    public async Task<IReadOnlyList<ExportedOnlinePaymentDto>> OnlinePaymentsAsync(StudentId studentId, CancellationToken cancellationToken)
+    {
+        var attempts = await db.Set<OnlinePayment>().AsNoTracking()
+            .Where(p => p.StudentId == studentId)
+            .OrderBy(p => p.StartedAt).ThenBy(p => p.Id)
+            .ToListAsync(cancellationToken);
+        return [.. attempts.Select(p => new ExportedOnlinePaymentDto(
+            p.Id.Value, p.EnrollmentId.Value, p.Period.ToString(), MoneyDto.From(p.Amount), p.Provider, p.Status, p.StartedAt, p.CompletedAt))];
     }
 }

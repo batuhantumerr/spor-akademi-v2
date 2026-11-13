@@ -48,16 +48,22 @@ public interface IAuditLogReadModel
 
 internal sealed class ListAuditLogValidator : AbstractValidator<ListAuditLogQuery>
 {
+    public static readonly DateOnly EarliestDay = new(2000, 1, 1);
+    public static readonly DateOnly LatestDay = new(2100, 12, 31);
+
     public ListAuditLogValidator()
     {
         RuleFor(q => q.EntityType)
-            .Must(t => Enum.TryParse<AuditEntityType>(t, ignoreCase: false, out var parsed) && Enum.IsDefined(parsed) && !int.TryParse(t, out _))
+            .Must(EnumNames.IsExact<AuditEntityType>)
             .When(q => !string.IsNullOrEmpty(q.EntityType))
             .WithErrorCode(CommonErrors.FieldInvalid.Code);
         RuleFor(q => q.To)
             .GreaterThanOrEqualTo(q => q.From)
             .When(q => q.From is not null && q.To is not null)
             .WithErrorCode(CommonErrors.FieldInvalid.Code);
+        // Days far outside the product's life would overflow the day arithmetic (0001-01-01, 9999-12-31).
+        RuleFor(q => q.From).InclusiveBetween(EarliestDay, LatestDay).When(q => q.From is not null).WithErrorCode(CommonErrors.FieldInvalid.Code);
+        RuleFor(q => q.To).InclusiveBetween(EarliestDay, LatestDay).When(q => q.To is not null).WithErrorCode(CommonErrors.FieldInvalid.Code);
         RuleFor(q => q.Page).SetValidator(new PageRequestValidator());
     }
 }

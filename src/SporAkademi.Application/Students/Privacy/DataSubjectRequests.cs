@@ -4,6 +4,7 @@ using SporAkademi.Application.Abstractions.Auditing;
 using SporAkademi.Application.Abstractions.Authentication;
 using SporAkademi.Application.Abstractions.Messaging;
 using SporAkademi.Application.Abstractions.Storage;
+using SporAkademi.Application.Billing.Contracts;
 using SporAkademi.Application.Students.Documents;
 using SporAkademi.Application.Tenancy.Contracts;
 using SporAkademi.Domain.Attendance;
@@ -53,7 +54,39 @@ public sealed record ExportedEnrollmentDto(Guid Id, Guid GroupId, string GroupNa
 
 public sealed record ExportedAttendanceDto(DateOnly Date, TimeOnly StartTime, Guid GroupId, string GroupName, AttendanceStatus Status);
 
-public sealed record ExportedPaymentDto(Guid Id, Guid EnrollmentId, string Period, MoneyDto Amount, PaymentMethod Method, DateOnly PaidOn, PaymentStatus Status);
+/// <param name="CancelReason">The School Admin's free text when the payment was cancelled (DEC-367): kept with the payment.</param>
+public sealed record ExportedPaymentDto(
+    Guid Id,
+    Guid EnrollmentId,
+    string Period,
+    MoneyDto Amount,
+    PaymentMethod Method,
+    DateOnly PaidOn,
+    PaymentStatus Status,
+    string? CancelReason,
+    DateTimeOffset? CancelledAt);
+
+/// <summary>A refund of an online payment (P3-13); the reason and the resolution note are free text written by the school.</summary>
+public sealed record ExportedRefundDto(
+    Guid Id,
+    Guid PaymentId,
+    MoneyDto Amount,
+    PaymentRefundStatus Status,
+    string Reason,
+    DateTimeOffset RequestedAt,
+    DateTimeOffset? CompletedAt,
+    string? ResolutionNote);
+
+/// <summary>An online payment attempt (P2-F1), finished or not; provider tokens and links are left out.</summary>
+public sealed record ExportedOnlinePaymentDto(
+    Guid Id,
+    Guid EnrollmentId,
+    string Period,
+    MoneyDto Amount,
+    string Provider,
+    OnlinePaymentStatus Status,
+    DateTimeOffset StartedAt,
+    DateTimeOffset? CompletedAt);
 
 /// <param name="DownloadUrl">A short-lived signed link (DEC-323, DEC-539); the file itself is not in the export.</param>
 public sealed record ExportedDocumentDto(
@@ -78,6 +111,8 @@ public sealed record StudentDataExportDto(
     IReadOnlyList<ExportedEnrollmentDto> Enrollments,
     IReadOnlyList<ExportedAttendanceDto> Attendance,
     IReadOnlyList<ExportedPaymentDto> Payments,
+    IReadOnlyList<ExportedRefundDto> Refunds,
+    IReadOnlyList<ExportedOnlinePaymentDto> OnlinePayments,
     IReadOnlyList<ExportedDocumentDto> Documents)
 {
     public const string FormatV1 = "spor-akademi.student-data-export/v1";
@@ -91,6 +126,10 @@ public interface IStudentDataExportReadModel
     Task<IReadOnlyList<ExportedAttendanceDto>> AttendanceAsync(StudentId studentId, CancellationToken cancellationToken);
 
     Task<IReadOnlyList<ExportedPaymentDto>> PaymentsAsync(StudentId studentId, CancellationToken cancellationToken);
+
+    Task<IReadOnlyList<ExportedRefundDto>> RefundsAsync(StudentId studentId, CancellationToken cancellationToken);
+
+    Task<IReadOnlyList<ExportedOnlinePaymentDto>> OnlinePaymentsAsync(StudentId studentId, CancellationToken cancellationToken);
 }
 
 public sealed record GetStudentDataExportQuery(StudentId Id) : IQuery<StudentDataExportDto>;
@@ -103,7 +142,7 @@ internal sealed class EraseStudentValidator : AbstractValidator<EraseStudentComm
     public EraseStudentValidator() =>
         RuleFor(c => c.Reason).Cascade(CascadeMode.Stop)
             .NotEmpty().WithErrorCode(CommonErrors.FieldRequired.Code)
-            .Must(r => Enum.TryParse<ErasureReason>(r, ignoreCase: false, out var parsed) && Enum.IsDefined(parsed) && !int.TryParse(r, out _))
+            .Must(EnumNames.IsExact<ErasureReason>)
             .WithErrorCode(CommonErrors.FieldInvalid.Code);
 }
 
@@ -164,6 +203,8 @@ internal sealed class GetStudentDataExportHandler(
             await others.EnrollmentsAsync(query.Id, cancellationToken),
             await others.AttendanceAsync(query.Id, cancellationToken),
             await others.PaymentsAsync(query.Id, cancellationToken),
+            await others.RefundsAsync(query.Id, cancellationToken),
+            await others.OnlinePaymentsAsync(query.Id, cancellationToken),
             exportedDocuments));
     }
 }
@@ -178,6 +219,7 @@ internal sealed class GetStudentDataExportHandler(
 internal sealed class EraseStudentHandler(
     IStudentRepository students,
     ITenancyModule tenancy,
+    IStudentPaymentActivity payments,
     ICurrentUser currentUser,
     IAuditTrail auditTrail,
     TimeProvider timeProvider) : ICommandHandler<EraseStudentCommand, Unit>
@@ -190,6 +232,12 @@ internal sealed class EraseStudentHandler(
             return Result.Failure<Unit>(StudentErrors.NotFound);
         }
 
+        // DEC-546: a provider callback could still create or change a payment of the student; wait until it settles.
+        if (!student.IsAnonymized && await payments.HasOpenActivityAsync(student.Id, cancellationToken))
+        {
+            return Result.Failure<Unit>(StudentErrors.OpenPaymentActivity);
+        }
+
         var today = await tenancy.TodayAsync(currentUser.RequireTenant(), cancellationToken);
         var erased = student.Erase(today, timeProvider.GetUtcNow());
         if (erased.IsFailure)
@@ -197,7 +245,9 @@ internal sealed class EraseStudentHandler(
             return Result.Failure<Unit>(erased.Error);
         }
 
-        auditTrail.Add(new AuditRecord(AuditAction.Erase, AuditEntityType.Student, student.Id.Value, [], command.Reason));
+        // The validated name, re-rendered from the enum: never the client's string (DEC-533).
+        var reason = Enum.Parse<ErasureReason>(command.Reason!).ToString();
+        auditTrail.Add(new AuditRecord(AuditAction.Erase, AuditEntityType.Student, student.Id.Value, [], reason));
         return Result.Success(Unit.Value);
     }
 }

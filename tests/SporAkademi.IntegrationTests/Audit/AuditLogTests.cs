@@ -220,6 +220,20 @@ public sealed class AuditLogTests(DatabaseFixture database) : PersonalDataTest(d
         errors.TryGetProperty("to", out _).ShouldBeTrue();
     }
 
+    [Theory]
+    [InlineData("?entityType=Student,Guardian", "entityType")]
+    [InlineData("?entityType=%20Student", "entityType")]
+    [InlineData("?entityType=0", "entityType")]
+    [InlineData("?from=0001-01-01", "from")]
+    [InlineData("?to=9999-12-31", "to")]
+    public async Task The_list_rejects_combined_record_types_and_far_away_dates(string query, string field)
+    {
+        var response = await Admin.GetAsync(new Uri($"/api/v1/audit-log{query}", UriKind.Relative), Ct);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        (await BodyOf(response)).GetProperty("errors").GetProperty(field)[0].GetString().ShouldBe("Field.Invalid");
+    }
+
     [Fact]
     public async Task The_retention_job_deletes_entries_older_than_two_years_through_the_owners_function()
     {

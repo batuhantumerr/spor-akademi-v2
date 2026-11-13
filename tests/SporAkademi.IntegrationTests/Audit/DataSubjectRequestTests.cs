@@ -62,6 +62,65 @@ public sealed class DataSubjectRequestTests(DatabaseFixture database) : Personal
     }
 
     [Fact]
+    public async Task The_export_holds_free_text_of_payments_refunds_and_online_payment_attempts()
+    {
+        await DefineJanuaryFeeAsync();
+        var cash = await PayCashAsync(Ali);
+        (await Admin.PostAsJsonAsync($"/api/v1/payments/{cash}/cancel", new { reason = "Yanlış öğrenciye girildi" }, Ct)).StatusCode.ShouldBe(HttpStatusCode.OK);
+        var (online, token) = await StartOnlineAsync(Ali);
+        var paid = await CompleteOnlineAsync(online, token);
+        using (var refund = new HttpRequestMessage(HttpMethod.Post, new Uri($"/api/v1/payments/{paid}/refund", UriKind.Relative)))
+        {
+            refund.Content = JsonContent.Create(new { reason = "Kayıt erken bitti" });
+            refund.Headers.Add("Idempotency-Key", "iade-export-1");
+            (await Admin.SendAsync(refund, Ct)).StatusCode.ShouldBe(HttpStatusCode.OK);
+        }
+
+        var export = await BodyOf(await Admin.GetAsync(new Uri($"/api/v1/students/{Ali}/data-export", UriKind.Relative), Ct));
+
+        var cancelled = export.GetProperty("payments").EnumerateArray().Single(p => p.GetProperty("id").GetGuid() == cash);
+        cancelled.GetProperty("cancelReason").GetString().ShouldBe("Yanlış öğrenciye girildi");
+        var refunded = export.GetProperty("refunds").EnumerateArray().ShouldHaveSingleItem();
+        refunded.GetProperty("paymentId").GetGuid().ShouldBe(paid);
+        refunded.GetProperty("reason").GetString().ShouldBe("Kayıt erken bitti");
+        var attempt = export.GetProperty("onlinePayments").EnumerateArray().ShouldHaveSingleItem();
+        attempt.GetProperty("id").GetGuid().ShouldBe(online);
+        attempt.GetProperty("status").GetString().ShouldBe("Succeeded");
+        attempt.TryGetProperty("checkoutUrl", out _).ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task Erasure_waits_while_an_online_payment_is_still_open_at_the_provider()
+    {
+        await DefineJanuaryFeeAsync();
+        var (online, token) = await StartOnlineAsync(Ali);
+
+        var refused = await Admin.PostAsJsonAsync($"/api/v1/students/{Ali}/erasure", new { reason = "DataSubjectRequest" }, Ct);
+
+        refused.StatusCode.ShouldBe(HttpStatusCode.UnprocessableEntity);
+        (await CodeOf(refused)).ShouldBe("Student.OpenPaymentActivity");
+        (await Admin.GetFromJsonAsync<JsonElement>($"/api/v1/students/{Ali}", Ct)).GetProperty("firstName").GetString().ShouldBe("Ali");
+        (await AuditRowsAsync()).ShouldNotContain(r => r.Action == "Erase");
+
+        await CompleteOnlineAsync(online, token);
+        (await Admin.PostAsJsonAsync($"/api/v1/students/{Ali}/erasure", new { reason = "DataSubjectRequest" }, Ct)).StatusCode.ShouldBe(HttpStatusCode.OK);
+    }
+
+    [Theory]
+    [InlineData("DataSubjectRequest,ConsentWithdrawn")]
+    [InlineData(" DataSubjectRequest")]
+    [InlineData("datasubjectrequest")]
+    [InlineData("0")]
+    public async Task Erasure_accepts_only_one_exact_reason_code(string reason)
+    {
+        var response = await Admin.PostAsJsonAsync($"/api/v1/students/{Ali}/erasure", new { reason }, Ct);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        (await BodyOf(response)).GetProperty("errors").GetProperty("reason")[0].GetString().ShouldBe("Field.Invalid");
+        (await AuditRowsAsync()).ShouldNotContain(r => r.Action == "Erase");
+    }
+
+    [Fact]
     public async Task Only_the_school_admin_of_the_students_school_exports()
     {
         var otherSchool = await TestSchools.CreateAsync(Api, "okul-b");

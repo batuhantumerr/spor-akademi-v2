@@ -388,5 +388,7 @@ public static class StudentErrors
     public static readonly Error InvalidLeaveDate = Error.BusinessRule("Student.InvalidLeaveDate", "The leave date is before the start of an active enrollment.");
     public static readonly Error Anonymized = Error.BusinessRule("Student.Anonymized", "The student's personal data was anonymized; the record can no longer change.");
     public static readonly Error AlreadyAnonymized = Error.BusinessRule("Student.AlreadyAnonymized", "The student is already anonymized.");
+    public static readonly Error OpenPaymentActivity = Error.BusinessRule(
+        "Student.OpenPaymentActivity", "An online payment or a refund of the student is still in progress at the provider.");
     public static readonly Error NotDueForAnonymization = Error.BusinessRule("Student.NotDueForAnonymization", "Only students who left before the retention period can be anonymized.");
 }

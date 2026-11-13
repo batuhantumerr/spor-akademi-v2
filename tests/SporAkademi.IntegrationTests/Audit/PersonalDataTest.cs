@@ -74,9 +74,48 @@ public abstract class PersonalDataTest(DatabaseFixture database) : AttendanceTes
     /// <summary>A fee from January and one cash payment for the student's (only) enrollment.</summary>
     protected async Task<Guid> PayJanuaryAsync(Guid studentId)
     {
-        var enrollment = (await StudentEnrollmentsAsync(studentId)).EnumerateArray().Single().GetProperty("id").GetGuid();
+        await DefineJanuaryFeeAsync();
+        return await PayCashAsync(studentId);
+    }
+
+    protected async Task DefineJanuaryFeeAsync() =>
         (await Admin.PostAsJsonAsync($"/api/v1/groups/{GroupId}/fees", new { effectiveFrom = "2027-01", amount = new { amount = "1000.00", currency = "TRY" } }, Ct))
             .StatusCode.ShouldBe(HttpStatusCode.Created);
+
+    protected async Task<Guid> EnrollmentOfAsync(Guid studentId) =>
+        (await StudentEnrollmentsAsync(studentId)).EnumerateArray().Single().GetProperty("id").GetGuid();
+
+    /// <summary>P2-F1: an online payment attempt of January (Fake provider), not completed yet, and its sandbox token.</summary>
+    protected async Task<(Guid Id, string Token)> StartOnlineAsync(Guid studentId)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Post, new Uri("/api/v1/online-payments", UriKind.Relative))
+        {
+            Content = JsonContent.Create(new { enrollmentId = await EnrollmentOfAsync(studentId), period = "2027-01" }),
+        };
+        request.Headers.Add("Idempotency-Key", $"key-{Guid.NewGuid():N}");
+        var response = await Admin.SendAsync(request, Ct);
+        response.StatusCode.ShouldBe(HttpStatusCode.Created);
+        var started = await BodyOf(response);
+        var url = started.GetProperty("checkoutUrl").GetString()!;
+        return (IdOf(started), url[(url.IndexOf("token=", StringComparison.Ordinal) + "token=".Length)..]);
+    }
+
+    /// <summary>The payer pays on the Fake sandbox page; returns the recorded payment.</summary>
+    protected async Task<Guid> CompleteOnlineAsync(Guid onlinePayment, string token)
+    {
+        using (var payer = Api.CreateClient())
+        {
+            (await payer.PostAsJsonAsync("/api/v1/sandbox-checkout/complete", new { token, succeed = true }, Ct)).StatusCode.ShouldBe(HttpStatusCode.OK);
+        }
+
+        var paid = await Admin.GetFromJsonAsync<JsonElement>($"/api/v1/online-payments/{onlinePayment}", Ct);
+        paid.GetProperty("status").GetString().ShouldBe("Succeeded");
+        return paid.GetProperty("paymentId").GetGuid();
+    }
+
+    protected async Task<Guid> PayCashAsync(Guid studentId)
+    {
+        var enrollment = await EnrollmentOfAsync(studentId);
         var payment = await Admin.PostAsJsonAsync(
             "/api/v1/payments",
             new { enrollmentId = enrollment, period = "2027-01", amount = new { amount = "1000.00", currency = "TRY" }, method = "Cash", paidOn = "2027-01-10" },

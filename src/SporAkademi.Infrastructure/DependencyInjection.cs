@@ -12,6 +12,7 @@ using SporAkademi.Application.Announcements;
 using SporAkademi.Application.Attendance;
 using SporAkademi.Application.Audit;
 using SporAkademi.Application.Billing;
+using SporAkademi.Application.Billing.Contracts;
 using SporAkademi.Application.Enrollments;
 using SporAkademi.Application.Enrollments.Contracts;
 using SporAkademi.Application.Groups;
@@ -125,6 +126,7 @@ public static class DependencyInjection
         services.AddScoped<IAnonymizationRunRepository, AnonymizationRunRepository>();
         services.AddScoped<IStudentDocumentRepository, StudentDocumentRepository>();
         services.AddScoped<Application.Students.Privacy.IStudentDataExportReadModel, StudentDataExportReadModel>();
+        services.AddScoped<IStudentPaymentActivity, StudentPaymentActivity>();
         services.AddDocumentStorage(configuration);
         services.AddScoped<IStudentReminderContacts, StudentReminderContacts>();
         services.AddScoped<IStudentSiblings, StudentSiblings>();
