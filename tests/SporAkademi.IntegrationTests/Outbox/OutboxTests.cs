@@ -217,10 +217,13 @@ public sealed class OutboxTests(DatabaseFixture database) : OutboxTest(database)
     public async Task Handlers_run_as_the_message_school_with_its_tenant_filter()
     {
         var (schoolA, schoolB) = (await TestSchools.CreateAsync(Api, "okul-a"), await TestSchools.CreateAsync(Api, "okul-b"));
-        await using (var scope = Host.Services.CreateAsyncScope())
+        // Each school's sport in that school's scope (row level security, P4-04).
+        foreach (var (school, name) in new[] { (schoolA, "Yüzme"), (schoolB, "Basketbol") })
         {
+            await using var scope = Host.Services.CreateAsyncScope();
+            scope.ServiceProvider.GetRequiredService<BackgroundTenantContext>().Enter(school.Value);
             var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-            db.AddRange(Sport.Create(schoolA, "Yüzme").Value, Sport.Create(schoolB, "Basketbol").Value);
+            db.Add(Sport.Create(school, name).Value);
             await db.SaveChangesAsync(Ct);
         }
 
