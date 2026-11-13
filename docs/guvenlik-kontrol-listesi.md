@@ -153,7 +153,7 @@ Sadece bu uygulamaya uygulanabilen maddeler listelenir (SOAP, GraphQL, OAuth/OID
 
 ## 3. Fikirler (`type:idea` adayları, issue açılmadı)
 
-1. **HTTPS/HSTS ve forwarded header'lar (Deploy bloğu, zorunlu):** reverse proxy'de TLS 1.2+, HTTP→HTTPS. API forwarded header'ları yalnız `ForwardedHeaders:KnownProxies`/`KnownNetworks`'teki kaynaktan uygular (P4-02, DEC-507); Caddy'nin adresi buraya yazılmalı, aksi halde rate limit tüm anonim istemcileri proxy IP'siyle sayar ve API HSTS göndermez. Admin imajına `STORAGE_PUBLIC_ORIGIN` verilmeli (DEC-502).
+1. **HTTPS/HSTS ve forwarded header'lar (Deploy bloğu, zorunlu):** reverse proxy'de TLS 1.2+, HTTP→HTTPS. API forwarded header'ları yalnız `ForwardedHeaders:KnownProxies`/`KnownNetworks`'teki kaynaktan uygular (P4-02, DEC-507); Caddy'nin adresi buraya yazılmalı, aksi halde rate limit tüm anonim istemcileri proxy IP'siyle sayar ve API HSTS göndermez. Konteynere `ASPNETCORE_FORWARDEDHEADERS_ENABLED=true` verilmez: framework bu durumda her kaynağa güvenen kendi middleware'ini ekler ve bu korumayı geçersiz kılar. Admin imajına `STORAGE_PUBLIC_ORIGIN` verilmeli (DEC-502).
 2. **Güvenlik başlıkları (NFR-SEC-13):** Yapıldı (P4-01, DEC-500 – DEC-502). Açık kalan: admin'de `style-src 'unsafe-inline'` (Angular CDK ve ECharts); CDK/ECharts nonce veya CSSOM'a geçerse kaldırılabilir. Proxy (Caddy) API ve SPA başlıklarını değiştirmemeli (Deploy bloğu).
 3. **Şifre uzunluğu:** Yapıldı. Politika 12 karakter (DEC-369, sahibin 2026-11-10 onayı).
 4. **İhlal edilmiş şifre kontrolü:** k-anonymity ile HIBP benzeri bir servis veya daha büyük bir gömülü liste (çevrimdışı çalışmalı, KVKK açısından şifrenin kendisi dışarı çıkmamalı).
