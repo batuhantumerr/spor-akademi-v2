@@ -257,6 +257,38 @@ public sealed class Student : AggregateRoot<StudentId>, ITenantScoped
             return Result.Failure(StudentErrors.NotDueForAnonymization);
         }
 
+        ClearPersonalData(now);
+        return Result.Success();
+    }
+
+    /// <summary>
+    /// P4-06 (KVKK md. 7 and 11, NFR-PRV-05): erasure on the data subject's request, whatever the retention period. The
+    /// result is exactly what <see cref="Anonymize"/> leaves (DEC-363). An active student first leaves on
+    /// <paramref name="today"/>, so its active enrollments end that day through <see cref="StudentLeft"/>; a student who
+    /// left keeps the leave date.
+    /// </summary>
+    public Result Erase(DateOnly today, DateTimeOffset now)
+    {
+        if (IsAnonymized)
+        {
+            return Result.Failure(StudentErrors.AlreadyAnonymized);
+        }
+
+        if (Status == StudentStatus.Active)
+        {
+            var left = Leave(today);
+            if (left.IsFailure)
+            {
+                return left;
+            }
+        }
+
+        ClearPersonalData(now);
+        return Result.Success();
+    }
+
+    private void ClearPersonalData(DateTimeOffset now)
+    {
         var formerGuardians = _guardians.Select(g => g.GuardianId).ToList();
         FirstName = AnonymizedFirstName;
         LastName = AnonymizedLastName(Id);
@@ -268,7 +300,6 @@ public sealed class Student : AggregateRoot<StudentId>, ITenantScoped
         _guardians.Clear();
         AnonymizedAt = now;
         Raise(new StudentAnonymized(TenantId, Id, formerGuardians));
-        return Result.Success();
     }
 
     /// <summary>"Öğrenci #" and the last eight hex digits of the id: the random part of a UUIDv7, never its timestamp.</summary>
