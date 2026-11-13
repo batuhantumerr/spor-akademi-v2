@@ -138,7 +138,9 @@ expect() {
 }
 
 echo "drill: run $run_id, image $image"
-quietly docker image inspect "$image" || quietly docker pull "$image"
+if ! docker image ls --digests --format '{{.Repository}}:{{.Tag}}@{{.Digest}}' | grep -qxF "$image"; then
+  quietly docker pull "$image"
+fi
 
 # ---------------------------------------------------------------- 1. source server with data
 echo "drill: 1/6 source server with WAL archiving"
