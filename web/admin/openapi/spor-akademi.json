@@ -9570,6 +9570,52 @@
           }
         }
       },
+      "ExportedOnlinePaymentDto": {
+        "required": [
+          "id",
+          "enrollmentId",
+          "period",
+          "amount",
+          "provider",
+          "status",
+          "startedAt",
+          "completedAt"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "enrollmentId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "period": {
+            "type": "string"
+          },
+          "amount": {
+            "$ref": "#/components/schemas/MoneyDto"
+          },
+          "provider": {
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/OnlinePaymentStatus"
+          },
+          "startedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "completedAt": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "date-time"
+          }
+        }
+      },
       "ExportedPaymentDto": {
         "required": [
           "id",
@@ -9578,7 +9624,9 @@
           "amount",
           "method",
           "paidOn",
-          "status"
+          "status",
+          "cancelReason",
+          "cancelledAt"
         ],
         "type": "object",
         "properties": {
@@ -9605,6 +9653,68 @@
           },
           "status": {
             "$ref": "#/components/schemas/PaymentStatus"
+          },
+          "cancelReason": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "cancelledAt": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "date-time"
+          }
+        }
+      },
+      "ExportedRefundDto": {
+        "required": [
+          "id",
+          "paymentId",
+          "amount",
+          "status",
+          "reason",
+          "requestedAt",
+          "completedAt",
+          "resolutionNote"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "paymentId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "amount": {
+            "$ref": "#/components/schemas/MoneyDto"
+          },
+          "status": {
+            "$ref": "#/components/schemas/PaymentRefundStatus"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "requestedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "completedAt": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "date-time"
+          },
+          "resolutionNote": {
+            "type": [
+              "null",
+              "string"
+            ]
           }
         }
       },
@@ -12906,6 +13016,8 @@
           "enrollments",
           "attendance",
           "payments",
+          "refunds",
+          "onlinePayments",
           "documents"
         ],
         "type": "object",
@@ -12942,6 +13054,18 @@
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/ExportedPaymentDto"
+            }
+          },
+          "refunds": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ExportedRefundDto"
+            }
+          },
+          "onlinePayments": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ExportedOnlinePaymentDto"
             }
           },
           "documents": {
