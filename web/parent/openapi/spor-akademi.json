@@ -2886,6 +2886,166 @@
         }
       }
     },
+    "/api/v1/students/{id}/data-export": {
+      "get": {
+        "tags": [
+          "Students"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StudentDataExportDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/students/{id}/erasure": {
+      "post": {
+        "tags": [
+          "Students"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EraseStudentRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StudentDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Entity",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/guardians": {
       "get": {
         "tags": [
@@ -7904,6 +8064,134 @@
         }
       }
     },
+    "/api/v1/audit-log": {
+      "get": {
+        "tags": [
+          "Audit"
+        ],
+        "parameters": [
+          {
+            "name": "entityType",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "userId",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "schema": {
+              "pattern": "^-?(?:0|[1-9]\\d*)$",
+              "type": [
+                "integer",
+                "string"
+              ],
+              "format": "int32"
+            }
+          },
+          {
+            "name": "pageSize",
+            "in": "query",
+            "schema": {
+              "pattern": "^-?(?:0|[1-9]\\d*)$",
+              "type": [
+                "integer",
+                "string"
+              ],
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PageResponseOfAuditEntryDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/audit-log/actors": {
+      "get": {
+        "tags": [
+          "Audit"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/AuditActorDto"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/platform/jobs/dashboard-session": {
       "post": {
         "tags": [
@@ -8229,8 +8517,7 @@
           "Present",
           "Absent",
           "Late",
-          "Excused",
-          null
+          "Excused"
         ]
       },
       "AttendanceSummaryDto": {
@@ -8301,6 +8588,128 @@
               "string"
             ],
             "format": "double"
+          }
+        }
+      },
+      "AuditAction": {
+        "enum": [
+          "Read",
+          "List",
+          "Create",
+          "Update",
+          "Delete",
+          "Anonymize",
+          "Export",
+          "Erase"
+        ]
+      },
+      "AuditActorDto": {
+        "required": [
+          "userId",
+          "userName",
+          "userRole"
+        ],
+        "type": "object",
+        "properties": {
+          "userId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "userName": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "userRole": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
+      "AuditEntityType": {
+        "enum": [
+          "Student",
+          "Guardian",
+          "StudentDocument",
+          "User"
+        ]
+      },
+      "AuditEntryDto": {
+        "required": [
+          "id",
+          "occurredAt",
+          "userId",
+          "userName",
+          "userRole",
+          "action",
+          "entityType",
+          "entityId",
+          "fields",
+          "reason",
+          "correlationId"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "occurredAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "userId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
+          },
+          "userName": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "userRole": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "action": {
+            "$ref": "#/components/schemas/AuditAction"
+          },
+          "entityType": {
+            "$ref": "#/components/schemas/AuditEntityType"
+          },
+          "entityId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
+          },
+          "fields": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "reason": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "correlationId": {
+            "type": [
+              "null",
+              "string"
+            ]
           }
         }
       },
@@ -8982,6 +9391,297 @@
               "string"
             ],
             "format": "date"
+          }
+        }
+      },
+      "EraseStudentRequest": {
+        "required": [
+          "reason"
+        ],
+        "type": "object",
+        "properties": {
+          "reason": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
+      "ExportedAttendanceDto": {
+        "required": [
+          "date",
+          "startTime",
+          "groupId",
+          "groupName",
+          "status"
+        ],
+        "type": "object",
+        "properties": {
+          "date": {
+            "type": "string",
+            "format": "date"
+          },
+          "startTime": {
+            "type": "string",
+            "format": "time"
+          },
+          "groupId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "groupName": {
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/AttendanceStatus"
+          }
+        }
+      },
+      "ExportedDocumentDto": {
+        "required": [
+          "id",
+          "type",
+          "contentType",
+          "fileName",
+          "sizeBytes",
+          "uploadedAt",
+          "downloadUrl",
+          "linkExpiresAt"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "type": {
+            "$ref": "#/components/schemas/DocumentType"
+          },
+          "contentType": {
+            "type": "string"
+          },
+          "fileName": {
+            "type": "string"
+          },
+          "sizeBytes": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int64"
+          },
+          "uploadedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "downloadUrl": {
+            "type": "string",
+            "format": "uri"
+          },
+          "linkExpiresAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "ExportedEnrollmentDto": {
+        "required": [
+          "id",
+          "groupId",
+          "groupName",
+          "startDate",
+          "endDate",
+          "status"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "groupId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "groupName": {
+            "type": "string"
+          },
+          "startDate": {
+            "type": "string",
+            "format": "date"
+          },
+          "endDate": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "date"
+          },
+          "status": {
+            "$ref": "#/components/schemas/EnrollmentStatus"
+          }
+        }
+      },
+      "ExportedGuardianDto": {
+        "required": [
+          "id",
+          "relationship",
+          "firstName",
+          "lastName",
+          "phone",
+          "email",
+          "address"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "relationship": {
+            "$ref": "#/components/schemas/GuardianRelationship"
+          },
+          "firstName": {
+            "type": "string"
+          },
+          "lastName": {
+            "type": "string"
+          },
+          "phone": {
+            "type": "string"
+          },
+          "email": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "address": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/GuardianAddressDto"
+              }
+            ]
+          }
+        }
+      },
+      "ExportedPaymentDto": {
+        "required": [
+          "id",
+          "enrollmentId",
+          "period",
+          "amount",
+          "method",
+          "paidOn",
+          "status"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "enrollmentId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "period": {
+            "type": "string"
+          },
+          "amount": {
+            "$ref": "#/components/schemas/MoneyDto"
+          },
+          "method": {
+            "$ref": "#/components/schemas/PaymentMethod"
+          },
+          "paidOn": {
+            "type": "string",
+            "format": "date"
+          },
+          "status": {
+            "$ref": "#/components/schemas/PaymentStatus"
+          }
+        }
+      },
+      "ExportedStudentDto": {
+        "required": [
+          "id",
+          "firstName",
+          "lastName",
+          "birthDate",
+          "gender",
+          "status",
+          "leftAt",
+          "phone",
+          "email",
+          "emergencyContact",
+          "anonymizedAt"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "firstName": {
+            "type": "string"
+          },
+          "lastName": {
+            "type": "string"
+          },
+          "birthDate": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "date"
+          },
+          "gender": {
+            "$ref": "#/components/schemas/Gender"
+          },
+          "status": {
+            "$ref": "#/components/schemas/StudentStatus"
+          },
+          "leftAt": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "date"
+          },
+          "phone": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "email": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "emergencyContact": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/EmergencyContactDto"
+              }
+            ]
+          },
+          "anonymizedAt": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "date-time"
           }
         }
       },
@@ -9992,6 +10692,56 @@
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/AnnouncementDto"
+            }
+          },
+          "page": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "pageSize": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "totalCount": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "totalPages": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          }
+        }
+      },
+      "PageResponseOfAuditEntryDto": {
+        "required": [
+          "items",
+          "page",
+          "pageSize",
+          "totalCount",
+          "totalPages"
+        ],
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AuditEntryDto"
             }
           },
           "page": {
@@ -12147,6 +12897,61 @@
           }
         }
       },
+      "StudentDataExportDto": {
+        "required": [
+          "format",
+          "exportedAt",
+          "student",
+          "guardians",
+          "enrollments",
+          "attendance",
+          "payments",
+          "documents"
+        ],
+        "type": "object",
+        "properties": {
+          "format": {
+            "type": "string"
+          },
+          "exportedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "student": {
+            "$ref": "#/components/schemas/ExportedStudentDto"
+          },
+          "guardians": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ExportedGuardianDto"
+            }
+          },
+          "enrollments": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ExportedEnrollmentDto"
+            }
+          },
+          "attendance": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ExportedAttendanceDto"
+            }
+          },
+          "payments": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ExportedPaymentDto"
+            }
+          },
+          "documents": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ExportedDocumentDto"
+            }
+          }
+        }
+      },
       "StudentDocumentDto": {
         "required": [
           "id",
@@ -12898,6 +13703,9 @@
     },
     {
       "name": "Parent"
+    },
+    {
+      "name": "Audit"
     },
     {
       "name": "Jobs"
