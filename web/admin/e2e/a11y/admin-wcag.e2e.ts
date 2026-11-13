@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 
-import { Page, expect, test } from '@playwright/test';
+import { Page, expect, test } from '../support/test';
 
 import { ApiClient } from '../support/api';
 import {

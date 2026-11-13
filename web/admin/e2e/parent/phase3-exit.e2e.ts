@@ -1,6 +1,8 @@
 import { randomUUID } from 'node:crypto';
 
-import { Browser, BrowserContext, Page, devices, expect, request, test } from '@playwright/test';
+import { devices, request } from '@playwright/test';
+
+import { Browser, BrowserContext, Page, expect, test } from '../support/test';
 
 import { expectNoSeriousA11yViolations } from '../support/a11y';
 import { ApiClient } from '../support/api';

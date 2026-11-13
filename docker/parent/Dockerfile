@@ -13,6 +13,7 @@ FROM nginxinc/nginx-unprivileged:1.31.7-alpine-slim@sha256:a8cb0f33d51fa107c96fd
 USER root
 RUN apk add --no-cache 'zlib>=1.3.2-r1' 'musl>=1.2.6-r3' 'musl-utils>=1.2.6-r3'
 USER 101
+COPY docker/parent/security-headers.inc /etc/nginx/conf.d/security-headers.inc
 COPY docker/parent/nginx.conf /etc/nginx/conf.d/default.conf
 COPY --from=build /app/dist/ /usr/share/nginx/html/
 EXPOSE 8080
