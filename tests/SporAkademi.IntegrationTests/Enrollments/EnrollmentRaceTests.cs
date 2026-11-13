@@ -177,7 +177,7 @@ public sealed class EnrollmentRaceTests(DatabaseFixture database) : EnrollmentsT
         var group = await GroupAsync("U10 Futbol");
 
         // Another connection holds the student's row lock past lock_timeout (5 s).
-        await using var holder = new NpgsqlConnection(Database.AppConnectionString);
+        await using var holder = new NpgsqlConnection(Database.MigratorConnectionString);
         await holder.OpenAsync(Ct);
         await using var transaction = await holder.BeginTransactionAsync(Ct);
         await using (var command = new NpgsqlCommand("SELECT 1 FROM students.students WHERE id = @id FOR UPDATE", holder, transaction))
@@ -203,11 +203,12 @@ public sealed class EnrollmentRaceTests(DatabaseFixture database) : EnrollmentsT
         // A stale copy loaded before someone else ended the enrollment cannot overwrite it (xmin token).
         var result = await InScopeAsync(async sp =>
         {
+            sp.GetRequiredService<BackgroundTenantContext>().Enter(School.Value);
             var db = sp.GetRequiredService<AppDbContext>();
             return await sp.GetRequiredService<IUnitOfWork>().ExecuteInTransactionAsync(
                 async ct =>
                 {
-                    var stale = await db.Set<Enrollment>().IgnoreQueryFilters().SingleAsync(e => e.Id == enrollment, ct);
+                    var stale = await db.Set<Enrollment>().SingleAsync(e => e.Id == enrollment, ct);
                     (await EndAsync(enrollment.Value, Today)).StatusCode.ShouldBe(HttpStatusCode.OK);
                     stale.End(new DateOnly(2027, 1, 14)).IsSuccess.ShouldBeTrue();
                     return Result.Success(true);

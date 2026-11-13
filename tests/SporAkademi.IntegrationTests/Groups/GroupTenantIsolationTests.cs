@@ -102,6 +102,7 @@ public sealed class GroupTenantIsolationTests(DatabaseFixture database) : Groups
 
         var violation = await InScopeAsync(async sp =>
         {
+            sp.GetRequiredService<BackgroundTenantContext>().Enter(School.Value);
             var db = sp.GetRequiredService<AppDbContext>();
             db.Add(Group.Create(School, sportOfB, FacilityId.From(FieldA), null, "Sızma", BirthYearRange.Create(2015, 2016).Value, 10).Value);
             return await Should.ThrowAsync<DbUpdateException>(() => db.SaveChangesAsync(Ct));

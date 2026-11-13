@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using System.Text.Json;
 using Microsoft.AspNetCore.SignalR.Client;
 using Microsoft.Extensions.DependencyInjection;
 using SporAkademi.Application.Abstractions.Data;
@@ -159,7 +160,19 @@ public sealed class RealtimeNotificationTests(DatabaseFixture database) : Realti
         var notice = await parentA.WaitForAsync(OfType("payment.recorded"), Arrives);
         Text(notice, "id").ShouldBe(payment);
         Text(notice, "studentId").ShouldBe(_a.Student.ToString());
-        notice.GetRawText().ShouldNotContain("400");
+        // No amount in the notice: checked per value, since a random id can contain the digits "400".
+        foreach (var property in notice.EnumerateObject())
+        {
+            property.Name.ShouldNotContain("amount", Case.Insensitive);
+            if (property.Value.ValueKind == JsonValueKind.Number)
+            {
+                property.Value.GetDecimal().ShouldNotBe(400m);
+            }
+            else
+            {
+                property.Value.ToString().ShouldNotStartWith("400");
+            }
+        }
         await Task.Delay(StaysQuiet, Ct);
         parentB.Received.ShouldBeEmpty();
         coach.Received.ShouldBeEmpty();
