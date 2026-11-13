@@ -1597,7 +1597,7 @@ Parametreler: `from`, `to` (`YYYY-MM`; varsayılan son 6 ay, en çok 12 ay, son 
 | `GET` | `/audit-log` | Okulun kişisel veri erişim kayıtları, en yeni önce; `entityType` (`Student` \| `Guardian` \| `StudentDocument` \| `User`), `userId`, `from`/`to` (okulun günleri), sayfalama. Değer yok, yalnız alan adları (DEC-530 – DEC-537) | SA | P4-05 |
 | `GET` | `/audit-log/actors` | Kayıtlarda geçen kullanıcılar (kullanıcı filtresi için) | SA | P4-05 |
 | `GET` | `/students/{id}/data-export` | Öğrencinin ve velilerinin verisi JSON dosyası olarak; belgeler kısa ömürlü imzalı bağlantıyla (DEC-538, DEC-539). Audit'e `Export` yazılır | SA | P4-06 |
-| `POST` | `/students/{id}/erasure` | `{ reason }` (`DataSubjectRequest` \| `ConsentWithdrawn` \| `RecordedInError`): talep üzerine silme, anonimleştirmeyle aynı sonuç; aktif öğrenci bugün ayrılır (DEC-540 – DEC-542). Zaten anonimse `422 Student.AlreadyAnonymized` | SA | P4-06 |
+| `POST` | `/students/{id}/erasure` | `{ reason }` (`DataSubjectRequest` \| `ConsentWithdrawn` \| `RecordedInError`): talep üzerine silme, anonimleştirmeyle aynı sonuç; aktif öğrenci bugün ayrılır (DEC-540 – DEC-542). Zaten anonimse `422 Student.AlreadyAnonymized`; sürmekte olan online ödeme veya iade varsa `422 Student.OpenPaymentActivity` (DEC-546) | SA | P4-06 |
 
 #### 3. Kapsam kontrolü
 
@@ -1721,6 +1721,7 @@ API'nin döndüğü tüm hata ve uyarı kodlarının kataloğu. Kurallar:
 | `Student.PhoneRequiredForAdult` | BusinessRule | Yetişkin öğrenciler için öğrencinin kendi telefonu zorunludur. | US-13 |
 | `Student.EmergencyContactRequired` | Validation | Acil durum kişisi bilgileri zorunludur. | US-13 |
 | `Student.AlreadyLeft` | BusinessRule | Bu öğrenci zaten ayrılmış olarak işaretli. | US-15 |
+| `Student.OpenPaymentActivity` | BusinessRule | Öğrencinin sürmekte olan bir online ödemesi veya iadesi var; sonuçlandıktan sonra tekrar deneyin. | P4-06 |
 | `Student.NotLeft` | BusinessRule | Sadece ayrılmış öğrenciler yeniden aktifleştirilebilir. | US-15 |
 | `Student.InvalidLeaveDate` | BusinessRule | Ayrılma tarihi, aktif kayıtların başlangıç tarihinden önce olamaz. | US-15 |
 | `Guardian.NotFound` | NotFound | Veli bulunamadı. | US-13 |

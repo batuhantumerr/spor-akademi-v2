@@ -89,6 +89,8 @@ export const enErrorMessages: ErrorMessageText = {
   'Student.Anonymized':
     'This student’s personal data has been anonymised; the record can no longer be changed.',
   'Student.AlreadyAnonymized': 'This student has already been anonymised.',
+  'Student.OpenPaymentActivity':
+    'An online payment or refund of this student is still in progress; try again once it has finished.',
   'RetentionPolicy.Invalid': 'The retention period is outside the allowed range.',
   'Student.InvalidLeaveDate':
     'The leaving date can’t be before the start date of active enrolments.',
@@ -406,7 +408,7 @@ export const enUi: UiText = {
     effect:
       'Name, birth date, contact and emergency contact details are erased; guardians with no other students, their parent accounts and the documents (health reports, photo) are deleted permanently.',
     keptEffect:
-      'Enrolment, attendance and payment history are kept without names for the legal period.',
+      'Enrolment, attendance and payment history are kept without names for the legal period; notes written when cancelling or refunding a payment are not erased.',
     reason: 'Reason for erasure',
     chooseReason: 'Choose a reason',
     reasons: {

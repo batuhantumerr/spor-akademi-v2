@@ -4,9 +4,8 @@
 > hukukçu tarafından gözden geçirilmeli ve her okul kendi bilgileriyle doldurmalıdır. Köşeli parantez içindeki alanlar
 > okul tarafından doldurulur. Örnekteki okul adı ve adresler sentetiktir.
 >
-> Uygulamalardaki bağlantı (`/aydinlatma-metni.html`) bu metnin HTML kopyasını gösterir:
-> `web/admin/public/aydinlatma-metni.html` ve `web/parent/public/aydinlatma-metni.html`. Metin değişince üç dosya
-> birlikte güncellenir.
+> Uygulamalardaki bağlantı (`/aydinlatma-metni.html`) bu metnin HTML hâlini gösterir. HTML sayfaları bu dosyadan
+> `node scripts/privacy-notice.mjs` ile üretilir; elle düzenlenmez, CI (`repo-checks`) farkı yakalar.
 
 ## 1. Veri sorumlusu
 
@@ -76,7 +75,10 @@ girilir; yoklama antrenör tarafından, ödemeler Okul tarafından veya online �
 
 - Öğrencinin ve velinin kişisel verileri, öğrencinin ayrılmasından sonra Okul'un belirlediği süre sonunda
   ([varsayılan: 24 ay]) otomatik olarak anonimleştirilir.
-- Ödeme kayıtları yasal süre boyunca (10 yıl) isim içermeden saklanır.
+- Ödeme kayıtları (tutar, dönem, ödeme tarihi, yöntem) yasal süre boyunca (10 yıl) saklanır. Öğrencinin verileri
+  anonimleştirildiğinde bu kayıtların öğrenciyle bağı isimsiz hâle gelir; ancak Okul'un bir ödemeyi iptal ederken veya
+  iade ederken yazdığı açıklamalar serbest metindir ve silinmez. Okul bu açıklamalara kişisel veri yazmamaya özen
+  gösterir.
 - Kişisel verilere erişim kayıtları 2 yıl saklanır, sonra silinir; bu kayıtlar verinin kendisini içermez.
 - Silme talebiniz saklama süresinin dolmasını beklemeden karşılanır (Bölüm 8).
 

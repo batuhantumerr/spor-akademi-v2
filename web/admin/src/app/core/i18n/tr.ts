@@ -87,6 +87,8 @@ const trErrorMessages = {
   'Student.Anonymized':
     'Bu öğrencinin kişisel verileri anonimleştirildi; kayıt artık değiştirilemez.',
   'Student.AlreadyAnonymized': 'Bu öğrenci zaten anonimleştirildi.',
+  'Student.OpenPaymentActivity':
+    'Öğrencinin sürmekte olan bir online ödemesi veya iadesi var; sonuçlandıktan sonra tekrar deneyin.',
   'RetentionPolicy.Invalid': 'Saklama süresi izin verilen aralıkta değil.',
   'Student.InvalidLeaveDate': 'Ayrılma tarihi, aktif kayıtların başlangıç tarihinden önce olamaz.',
   'Guardian.NotFound': 'Veli bulunamadı.',
@@ -405,7 +407,8 @@ const trUi = {
       'Öğrenci bugün itibarıyla ayrıldı olarak işaretlenir; aktif grup kayıtları bugün sona erer.',
     effect:
       'Ad, doğum tarihi, iletişim ve acil durum bilgileri silinir; başka öğrencisi olmayan veliler, veli hesapları ve belgeler (sağlık raporu, fotoğraf) kalıcı olarak silinir.',
-    keptEffect: 'Kayıt, yoklama ve ödeme geçmişi yasal süre boyunca isimsiz olarak saklanır.',
+    keptEffect:
+      'Kayıt, yoklama ve ödeme geçmişi yasal süre boyunca isimsiz olarak saklanır; ödeme iptali ve iadesi için yazılmış açıklamalar silinmez.',
     reason: 'Silme gerekçesi',
     chooseReason: 'Gerekçe seçin',
     reasons: {
