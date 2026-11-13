@@ -463,7 +463,7 @@ Soru 14'ün Faz 3 adımı. Sahip kararları agent'a bıraktı (futbol okulu yön
 3. **Kapsam dışı (DEC-531).** Ödeme, yoklama ve kayıt satırlarının değişiklikleri audit'e girmez (kendi `recorded_by`/iptal/iade izleri var); kullanıcının giriş sayaçları da girmez. Öneri: kabul.
 4. **RLS'de platform tablosu (DEC-535).** E-posta bağlantısıyla şifre belirleme ve Platform Admin'in okula yönetici açması okulsuz kapsamda çalıştığı için audit tablosu platform tablosu gibi korunur (okulsuz kapsam bütün okullara yazabilir ve okuyabilir). Okula bağlı kapsam yalnız kendi okulunu görür. Öneri: kabul.
 
-### P4-06 KVKK ilgili kişi başvuruları (DEC-538 – DEC-547)
+### P4-06 KVKK ilgili kişi başvuruları (DEC-538 – DEC-548)
 
 1. **Belgeler zip değil, kısa ömürlü imzalı bağlantıyla (DEC-539).** Dışa aktarılan JSON belgelerin bağlantılarını taşır; bağlantılar `Storage:DownloadLinkLifetime` sonunda (varsayılan 5 dakika, en çok 15) geçersizdir.
    - *Yönetici:* belgeleri dışa aktarmadan hemen sonra indirmek gerekir; gerekirse dışa aktarma tekrarlanır (her biri audit'e yazılır).
