@@ -2,36 +2,48 @@ import { Browser, BrowserContext, test as base, expect } from '@playwright/test'
 
 /**
  * P4-01 (DEC-502): the e2e servers send the images' Content-Security-Policy (e2e/serve.mjs), and every spec imports
- * `test` from here, so a CSP violation anywhere fails the test it happened in. Pages report violations through the
- * `securitypolicyviolation` event (all three engines); browser console messages about a blocked resource count too.
- * Contexts the specs open themselves (`browser.newContext()`, also in `beforeAll`) are watched as well; a
- * violation in a `beforeAll` fails the next test.
+ * `test` from here, so a CSP violation anywhere fails the test it happened in. Each page reports its
+ * `securitypolicyviolation` events (all three engines) straight to the test process through a binding, so unrelated
+ * console text cannot count and nothing depends on console timing. Before a test ends, one round trip to every open
+ * page delivers reports still in flight. Contexts the specs open themselves (`browser.newContext()`, also in
+ * `beforeAll`) are watched as well; a violation in a `beforeAll` fails the next test.
  */
-const MARKER = '[csp-violation]';
+const BINDING = '__reportCspViolation';
 const violations: string[] = [];
-const watched = new WeakSet<BrowserContext>();
+const contexts = new Set<BrowserContext>();
 
 async function watch(context: BrowserContext): Promise<BrowserContext> {
-  if (watched.has(context)) return context;
-  watched.add(context);
-  await context.addInitScript((marker) => {
+  if (contexts.has(context)) return context;
+  contexts.add(context);
+  context.on('close', () => contexts.delete(context));
+  await context.exposeBinding(BINDING, ({ page }, report: string) => {
+    violations.push(`${page.url()}: ${report}`);
+  });
+  await context.addInitScript((binding) => {
     document.addEventListener('securitypolicyviolation', (event) => {
-      console.error(
-        `${marker} ${event.effectiveDirective} blocked ${event.blockedURI || '(inline)'} at ${event.sourceFile}:${event.lineNumber}`,
+      const report = (window as unknown as Record<string, (text: string) => Promise<void>>)[
+        binding
+      ];
+      void report?.(
+        `${event.effectiveDirective} blocked ${event.blockedURI || '(inline)'} at ${event.sourceFile}:${event.lineNumber}`,
       );
     });
-  }, MARKER);
-  context.on('console', (message) => {
-    const text = message.text();
-    if (text.startsWith(MARKER) || /content[- ]security[- ]policy/i.test(text)) {
-      violations.push(`${message.page()?.url() ?? '?'}: ${text}`);
-    }
-  });
+  }, BINDING);
   return context;
 }
 
+/** Delivers reports the pages have sent but the test process has not handled yet. */
+async function flush(): Promise<void> {
+  for (const context of contexts) {
+    for (const page of context.pages()) {
+      await page.evaluate(() => 0).catch(() => undefined); // a closed or navigating page has nothing left to send
+    }
+  }
+}
+
 /** Violations so far, emptied; for a spec that provokes one on purpose. */
-export function takeCspViolations(): string[] {
+export async function takeCspViolations(): Promise<string[]> {
+  await flush();
   return violations.splice(0);
 }
 
@@ -53,11 +65,11 @@ export const test = base.extend<{ cspGuard: void }, { cspBrowser: void }>({
     await use(await watch(context));
   },
   cspGuard: [
-    // Playwright reads a fixture's dependencies from the destructuring pattern; this one has none.
-    // eslint-disable-next-line no-empty-pattern
-    async ({}, use) => {
+    // Depends on the test's context so that it ends first, while the pages can still deliver their reports.
+    async ({ context }, use) => {
+      void context;
       await use();
-      expect(takeCspViolations(), 'Content-Security-Policy violations').toEqual([]);
+      expect(await takeCspViolations(), 'Content-Security-Policy violations').toEqual([]);
     },
     { auto: true },
   ],

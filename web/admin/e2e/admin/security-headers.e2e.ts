@@ -33,8 +33,8 @@ test('both apps are served under the production policy, and a violation is caugh
     });
     expect(ran).toBe(false);
     await expect
-      .poll(() =>
-        takeCspViolations().some((violation) => violation.includes('[csp-violation] script-src')),
+      .poll(async () =>
+        (await takeCspViolations()).some((violation) => violation.includes(': script-src')),
       )
       .toBe(true);
   }
