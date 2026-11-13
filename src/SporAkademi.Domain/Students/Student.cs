@@ -257,6 +257,38 @@ public sealed class Student : AggregateRoot<StudentId>, ITenantScoped
             return Result.Failure(StudentErrors.NotDueForAnonymization);
         }
 
+        ClearPersonalData(now);
+        return Result.Success();
+    }
+
+    /// <summary>
+    /// P4-06 (KVKK md. 7 and 11, NFR-PRV-05): erasure on the data subject's request, whatever the retention period. The
+    /// result is exactly what <see cref="Anonymize"/> leaves (DEC-363). An active student first leaves on
+    /// <paramref name="today"/>, so its active enrollments end that day through <see cref="StudentLeft"/>; a student who
+    /// left keeps the leave date.
+    /// </summary>
+    public Result Erase(DateOnly today, DateTimeOffset now)
+    {
+        if (IsAnonymized)
+        {
+            return Result.Failure(StudentErrors.AlreadyAnonymized);
+        }
+
+        if (Status == StudentStatus.Active)
+        {
+            var left = Leave(today);
+            if (left.IsFailure)
+            {
+                return left;
+            }
+        }
+
+        ClearPersonalData(now);
+        return Result.Success();
+    }
+
+    private void ClearPersonalData(DateTimeOffset now)
+    {
         var formerGuardians = _guardians.Select(g => g.GuardianId).ToList();
         FirstName = AnonymizedFirstName;
         LastName = AnonymizedLastName(Id);
@@ -268,7 +300,6 @@ public sealed class Student : AggregateRoot<StudentId>, ITenantScoped
         _guardians.Clear();
         AnonymizedAt = now;
         Raise(new StudentAnonymized(TenantId, Id, formerGuardians));
-        return Result.Success();
     }
 
     /// <summary>"Öğrenci #" and the last eight hex digits of the id: the random part of a UUIDv7, never its timestamp.</summary>
@@ -357,5 +388,7 @@ public static class StudentErrors
     public static readonly Error InvalidLeaveDate = Error.BusinessRule("Student.InvalidLeaveDate", "The leave date is before the start of an active enrollment.");
     public static readonly Error Anonymized = Error.BusinessRule("Student.Anonymized", "The student's personal data was anonymized; the record can no longer change.");
     public static readonly Error AlreadyAnonymized = Error.BusinessRule("Student.AlreadyAnonymized", "The student is already anonymized.");
+    public static readonly Error OpenPaymentActivity = Error.BusinessRule(
+        "Student.OpenPaymentActivity", "An online payment or a refund of the student is still in progress at the provider.");
     public static readonly Error NotDueForAnonymization = Error.BusinessRule("Student.NotDueForAnonymization", "Only students who left before the retention period can be anonymized.");
 }

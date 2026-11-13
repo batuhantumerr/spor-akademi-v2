@@ -278,6 +278,35 @@ public sealed class StudentTests
     }
 
     [Fact]
+    [Trait("Story", "P4-06")]
+    public void Erasure_on_request_anonymizes_regardless_of_the_retention_period_and_ends_an_active_student_today()
+    {
+        var active = Student.Register(School, Details(new DateOnly(2015, 5, 1), SomePhone), OneGuardian, Today).Value;
+        active.ClearDomainEvents();
+        var now = new DateTimeOffset(2027, 1, 14, 9, 0, 0, TimeSpan.Zero);
+
+        active.Erase(Today, now).IsSuccess.ShouldBeTrue();
+
+        active.Status.ShouldBe(StudentStatus.Left);
+        active.LeftAt.ShouldBe(Today);
+        active.AnonymizedAt.ShouldBe(now);
+        active.FirstName.ShouldBe(Student.AnonymizedFirstName);
+        active.BirthDate.ShouldBeNull();
+        active.Guardians.ShouldBeEmpty();
+        active.DomainEvents.Select(e => e.GetType()).ShouldBe([typeof(StudentLeft), typeof(StudentAnonymized)]);
+
+        // A student who left keeps the leave date; the retention period does not matter.
+        var left = Student.Register(School, Details(new DateOnly(2015, 5, 1)), OneGuardian, Today).Value;
+        left.Leave(new DateOnly(2027, 1, 10));
+        left.ClearDomainEvents();
+        left.Erase(Today, now).IsSuccess.ShouldBeTrue();
+        left.LeftAt.ShouldBe(new DateOnly(2027, 1, 10));
+        left.DomainEvents.ShouldHaveSingleItem().ShouldBeOfType<StudentAnonymized>();
+
+        left.Erase(Today, now).Error.ShouldBe(StudentErrors.AlreadyAnonymized);
+    }
+
+    [Fact]
     [Trait("Story", "US-13")]
     public void Guardian_names_are_tidied_and_required()
     {

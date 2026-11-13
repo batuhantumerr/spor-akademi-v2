@@ -7,3 +7,5 @@ src/app/api
 openapi
 playwright-report
 test-results
+# Generated from docs/aydinlatma-metni.md by scripts/privacy-notice.mjs (DEC-543)
+public/aydinlatma-metni.html

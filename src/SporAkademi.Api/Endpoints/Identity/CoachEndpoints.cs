@@ -1,5 +1,6 @@
 using SporAkademi.Api.Errors;
 using SporAkademi.Application.Abstractions;
+using SporAkademi.Application.Abstractions.Auditing;
 using SporAkademi.Application.Abstractions.Authentication;
 using SporAkademi.Application.Abstractions.Messaging;
 using SporAkademi.Application.Identity;
@@ -20,8 +21,8 @@ internal static class CoachEndpoints
     public static IEndpointRouteBuilder MapCoachEndpoints(this IEndpointRouteBuilder app)
     {
         var coaches = app.MapGroup("/api/v1/coaches").WithTags("Coaches").RequireRole(Role.SchoolAdmin);
-        coaches.MapGet("/", ListCoaches).Produces<PageResponse<CoachDto>>().ProducesProblems(400);
-        coaches.MapGet("/{id:guid}", GetCoach).Produces<CoachDto>().ProducesProblems(404);
+        coaches.MapGet("/", ListCoaches).Produces<PageResponse<CoachDto>>().ProducesProblems(400).AuditsList(AuditEntityType.User);
+        coaches.MapGet("/{id:guid}", GetCoach).Produces<CoachDto>().ProducesProblems(404).AuditsRead(AuditEntityType.User);
         coaches.MapPost("/", CreateCoach).Produces<CoachCreatedResponse>(StatusCodes.Status201Created).ProducesProblems(400, 409);
         coaches.MapPut("/{id:guid}", UpdateCoach).Produces<CoachDto>().ProducesProblems(400, 404, 409, 422);
         coaches.MapPost("/{id:guid}/deactivate", DeactivateCoach).Produces<CoachDto>().ProducesProblems(404, 422);

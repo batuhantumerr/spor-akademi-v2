@@ -171,6 +171,14 @@ import { LanguageSwitcherComponent } from '../../shared/ui/language-switcher.com
               {{ submitting() ? text.login.submitting : text.login.submit }}
             </button>
           </form>
+          <!-- P4-06 (DEC-543): the privacy notice (KVKK md. 10), a static page served next to the app. -->
+          <p class="mt-8 text-center text-xs">
+            <a
+              href="/aydinlatma-metni.html"
+              class="text-muted-foreground underline underline-offset-4 hover:text-foreground"
+              >{{ text.login.privacyNotice }}</a
+            >
+          </p>
         </div>
       </section>
     </main>

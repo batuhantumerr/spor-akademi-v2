@@ -37,9 +37,9 @@ public sealed class RowLevelSecurityTests(DatabaseFixture database) : IdentityTe
 
     /// <summary>
     /// Platform tables (DEC-105, DEC-302): a school sees its own rows; work without a school sees them all. The feature
-    /// flag values are written by the Platform Admin and read by their school (P4-10, DEC-581).
+    /// flag values are written by the Platform Admin and read by their school (P4-10, DEC-581). The audit log takes entries from work without a school (P4-05, DEC-535).
     /// </summary>
-    private static readonly string[] PlatformTables = ["identity.users", "outbox.messages", "tenancy.schools", "tenancy.school_features"];
+    private static readonly string[] PlatformTables = ["audit.audit_entries", "identity.users", "outbox.messages", "tenancy.schools", "tenancy.school_features"];
 
     private static CancellationToken Ct => TestContext.Current.CancellationToken;
 
@@ -338,6 +338,7 @@ public sealed class RowLevelSecurityTests(DatabaseFixture database) : IdentityTe
             """);
         grants.Select(r => (string)r[0]!).ShouldBe(
         [
+            "audit.purge_expired app=true public=false",
             "billing.count_schools_with_open_period app=true public=false",
             "billing.find_checkout_target app=true public=false",
         ]);
