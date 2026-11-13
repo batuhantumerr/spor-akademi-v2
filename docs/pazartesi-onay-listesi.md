@@ -450,3 +450,15 @@ Soru 14'ün Faz 3 adımı. Sahip kararları agent'a bıraktı (futbol okulu yön
 4. **Tehdit modeli (DEC-525).** RLS uygulama hatalarına karşı ikinci katmandır. Uygulama rolüyle keyfi SQL çalıştırabilen biri okul ayarını da değiştirebilir. Öneri: kabul; proje dokümanı 5.4 ve Ek C'ye sahip onayından sonra işlensin.
 5. **Anonim kimlik uçları RLS'de token'dan bağımsız olarak platform kapsamında çalışır (DEC-526).** Giriş, refresh, şifre bağlantıları ve ödeme sağlayıcısı uçları `UsesPlatformData()` ile işaretli.
    - *Yazılımcı:* yeni bir anonim uç okullar arası arama yapacaksa bu işareti almalıdır; işaret yalnız RLS oturumunu etkiler. Öneri: kabul.
+
+### P4-10 Feature flag'ler (DEC-580 – DEC-585)
+
+1. **Paket yok, küçük kendi servisimiz (DEC-580).** `Microsoft.FeatureManagement` değerlendirildi, eklenmedi. Okul başına veritabanı değeri için pakette de özel provider ve ayrı bir 404 kapısı yazmak gerekiyordu.
+   - *Yazılımcı:* yüzdelik yayın ya da zaman pencereli bayrak gerekirse paket yeniden değerlendirilir. Öneri: kabul.
+2. **İlk iki bayrak: `reports` ve `parent-online-payments`, ikisi de varsayılan açık (DEC-580, DEC-582).** Bugünkü davranış değişmez; bir okulda raporlar ya da veli ödemesi tek tıkla kapatılabilir.
+   - *Yönetici:* örneğin ödeme sağlayıcısında sorun yaşayan bir okulda veli ödemesi geçici olarak kapatılabilir; veli "okulunuza ödeyebilirsiniz" notunu görür. Öneri: kabul.
+3. **Bayrak tablosu RLS'de platform tablosu (DEC-581).** Platform Admin bütün okulların değerlerini görür ve yazar; okul yalnız kendininkini görür.
+   - *Yazılımcı:* `RowLevelSecurityTests` listesine eklendi. Öneri: kabul.
+4. **Kapalı özellik `404` döner, menüden kalkar; anlık SignalR bildirimi yok (DEC-584, DEC-585).** Açık bir ekran değişikliği bir sonraki yüklemede ya da girişte görür; API o ana kadar zaten `404` döner.
+   - *Yönetici:* bir okulda özelliği kapattığınızda kullanıcı en geç sayfayı yenileyince menünün değiştiğini görür. Öneri: kabul; ihtiyaç olursa bildirim sonra eklenir.
+5. **e2e yok.** Bayrağı kapatıp menünün kaybolması admin ve veli birim testleriyle, `404` ve cache invalidation entegrasyon testleriyle doğrulandı. Paylaşılan e2e okulunda bayrak kapatmak paralel çalışan başka e2e testlerini kırabilirdi. Öneri: gerekirse ayrı bir okulla P4-11'de eklensin.

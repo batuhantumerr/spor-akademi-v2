@@ -200,7 +200,7 @@ Migration ekleyen işler (RLS → audit log → KVKK başvuruları) art arda yap
   - Tatbikatta tam yedekten ve belirli bir ana (PITR) geri dönüş denenir.
   - Tatbikat ölçülür ve süresiyle belgelenir; production yedeği Deploy bloğunda.
   - RLS notu (DEC-528): `FORCE`'lu tablolarda `pg_dump` sahip rolüyle `--enable-row-security` ve `PGOPTIONS='-c app.maintenance=on'` ister (ya da `BYPASSRLS`'li ayrı bir yedek rolü); tatbikat yedeğin bütün okulları içerdiğini doğrular.
-- [ ] P4-10 **Feature flag'ler** (kademeli yayın).
+- [x] P4-10 **Feature flag'ler** (kademeli yayın). (DEC-580 – DEC-585)
   - Okul bazında açılıp kapanan bayraklar; Platform Admin yönetir, istemciler bayrakları okur.
   - Kapalı bayraklı uç nokta `404` döner; bayrak değişikliği cache'i geçersiz kılar.
 
