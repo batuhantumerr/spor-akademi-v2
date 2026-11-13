@@ -18,6 +18,7 @@ using SporAkademi.Api.Jobs;
 using SporAkademi.Api.Observability;
 using SporAkademi.Api.OpenApi;
 using SporAkademi.Api.Realtime;
+using SporAkademi.Api.Security;
 using SporAkademi.Application;
 using SporAkademi.Application.Abstractions.Authentication;
 using SporAkademi.Infrastructure;
@@ -32,8 +33,12 @@ builder.Host.UseDefaultServiceProvider(options =>
     options.ValidateScopes = true;
 });
 
-// NFR-SEC-12: request bodies are capped at 1 MB.
-builder.WebHost.ConfigureKestrel(kestrel => kestrel.Limits.MaxRequestBodySize = 1_048_576);
+// NFR-SEC-12: request bodies are capped at 1 MB. No Server header: it only tells an attacker what runs here (P4-01).
+builder.WebHost.ConfigureKestrel(kestrel =>
+{
+    kestrel.Limits.MaxRequestBodySize = 1_048_576;
+    kestrel.AddServerHeader = false;
+});
 
 builder.AddStructuredLogging();
 builder.AddTelemetry(); // P4-07: OpenTelemetry, exported only when an OTLP endpoint is configured
@@ -45,6 +50,8 @@ builder.Services.AddRealtime(); // P3-08; also before AddInfrastructure (its not
 builder.Services.AddApplication();
 builder.Services.AddInfrastructure(builder.Configuration);
 builder.Services.AddJwtAuthentication();
+builder.Services.AddTrustedForwardedHeaders(); // P4-02 (DEC-507): client address and scheme from the known proxy only
+builder.Services.AddApiRateLimiting(); // P4-02: the general limit, the 429 shape and Retry-After
 builder.Services.AddAuthRateLimiting();
 builder.Services.AddPaymentNotificationRateLimiting();
 builder.Services.AddParentRateLimiting();
@@ -57,7 +64,23 @@ builder.Services.AddProblemDetails(options => options.CustomizeProblemDetails = 
 builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
 builder.Services.AddApiDocument();
 
+builder.Services.AddHsts(hsts =>
+{
+    hsts.MaxAge = TimeSpan.FromDays(365);
+    hsts.IncludeSubDomains = false;
+    hsts.Preload = false;
+});
+
 var app = builder.Build();
+// First: everything after it (HSTS, rate limits, logs) sees the client's address and scheme, not the proxy's.
+app.UseTrustedForwardedHeaders();
+app.UseMiddleware<SecurityHeadersMiddleware>(); // P4-01 (NFR-SEC-13), on every response
+if (app.Environment.IsProduction())
+{
+    // NFR-SEC-02 (DEC-501): only in Production and only on HTTPS requests (UseHsts skips plain HTTP and localhost).
+    // Behind the TLS-terminating proxy the request is HTTPS through X-Forwarded-Proto from a known proxy (DEC-507).
+    app.UseHsts();
+}
 
 app.UseMiddleware<CorrelationIdMiddleware>();
 app.UseMiddleware<NoStoreMiddleware>();

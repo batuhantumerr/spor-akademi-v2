@@ -7,48 +7,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta name="color-scheme" content="light dark" />
     <link rel="icon" type="image/x-icon" href="/favicon.ico" />
-    <script>
-      // Apply the stored or system theme before first paint to avoid a flash (same key as web/admin).
-      (function () {
-        var pref = 'system';
-        try {
-          pref = localStorage.getItem('sa-theme') || 'system';
-        } catch (e) {}
-        var dark =
-          pref === 'dark' || (pref === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
-        document.documentElement.classList.add(dark ? 'dark' : 'light');
-      })();
-      // P3-10: the stored or browser language before first paint (same rule as src/i18n/language.ts).
-      (function () {
-        var lang = null;
-        try {
-          lang = localStorage.getItem('sa-language');
-        } catch (e) {}
-        if (lang !== 'tr' && lang !== 'en') {
-          var first = (
-            (navigator.languages && navigator.languages[0]) ||
-            navigator.language ||
-            ''
-          ).toLowerCase();
-          lang = first === 'en' || first.indexOf('en-') === 0 ? 'en' : 'tr';
-        }
-        document.documentElement.lang = lang;
-      })();
-    </script>
-    <style>
-      html.light,
-      html.light body {
-        background: #f8fafc;
-        color: #0f172a;
-        color-scheme: light;
-      }
-      html.dark,
-      html.dark body {
-        background: #121620;
-        color: #edf2f7;
-        color-scheme: dark;
-      }
-    </style>
+    <!-- P4-01: no inline script or style (Content-Security-Policy). Theme and language before first paint. -->
+    <script src="/boot.js"></script>
+    <link rel="stylesheet" href="/boot.css" />
   </head>
   <body>
     <div id="root"></div>

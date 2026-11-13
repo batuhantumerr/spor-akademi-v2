@@ -2,7 +2,7 @@ import { useCallback, useSyncExternalStore } from 'react';
 
 export type ThemePreference = 'light' | 'dark' | 'system';
 
-/** Same key and classes as web/admin (core/theme/theme.service.ts) and the pre-paint script in index.html. */
+/** Same key and classes as web/admin (core/theme/theme.service.ts) and the pre-paint script public/boot.js. */
 export const THEME_STORAGE_KEY = 'sa-theme';
 
 const listeners = new Set<() => void>();

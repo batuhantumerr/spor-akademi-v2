@@ -12,6 +12,12 @@ FROM nginxinc/nginx-unprivileged:1.31.7-alpine-slim@sha256:a8cb0f33d51fa107c96fd
 USER root
 RUN apk add --no-cache 'zlib>=1.3.2-r1' 'musl>=1.2.6-r3' 'musl-utils>=1.2.6-r3'
 USER 101
+# P4-01 (DEC-502): the public origin of the document store, for photo thumbnails (img-src); empty means none. The
+# entrypoint checks it and renders the security headers from the template; envsubst touches only this variable.
+ENV STORAGE_PUBLIC_ORIGIN="" \
+    NGINX_ENVSUBST_FILTER="STORAGE_PUBLIC_ORIGIN"
+COPY --chmod=755 docker/admin/19-check-storage-origin.sh /docker-entrypoint.d/19-check-storage-origin.sh
+COPY docker/admin/security-headers.inc.template /etc/nginx/templates/security-headers.inc.template
 COPY docker/admin/nginx.conf /etc/nginx/conf.d/default.conf
 COPY --from=build /app/dist/admin/browser/ /usr/share/nginx/html/
 EXPOSE 8080

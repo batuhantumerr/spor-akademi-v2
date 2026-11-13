@@ -12,7 +12,6 @@ required=(
   "referrer-policy: no-referrer"
   "x-content-type-options: nosniff"
   "x-frame-options: deny"
-  "content-security-policy: frame-ancestors 'none'"
 )
 
 for path in /hubs /hubs/notifications /hubs/notifications/negotiate /HUBS/Notifications /api /api/v1/me /API/v1/me; do
@@ -27,6 +26,11 @@ for path in /hubs /hubs/notifications /hubs/notifications/negotiate /HUBS/Notifi
       exit 1
     fi
   done
+  # The image's full policy (P4-01, compared exactly by check-security-headers.sh); here only that it is there.
+  if ! grep -qE "^content-security-policy: .*frame-ancestors 'none'" <<<"$headers"; then
+    echo "$base$path is missing the Content-Security-Policy with frame-ancestors 'none'" >&2
+    exit 1
+  fi
 done
 
 # Paths that only start like the API's stay client routes.

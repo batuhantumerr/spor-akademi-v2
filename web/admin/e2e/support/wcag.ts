@@ -142,10 +142,10 @@ export class A11yAudit {
   ): Promise<void> {
     await page.mouse.move(0, 0);
     // Final styles at once: a focus ring that fades in would otherwise read as "no change".
-    const instant = await page.addStyleTag({
-      content:
-        '*, *::before, *::after { transition: none !important; animation: none !important; }',
-    });
+    const removeInstant = await addTestStyle(
+      page,
+      '*, *::before, *::after { transition: none !important; animation: none !important; }',
+    );
     await page.evaluate(() => {
       (document.activeElement as HTMLElement | null)?.blur();
       window.scrollTo(0, 0);
@@ -201,7 +201,7 @@ export class A11yAudit {
       }
     }
     await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
-    await instant.evaluate((node) => node.remove());
+    await removeInstant();
   }
 
   /** 1.4.10: at 320 CSS px nothing but data tables (which scroll in their own box) may need horizontal scrolling. */
@@ -225,15 +225,15 @@ export class A11yAudit {
 
   /** 1.4.12: with the criterion's spacing override no text may be cut off and the page must still reflow. */
   private async textSpacing(page: Page, name: string): Promise<void> {
-    const style = await page.addStyleTag({
-      content:
-        '* { line-height: 1.5 !important; letter-spacing: 0.12em !important; word-spacing: 0.16em !important; }' +
+    const removeSpacing = await addTestStyle(
+      page,
+      '* { line-height: 1.5 !important; letter-spacing: 0.12em !important; word-spacing: 0.16em !important; }' +
         ' p { margin-bottom: 2em !important; }',
-    });
+    );
     await settle(page);
     const clipped = await page.evaluate(clippedText);
     const overflow = await page.evaluate(horizontalOverflow);
-    await style.evaluate((node) => node.remove());
+    await removeSpacing();
     await page.setViewportSize(viewports.mobile);
     if (clipped.length > 0 || overflow.length > 0) {
       this.record(name, '320px+spacing', {
@@ -304,6 +304,31 @@ export interface ScreenOptions {
 
 export function variantLabel(v: Variant): string {
   return `${v.language}/${v.theme}/${v.width}`;
+}
+
+/**
+ * Test-only CSS as a constructed style sheet (CSSOM), which the Content-Security-Policy does not restrict. An inline
+ * <style> (`page.addStyleTag`) is blocked by the parent app's `style-src 'self'` (P4-01, DEC-502) and would count as a
+ * violation; the production policy stays as it is. Returns a function that removes the sheet again.
+ */
+async function addTestStyle(page: Page, css: string): Promise<() => Promise<void>> {
+  const index = await page.evaluate((text) => {
+    const sheet = new CSSStyleSheet();
+    sheet.replaceSync(text);
+    document.adoptedStyleSheets = [...document.adoptedStyleSheets, sheet];
+    const store = window as unknown as { __testStyleSheets?: CSSStyleSheet[] };
+    store.__testStyleSheets ??= [];
+    return store.__testStyleSheets.push(sheet) - 1;
+  }, css);
+  return async () => {
+    await page.evaluate((at) => {
+      const sheet = (window as unknown as { __testStyleSheets?: CSSStyleSheet[] })
+        .__testStyleSheets?.[at];
+      document.adoptedStyleSheets = document.adoptedStyleSheets.filter(
+        (adopted) => adopted !== sheet,
+      );
+    }, index);
+  };
 }
 
 async function currentLanguage(page: Page): Promise<Language> {
