@@ -207,8 +207,7 @@ export class A11yAudit {
   /** 1.4.10: at 320 CSS px nothing but data tables (which scroll in their own box) may need horizontal scrolling. */
   private async reflow(page: Page, name: string): Promise<void> {
     await page.setViewportSize({ width: 320, height: 640 });
-    // Charts redraw on a throttled resize observer; give them time to take the new width.
-    await page.waitForTimeout(500);
+    await chartsFitContainers(page);
     await settle(page);
     const overflow = await page.evaluate(horizontalOverflow);
     if (overflow.length > 0) {
@@ -359,18 +358,45 @@ export async function applyVariant(page: Page, variant: Variant): Promise<void> 
   await settle(page);
 }
 
-/** Waits until finite animations and transitions are over, so colours and positions are final. */
+/**
+ * Waits until the page is quiet, so colours and positions are final: no region is loading (`aria-busy="true"`, which
+ * every refreshing admin list sets) and no finite animation or transition is running, and both still hold two
+ * animation frames later. The second look catches a list that finishes reloading just after the first one: it
+ * re-enables its buttons, which then fade in (P3-11: a half-faded button reads as low contrast). Reading
+ * `getAnimations()` flushes styles, so a transition that the re-render starts is already visible to it.
+ */
 export async function settle(page: Page): Promise<void> {
-  // Twice, a moment apart: a list that finishes reloading just after the first check re-enables its buttons, which
-  // then fade in (P3-11: a half-faded button reads as low contrast).
-  for (let check = 0; check < 2; check++) {
-    if (check > 0) await page.waitForTimeout(250);
-    await page.waitForFunction(() =>
-      document
-        .getAnimations()
-        .every((a) => a.playState !== 'running' || a.effect?.getTiming().iterations === Infinity),
-    );
-  }
+  await page.waitForFunction(
+    () =>
+      new Promise<boolean>((resolve) => {
+        const quiet = () =>
+          !document.querySelector('[aria-busy="true"]') &&
+          document
+            .getAnimations()
+            .every(
+              (a) => a.playState !== 'running' || a.effect?.getTiming().iterations === Infinity,
+            );
+        if (!quiet()) {
+          resolve(false);
+          return;
+        }
+        requestAnimationFrame(() => requestAnimationFrame(() => resolve(quiet())));
+      }),
+  );
+}
+
+/**
+ * ECharts redraws on a throttled resize observer (ngx-echarts `autoResize`, 100 ms trailing), so right after a
+ * viewport change a canvas still has the old width and would read as overflow. Waits until every chart's canvas is as
+ * wide as its host again.
+ */
+async function chartsFitContainers(page: Page): Promise<void> {
+  await page.waitForFunction(() =>
+    Array.from(document.querySelectorAll<HTMLElement>('[_echarts_instance_]')).every((host) => {
+      const canvas = host.querySelector('canvas');
+      return !canvas || Math.abs(canvas.getBoundingClientRect().width - host.clientWidth) <= 1;
+    }),
+  );
 }
 
 interface FocusProbe {
