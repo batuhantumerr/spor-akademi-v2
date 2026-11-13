@@ -204,7 +204,7 @@ Migration ekleyen işler (RLS → audit log → KVKK başvuruları) art arda yap
   - Kapalı bayraklı uç nokta `404` döner; bayrak değişikliği cache'i geçersiz kılar.
 
 ### 4.4 Faz 3'ten kalan takip işleri
-- [ ] P4-11 **Test ve CI iyileştirmeleri.**
+- [x] P4-11 **Test ve CI iyileştirmeleri.** (DEC-590 – DEC-594)
   - `wcag.ts`'teki `waitForTimeout(500)` koşul beklemesiyle değişir; a11y projeleri ayrı CI job'ına taşınır.
   - Ay sınırını aşan iade testi (DEC-420); çıkış ile refresh grace replay'i arasında barrier entegrasyon testi.
 

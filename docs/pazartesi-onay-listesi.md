@@ -437,3 +437,10 @@ Soru 14'ün Faz 3 adımı. Sahip kararları agent'a bıraktı (futbol okulu yön
    - *Yönetici:* en yoğun ekranlarda bile bir kişi dakikada 100 isteği zor geçer; sınır yalnız betikleri ve ele geçirilmiş hesabı yavaşlatır.
 2. **Sınırlar instance başına, Valkey'de değil (DEC-506).** İki instance'la etkili sınır iki katına kadar çıkabilir. Kalıcı olarak birden fazla instance çalıştırıldığında giriş ve okul yazma sınırları Valkey'e taşınır. Onay ya da "şimdi taşıyalım" kararı.
 3. **Proxy arkasında IP (DEC-507, Deploy bloğunda zorunlu).** API `X-Forwarded-For`'a yalnız `ForwardedHeaders:KnownProxies`'teki adresten güvenir. Caddy'nin adresi yazılmazsa bütün anonim trafik proxy'nin tek kovasına düşer ve dakikada 120 istekle herkes kilitlenir; Production açılışında uyarı loglanır.
+
+### P4-11 Test ve CI iyileştirmeleri (DEC-590 – DEC-594)
+
+1. **Sahip işlemi: `a11y` check'ini ruleset'e ekleyin (DEC-591).** WCAG denetimi `e2e` job'undan ayrı `a11y` job'una taşındı; `a11y` zorunlu değilken bir erişilebilirlik gerilemesi merge'ü durdurmaz.
+   - *Yönetici:* önceden `e2e` zorunlu olduğu için denetim de kapıdaydı; ruleset'e eklenince kapsam aynı kalır, `e2e` yarıdan fazla hızlanır (~11–13 dk yerine ~4–6 dk; `a11y` paralel ~10–11 dk).
+2. **Çıkışla yarışan eski token'ın yeniden denemesi (DEC-594).** Çıkış her iki sırada da kazanıyor (DEC-593). Ancak çıkışla yarışıp `409` alan sekmenin tek yeniden denemesi, belgelenmiş yeniden kullanım kuralı gereği kullanıcının diğer cihazlarındaki oturumları da kapatıyor. Davranış değişmedi.
+   - *Yazılımcı:* yalnız çıkışla kapanan ailede alarmı kapatmak, iptal nedenini saklamayı (migration) gerektirir. Onay ya da "değiştirelim" kararı.
