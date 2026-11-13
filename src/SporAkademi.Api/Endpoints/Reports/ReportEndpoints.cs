@@ -3,6 +3,7 @@ using System.Threading.RateLimiting;
 using Microsoft.Net.Http.Headers;
 using SporAkademi.Api.Endpoints.Tenancy;
 using SporAkademi.Api.Errors;
+using SporAkademi.Api.Security;
 using SporAkademi.Application.Abstractions.Authentication;
 using SporAkademi.Application.Abstractions.Messaging;
 using SporAkademi.Application.Reports;
@@ -24,7 +25,7 @@ internal static class ReportEndpoints
 
     public static IServiceCollection AddReportExportRateLimiting(this IServiceCollection services) =>
         services.AddRateLimiter(options => options.AddPolicy(ExportRateLimitPolicy, context => RateLimitPartition.GetFixedWindowLimiter(
-            context.User.FindFirst("sub")?.Value ?? context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+            context.User.FindFirst("sub")?.Value ?? ApiRateLimiting.ClientNetwork(context.Connection.RemoteIpAddress),
             _ => new FixedWindowRateLimiterOptions { PermitLimit = ExportsPerMinute, Window = TimeSpan.FromMinutes(1), QueueLimit = 0 })));
 
     public static IEndpointRouteBuilder MapReportEndpoints(this IEndpointRouteBuilder app)

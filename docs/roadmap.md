@@ -191,7 +191,7 @@ Migration ekleyen işler (RLS → audit log → KVKK başvuruları) art arda yap
   - Trace (ASP.NET Core, HttpClient, EF/Npgsql, Hangfire, outbox), metrik ve log OTLP ile; kişisel veri ve token taşınmaz.
   - Yerelde compose profiliyle dashboard ve alarm kuralları.
   - Sentry ile hata takibi: SDK entegre edilir ve testle doğrulanır; DSN ortam yapılandırmasından gelir, yoksa gönderim kapalıdır (anahtar repoda yok, gerçek DSN Deploy bloğunda).
-- [ ] P4-08 **k6 ile yük testi ve performans bütçesi** (NFR-PRF-01, -02).
+- [x] P4-08 **k6 ile yük testi ve performans bütçesi** (NFR-PRF-01, -02). (DEC-560 – DEC-569; `perf/k6/`, `scripts/perf/`, `docs/performans.md`)
   - Okuma p95 < 300 ms, yazma p95 < 500 ms; demo verisiyle yerelde ölçülür, sonuçlar `docs/`'a yazılır.
   - N+1 sorgular ve eksik index'ler düzeltilir; regresyon için sorgu sayısı testleri.
   - Durumsuzluk (NFR-SCL-01): yük testi proxy arkasında iki API örneğiyle de koşar; oturum, SignalR ve rate limit sayaçlarının davranışı belgelenir.

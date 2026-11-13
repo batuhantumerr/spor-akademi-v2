@@ -2,6 +2,7 @@ using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.Mvc;
 using SporAkademi.Api.Endpoints.Students;
 using SporAkademi.Api.Errors;
+using SporAkademi.Api.Security;
 using SporAkademi.Application.Abstractions;
 using SporAkademi.Application.Abstractions.Authentication;
 using SporAkademi.Application.Abstractions.Messaging;
@@ -61,7 +62,7 @@ internal static class OnlinePaymentEndpoints
 
     private static RateLimitPartition<string> Partition(HttpContext context, int permitsPerMinute) =>
         RateLimitPartition.GetFixedWindowLimiter(
-            $"{context.Connection.RemoteIpAddress?.ToString() ?? "unknown"} {context.Request.Path.Value}",
+            $"{ApiRateLimiting.ClientNetwork(context.Connection.RemoteIpAddress)} {context.Request.Path.Value}",
             _ => new FixedWindowRateLimiterOptions { PermitLimit = permitsPerMinute, Window = TimeSpan.FromMinutes(1), QueueLimit = 0 });
 
     public static IEndpointRouteBuilder MapOnlinePaymentEndpoints(this IEndpointRouteBuilder app)

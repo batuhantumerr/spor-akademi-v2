@@ -1,0 +1,90 @@
+name: load-smoke
+
+# P4-08 (DEC-568): a small k6 smoke load test by hand only (workflow_dispatch). The demo schools plus one load test
+# school, 12 virtual users for a minute against the Release API image, with the same budget thresholds as the full test
+# (read p95 < 300 ms, write p95 < 500 ms). Not a required check and not on pull requests: it never lengthens the
+# required jobs, and shared runners are too noisy for the full 300-user test, which is run locally
+# (scripts/perf/run-k6.sh, docs/performans.md).
+on:
+  workflow_dispatch:
+    inputs:
+      instances:
+        description: API instances (2 = behind the Caddy proxy, NFR-SCL-01)
+        type: choice
+        options: ["1", "2"]
+        default: "1"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: load-smoke-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+  DOTNET_NOLOGO: "1"
+  DOTNET_CLI_UI_LANGUAGE: en
+
+jobs:
+  smoke:
+    runs-on: ubuntu-24.04
+    # Seeding takes about four minutes, the image build two, the run one.
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Lint the load test scripts
+        run: shellcheck --severity=warning scripts/perf/*.sh
+      - uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6.1.0
+        with:
+          global-json-file: global.json
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.nuget/packages
+          key: nuget-load-${{ runner.os }}-${{ hashFiles('**/packages.lock.json', '.config/dotnet-tools.json') }}
+      - name: Throwaway .env (random values, never printed; the runner is discarded)
+        run: |
+          umask 077
+          {
+            echo "POSTGRES_PASSWORD=$(openssl rand -hex 24)"
+            echo "SPOR_AKADEMI_MIGRATOR_PASSWORD=$(openssl rand -hex 24)"
+            echo "SPOR_AKADEMI_APP_PASSWORD=$(openssl rand -hex 24)"
+            echo "JWT_SIGNING_KEY=$(openssl rand -hex 32)"
+            echo "VALKEY_PASSWORD=$(openssl rand -hex 24)"
+            echo "DEMO_PASSWORD=Smoke-$(openssl rand -hex 12)"
+          } > .env
+      - name: Start PostgreSQL (the compose.yaml image and init script)
+        run: docker compose up -d --wait postgres
+      - name: Restore
+        run: |
+          dotnet tool restore
+          dotnet restore src/SporAkademi.DemoSeed/SporAkademi.DemoSeed.csproj --locked-mode
+      - name: Load test data (demo schools, one load test school, 10 parent accounts each)
+        run: bash scripts/perf/prepare-db.sh --load-schools 1 --parents 10
+      - name: k6 smoke
+        env:
+          INSTANCES: ${{ inputs.instances }}
+        run: |
+          # The k6 image runs as its own unprivileged user (uid 12345). The results directory goes to it, with the runner's
+          # group kept (setgid, group-writable) so run-k6.sh can add the pg_stat_statements file; nothing is world-writable.
+          sudo chown 12345:"$(id -g)" perf/k6/out && sudo chmod 2775 perf/k6/out
+          bash scripts/perf/run-k6.sh --profile smoke --instances "$INSTANCES" --label smoke-ci
+      - name: Give the results back to the runner
+        if: always()
+        run: sudo chown -R "$(id -u)" perf/k6/out
+      - name: Results in the job summary
+        if: always()
+        run: |
+          if [ -f perf/k6/out/summary-smoke-ci.md ]; then cat perf/k6/out/summary-smoke-ci.md >>"$GITHUB_STEP_SUMMARY"; fi
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: load-smoke
+          # The k6 summaries and pg_stat_statements; not the manifest (sign-in addresses).
+          path: |
+            perf/k6/out/summary-*
+            perf/k6/out/pg-stat-*
+          if-no-files-found: ignore
+          retention-days: 14

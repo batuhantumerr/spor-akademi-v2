@@ -122,6 +122,105 @@ public sealed class ApiRateLimitingTests(DatabaseFixture database) : Integration
     }
 
     [Fact]
+    [Trait("Story", "P4-08")]
+    public async Task The_sign_in_limit_can_be_raised_by_configuration_for_a_load_test()
+    {
+        // DEC-561: a load test signs many accounts in from one address; production keeps the default (10 per minute).
+        using var api = Api.WithWebHostBuilder(builder => builder.ConfigureAppConfiguration((_, config) =>
+            config.AddInMemoryCollection(new Dictionary<string, string?> { ["RateLimiting:AuthPermitsPerMinute"] = "20" })));
+        using var anonymous = api.CreateClient(new WebApplicationFactoryClientOptions { HandleCookies = false });
+
+        for (var i = 0; i < 20; i++)
+        {
+            (await RefreshAsync(anonymous)).StatusCode.ShouldNotBe(HttpStatusCode.TooManyRequests);
+        }
+
+        await ShouldBeRateLimitedAsync(await RefreshAsync(anonymous));
+    }
+
+    [Fact]
+    [Trait("Story", "P4-08")]
+    public async Task The_sign_in_limit_counts_a_client_once_however_its_address_is_written()
+    {
+        // DEC-569: found behind the load test's proxy. A direct IPv4 connection arrives IPv4-mapped (::ffff:a.b.c.d), the
+        // forwarded one as plain a.b.c.d; and an IPv6 client could take a fresh address of its /64 for every attempt.
+        using var api = Api.WithWebHostBuilder(builder =>
+        {
+            RemoteAddress.Enable(builder);
+            builder.ConfigureAppConfiguration((_, config) => config.AddInMemoryCollection(
+                new Dictionary<string, string?> { ["RateLimiting:AuthPermitsPerMinute"] = "2", ["ForwardedHeaders:KnownProxies:0"] = Proxy }));
+        });
+        using var http = api.CreateClient(new WebApplicationFactoryClientOptions { HandleCookies = false });
+
+        (await RefreshFromAsync(http, "::ffff:203.0.113.9")).StatusCode.ShouldNotBe(HttpStatusCode.TooManyRequests);
+        (await RefreshFromAsync(http, Proxy, "203.0.113.9")).StatusCode.ShouldNotBe(HttpStatusCode.TooManyRequests);
+        await ShouldBeRateLimitedAsync(await RefreshFromAsync(http, "203.0.113.9"));
+
+        (await RefreshFromAsync(http, "2001:db8:0:7::1")).StatusCode.ShouldNotBe(HttpStatusCode.TooManyRequests);
+        (await RefreshFromAsync(http, "2001:db8:0:7::2")).StatusCode.ShouldNotBe(HttpStatusCode.TooManyRequests);
+        await ShouldBeRateLimitedAsync(await RefreshFromAsync(http, "2001:db8:0:7:abcd::3"));
+    }
+
+    private static async Task<HttpResponseMessage> RefreshFromAsync(HttpClient http, string address, string? forwardedFor = null)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Post, "/api/v1/auth/refresh").From(address, forwardedFor);
+        request.Headers.Add("X-Requested-With", "XMLHttpRequest");
+        return await http.SendAsync(request, Ct);
+    }
+
+    [Theory]
+    [InlineData("AuthPermitsPerMinute", "11")]
+    [InlineData("ParentPermitsPerMinute", "61")]
+    [InlineData("UserPermitsPerMinute", "301")]
+    [InlineData("SchoolWritePermitsPerMinute", "301")]
+    [InlineData("AnonymousPermitsPerMinute", "121")]
+    [InlineData("ConcurrentUploadsPerSchool", "4")]
+    [Trait("Story", "P4-08")]
+    public void Production_refuses_to_start_with_a_limit_above_the_production_value(string setting, string value)
+    {
+        // DEC-561: only the load test environment may raise the limits; in Production a raised value stops the start.
+        using var api = Api.WithWebHostBuilder(builder =>
+        {
+            builder.UseEnvironment("Production");
+            builder.ConfigureAppConfiguration((_, config) => config.AddInMemoryCollection(
+                new Dictionary<string, string?> { [$"RateLimiting:{setting}"] = value }));
+        });
+
+        Should.Throw<Exception>(() => api.CreateClient()).ToString().ShouldContain("above the production value");
+    }
+
+    [Fact]
+    [Trait("Story", "P4-08")]
+    public void Outside_production_the_limits_may_be_raised()
+    {
+        using var api = Api.WithWebHostBuilder(builder =>
+        {
+            builder.UseEnvironment("LoadTest");
+            builder.ConfigureAppConfiguration((_, config) => config.AddInMemoryCollection(
+                new Dictionary<string, string?> { ["RateLimiting:AuthPermitsPerMinute"] = "1000000", ["RateLimiting:ParentPermitsPerMinute"] = "1000000" }));
+        });
+
+        Should.NotThrow(() => api.CreateClient().Dispose());
+    }
+
+    [Fact]
+    [Trait("Story", "P4-08")]
+    public void The_default_endpoint_limits_are_the_production_ones()
+    {
+        var defaults = new SporAkademi.Api.Security.RateLimitingOptions();
+
+        defaults.AuthPermitsPerMinute.ShouldBe(10);
+        defaults.ParentPermitsPerMinute.ShouldBe(60);
+    }
+
+    private static async Task<HttpResponseMessage> RefreshAsync(HttpClient anonymous)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Post, "/api/v1/auth/refresh");
+        request.Headers.Add("X-Requested-With", "XMLHttpRequest");
+        return await anonymous.SendAsync(request, Ct);
+    }
+
+    [Fact]
     [Trait("Story", "P4-03")]
     public async Task Uploads_in_flight_are_capped_per_school()
     {

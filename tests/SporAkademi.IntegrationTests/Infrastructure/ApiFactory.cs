@@ -1,10 +1,12 @@
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Time.Testing;
 using SporAkademi.Application.Abstractions.Notifications;
+using SporAkademi.Infrastructure.Persistence;
 
 namespace SporAkademi.IntegrationTests.Infrastructure;
 
@@ -25,6 +27,25 @@ public sealed class ApiFactory(
 
     /// <summary>Every e-mail the API "sends" (DEC-350); nothing leaves the test.</summary>
     public CapturingEmailSender Emails { get; } = new();
+
+    /// <summary>P4-08: counts EF's commands and connection openings during a measurement (query count tests).</summary>
+    public QueryCounter Queries { get; } = new();
+
+    /// <summary>
+    /// For a host switched to Production: the general limits back at their production values, since Production refuses to
+    /// start with the raised ones this factory uses (DEC-561).
+    /// </summary>
+    public static void UseProductionRateLimits(IWebHostBuilder builder)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        builder.ConfigureAppConfiguration((_, config) => config.AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            ["RateLimiting:UserPermitsPerMinute"] = "300",
+            ["RateLimiting:SchoolWritePermitsPerMinute"] = "300",
+            ["RateLimiting:AnonymousPermitsPerMinute"] = "120",
+            ["RateLimiting:ConcurrentUploadsPerSchool"] = "3",
+        }));
+    }
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
@@ -56,6 +77,7 @@ public sealed class ApiFactory(
         {
             services.Replace(ServiceDescriptor.Singleton<TimeProvider>(Clock));
             services.Replace(ServiceDescriptor.Singleton<IEmailSender>(Emails));
+            services.ConfigureDbContext<AppDbContext>(options => options.AddInterceptors(Queries));
         });
     }
 }

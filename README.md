@@ -134,6 +134,10 @@ bash scripts/seed-demo.sh   # migration'lardan sonra, API çalışmıyorken de o
   ```
 - Telefonlar `+90 5xx 000 nnnn` biçiminde, e-postalar ayrılmış `.test` alan adında; isimler yaygın Türkçe ad ve soyadların rastgele birleşimidir. Telefonların gerçek bir hatta denk gelmemesi sadece bu biçim kuralına dayanır (yönlendirilemez olduğu garanti değildir); uygulama demo kişilere SMS, WhatsApp veya e-posta göndermez, böyle bir entegrasyon eklenirse demo verisi hariç tutulmalıdır.
 
+### Yük testi (P4-08)
+
+`bash scripts/perf/prepare-db.sh` (bir kez, ayrı `spor_akademi_perf` veritabanı) ve `bash scripts/perf/run-k6.sh` (`--instances 2`, `--checks`); ayrıntılar ve sonuçlar [docs/performans.md](docs/performans.md). Compose'un PostgreSQL'i `pg_stat_statements` yüklü başlar (DEC-563); mevcut bir geliştirici konteyneri bunu bir sonraki `docker compose up -d` yeniden oluşturmasında alır, veriye dokunulmaz.
+
 ### İlk Platform Admin
 
 `setup-env.sh`, `.env`'e `PLATFORM_ADMIN_EMAIL` ve rastgele bir `PLATFORM_ADMIN_PASSWORD` yazar ve şifreyi **bir kez** ekrana basar. `run-api.sh` bunları API'ye `PlatformAdmin__Email` / `PlatformAdmin__InitialPassword` olarak verir. API açılırken:

@@ -94,6 +94,15 @@ public interface ISessionRepository
     /// <summary>Untracked stored sessions of the group between the dates (inclusive), with records.</summary>
     Task<IReadOnlyList<Session>> ListOfGroupAsync(GroupId groupId, DateOnly firstDay, DateOnly lastDay, CancellationToken cancellationToken);
 
-    /// <summary>Untracked stored sessions of the groups between the dates (inclusive), with records.</summary>
-    Task<IReadOnlyList<Session>> ListOfGroupsAsync(IReadOnlyCollection<GroupId> groupIds, DateOnly firstDay, DateOnly lastDay, CancellationToken cancellationToken);
+    /// <summary>
+    /// Untracked stored sessions of the groups between the dates (inclusive), with the <paramref name="studentId"/>'s record
+    /// only (P4-08, DEC-566: a student's history needs no other student's row; loading them all was most of the parent
+    /// app's database time in the load test).
+    /// </summary>
+    Task<IReadOnlyList<Session>> ListOfGroupsForStudentAsync(
+        IReadOnlyCollection<GroupId> groupIds,
+        StudentId studentId,
+        DateOnly firstDay,
+        DateOnly lastDay,
+        CancellationToken cancellationToken);
 }

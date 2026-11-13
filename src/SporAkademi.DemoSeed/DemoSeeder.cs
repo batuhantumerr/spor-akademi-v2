@@ -1,7 +1,9 @@
+using System.Globalization;
 using System.Security.Cryptography;
 using Microsoft.Extensions.DependencyInjection;
 using SporAkademi.Application.Abstractions;
 using SporAkademi.Application.Abstractions.Authentication;
+using SporAkademi.Application.Abstractions.Data;
 using SporAkademi.Application.Abstractions.Messaging;
 using SporAkademi.Application.Announcements;
 using SporAkademi.Application.Attendance;
@@ -19,6 +21,7 @@ using SporAkademi.Domain.Attendance;
 using SporAkademi.Domain.Billing;
 using SporAkademi.Domain.Enrollments;
 using SporAkademi.Domain.Groups;
+using SporAkademi.Domain.Identity;
 using SporAkademi.Domain.Organization;
 using SporAkademi.Domain.SharedKernel;
 using SporAkademi.Domain.Students;
@@ -30,9 +33,30 @@ namespace SporAkademi.DemoSeed;
 /// <param name="HistoryDays">How far back the history starts (about three months by default).</param>
 /// <param name="Password">The password of every demo account; generated when empty.</param>
 /// <param name="Seed">Seed of the random choices: the same seed gives the same data.</param>
-internal sealed record DemoSeedOptions(DateTimeOffset Now, int HistoryDays = 92, string? Password = null, int Seed = 20_261_107);
+/// <param name="LoadSchools">P4-08: extra, larger schools for the load test (<see cref="DemoData.LoadSchool"/>); none by default.</param>
+/// <param name="ParentAccounts">P4-08: how many guardians per school get an active parent account (invited and accepted).</param>
+internal sealed record DemoSeedOptions(
+    DateTimeOffset Now,
+    int HistoryDays = 92,
+    string? Password = null,
+    int Seed = 20_261_107,
+    int LoadSchools = 0,
+    int ParentAccounts = 0)
+{
+    /// <summary>The demo schools followed by the load test schools.</summary>
+    public IReadOnlyList<SchoolPlan> Plans =>
+        [.. DemoData.Schools, .. Enumerable.Range(1, Math.Max(0, LoadSchools)).Select(DemoData.LoadSchool)];
+}
 
-internal sealed record DemoSchoolSummary(string Name, string Slug, string AdminEmail, Guid SchoolId);
+/// <param name="CoachEmails">The coaches' sign-in addresses.</param>
+/// <param name="ParentEmails">The sign-in addresses of the parent accounts opened (<see cref="DemoSeedOptions.ParentAccounts"/>).</param>
+internal sealed record DemoSchoolSummary(
+    string Name,
+    string Slug,
+    string AdminEmail,
+    Guid SchoolId,
+    IReadOnlyList<string> CoachEmails,
+    IReadOnlyList<string> ParentEmails);
 
 internal sealed record DemoSeedResult(bool Created, string? Password, IReadOnlyList<DemoSchoolSummary> Schools)
 {
@@ -61,7 +85,7 @@ internal sealed class DemoSeeder(IServiceScopeFactory scopes, SeedClock clock, S
         await using (var scope = scopes.CreateAsyncScope())
         {
             var schools = scope.ServiceProvider.GetRequiredService<ISchoolRepository>();
-            foreach (var plan in DemoData.Schools)
+            foreach (var plan in options.Plans)
             {
                 if (await schools.SlugExistsAsync(Slug.Create(plan.Slug).Value, cancellationToken))
                 {
@@ -76,10 +100,11 @@ internal sealed class DemoSeeder(IServiceScopeFactory scopes, SeedClock clock, S
             throw new DemoSeedException("The demo password does not meet the password policy (at least 12 characters, not a common password).");
         }
 
+        var plans = options.Plans;
         var summaries = new List<DemoSchoolSummary>();
-        for (var i = 0; i < DemoData.Schools.Length; i++)
+        for (var i = 0; i < plans.Count; i++)
         {
-            var run = new SchoolRun(this, DemoData.Schools[i], i, options, password, cancellationToken);
+            var run = new SchoolRun(this, plans[i], i, options, password, cancellationToken);
             summaries.Add(await run.SeedAsync());
         }
 
@@ -109,6 +134,44 @@ internal sealed class DemoSeeder(IServiceScopeFactory scopes, SeedClock clock, S
         return result.IsSuccess
             ? result.Value
             : throw new DemoSeedException($"{typeof(TQuery).Name} failed with {result.Error.Code}.");
+    }
+
+    private async Task<Result<T>> TrySendAsync<TCommand, T>(TCommand command, CancellationToken cancellationToken)
+        where TCommand : ICommand<T>
+    {
+        await using var scope = scopes.CreateAsyncScope();
+        return await scope.ServiceProvider.GetRequiredService<ICommandHandler<TCommand, T>>().Handle(command, cancellationToken);
+    }
+
+    /// <summary>
+    /// P4-08: accepts a parent invitation the way the invitation e-mail's link would (DEC-383): a set-password token is
+    /// issued to the invited account, as <c>PasswordLinkMailer</c> does, and redeemed at once. No e-mail is sent; the
+    /// invitation's outbox message later finds the account active and is skipped.
+    /// </summary>
+    private async Task AcceptInvitationAsync(string email, string password, CancellationToken cancellationToken)
+    {
+        string token;
+        await using (var scope = scopes.CreateAsyncScope())
+        {
+            var users = scope.ServiceProvider.GetRequiredService<IUserRepository>();
+            var created = scope.ServiceProvider.GetRequiredService<IPasswordTokenFactory>().Create();
+            var issued = await scope.ServiceProvider.GetRequiredService<IUnitOfWork>().ExecuteInTransactionAsync(
+                async ct =>
+                {
+                    var user = await users.GetByEmailAsync(Email.Create(email).Value, ct)
+                        ?? throw new DemoSeedException("The invited parent account was not found.");
+                    return user.IssuePasswordToken(created.Hash, PasswordTokenPurpose.Invitation, clock.GetUtcNow());
+                },
+                cancellationToken);
+            if (issued.IsFailure)
+            {
+                throw new DemoSeedException($"Issuing the invitation token failed with {issued.Error.Code}.");
+            }
+
+            token = created.Token;
+        }
+
+        await SendAsync<ConfirmPasswordResetCommand, Unit>(new ConfirmPasswordResetCommand(token, password), cancellationToken);
     }
 
     private static DateTimeOffset At(DateOnly date, TimeOnly time) =>
@@ -153,7 +216,7 @@ internal sealed class DemoSeeder(IServiceScopeFactory scopes, SeedClock clock, S
         public bool IsActiveOn(DateOnly date) => Start <= date && (End is not { } end || date <= end);
     }
 
-    private sealed record Family(string LastName, Guid GuardianId);
+    private sealed record Family(string LastName, Guid GuardianId, string Email);
 
     /// <summary>One school's seeding, with its own deterministic random sequence.</summary>
     private sealed class SchoolRun(DemoSeeder seeder, SchoolPlan plan, int index, DemoSeedOptions options, string password, CancellationToken ct)
@@ -186,7 +249,14 @@ internal sealed class DemoSeeder(IServiceScopeFactory scopes, SeedClock clock, S
             PlanPaymentsAndLeaves();
             await ReplayDaysAsync();
             await DefineFeeRulesAsync();
-            return new DemoSchoolSummary(plan.Name, plan.Slug, plan.AdminEmail, _schoolId);
+            var parents = await OpenParentAccountsAsync();
+            return new DemoSchoolSummary(
+                plan.Name,
+                plan.Slug,
+                plan.AdminEmail,
+                _schoolId,
+                [.. Enumerable.Range(1, plan.CoachCount).Select(i => string.Create(CultureInfo.InvariantCulture, $"antrenor{i}@{plan.Domain}"))],
+                parents);
         }
 
         private string NextPhone() => DemoData.Phone(index, ++_phones);
@@ -199,6 +269,41 @@ internal sealed class DemoSeeder(IServiceScopeFactory scopes, SeedClock clock, S
             where TCommand : ICommand<T> => seeder.SendAsync<TCommand, T>(command, ct);
 
         private void AsAdmin() => seeder.Actor.Act(Role.SchoolAdmin, _adminId, _schoolId);
+
+        /// <summary>
+        /// P4-08: the first guardians (in registration order) get a parent account, as on the day the history ends. A
+        /// guardian whose children have all left cannot be invited and is skipped.
+        /// </summary>
+        private async Task<IReadOnlyList<string>> OpenParentAccountsAsync()
+        {
+            var opened = new List<string>();
+            if (options.ParentAccounts <= 0)
+            {
+                return opened;
+            }
+
+            seeder.Clock.Set(options.Now);
+            foreach (var family in _families)
+            {
+                if (opened.Count == options.ParentAccounts)
+                {
+                    break;
+                }
+
+                AsAdmin();
+                var invited = await seeder.TrySendAsync<InviteGuardianCommand, Unit>(new InviteGuardianCommand(GuardianId.From(family.GuardianId)), ct);
+                if (invited.IsFailure)
+                {
+                    continue;
+                }
+
+                await seeder.AcceptInvitationAsync(family.Email, password, ct);
+                opened.Add(family.Email);
+            }
+
+            AsAdmin();
+            return opened;
+        }
 
         private async Task CreateSchoolAsync()
         {
@@ -273,6 +378,11 @@ internal sealed class DemoSeeder(IServiceScopeFactory scopes, SeedClock clock, S
                 var coachId = _coaches[g % _coaches.Count];
                 var capacity = adult ? 20 : 12 + _random.Next(0, 3) * 2;
                 var name = $"{band.Label} {sport.Name}{(g >= sports.Count * 2 ? " B" : string.Empty)}";
+                // The larger load test schools (P4-08) have more groups than band and sport pairs: C, D, … then.
+                for (var suffix = 'C'; _groups.Exists(existing => existing.Name == name); suffix++)
+                {
+                    name = $"{band.Label} {sport.Name} {suffix}";
+                }
 
                 // Adults train late; children in the afternoon.
                 var times = adult ? DemoData.SlotStarts[^1..] : DemoData.SlotStarts[..^1];
@@ -389,12 +499,13 @@ internal sealed class DemoSeeder(IServiceScopeFactory scopes, SeedClock clock, S
 
             var familyName = Pick(DemoData.LastNames);
             var motherName = Pick(DemoData.FemaleNames);
+            var guardianEmail = NextEmail("veli");
             var studentId = await Send<RegisterStudentCommand, StudentId>(new RegisterStudentCommand(
                 firstName, familyName, birthDate, gender, null, null,
                 new EmergencyContactInput($"{Pick(DemoData.MaleNames)} {familyName}", NextPhone(), "Baba"),
-                [new GuardianLinkInput(null, new NewGuardianInput(motherName, familyName, NextPhone(), NextEmail("veli"), null), GuardianRelationship.Mother)]));
+                [new GuardianLinkInput(null, new NewGuardianInput(motherName, familyName, NextPhone(), guardianEmail, null), GuardianRelationship.Mother)]));
             var student = await seeder.AskAsync<GetStudentQuery, StudentDto>(new GetStudentQuery(studentId), ct);
-            _families.Add(new Family(familyName, student.Guardians[0].GuardianId));
+            _families.Add(new Family(familyName, student.Guardians[0].GuardianId, guardianEmail));
             return studentId.Value;
         }
 

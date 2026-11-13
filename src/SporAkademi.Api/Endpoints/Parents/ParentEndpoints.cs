@@ -1,8 +1,10 @@
 using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Options;
 using SporAkademi.Api.Endpoints.Billing;
 using SporAkademi.Api.Endpoints.Tenancy;
 using SporAkademi.Api.Errors;
+using SporAkademi.Api.Security;
 using SporAkademi.Application.Abstractions;
 using SporAkademi.Application.Abstractions.Authentication;
 using SporAkademi.Application.Abstractions.Messaging;
@@ -27,14 +29,21 @@ internal sealed record StartChildOnlinePaymentRequest(Guid EnrollmentId, string 
 /// </summary>
 internal static class ParentEndpoints
 {
-    /// <summary>DEC-388: requests per parent account (the token's subject) and minute, over all parent endpoints.</summary>
+    /// <summary>
+    /// DEC-388: requests per parent account (the token's subject) and minute, over all parent endpoints:
+    /// <c>RateLimiting:ParentPermitsPerMinute</c> (60 by default), raised only for a load test (P4-08, DEC-561).
+    /// </summary>
     public const string RateLimitPolicy = "parent";
-    public const int PermitsPerMinute = 60;
 
     public static IServiceCollection AddParentRateLimiting(this IServiceCollection services) =>
         services.AddRateLimiter(options => options.AddPolicy(RateLimitPolicy, context => RateLimitPartition.GetFixedWindowLimiter(
-            context.User.FindFirst("sub")?.Value ?? context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
-            _ => new FixedWindowRateLimiterOptions { PermitLimit = PermitsPerMinute, Window = TimeSpan.FromMinutes(1), QueueLimit = 0 })));
+            context.User.FindFirst("sub")?.Value ?? ApiRateLimiting.ClientNetwork(context.Connection.RemoteIpAddress),
+            _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = context.RequestServices.GetRequiredService<IOptions<RateLimitingOptions>>().Value.ParentPermitsPerMinute,
+                Window = TimeSpan.FromMinutes(1),
+                QueueLimit = 0,
+            })));
 
     public static IEndpointRouteBuilder MapParentEndpoints(this IEndpointRouteBuilder app)
     {
