@@ -41,6 +41,7 @@ import { SchoolClock } from '../../core/time/school-clock';
 import { PageHeaderComponent } from '../../shared/ui/page-header.component';
 import { StatCardComponent } from '../../shared/ui/stat-card.component';
 import { ToastService } from '../../shared/ui/toast.service';
+import { saveFile } from '../../shared/data/save-file';
 import { DashboardChartComponent } from '../dashboard/dashboard-chart.component';
 import { chartTheme, count, ratio } from '../dashboard/dashboard-charts';
 import {
@@ -1026,16 +1027,4 @@ export function fileName(header: string | null): string | null {
   return match ? match[1] : null;
 }
 
-/** Hands a downloaded file to the browser without navigating away. */
-export function saveFile(blob: Blob, name: string): void {
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement('a');
-  link.href = url;
-  link.download = name;
-  link.rel = 'noopener';
-  document.body.appendChild(link);
-  link.click();
-  link.remove();
-  // Some browsers cancel a download whose URL is revoked at once; a short delay is enough.
-  setTimeout(() => URL.revokeObjectURL(url), 10_000);
-}
+export { saveFile };

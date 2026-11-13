@@ -10,29 +10,43 @@ import {
   untracked,
 } from '@angular/core';
 import { RouterLink } from '@angular/router';
-import { LucideArrowLeft, LucideLogOut, LucidePencil, LucideRotateCcw } from '@lucide/angular';
+import {
+  LucideArrowLeft,
+  LucideDownload,
+  LucideLogOut,
+  LucidePencil,
+  LucideRotateCcw,
+  LucideUserX,
+} from '@lucide/angular';
 import { firstValueFrom } from 'rxjs';
 
 import { Api } from '../../api/api';
-import { apiV1StudentsIdGet, apiV1StudentsIdReactivatePost } from '../../api/functions';
+import {
+  apiV1StudentsIdDataExportGet,
+  apiV1StudentsIdGet,
+  apiV1StudentsIdReactivatePost,
+} from '../../api/functions';
 import { GuardianDto, StudentDto, StudentGuardianDto } from '../../api/models';
 import { problemMessage, toProblem } from '../../core/api/problem';
 import { formatDate, formatPhone } from '../../core/format/format';
 import { interpolate, ui } from '../../core/i18n/tr';
 import { ageOn } from '../../core/students/age';
 import { SchoolClock, dateIn } from '../../core/time/school-clock';
+import { saveFile } from '../../shared/data/save-file';
 import { ConfirmService } from '../../shared/ui/confirm-dialog.component';
 import { PageHeaderComponent } from '../../shared/ui/page-header.component';
 import { ToastService } from '../../shared/ui/toast.service';
 import { StudentAttendanceComponent } from '../attendance/student-attendance.component';
 import { StudentEnrollmentsComponent } from '../enrollments/student-enrollments.component';
 import {
+  ERASURE_TITLE_ID,
   GUARDIAN_EDIT_TITLE_ID,
   GuardianEditData,
   GuardianEditDialog,
   LEAVE_TITLE_ID,
   STUDENT_EDIT_TITLE_ID,
   StudentEditDialog,
+  StudentErasureDialog,
   StudentLeaveDialog,
 } from './student-dialogs';
 import { GuardianAccessComponent } from './guardian-access.component';
@@ -50,9 +64,11 @@ import { StudentDocumentsComponent } from './student-documents.component';
     StudentDocumentsComponent,
     GuardianAccessComponent,
     LucideArrowLeft,
+    LucideDownload,
     LucideLogOut,
     LucidePencil,
     LucideRotateCcw,
+    LucideUserX,
   ],
   template: `
     <a routerLink="/students" class="btn btn-ghost btn-sm mb-2 -ml-2">
@@ -97,6 +113,20 @@ import { StudentDocumentsComponent } from './student-documents.component';
         } @else {
           <button type="button" class="btn btn-outline" [disabled]="busy()" (click)="reactivate()">
             <svg lucideRotateCcw></svg>{{ text.reactivate }}
+          </button>
+        }
+        <!-- P4-06: data subject requests (KVKK md. 11). -->
+        <button type="button" class="btn btn-ghost" [disabled]="busy()" (click)="exportData()">
+          <svg lucideDownload></svg>{{ erasureText.export }}
+        </button>
+        @if (!s.anonymizedAt) {
+          <button
+            type="button"
+            class="btn btn-ghost text-destructive"
+            [disabled]="busy()"
+            (click)="erase()"
+          >
+            <svg lucideUserX></svg>{{ erasureText.open }}
           </button>
         }
       </app-page-header>
@@ -205,6 +235,7 @@ export class StudentDetailPage {
   protected readonly list = ui.students;
   protected readonly relationships = ui.studentForm.relationships;
   protected readonly common = ui.common;
+  protected readonly erasureText = ui.erasure;
   protected readonly student = signal<StudentDto | null>(null);
   protected readonly loadError = signal<string | null>(null);
   protected readonly busy = signal(false);
@@ -321,6 +352,41 @@ export class StudentDetailPage {
       } catch (err) {
         this.toasts.error(problemMessage(toProblem(err)));
         await this.load();
+      }
+    });
+  }
+
+  /** P4-06 (DEC-539): a JSON file with the student's data; documents are short-lived links inside it. */
+  protected async exportData(): Promise<void> {
+    const student = this.student();
+    if (!student) {
+      return;
+    }
+    await this.exclusive(async () => {
+      try {
+        const data = await this.api.invoke(apiV1StudentsIdDataExportGet, { id: student.id });
+        saveFile(
+          new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' }),
+          `ogrenci-verisi-${student.id}.json`,
+        );
+        this.toasts.success(this.erasureText.exported);
+      } catch (err) {
+        this.toasts.error(problemMessage(toProblem(err)));
+      }
+    });
+  }
+
+  /** P4-06 (DEC-540): irreversible erasure on request, after the dialog's reason and confirmation. */
+  protected async erase(): Promise<void> {
+    const student = this.student();
+    if (!student) {
+      return;
+    }
+    await this.exclusive(async () => {
+      const erased = await this.open<StudentDto>(StudentErasureDialog, student, ERASURE_TITLE_ID);
+      if (erased) {
+        this.student.set(erased);
+        this.toasts.success(this.erasureText.erased);
       }
     });
   }

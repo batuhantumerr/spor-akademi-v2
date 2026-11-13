@@ -86,3 +86,10 @@ targetRules = ["generic-api-key"]
 condition = "AND"
 paths = ['''^tests/SporAkademi\.IntegrationTests/Observability/(?:ErrorTrackingTests|TelemetryTests)\.cs$''']
 regexes = ['''^(?:header-secret-p407|Yanlis-Iz-Sifresi-41)$''']
+
+[[allowlists]]
+description = "Synthetic new password set by the password-changed notification tests (P4-03)"
+targetRules = ["generic-api-key"]
+condition = "AND"
+paths = ['''^tests/SporAkademi\.IntegrationTests/Identity/PasswordChangedNotificationTests\.cs$''']
+regexes = ['''^Yepyeni-Sifre-2027$''']

@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Http.Metadata;
 using Microsoft.AspNetCore.Mvc;
 using SporAkademi.Api.Errors;
+using SporAkademi.Application.Abstractions.Auditing;
 using SporAkademi.Application.Abstractions.Authentication;
 using SporAkademi.Application.Abstractions.Messaging;
 using SporAkademi.Application.Students.Documents;
@@ -28,13 +29,17 @@ internal static class DocumentEndpoints
             .WithFormOptions(bufferBody: false, memoryBufferThreshold: (int)UploadRequestLimit, multipartBodyLengthLimit: UploadRequestLimit)
             // Bearer tokens only, no cookie authentication on this endpoint, so there is no CSRF to defend against (DEC-321).
             .DisableAntiforgery();
-        admin.MapGet("/students/{id:guid}/documents", List).Produces<IReadOnlyList<StudentDocumentDto>>().ProducesProblems(404);
-        admin.MapGet("/documents/{id:guid}/link", Link).Produces<DocumentLinkDto>().ProducesProblems(404);
+        // P4-05 (DEC-532): opening a document, or a student's document list, is recorded.
+        admin.MapGet("/students/{id:guid}/documents", List).Produces<IReadOnlyList<StudentDocumentDto>>().ProducesProblems(404)
+            .AuditsRead(AuditEntityType.Student, AuditAction.Read, "Documents");
+        admin.MapGet("/documents/{id:guid}/link", Link).Produces<DocumentLinkDto>().ProducesProblems(404)
+            .AuditsRead(AuditEntityType.StudentDocument);
         admin.MapDelete("/documents/{id:guid}", Delete).Produces(StatusCodes.Status204NoContent).ProducesProblems(404);
 
         // DEC-324: the coach of one of the student's active groups sees the photo; anyone else gets 404.
         var shared = app.MapGroup("/api/v1").WithTags("Documents").RequireRole(Role.SchoolAdmin, Role.Coach);
-        shared.MapGet("/students/{id:guid}/photo", Photo).Produces<DocumentLinkDto>().ProducesProblems(404);
+        shared.MapGet("/students/{id:guid}/photo", Photo).Produces<DocumentLinkDto>().ProducesProblems(404)
+            .AuditsRead(AuditEntityType.Student, AuditAction.Read, "Photo");
 
         return app;
     }

@@ -13,6 +13,9 @@ internal static class Schemas
     public const string Billing = "billing";
     public const string Announcements = "announcements";
 
+    /// <summary>Cross-cutting: the personal data audit log (P4-05).</summary>
+    public const string Audit = "audit";
+
     /// <summary>Platform infrastructure, not a module: the transactional outbox (P2-F3).</summary>
     public const string Outbox = "outbox";
 }
