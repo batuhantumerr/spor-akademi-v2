@@ -25,8 +25,7 @@ internal static class JobsRegistration
             .SetDataCompatibilityLevel(CompatibilityLevel.Version_180)
             .UseSimpleAssemblyNameTypeSerializer()
             .UseRecommendedSerializerSettings()
-            .UseFilter(new FailedJobExceptionFilter())
-            .UseFilter(new JobActivityFilter())
+            .UseServerFiltersOnce()
             .UsePostgreSqlStorage(
                 storage => storage.UseNpgsqlConnection(
                     provider.GetRequiredService<IConfiguration>().GetConnectionString("App")
@@ -53,5 +52,31 @@ internal static class JobsRegistration
         services.AddSingleton<PanelSessionRevocationInterceptor>();
         services.AddScoped<IJobsDashboardAccess, JobsDashboardAccess>();
         return services;
+    }
+
+    private static readonly Lock FilterGate = new();
+
+    /// <summary>
+    /// Hangfire keeps job filters in a process-wide static list (<see cref="GlobalJobFilters.Filters"/>), and the
+    /// configuration callback runs once per host. Adding new instances every time stacked one more filter per host,
+    /// so a test run that builds hundreds of hosts eventually overflowed the stack in the filter chain. Each filter
+    /// type is added only when the list does not already hold one.
+    /// </summary>
+    private static IGlobalConfiguration UseServerFiltersOnce(this IGlobalConfiguration config)
+    {
+        lock (FilterGate)
+        {
+            if (!GlobalJobFilters.Filters.Any(f => f.Instance is FailedJobExceptionFilter))
+            {
+                config.UseFilter(new FailedJobExceptionFilter());
+            }
+
+            if (!GlobalJobFilters.Filters.Any(f => f.Instance is JobActivityFilter))
+            {
+                config.UseFilter(new JobActivityFilter());
+            }
+        }
+
+        return config;
     }
 }
