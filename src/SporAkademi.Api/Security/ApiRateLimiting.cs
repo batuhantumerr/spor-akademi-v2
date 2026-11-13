@@ -3,6 +3,7 @@ using System.Globalization;
 using System.Net;
 using System.Net.Sockets;
 using System.Threading.RateLimiting;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.Extensions.Options;
 
 namespace SporAkademi.Api.Security;
@@ -23,6 +24,13 @@ internal sealed class RateLimitingOptions
     /// <summary>All <c>/api</c> requests without a valid token from one client IP.</summary>
     [Range(1, int.MaxValue)]
     public int AnonymousPermitsPerMinute { get; set; } = 120;
+
+    /// <summary>
+    /// Document uploads of one school being read at the same time, per API instance (P4-03, DEC-514). The form is read
+    /// into memory (DEC-321), so N parallel uploads cost up to N x 5 MB; the request-per-minute limits do not bound that.
+    /// </summary>
+    [Range(1, int.MaxValue)]
+    public int ConcurrentUploadsPerSchool { get; set; } = 3;
 }
 
 /// <summary>
@@ -38,6 +46,12 @@ internal static class ApiRateLimiting
 {
     private static readonly TimeSpan Window = TimeSpan.FromMinutes(1);
 
+    /// <summary>An upload that finds the school's slots taken is worth retrying within seconds, not a minute.</summary>
+    private static readonly TimeSpan UploadRetryAfter = TimeSpan.FromSeconds(5);
+
+    /// <summary>Endpoint policy of the document upload (P4-03, DEC-514): in-flight uploads per school.</summary>
+    public const string UploadPolicy = "document-upload";
+
     public static IServiceCollection AddApiRateLimiting(this IServiceCollection services)
     {
         services.AddOptions<RateLimitingOptions>()
@@ -50,7 +64,8 @@ internal static class ApiRateLimiting
             options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
             options.OnRejected = (context, _) =>
             {
-                var retryAfter = context.Lease.TryGetMetadata(MetadataName.RetryAfter, out var wait) ? wait : Window;
+                var upload = context.HttpContext.GetEndpoint()?.Metadata.GetMetadata<EnableRateLimitingAttribute>()?.PolicyName == UploadPolicy;
+                var retryAfter = context.Lease.TryGetMetadata(MetadataName.RetryAfter, out var wait) ? wait : upload ? UploadRetryAfter : Window;
                 var seconds = Math.Clamp((int)Math.Ceiling(retryAfter.TotalSeconds), 1, int.MaxValue);
                 context.HttpContext.Response.Headers.RetryAfter = seconds.ToString(CultureInfo.InvariantCulture);
                 return ValueTask.CompletedTask;
@@ -58,6 +73,9 @@ internal static class ApiRateLimiting
             // The chain takes the caller's permit first; when the school's write budget then refuses, that permit is not
             // given back (fixed windows cannot return one), and Retry-After is mostly the rest of the school's window
             // (DEC-503).
+            options.AddPolicy(UploadPolicy, context => RateLimitPartition.GetConcurrencyLimiter(
+                context.User.FindFirst("tenant_id")?.Value is { Length: > 0 } school ? $"school:{school}" : $"user:{context.User.FindFirst("sub")?.Value}",
+                _ => new ConcurrencyLimiterOptions { PermitLimit = Settings(context).ConcurrentUploadsPerSchool, QueueLimit = 0 }));
             options.GlobalLimiter = PartitionedRateLimiter.CreateChained(
                 PartitionedRateLimiter.Create<HttpContext, string>(Caller),
                 PartitionedRateLimiter.Create<HttpContext, string>(SchoolWrites));

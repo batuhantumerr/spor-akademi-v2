@@ -592,7 +592,7 @@ Projede bir öğrenme günlüğü tutulur: her maddeden sonra kendi cümlelerinl
 - P1-07: `/health/live` ve `/health/ready` anonim endpoint listesinde.
 - P1-08: Testcontainers aynı PostgreSQL imajını `compose.yaml`'dan okur; roller migration'lardan önce; ilk test `/health/ready` (DB varken 200, yokken 503).
 - P1-13: `/api` dev server proxy'si; UI kütüphanesi seçimi (ADR-0010).
-- P4-F1: Trivy checksum'ının workflow'a sabitlenmesi yeniden değerlendirilir.
+- P4-F1: Trivy checksum'ının workflow'a sabitlenmesi yeniden değerlendirildi (P4-03, DEC-515): zaten sabitti, resmi dosyayla doğrulandı.
 
 ---
 

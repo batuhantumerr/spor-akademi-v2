@@ -1,6 +1,6 @@
 # MVP güvenlik kontrol listesi (P1-37)
 
-Kapsam: NFR-SEC-01 (OWASP ASVS 4.0.3 Seviye 1), NFR-SEC-03 – NFR-SEC-12, NFR-PRV-03. Her madde için repodaki kanıt (dosya veya test) ya da açık bir eksik yazılıdır. Eksikler "Fikirler" bölümünde `type:idea` adayı olarak listelenir; issue açılmadı.
+Kapsam: NFR-SEC-01 (OWASP ASVS 4.0.3 Seviye 1), NFR-SEC-03 – NFR-SEC-12, NFR-PRV-03. Her madde için repodaki kanıt (dosya veya test) ya da açık bir eksik yazılıdır. Eksikler "Fikirler" bölümünde `type:idea` adayı olarak listelenir; issue açılmadı. **Faz 4'te (P4-03) OWASP Top 10 (2021) ve ASVS L2 incelemesi Bölüm 4'tedir; "Fikirler"in her maddesinin son durumu 4.5'te.**
 
 Durum: ✅ karşılanıyor (otomatik test veya CI ile) · 🟡 kısmen / elle doğrulanıyor · ⛔ eksik (Deploy bloğu veya sonraki faz) · — MVP'de kapsam dışı.
 
@@ -156,6 +156,8 @@ Sadece bu uygulamaya uygulanabilen maddeler listelenir (SOAP, GraphQL, OAuth/OID
 
 ## 3. Fikirler (`type:idea` adayları, issue açılmadı)
 
+Faz 4 incelemesi (P4-03) her maddeyi yapıldı / Faz 5 / Deploy / gerek yok olarak sınıflandırdı: bkz. 4.5. Metinler MVP anındaki halidir.
+
 1. **HTTPS/HSTS ve forwarded header'lar (Deploy bloğu, zorunlu):** reverse proxy'de TLS 1.2+, HTTP→HTTPS. API forwarded header'ları yalnız `ForwardedHeaders:KnownProxies`/`KnownNetworks`'teki kaynaktan uygular (P4-02, DEC-507); Caddy'nin adresi buraya yazılmalı, aksi halde rate limit tüm anonim istemcileri proxy IP'siyle sayar ve API HSTS göndermez. Konteynere `ASPNETCORE_FORWARDEDHEADERS_ENABLED=true` verilmez: framework bu durumda her kaynağa güvenen kendi middleware'ini ekler ve bu korumayı geçersiz kılar. Admin imajına `STORAGE_PUBLIC_ORIGIN` verilmeli (DEC-502).
 2. **Güvenlik başlıkları (NFR-SEC-13):** Yapıldı (P4-01, DEC-500 – DEC-502). Açık kalan: admin'de `style-src 'unsafe-inline'` (Angular CDK ve ECharts); CDK/ECharts nonce veya CSSOM'a geçerse kaldırılabilir. Proxy (Caddy) API ve SPA başlıklarını değiştirmemeli (Deploy bloğu).
 3. **Şifre uzunluğu:** Yapıldı. Politika 12 karakter (DEC-369, sahibin 2026-11-10 onayı).
@@ -170,3 +172,79 @@ Sadece bu uygulamaya uygulanabilen maddeler listelenir (SOAP, GraphQL, OAuth/OID
 13. **Yükleme ile commit arasında çökme (P2-F6):** nesne depoya yazıldıktan sonra süreç metadata commit'inden önce çökerse nesne yetim kalır (DEC-325 istisnası). Ara sıra çalışan bir temizlik işi (P2-F2 Hangfire ile) `students.student_documents`'ta karşılığı olmayan ve belirli bir yaştan eski anahtarları silmeli.
 14. **Yükleme bellek kullanımı (P2-F6):** form bellekte tamponlanır (DEC-321); eşzamanlı N yükleme ~N × 5 MB bellek kullanır. Yükleme uç noktasına eşzamanlılık/oran sınırı (ör. okul başına) veya akış hâlinde inceleme değerlendirilmeli.
 10. **Refresh token yarışı:** aynı token'la eşzamanlı iki sekme birini `409` ile düşürür (DEC-119); kısa bir tolerans penceresi değerlendirilebilir.
+
+## 4. Faz 4 — OWASP Top 10 ve ASVS L2 incelemesi (P4-03)
+
+Tarih 2026-11-13, `main` 46ae122 üzerinde (P4-01, -02, -04, -07, -09, -10, -11 içeride; P4-05/06 PR #141'de). Yöntem: kod ve yapılandırma okuması (`src/Api`, `Application`, `Infrastructure`, `web/admin`, `web/parent`, `docker/`, `.github/`), bağımlılık taraması (`dotnet list package --vulnerable --include-transitive`: 0 açık; `npm audit`: admin 0, parent 0), Trivy ve gitleaks checksum doğrulaması. Dinamik tarama (ZAP vb.) yapılmadı: sunucu ve TLS Deploy bloğundan sonra, Faz 5'te. Kararlar DEC-510 – DEC-518 (`karar-gunlugu-v2.md`).
+
+### 4.1 Sonuç
+
+**Yüksek bulgu yok.** Orta bulguların üçü bu PR'da düzeltildi, üçü gerekçeli ertelendi (Deploy veya Faz 5); düşükler 4.2'nin altında.
+
+| # | Bulgu | Seviye | Durum |
+| --- | --- | --- | --- |
+| O1 | Belge yüklemede form belleğe okunur (5 MB); okul başına eşzamanlı yükleme sınırı yoktu, dakika sınırları belleği sınırlamaz (A04) | Orta | **Düzeltildi:** okul başına 3 eşzamanlı yükleme, fazlası `429` (DEC-514) |
+| O2 | Şifre değişince, sıfırlanınca veya yönetici sıfırlayınca hesap sahibine bildirim gitmiyordu; hesabın ele geçirilmesi fark edilmezdi (A07, ASVS 2.2.3) | Orta | **Düzeltildi:** e-posta bildirimi (DEC-512) |
+| O3 | Refresh reddi (token tekrar kullanımı dahil) ve `403` yığılması için alarm yoktu; yalnız giriş hatası vardı (A09, ASVS 7.2.x) | Orta | **Düzeltildi:** `RefreshFailureSpike`, `AuthorizationFailureSpike` (DEC-513) |
+| O4 | `AllowedHosts: "*"`; Host başlığı doğrulanmıyor (A05, ASVS 14.x). Bağlantılar yapılandırmadan üretilir, Host başlığı hiçbir yerde kullanılmaz; risk düşük | Orta | **Deploy bloğu:** Caddy host'a göre yönlendirir, `AllowedHosts` alan adlarıyla verilir (DEC-516) |
+| O5 | `User.EmailTaken` (409) başka okulun kullanıcısı olan bir adresi Okul Admini'ne ele verir (e-posta küresel tekil) (A01/A07, 1 bit bilgi) | Orta | **Kabul, ertelendi:** giriş e-postayla aranır (DEC-105); yalnız oturumlu yönetici, kullanıcı başına dakikada 300 istek (DEC-516) |
+| O6 | `npm ci` bağımlılıkların kurulum betiklerini CI ve imaj derlemesinde çalıştırır (A08) | Orta | **Faz 5:** `ignore-scripts` denemesi. Şimdilik kilit dosyası + 7 gün cooldown + audit + betikler yalnız build aşamasında (DEC-516) |
+
+### 4.2 OWASP Top 10 (2021)
+
+| Kategori | İncelenen ve kanıt | Bulgu / durum |
+| --- | --- | --- |
+| **A01 Bozuk erişim kontrolü** | Varsayılan red: `JwtSetup.cs` fallback policy; anonim endpoint listesi gözden geçirilmiş (`ArchitectureTests/EndpointSecurityTests`). Rol grupları `EndpointConventions.RequireRole`. Tenant: filtre + yazma koruması + bileşik FK + RLS (`RowLevelSecurityTests`, `CrossTenantEndpointTests`, her modülün `*TenantIsolationTests`). Veli sınırı: `ParentIsolationTests`. İş paneli: yalnız Platform Admin çerezi. Kapalı özellik `404` (`FeatureFlagTests`). CORS yok (`CorsTests`). İstemci `returnUrl`'leri yalnız uygulama içi (router) | O5. **Önlem eklendi:** her oturumlu endpoint rol adlandırır; yalnız `/me` ve `change-password` serbest (`EndpointSecurityTests.Every_signed_in_endpoint_names_the_roles_that_may_call_it`, DEC-511). Rol atlatan endpoint bulunmadı |
+| **A02 Kriptografik hatalar** | PBKDF2-HMAC-SHA512 (`PasswordStorageTests`); refresh/davet/sıfırlama token'ları 256 bit CSPRNG, DB'de SHA-256; JWT yalnız HS256 (`JwtSetup.cs` `ValidAlgorithms`), anahtar ≥ 32 bayt ortamdan; imzalı belge URL'leri 5 dk, depo özel; `Cache-Control: no-store`; HSTS (DEC-501). Webhook imzası `FixedTimeEquals` (`IyzicoProtocol.cs`) | TLS, diskte ve yedekte şifreleme Deploy bloğu. Düşük: JWT anahtarını döndürme prosedürü ve zayıf anahtar reddi yok (yalnız uzunluk ve hex denetlenir) (DEC-516) |
+| **A03 Enjeksiyon** | EF parametreli sorgular; ham SQL yalnız interpolasyonlu `ExecuteSqlAsync`/`FromSql` ve sabit `SET LOCAL` (tek tek tarandı, kullanıcı girdisi birleştirilmiyor). Arama `Contains` (EF kaçışlar). CSV formülü (`ReportCsvTests`). E-posta gövdesi `HtmlEncoder`, başlıklar MimeKit. Süreç başlatma yok; kullanıcı URL'si çekilmez. Günlükler yapılandırılmış JSON | Bulgu yok |
+| **A04 Güvensiz tasarım** | Giriş/refresh/sıfırlama/davet/dışa aktarma/veli API/ödeme sınırları (DEC-503 – DEC-507); hesap kilidi; Idempotency-Key ve kayıt kilitleri (para hareketi); webhook imzalı ve sağlayıcıdan yeniden sorgulanır; tutar sunucuda; yükleme türe göre sınırlı | O1. Düşük: ayrı tehdit modeli dokümanı yok, ADR'ler + bu inceleme var (Faz 5) |
+| **A05 Güvenlik yanlış yapılandırması** | Başlıklar ve CSP (`SecurityHeadersTests`, CI `check-security-headers.sh`); `Server` başlığı yok; OpenAPI yalnız Development/Testing (`OpenApiSetup.cs`); Fake ödeme sağlayıcısı Production'da başlamaz (`PaymentProviderSetup.cs`); API/migrator imajları root değil, digest'li; admin/veli nginx-unprivileged; `.dockerignore` izin listesi; Hangfire varsayılan salt okunur; geliştirme araçları (Seq, Mailpit) yalnız 127.0.0.1 | O4 |
+| **A06 Savunmasız bileşenler** | NuGet audit (`NuGetAuditMode=all`) ve `dotnet list --vulnerable`: 0; `npm audit`: 0; Trivy imaj taraması (high/critical kırar); Dependabot (nuget, npm ×2, actions, docker, compose; 7 gün cooldown); kilit dosyaları ve `--locked-mode` | Düşük: SBOM üretilmiyor (ASVS 14.2.5, Faz 5). Geçici zlib/musl pinleri base imaj düzelince kalkacak (DEC-104, DEC-202) |
+| **A07 Kimlik doğrulama hataları** | Şifre politikası, ortak şifre listesi, kilit, kullanıcı sayımı engeli (benzer süre), tek kullanımlık davet/sıfırlama token'ı fragment'te ve `Referrer-Policy: no-referrer`, refresh rotasyonu + tekrar kullanım tespiti + 30 sn tolerans (DEC-446), çerez `HttpOnly; Secure; SameSite=Strict; Path`, çıkışta ve şifre değişiminde bütün oturumlar kapanır | O2. MFA yok (4.5). Düşük, kabul: kilitli hesap `Auth.AccountLocked` döner (kilit hesabın varlığını gösterir; kilitlemeden hiç haber vermemek kullanıcıyı şaşırtır); sıfırlama isteği var olan hesapta bir DB yazımı yapar (zaman farkı küçük, IP başına dakikada 5 istek). Çerez adı `__Host-` önekli değil (Path ile uyumsuz), Deploy sonrası `__Secure-` düşünülür (DEC-516) |
+| **A08 Yazılım ve veri bütünlüğü** | Actions SHA ile, imajlar digest ile, Trivy/gitleaks ikilileri checksum ile (4.4); `GITHUB_TOKEN` yalnız `contents: read` (publish işinde `packages: write`); `pull_request_target` yok; JSON polimorfik tip çözümü ve `BinaryFormatter` yok; outbox mesajı kayıtlı sabit adlarla çözülür; webhook imza + yeniden sorgu | **Düzeltildi (düşük):** checkout'larda `persist-credentials: false`, bağlam değerleri script metnine değil ortam değişkenine (DEC-515). O6. Code-owner incelemesinin ruleset'te zorunlu olması sahibin kararı (onay listesi) |
+| **A09 Günlükleme ve izleme** | Kişisel veri yok (`LogPrivacyTests`), trace/metrik temizleyici (DEC-551), korelasyon kimliği, `LoginFailureSpike`, `RateLimitRejections`, Sentry (DEC-556), kişisel veri audit log'u (P4-05, PR #141) | O3. Düşük: kimlik olayları (giriş hatası, kilit) için aktör içeren ayrı kayıt yok; IP ve e-posta günlüğe yazılmıyor (NFR-PRV-03), alarm metrik üzerinden. Günlük saklama ve erişim Deploy bloğu |
+| **A10 SSRF** | Dışarı giden tek HTTP: iyzico (`BaseUrl` sandbox host'una kilitli, ödeme sayfası URL'si `iyzipay.com` izin listesi: `IsIyzicoPage`); SMTP, S3, OTLP, Sentry adresleri yalnız yapılandırmadan; kullanıcı girdisinden URL çekilmez, belge içeriği sunucuda açılıp bir adres çözülmez | Bulgu yok |
+
+**Düşük bulguların toplu durumu:** düzeltilen: CI sertleştirmesi (DEC-515), rol kapısı mimari testi (DEC-511). Kabul, Deploy veya Faz 5: JWT anahtar döndürme, çerez öneki, SBOM, tehdit modeli, kimlik olayı kaydı, kilit ve sıfırlama zaman/varlık sinyalleri (DEC-516).
+
+### 4.3 ASVS 4.0.3 Seviye 2 eşlemesi
+
+Seviye 1 ayrıntısı Bölüm 2'de; burada bölüm düzeyinde durum ve L2 farkı. Durum: ✅ karşılandı · 🟡 kısmen / bilinçli sapma · ⛔ Deploy bloğu · ➖ kapsam dışı.
+
+| Bölüm | Durum | Gerekçe |
+| --- | --- | --- |
+| V1 Mimari | 🟡 | Katman ve modül kuralları, varsayılan red, RLS, ADR'ler var. L2 1.1.2 (tasarım değişikliği için tehdit modeli) ayrı doküman olarak yok: Faz 5. 1.6 anahtar yönetimi: JWT anahtarı ortamda, döndürme runbook'u Deploy |
+| V2 Kimlik doğrulama | 🟡 | 2.1, 2.2.1, 2.3, 2.4, 2.5.4 ✅. 2.2.3 hesap değişikliği bildirimi **bu PR'da** (DEC-512; bilinmeyen konumdan giriş bildirimi yok). 2.1.7 ihlal listesi kısmen. 2.7 – 2.9 OTP/MFA ve 4.3.1 L2 yönetici MFA: Faz 5 (4.5, DEC-517). 2.10 servis kimlik bilgileri ortamdan, repoda yok (gitleaks) ✅ |
+| V3 Oturum | 🟡 | 3.2, 3.4, 3.5, 3.7.1 ✅; 3.3.3 şifre değişiminde diğer oturumlar kapanır ✅. **Bilinçli sapma (DEC-517):** 3.3.2 L2 12 saat mutlak veya 30 dk hareketsizlik ister; burada 7 gün kayan / 30 gün mutlak (NFR-SEC-05, DEC-405; veli uygulaması mobil, sık giriş kabul edilmedi). 3.3.4 etkin oturum listesi ve tek tek sonlandırma yok (Faz 5, düşük) |
+| V4 Erişim kontrolü | ✅ | 4.1 – 4.3: sunucu tarafı, rol + tenant + RLS, IDOR testleri, yönetim arayüzü (iş paneli) ayrı çerez ve rol; 4.3.2 dizin listeleme kapalı (nginx statik) |
+| V5 Doğrulama, kodlama | ✅ | 5.1 sınırda doğrulama, 5.2 kodlama (Angular/React varsayılanı, e-posta `HtmlEncoder`), 5.3 enjeksiyon, 5.1.5 yönlendirmeler (`returnUrl` yalnız uygulama içi, ödeme sayfası izin listesi), 5.2.6 SSRF izin listesi |
+| V7 Hata ve günlükleme | 🟡 | 7.4 genel hata + iz kimliği ✅; 7.3 günlük enjeksiyonu: yapılandırılmış JSON ✅. 7.1.3/7.2.x güvenlik olayları: metrik + alarm (DEC-513) ve kişisel veri audit log'u; kimlik doğrulama olaylarının aktör içeren ayrı kaydı yok (KVKK gereği IP/e-posta yazılmıyor), Faz 5. 7.3.3 günlük koruması Deploy |
+| V8 Veri koruma | 🟡 | 8.2 istemci önbelleği (`no-store`, service worker kuralı) ✅. 8.3.4 / 8.1.x kişisel veri envanteri ve sınıflandırma belgesi Faz 5 (aydınlatma metni taslağı PR #141'de) |
+| V9 İletişim | ⛔ | TLS 1.2+, HTTP→HTTPS, sertifika Deploy bloğunda; HSTS ve proxy güveni kodda hazır (DEC-501, DEC-507) |
+| V10 Kötü amaçlı kod | ✅ | Bağımlılık bütünlüğü (kilit, SHA/digest, checksum). Kaynak kodda arka kapı/zaman bombası izi yok: `Process.Start`, dinamik kod yükleme ve tip adından örnekleme taranıp bulunmadı. CODEOWNERS var (ruleset zorunluluğu sahipte) |
+| V12 Dosyalar | 🟡 | 12.1 – 12.6 ✅ (magic bytes, etkin içerik reddi, rastgele anahtar, özel depo, imzalı kısa URL; okul başına eşzamanlı yükleme sınırı DEC-514). 12.4.2 antivirüs taraması ⛔ Deploy/Faz 5 kararı (4.5) |
+| V13 API | ✅ | 13.1 – 13.2 yöntem, içerik türü, şema; 13.5 SignalR (Bölüm 2); sürümlü yol `/api/v1`; hız sınırları. GraphQL/SOAP yok ➖ |
+| V14 Yapılandırma | 🟡 | 14.1 derleme, 14.2 bağımlılıklar, 14.3 hata ayrıntısı yok, 14.4 başlıklar, 14.5 CORS/yöntem/Origin kullanılmaz, 14.5.4 proxy başlıkları yalnız bilinen proxy'den (DEC-507) ✅. 14.2.5 SBOM yok (Faz 5); `AllowedHosts` O4 |
+
+### 4.4 Trivy ve gitleaks checksum'ı (roadmap "P4-F1: Trivy checksum'ı")
+
+Durum: **zaten sabit.** `ci.yml` başında `TRIVY_VERSION` / `TRIVY_SHA256` ve `GITLEAKS_VERSION` / `GITLEAKS_SHA256` var; ikili indirilir, `sha256sum -c -` geçmezse iş kırılır, sonra açılır (`Install Trivy`, `Secret scan`). 2026-11-13'te iki değer de sürümlerin resmi `*_checksums.txt` dosyalarıyla karşılaştırıldı: eşleşiyor. **Karar (DEC-515):** ek iş yok; not kapandı. Bakım kuralı: sürüm ve SHA birlikte, 7 günlük cooldown sonrası yükseltilir (Dependabot bu iki ikiliyi görmez; haftalık bakımda elle bakılır). Trivy zafiyet veritabanı her koşuda indirilir ve sabitlenmez (güncel olması amaçtır); bu bilinçli kabul.
+
+### 4.5 Ertelenen fikirlerin sınıflaması (onay listesi soru 33)
+
+| Fikir (Bölüm 3) | Sınıf | Not |
+| --- | --- | --- |
+| 1 HTTPS/HSTS, forwarded header | **Yapıldı** (kod) / Deploy | P4-01, P4-02 (DEC-501, DEC-507); TLS ve `KnownProxies` değeri Deploy bloğunda zorunlu |
+| 2 Güvenlik başlıkları (NFR-SEC-13) | **Yapıldı** | P4-01 (DEC-500 – DEC-502). Kalan: admin `style-src 'unsafe-inline'` (izlenir) |
+| 3 Şifre uzunluğu | **Yapıldı** | DEC-369 |
+| 4 İhlal edilmiş şifre listesi | **Faz 5** | Çevrimdışı büyük liste (şifre dışarı çıkmamalı); ASVS 2.1.7 kısmen |
+| 5 MFA (Platform Admin, Okul Admini) | **Faz 5** | TOTP; kurtarma kodları ve cihaz kaybı akışı tasarım ister. Gerçek veriden önce en az Platform Admin için istenir (DEC-517, sahibin kararı) |
+| 6 Güvenlik denetim kaydı | **Kısmen yapıldı / Faz 5** | Kişisel veri erişim kaydı P4-05'te (PR #141); kimlik olayları için alarm yapıldı (DEC-513), aktör içeren olay kaydı Faz 5 |
+| 7 Arama terimi sorgu dizesinde | **Gerek yok / Deploy** | API'de istek günlüğü kapalı (`Logging.cs`, `LogPrivacyTests`), telemetri sorguyu yazmaz (DEC-551). Caddy erişim günlüğünde sorgu dizesi atılmalı: Deploy bloğu |
+| 8 Kişisel veri envanteri | **Faz 5** | P4-06 aydınlatma metni kategorilerinden türetilir, hukuki teyitle |
+| 9 Log gizliliği testi: yoklama notu, duyuru | **Faz 5** (düşük) | Kod bu alanlarda serbest metni günlüğe yazmıyor (komut adı + hata kodu); test kapsamı genişletilir |
+| 10 Refresh yarışı | **Yapıldı** | DEC-446 |
+| 11 Peşin ödemeli kaydın bitirilmesi | **Yapıldı** | P3-13 |
+| 12 Yüklemede antivirüs ve derin PDF | **Deploy / Faz 5** | ClamAV (GPL-2.0, ayrı servis) veya yönetilen tarama bir hizmet kararı; yapısal denetim ve etkin içerik reddi şimdilik yeterli kabul |
+| 13 Yetim nesne temizliği | **Faz 5** (düşük) | Yalnız depo maliyeti; erişilebilir bir risk değil |
+| 14 Yükleme bellek sınırı | **Yapıldı** | DEC-514: okul başına 3 eşzamanlı yükleme |

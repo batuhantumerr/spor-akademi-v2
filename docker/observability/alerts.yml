@@ -92,6 +92,28 @@ groups:
           summary: More than 30 failed logins per minute for 5 minutes (brute force or credential stuffing).
           description: The reason label shows whether accounts are being locked (Auth.AccountLocked) or passwords guessed.
 
+      # P4-03 (DEC-513): the signals of A01 and A07 that need no code of their own, from the framework's request metric
+      # (route and status only, no user, school or address). A refresh refused with 401 is an expired session or a
+      # token that was used twice (theft signal, DEC-446: the family is then revoked); 403 is a signed-in caller reaching
+      # for something that is not theirs (a Parent token on an admin route, probing).
+      - alert: RefreshFailureSpike
+        expr: sum(rate(http_server_request_duration_seconds_count{job="spor-akademi-api", http_route="/api/v1/auth/refresh", http_response_status_code="401"}[5m])) * 60 > 30
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: More than 30 refresh requests per minute are refused with 401 for 5 minutes.
+          description: Normal expiry is spread out; a burst means stolen or replayed refresh tokens (token reuse revokes the whole session family) or a client loop.
+
+      - alert: AuthorizationFailureSpike
+        expr: sum(rate(http_server_request_duration_seconds_count{job="spor-akademi-api", http_route=~"/api/.*", http_response_status_code="403"}[5m])) * 60 > 30
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: More than 30 API requests per minute are refused with 403 for 5 minutes.
+          description: Signed-in callers are reaching for routes their role does not allow (probing, or a client bug). The route label shows where.
+
       - alert: RateLimitRejections
         expr: sum(rate(aspnetcore_rate_limiting_requests_total{job="spor-akademi-api", aspnetcore_rate_limiting_result!="acquired"}[5m])) * 60 > 60
         for: 10m

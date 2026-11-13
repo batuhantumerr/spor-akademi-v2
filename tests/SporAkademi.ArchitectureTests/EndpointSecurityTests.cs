@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Authorization.Infrastructure;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.Routing;
@@ -27,6 +28,17 @@ public sealed class EndpointSecurityTests : IDisposable
         "/api/v1/auth/password-reset/confirm", // P2-F4: needs a set-password token
     ];
 
+    /// <summary>
+    /// P4-03 (A01, ASVS 4.1.3): signed-in endpoints that deliberately accept every role. Everything else names its roles,
+    /// so a new endpoint added without a role gate (which the fallback policy alone would leave open to a Parent token)
+    /// fails here.
+    /// </summary>
+    private static readonly string[] AnyRoleEndpoints =
+    [
+        "GET /api/v1/me", // the signed-in user's own profile
+        "POST /api/v1/auth/change-password", // the signed-in user's own password (also while it must be changed)
+    ];
+
     private readonly WebApplicationFactory<Program> _factory = new WebApplicationFactory<Program>()
         .WithWebHostBuilder(builder =>
         {
@@ -49,6 +61,23 @@ public sealed class EndpointSecurityTests : IDisposable
 
         anonymous.ShouldBeSubsetOf(AnonymousEndpoints);
     }
+
+    [Fact]
+    [Trait("Story", "P4-03")]
+    public void Every_signed_in_endpoint_names_the_roles_that_may_call_it()
+    {
+        var open = Endpoints()
+            .Where(e => e.Metadata.GetMetadata<IAllowAnonymous>() is null)
+            .Where(e => !NamesRoles(e))
+            .Select(e => string.Join(' ', e.Metadata.GetMetadata<HttpMethodMetadata>()?.HttpMethods ?? []) + " /" + e.RoutePattern.RawText!.TrimStart('/'))
+            .ToList();
+
+        open.ShouldBe(AnyRoleEndpoints, ignoreOrder: true);
+    }
+
+    private static bool NamesRoles(RouteEndpoint endpoint) =>
+        endpoint.Metadata.GetOrderedMetadata<AuthorizationPolicy>().Any(p => p.Requirements.OfType<RolesAuthorizationRequirement>().Any())
+        || endpoint.Metadata.GetOrderedMetadata<IAuthorizeData>().Any(a => !string.IsNullOrEmpty(a.Roles) || !string.IsNullOrEmpty(a.Policy));
 
     [Fact]
     public void Fallback_policy_requires_an_authenticated_user()
