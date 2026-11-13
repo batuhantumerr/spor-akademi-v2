@@ -77,6 +77,9 @@ public sealed class TelemetryTests(DatabaseFixture database) : IdentityTest(data
         var loginSpan = recorded.Single(s => s.Kind == ActivityKind.Server && Equals(s.GetTagItem("spor_akademi.correlation_id"), "corr-p407-login"));
         loginSpan.GetTagItem("http.route").ShouldBe("/api/v1/auth/login");
         recorded.Any(s => s.Source.Name == "Npgsql" && s.GetTagItem("db.query.text") is string sql && sql.Contains("users", StringComparison.Ordinal)).ShouldBeTrue();
+        // P4-04: each connection open sets the session's school for row level security; its span shows the parameterised
+        // statement only, never the school id (DEC-551).
+        recorded.Any(s => s.Source.Name == "Npgsql" && s.GetTagItem("db.query.text") is string sql && sql.Contains("set_config", StringComparison.Ordinal)).ShouldBeTrue();
         // A failed command's span carries the driver's exception event (with PostgreSQL's message); it is not exported,
         // and the request's span keeps the error's SQLSTATE instead (DEC-551).
         recorded.ShouldNotContain(s => s.Events.Any(e => e.Name == "exception"));
@@ -91,6 +94,7 @@ public sealed class TelemetryTests(DatabaseFixture database) : IdentityTest(data
         [
             Email, "iz.gizli", BadUuid, WrongPassword, OwnPassword, SearchTerm, HubSecret, ResetSecret, HeaderSecret, CookieSecret,
             session.AccessToken, session.RefreshToken, session.AccessToken.Split('.')[2],
+            school.Value.ToString(), school.Value.ToString("N"),
         ];
         foreach (var span in recorded)
         {

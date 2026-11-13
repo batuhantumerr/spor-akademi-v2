@@ -29,9 +29,10 @@ public sealed class DemoSeedTests(DatabaseFixture database) : IntegrationTest(da
     private IHost SeedHost(string environment = "Development") =>
         DemoSeedHost.Create([], new Dictionary<string, string?> { ["ConnectionStrings:App"] = Database.AppConnectionString }, environment);
 
+    /// <summary>Counts across schools as the migrator with the maintenance switch (row level security, P4-04, DEC-522).</summary>
     private async Task<long> CountAsync(string sql, Guid? tenant = null)
     {
-        await using var connection = new NpgsqlConnection(Database.AppConnectionString);
+        await using var connection = new NpgsqlConnection(Database.MigratorConnectionString);
         await connection.OpenAsync(Ct);
         await using var command = new NpgsqlCommand(sql, connection);
         if (tenant is { } id)

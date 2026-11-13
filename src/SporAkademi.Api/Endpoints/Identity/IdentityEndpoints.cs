@@ -33,6 +33,7 @@ internal static partial class IdentityEndpoints
         var auth = app.MapGroup("/api/v1/auth");
         auth.MapPost("/login", Login)
             .AllowAnonymous()
+            .UsesPlatformData()
             .RequireRateLimiting(AuthRateLimiting.Policy)
             .Produces<SessionResponse>()
             .ProducesProblem(StatusCodes.Status400BadRequest)
@@ -41,6 +42,7 @@ internal static partial class IdentityEndpoints
         // DEC-055: no access token, but the refresh cookie plus a header a cross-site form cannot send.
         auth.MapPost("/refresh", Refresh)
             .AllowAnonymous()
+            .UsesPlatformData()
             .RequireRateLimiting(AuthRateLimiting.Policy)
             .AddEndpointFilter<RequireXRequestedWithFilter>()
             .Produces<SessionResponse>()
@@ -50,6 +52,7 @@ internal static partial class IdentityEndpoints
             .ProducesProblem(StatusCodes.Status429TooManyRequests);
         auth.MapPost("/logout", Logout)
             .AllowAnonymous()
+            .UsesPlatformData()
             .AddEndpointFilter<RequireXRequestedWithFilter>()
             .Produces(StatusCodes.Status204NoContent)
             .ProducesProblem(StatusCodes.Status400BadRequest);
@@ -66,12 +69,14 @@ internal static partial class IdentityEndpoints
         // or not the address belongs to an account.
         auth.MapPost("/password-reset/request", RequestPasswordReset)
             .AllowAnonymous()
+            .UsesPlatformData()
             .RequireRateLimiting(AuthRateLimiting.PasswordResetRequestPolicy)
             .Produces(StatusCodes.Status202Accepted)
             .ProducesProblem(StatusCodes.Status400BadRequest)
             .ProducesProblem(StatusCodes.Status429TooManyRequests);
         auth.MapPost("/password-reset/confirm", ConfirmPasswordReset)
             .AllowAnonymous()
+            .UsesPlatformData()
             .RequireRateLimiting(AuthRateLimiting.Policy)
             .Produces(StatusCodes.Status204NoContent)
             .ProducesProblem(StatusCodes.Status400BadRequest)

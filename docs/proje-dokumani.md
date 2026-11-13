@@ -259,6 +259,7 @@ Ek: başka okulun kaydı → `404`; `IgnoreQueryFilters()` sadece `Tenancy`'de; 
 - Migration'lar **her zaman migrator ile** (`scripts/ef.sh`); `postgres` ile çalıştırılırsa uygulama tablolara erişemez.
 - Production: uygulama asla `Migrate()` çağırmaz. SQL script PR'da incelenir; **migration bundle** CI'da aynı build'den üretilip migrator imajında çalıştırılır. Sıra: yedek → bundle → yeni API → sağlık kontrolü. `Down` çalıştırılmaz; geri alma yedek + ileri yönlü düzeltme. Her migration bir önceki API sürümüyle çalışmalı (expand–contract zorunlu).
 - Uygulanmış/merge edilmiş migration asla düzenlenmez; düzeltme yeni migration'la.
+- Tablolar `FORCE ROW LEVEL SECURITY` altındadır; migrator da politikalara tabidir (P4-04). Her migration bakım anahtarıyla (`app.maintenance`) çalışır (DEC-528), böylece veri migration'ları bütün okulların satırlarını görür. `tenant_id`'li her yeni tablo, migration'ında `RowLevelSecurity.ForTenantTable` ile politikasını alır.
 
 ### 5.10 Çalışma ortamları
 

@@ -229,14 +229,18 @@ public sealed class EditStudentTests(DatabaseFixture database) : StudentsTest(da
     public async Task The_database_maps_a_duplicate_guardian_phone_to_phone_taken()
     {
         // Two concurrent registrations can both pass the lookup; the unique index is the backstop (DEC-133).
-        var result = await InScopeAsync(services => services.GetRequiredService<IUnitOfWork>().ExecuteInTransactionAsync<int>(_ =>
+        var result = await InScopeAsync(services =>
+        {
+            services.GetRequiredService<SporAkademi.Infrastructure.Persistence.BackgroundTenantContext>().Enter(School.Value);
+            return services.GetRequiredService<IUnitOfWork>().ExecuteInTransactionAsync<int>(_ =>
         {
             var db = services.GetRequiredService<SporAkademi.Infrastructure.Persistence.AppDbContext>();
             var phone = PhoneNumber.Create("05321112233").Value;
             db.Add(Guardian.Create(School, "Ayşe", "Deneme", phone, null, null).Value);
             db.Add(Guardian.Create(School, "Ayşe", "Kopya", phone, null, null).Value);
             return Task.FromResult(Result.Success(0));
-        }, Ct));
+        }, Ct);
+        });
 
         result.Error.ShouldBe(GuardianErrors.PhoneTaken);
     }

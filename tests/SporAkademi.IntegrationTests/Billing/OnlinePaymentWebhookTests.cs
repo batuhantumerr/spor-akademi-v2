@@ -298,7 +298,8 @@ public sealed class OnlinePaymentWebhookTests(DatabaseFixture database) : Online
         var (body, headers) = FakeWebhook(token);
         (await WebhookAsync(body, headers)).StatusCode.ShouldBe(HttpStatusCode.OK);
 
-        await using var connection = new Npgsql.NpgsqlConnection(Database.AppConnectionString);
+        // The migrator with the maintenance switch sees every row (row level security, P4-04): the triggers still refuse.
+        await using var connection = new Npgsql.NpgsqlConnection(Database.MigratorConnectionString);
         await connection.OpenAsync(Ct);
         await using var command = new Npgsql.NpgsqlCommand(sql, connection);
         command.Parameters.AddWithValue("id", id);

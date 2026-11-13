@@ -1,4 +1,6 @@
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using SporAkademi.Infrastructure.Persistence;
 
 namespace SporAkademi.IntegrationTests.Infrastructure;
 
@@ -35,6 +37,22 @@ public abstract class IntegrationTest(DatabaseFixture database) : IAsyncLifetime
         ArgumentNullException.ThrowIfNull(action);
         await using var scope = Api.Services.CreateAsyncScope();
         return await action(scope.ServiceProvider);
+    }
+
+    /// <summary>
+    /// Inspects rows of every school at once, for assertions only: a context on the migrator's connection with the
+    /// maintenance switch (row level security, P4-04, DEC-522). The application never reads across schools this way;
+    /// call <c>IgnoreQueryFilters</c> on the sets, since no school is current.
+    /// </summary>
+    protected async Task<T> AcrossSchoolsAsync<T>(Func<AppDbContext, Task<T>> action)
+    {
+        ArgumentNullException.ThrowIfNull(action);
+        var options = new DbContextOptionsBuilder<AppDbContext>()
+            .UseNpgsql(Database.MigratorConnectionString)
+            .UseSnakeCaseNamingConvention()
+            .Options;
+        await using var db = new AppDbContext(options, new AnonymousCurrentUser());
+        return await action(db);
     }
 
     protected async Task InScopeAsync(Func<IServiceProvider, Task> action)
