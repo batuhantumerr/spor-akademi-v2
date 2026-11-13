@@ -177,10 +177,10 @@ Migration ekleyen işler (RLS → audit log → KVKK başvuruları) art arda yap
   - Uygulama rolü her bağlantıda okul bağlamını (`set_config`) taşır; tenant'lı her tabloda `FORCE ROW LEVEL SECURITY` ve politika bulunur.
   - Platform Admin, arka plan işleri ve okullar arası giriş araması için açık ve test edilmiş istisnalar.
   - Kanıt: EF global filter'ı kapalıyken başka okulun satırı okunamaz ve yazılamaz.
-- [ ] P4-05 **Kişisel veri audit log'u.**
+- [x] P4-05 **Kişisel veri audit log'u.** (DEC-530 – DEC-537)
   - Öğrenci, veli, sağlık belgesi ve kullanıcı verisinin okunması ve değiştirilmesi kaydedilir: kim, ne zaman, hangi kayıt, hangi alanlar (değerler değil).
   - Audit tablosuna uygulama rolü yalnız ekleme yapabilir; saklama süresi var; Okul Admini için listeleme ekranı.
-- [ ] P4-06 **KVKK ilgili kişi başvuruları** (NFR-PRV-05, -06).
+- [x] P4-06 **KVKK ilgili kişi başvuruları** (NFR-PRV-05, -06) (DEC-538 – DEC-545).
   - Bir öğrencinin ve velisinin verisi makinece okunur biçimde dışa aktarılır (JSON ve belgeler).
   - Talep üzerine silme: anonimleştirme altyapısıyla, saklama süresinden bağımsız, audit kaydıyla.
   - Aydınlatma metni taslağı ve arayüzde bağlantısı (hukuki teyit sahipte).

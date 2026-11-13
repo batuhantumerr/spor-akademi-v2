@@ -1590,6 +1590,15 @@ Parametreler: `from`, `to` (`YYYY-MM`; varsayılan son 6 ay, en çok 12 ay, son 
 | `DELETE` | `/documents/{id}` | Belgeyi ve dosyasını kalıcı olarak siler (DEC-325) | SA | P2-F6 |
 | `GET` | `/students/{id}/photo` | Öğrenci fotoğrafının imzalı bağlantısı; antrenör sadece kendi aktif gruplarındaki öğrenciler için (DEC-324) | SA, CO (kendi) | P2-F6 |
 
+##### 2.14 Audit log ve KVKK başvuruları (faz 4, P4-05, P4-06)
+
+| Metot | Yol | Açıklama | Rol | Hikaye |
+| --- | --- | --- | --- | --- |
+| `GET` | `/audit-log` | Okulun kişisel veri erişim kayıtları, en yeni önce; `entityType` (`Student` \| `Guardian` \| `StudentDocument` \| `User`), `userId`, `from`/`to` (okulun günleri), sayfalama. Değer yok, yalnız alan adları (DEC-530 – DEC-537) | SA | P4-05 |
+| `GET` | `/audit-log/actors` | Kayıtlarda geçen kullanıcılar (kullanıcı filtresi için) | SA | P4-05 |
+| `GET` | `/students/{id}/data-export` | Öğrencinin ve velilerinin verisi JSON dosyası olarak; belgeler kısa ömürlü imzalı bağlantıyla (DEC-538, DEC-539). Audit'e `Export` yazılır | SA | P4-06 |
+| `POST` | `/students/{id}/erasure` | `{ reason }` (`DataSubjectRequest` \| `ConsentWithdrawn` \| `RecordedInError`): talep üzerine silme, anonimleştirmeyle aynı sonuç; aktif öğrenci bugün ayrılır (DEC-540 – DEC-542). Zaten anonimse `422 Student.AlreadyAnonymized` | SA | P4-06 |
+
 #### 3. Kapsam kontrolü
 
 Her Must ve Should kullanıcı hikayesinin en az bir endpoint'i vardır. Kullanıcı hikayelerinde açıkça geçmeyen ama arayüzün çalışması için gereken endpoint'ler: `GET /me`, `GET /guardians`, `POST /students/{id}/reactivate`, `PUT /guardians/{id}` ve Platform Admin'in okul listesi. Bunlar ilgili hikayelerin parçası olarak geliştirilir.
