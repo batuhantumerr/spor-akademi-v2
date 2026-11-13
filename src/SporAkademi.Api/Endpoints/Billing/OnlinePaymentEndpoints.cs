@@ -75,7 +75,7 @@ internal static class OnlinePaymentEndpoints
             .Produces<OnlinePaymentDto>()
             .ProducesProblems(400, 404, 409, 422);
 
-        var provider = app.MapGroup("/api/v1").WithTags("Payment provider").AllowAnonymous();
+        var provider = app.MapGroup("/api/v1").WithTags("Payment provider").AllowAnonymous().UsesPlatformData();
         provider.MapPost("/payment-webhooks", Webhook)
             .RequireRateLimiting(WebhookRateLimitPolicy)
             .WithMetadata(new RequestSizeLimit(WebhookMaxBodyBytes))

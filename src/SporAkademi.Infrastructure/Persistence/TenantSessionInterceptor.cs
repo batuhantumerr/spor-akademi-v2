@@ -19,8 +19,10 @@ namespace SporAkademi.Infrastructure.Persistence;
 /// outbox messages; DEC-105, DEC-302) and nothing else. A signed-in school user without a school gets neither, so it
 /// sees nothing.</item>
 /// </list>
+/// A request scope marked with <see cref="PlatformDataScope"/> (anonymous identity and payment provider endpoints) is
+/// platform-level whatever token it carries (DEC-526).
 /// </remarks>
-internal sealed class TenantSessionInterceptor(ICurrentUser currentUser) : DbConnectionInterceptor
+internal sealed class TenantSessionInterceptor(ICurrentUser currentUser, PlatformDataScope platformScope) : DbConnectionInterceptor
 {
     public const string TenantSetting = "app.tenant_id";
     public const string PlatformSetting = "app.platform";
@@ -43,8 +45,9 @@ internal sealed class TenantSessionInterceptor(ICurrentUser currentUser) : DbCon
     {
         ArgumentNullException.ThrowIfNull(connection);
 
-        var tenant = currentUser.TenantId;
-        var platform = tenant is null && (!currentUser.IsAuthenticated || currentUser.Role == Role.PlatformAdmin);
+        var tenant = platformScope.IsEntered ? null : currentUser.TenantId;
+        var platform = platformScope.IsEntered
+            || (tenant is null && (!currentUser.IsAuthenticated || currentUser.Role == Role.PlatformAdmin));
 
         var command = connection.CreateCommand();
         command.CommandText = Sql;

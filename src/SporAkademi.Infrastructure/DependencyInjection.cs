@@ -61,6 +61,7 @@ public static class DependencyInjection
         services.TryAddSingleton(TimeProvider.System);
         services.AddScoped<AuditingInterceptor>();
         services.AddScoped<TenantWriteGuardInterceptor>();
+        services.AddScoped<PlatformDataScope>();
         services.AddScoped<TenantSessionInterceptor>();
         services.AddTenantCache();
         // The connection string is read when the first context is built, not at registration,
