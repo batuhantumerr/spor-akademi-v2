@@ -26,6 +26,7 @@ internal static class JobsRegistration
             .UseSimpleAssemblyNameTypeSerializer()
             .UseRecommendedSerializerSettings()
             .UseFilter(new FailedJobExceptionFilter())
+            .UseFilter(new JobActivityFilter())
             .UsePostgreSqlStorage(
                 storage => storage.UseNpgsqlConnection(
                     provider.GetRequiredService<IConfiguration>().GetConnectionString("App")

@@ -11,6 +11,7 @@ namespace SporAkademi.Api.Observability;
 internal sealed class CorrelationIdMiddleware(RequestDelegate next)
 {
     public const string HeaderName = "X-Correlation-Id";
+    public const string CorrelationTag = "spor_akademi.correlation_id";
     private const int MaxLength = 64;
 
     public async Task InvokeAsync(HttpContext context)
@@ -21,6 +22,9 @@ internal sealed class CorrelationIdMiddleware(RequestDelegate next)
         var correlationId = IsWellFormed(incoming) ? incoming : Guid.CreateVersion7().ToString("N");
 
         context.TraceIdentifier = correlationId;
+        // P4-07 (DEC-553): the request's span carries the correlation id, and log events carry the span's TraceId
+        // (Serilog takes it from the current activity), so a problem response's traceId leads to its trace and logs.
+        System.Diagnostics.Activity.Current?.SetTag(CorrelationTag, correlationId);
         context.Response.OnStarting(() =>
         {
             context.Response.Headers[HeaderName] = correlationId;

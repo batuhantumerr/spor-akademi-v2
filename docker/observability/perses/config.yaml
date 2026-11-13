@@ -1,0 +1,15 @@
+# Local observability (P4-07, DEC-554): Perses (Apache-2.0) with the dashboards under provisioning/. Local only: no
+# authentication, bound to 127.0.0.1 by compose. Dashboards edited in the UI are lost on restart; change the files instead.
+security:
+  readonly: false
+  enable_auth: false
+  cookie:
+    secure: false
+database:
+  file:
+    folder: /tmp/perses
+    extension: yaml
+provisioning:
+  interval: 30s
+  folders:
+    - /etc/perses/provisioning

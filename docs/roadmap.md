@@ -187,7 +187,7 @@ Migration ekleyen işler (RLS → audit log → KVKK başvuruları) art arda yap
   - Gerçek verinin barındırma konumu için ADR (NFR-PRV-07; yurt dışı aktarım koşulları). Seçenekler ve öneri agent tarafından yazılır, karar sahipte.
 
 ### 4.3 Operasyon (P4-F5 – P4-F8)
-- [ ] P4-07 **OpenTelemetry ve hata takibi** (NFR-OBS-04).
+- [x] P4-07 **OpenTelemetry ve hata takibi** (NFR-OBS-04) (DEC-550 – DEC-557).
   - Trace (ASP.NET Core, HttpClient, EF/Npgsql, Hangfire, outbox), metrik ve log OTLP ile; kişisel veri ve token taşınmaz.
   - Yerelde compose profiliyle dashboard ve alarm kuralları.
   - Sentry ile hata takibi: SDK entegre edilir ve testle doğrulanır; DSN ortam yapılandırmasından gelir, yoksa gönderim kapalıdır (anahtar repoda yok, gerçek DSN Deploy bloğunda).

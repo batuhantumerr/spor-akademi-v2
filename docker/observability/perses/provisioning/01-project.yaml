@@ -1,0 +1,7 @@
+# Local dashboards (P4-07, DEC-554): the project that holds them.
+kind: Project
+metadata:
+  name: spor-akademi
+spec:
+  display:
+    name: Spor Akademi
