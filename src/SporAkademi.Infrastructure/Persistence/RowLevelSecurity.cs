@@ -1,0 +1,46 @@
+namespace SporAkademi.Infrastructure.Persistence;
+
+/// <summary>
+/// The SQL of the row level security policies (P4-04, DEC-520 – DEC-523), for migrations. A migration that creates a
+/// table with a <c>tenant_id</c> column calls <see cref="ForTenantTable"/> for it; <c>RowLevelSecurityTests</c> fails
+/// for any tenant table without the policy.
+/// </summary>
+/// <remarks>
+/// The policies read the session settings written by <see cref="TenantSessionInterceptor"/> through the functions
+/// created in the <c>AddRowLevelSecurity</c> migration. <c>tenancy.current_tenant_id()</c> is <c>STABLE</c>, so the
+/// planner treats it as a constant: <c>tenant_id = tenancy.current_tenant_id()</c> is an index condition on the
+/// tenant-leading indexes every tenant table already has (ADR-0003), not a per-row filter.
+/// </remarks>
+public static class RowLevelSecurity
+{
+    /// <summary>
+    /// Enables and forces row level security on a school table: only the current school's rows are visible, and only
+    /// rows of the current school can be written. The table owner (the migrator) gets the maintenance policy only.
+    /// </summary>
+    public static string ForTenantTable(string schema, string table) =>
+        Policies(schema, table, "tenant_id = tenancy.current_tenant_id()");
+
+    /// <summary>
+    /// A platform table (DEC-105, DEC-302): a school sees and writes its own rows; work without a school (login,
+    /// Platform Admin, platform jobs) sees all of them. <paramref name="tenantColumn"/> names the school column.
+    /// </summary>
+    public static string ForPlatformTable(string schema, string table, string tenantColumn = "tenant_id") =>
+        Policies(schema, table, $"{tenantColumn} = tenancy.current_tenant_id() OR tenancy.is_platform_scope()");
+
+    /// <summary>Reverts <see cref="ForTenantTable"/> or <see cref="ForPlatformTable"/>.</summary>
+    public static string Drop(string schema, string table) =>
+        $"""
+        DROP POLICY IF EXISTS maintenance ON {schema}.{table};
+        DROP POLICY IF EXISTS tenant_isolation ON {schema}.{table};
+        ALTER TABLE {schema}.{table} NO FORCE ROW LEVEL SECURITY;
+        ALTER TABLE {schema}.{table} DISABLE ROW LEVEL SECURITY;
+        """;
+
+    private static string Policies(string schema, string table, string condition) =>
+        $"""
+        ALTER TABLE {schema}.{table} ENABLE ROW LEVEL SECURITY;
+        ALTER TABLE {schema}.{table} FORCE ROW LEVEL SECURITY;
+        CREATE POLICY tenant_isolation ON {schema}.{table} USING ({condition}) WITH CHECK ({condition});
+        CREATE POLICY maintenance ON {schema}.{table} TO CURRENT_USER USING (tenancy.is_maintenance()) WITH CHECK (tenancy.is_maintenance());
+        """;
+}

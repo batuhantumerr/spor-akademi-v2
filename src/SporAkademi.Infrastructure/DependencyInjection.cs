@@ -61,6 +61,7 @@ public static class DependencyInjection
         services.TryAddSingleton(TimeProvider.System);
         services.AddScoped<AuditingInterceptor>();
         services.AddScoped<TenantWriteGuardInterceptor>();
+        services.AddScoped<TenantSessionInterceptor>();
         services.AddTenantCache();
         // The connection string is read when the first context is built, not at registration,
         // so hosts and test factories can supply it through any configuration source.
@@ -70,6 +71,7 @@ public static class DependencyInjection
                     ?? throw new InvalidOperationException("Connection string 'App' is not configured."), npgsql => npgsql.MigrationsHistoryTable("__ef_migrations_history", "public"))
             .UseSnakeCaseNamingConvention()
             .AddInterceptors(
+                provider.GetRequiredService<TenantSessionInterceptor>(),
                 provider.GetRequiredService<TenantWriteGuardInterceptor>(),
                 provider.GetRequiredService<AuditingInterceptor>(),
                 provider.GetRequiredService<CacheInvalidationInterceptor>(),
