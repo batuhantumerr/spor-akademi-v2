@@ -4,3 +4,5 @@ coverage
 package-lock.json
 openapi
 src/api/schema.gen.ts
+# Generated from docs/aydinlatma-metni.md by scripts/privacy-notice.mjs (DEC-543)
+public/aydinlatma-metni.html

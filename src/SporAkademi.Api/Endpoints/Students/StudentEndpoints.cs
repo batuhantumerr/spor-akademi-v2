@@ -2,9 +2,11 @@ using System.Threading.RateLimiting;
 using SporAkademi.Api.Errors;
 using SporAkademi.Api.Security;
 using SporAkademi.Application.Abstractions;
+using SporAkademi.Application.Abstractions.Auditing;
 using SporAkademi.Application.Abstractions.Authentication;
 using SporAkademi.Application.Abstractions.Messaging;
 using SporAkademi.Application.Students;
+using SporAkademi.Application.Students.Privacy;
 using SporAkademi.Domain.Students;
 
 namespace SporAkademi.Api.Endpoints.Students;
@@ -33,6 +35,9 @@ internal sealed record ReplaceGuardiansRequest(IReadOnlyList<GuardianLinkInput>?
 
 internal sealed record LeaveStudentRequest(DateOnly? Date);
 
+/// <param name="Reason">An erasure reason code (P4-06): DataSubjectRequest, ConsentWithdrawn or RecordedInError.</param>
+internal sealed record EraseStudentRequest(string? Reason);
+
 internal sealed record UpdateGuardianRequest(string FirstName, string LastName, string Phone, string? Email, GuardianAddressDto? Address, uint Version);
 
 /// <summary>Students and guardians (appendix D §2.7, US-13, US-15, US-16). School Admin only.</summary>
@@ -54,16 +59,23 @@ internal static class StudentEndpoints
     public static IEndpointRouteBuilder MapStudentEndpoints(this IEndpointRouteBuilder app)
     {
         var students = app.MapGroup("/api/v1/students").WithTags("Students").RequireRole(Role.SchoolAdmin);
-        students.MapGet("/", SearchStudents).Produces<PageResponse<StudentListItemDto>>().ProducesProblems(400);
-        students.MapGet("/{id:guid}", GetStudent).Produces<StudentDto>().ProducesProblems(404);
+        students.MapGet("/", SearchStudents).Produces<PageResponse<StudentListItemDto>>().ProducesProblems(400)
+            .AuditsList(AuditEntityType.Student, "search", "status", "groupId", "sportId", "sort");
+        students.MapGet("/{id:guid}", GetStudent).Produces<StudentDto>().ProducesProblems(404).AuditsRead(AuditEntityType.Student);
         students.MapPost("/", RegisterStudent).Produces<StudentDto>(StatusCodes.Status201Created).ProducesProblems(400, 404, 409, 422);
         students.MapPut("/{id:guid}", UpdateStudent).Produces<StudentDto>().ProducesProblems(400, 404, 409, 422);
         students.MapPut("/{id:guid}/guardians", ReplaceGuardians).Produces<StudentDto>().ProducesProblems(400, 404, 409, 422);
         students.MapPost("/{id:guid}/leave", LeaveStudent).Produces<StudentDto>().ProducesProblems(400, 404, 422);
         students.MapPost("/{id:guid}/reactivate", ReactivateStudent).Produces<StudentDto>().ProducesProblems(404, 422);
 
+        // P4-06 (NFR-PRV-05): data subject requests. Both are recorded in the audit log.
+        students.MapGet("/{id:guid}/data-export", ExportStudentData).Produces<StudentDataExportDto>().ProducesProblems(404)
+            .AuditsRead(AuditEntityType.Student, AuditAction.Export);
+        students.MapPost("/{id:guid}/erasure", EraseStudent).Produces<StudentDto>().ProducesProblems(400, 404, 409, 422);
+
         var guardians = app.MapGroup("/api/v1/guardians").WithTags("Guardians").RequireRole(Role.SchoolAdmin);
-        guardians.MapGet("/", FindGuardiansByPhone).Produces<PageResponse<GuardianDto>>().ProducesProblems(400);
+        guardians.MapGet("/", FindGuardiansByPhone).Produces<PageResponse<GuardianDto>>().ProducesProblems(400)
+            .AuditsList(AuditEntityType.Guardian, "phone");
         guardians.MapPut("/{id:guid}", UpdateGuardian).Produces<GuardianDto>().ProducesProblems(400, 404, 409);
 
         // P3-02 (DEC-383): the guardian's parent account invitation. POST invites, or sends it again (the earlier link
@@ -169,6 +181,31 @@ internal static class StudentEndpoints
         IQueryHandler<GetStudentQuery, StudentDto> reader,
         CancellationToken cancellationToken) =>
         await ThenRead(await handler.Handle(new LeaveStudentCommand(StudentId.From(id), request.Date), cancellationToken), id, reader, cancellationToken);
+
+    /// <summary>A JSON file to hand to the data subject; documents are short-lived links in it (DEC-539).</summary>
+    private static async Task<IResult> ExportStudentData(
+        Guid id,
+        HttpContext httpContext,
+        IQueryHandler<GetStudentDataExportQuery, StudentDataExportDto> handler,
+        CancellationToken cancellationToken)
+    {
+        var result = await handler.Handle(new GetStudentDataExportQuery(StudentId.From(id)), cancellationToken);
+        if (result.IsFailure)
+        {
+            return ProblemResults.Problem(result.Error);
+        }
+
+        httpContext.Response.Headers.ContentDisposition = $"attachment; filename=\"ogrenci-verisi-{id}.json\"";
+        return TypedResults.Ok(result.Value);
+    }
+
+    private static async Task<IResult> EraseStudent(
+        Guid id,
+        EraseStudentRequest request,
+        ICommandHandler<EraseStudentCommand, Unit> handler,
+        IQueryHandler<GetStudentQuery, StudentDto> reader,
+        CancellationToken cancellationToken) =>
+        await ThenRead(await handler.Handle(new EraseStudentCommand(StudentId.From(id), request.Reason), cancellationToken), id, reader, cancellationToken);
 
     private static async Task<IResult> ReactivateStudent(
         Guid id,

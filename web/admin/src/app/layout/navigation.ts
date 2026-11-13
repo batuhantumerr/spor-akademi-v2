@@ -13,6 +13,7 @@ import {
   LucideMegaphone,
   LucidePercent,
   LucideReceipt,
+  LucideScrollText,
   LucideShieldCheck,
   LucideUsers,
   LucideWallet,
@@ -109,6 +110,7 @@ function menuFor(role: Role | null): NavSection[] {
               icon: LucideShieldCheck,
             },
             { label: ui.nav.billingRules, path: '/settings/billing-rules', icon: LucidePercent },
+            { label: ui.nav.auditLog, path: '/settings/audit-log', icon: LucideScrollText },
           ],
         },
       ];

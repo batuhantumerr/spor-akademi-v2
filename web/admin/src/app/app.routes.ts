@@ -203,6 +203,12 @@ export const routes: Routes = [
               import('./features/settings/data-retention.page').then((m) => m.DataRetentionPage),
           },
           {
+            path: 'settings/audit-log',
+            title: () => ui.nav.auditLog,
+            loadComponent: () =>
+              import('./features/settings/audit-log.page').then((m) => m.AuditLogPage),
+          },
+          {
             path: 'settings/billing-rules',
             title: () => ui.nav.billingRules,
             loadComponent: () =>

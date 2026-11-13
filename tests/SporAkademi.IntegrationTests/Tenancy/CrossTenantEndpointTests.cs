@@ -294,6 +294,8 @@ public sealed partial class CrossTenantEndpointTests(DatabaseFixture database) :
         // Parameterless GETs school users can call: each one is read by the leak test above.
         CollectionEndpoints().Select(e => e.Route).ShouldBe(
         [
+            "/api/v1/audit-log",
+            "/api/v1/audit-log/actors",
             "/api/v1/coaches",
             "/api/v1/dashboard",
             "/api/v1/reports/attendance",
@@ -466,6 +468,8 @@ public sealed partial class CrossTenantEndpointTests(DatabaseFixture database) :
             ["PUT /api/v1/students/{id:guid}/guardians"] = (new { guardians = Array.Empty<object>(), version = 1 }, ""),
             ["POST /api/v1/students/{id:guid}/leave"] = (new { date = "2027-01-14" }, ""),
             ["POST /api/v1/students/{id:guid}/reactivate"] = (null, ""),
+            ["GET /api/v1/students/{id:guid}/data-export"] = (null, ""),
+            ["POST /api/v1/students/{id:guid}/erasure"] = (new { reason = "DataSubjectRequest" }, ""),
             ["GET /api/v1/students/{id:guid}/enrollments"] = (null, ""),
             ["GET /api/v1/students/{id:guid}/attendance"] = (null, "?from=2027-01-01&to=2027-01-31"),
             // A valid upload: only the foreign student can stop it (DEC-324), and nothing may reach storage.
