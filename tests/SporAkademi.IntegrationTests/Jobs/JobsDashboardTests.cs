@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Http.Json;
+using System.Text.RegularExpressions;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.Configuration;
@@ -190,6 +191,55 @@ public sealed class JobsDashboardTests(DatabaseFixture database) : IdentityTest(
         (await TriggerAsync(http, cookie, null)).StatusCode.ShouldBe(HttpStatusCode.Forbidden);
         (await TriggerAsync(http, cookie, antiforgery with { Token = antiforgery.Token[..^2] + "AA" })).StatusCode.ShouldBe(HttpStatusCode.Forbidden);
         ((int)(await TriggerAsync(http, cookie, antiforgery)).StatusCode).ShouldBeLessThan(300);
+    }
+
+    /// <summary>
+    /// P4-01 (DEC-500): the panel's pages work under its Content-Security-Policy (script-src 'self', inline styles
+    /// only): no inline script or event handler, no javascript: URL, every script, style sheet and image from this
+    /// origin (or data:), and the scripts themselves evaluate no strings.
+    /// </summary>
+    [Theory]
+    [Trait("Story", "P4-01")]
+    [InlineData("/jobs")]
+    [InlineData("/jobs/recurring")]
+    [InlineData("/jobs/jobs/succeeded")]
+    [InlineData("/jobs/retries")]
+    [InlineData("/jobs/servers")]
+    public async Task The_panel_pages_need_nothing_its_policy_forbids(string path)
+    {
+        var cookie = await StartPanelSessionAsync(await PlatformAdminTokenAsync());
+
+        var page = await OpenAsync(path, cookie);
+
+        page.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var policy = page.Headers.GetValues("Content-Security-Policy").Single();
+        policy.ShouldContain("script-src 'self';");
+        policy.ShouldContain("style-src 'self' 'unsafe-inline';");
+        policy.ShouldContain("img-src 'self' data:;");
+        var html = await page.Content.ReadAsStringAsync(Ct);
+        var scripts = Regex.Matches(html, @"<script\b[^>]*>", RegexOptions.IgnoreCase).Select(m => m.Value).ToList();
+        scripts.ShouldNotBeEmpty();
+        scripts.ShouldAllBe(tag => Regex.IsMatch(tag, @"\ssrc\s*=", RegexOptions.IgnoreCase), "An inline script would be blocked.");
+        Regex.IsMatch(html, @"<[^>]+\son[a-z]+\s*=", RegexOptions.IgnoreCase).ShouldBeFalse("An inline event handler would be blocked.");
+        html.ShouldNotContain("javascript:", Case.Insensitive);
+
+        var resources = Regex.Matches(html, @"<(?:script|link|img)\b[^>]*\s(?:src|href)\s*=\s*""(?<url>[^""]*)""", RegexOptions.IgnoreCase)
+            .Select(m => System.Net.WebUtility.HtmlDecode(m.Groups["url"].Value))
+            .ToList();
+        resources.ShouldNotBeEmpty();
+        foreach (var url in resources)
+        {
+            (url.StartsWith('/') && !url.StartsWith("//", StringComparison.Ordinal) || url.StartsWith("data:", StringComparison.Ordinal))
+                .ShouldBeTrue($"{url} is not from this origin.");
+        }
+
+        foreach (var src in scripts.Select(tag => Regex.Match(tag, @"src\s*=\s*""(?<url>[^""]+)""").Groups["url"].Value))
+        {
+            var script = await OpenAsync(System.Net.WebUtility.HtmlDecode(src), cookie);
+            script.StatusCode.ShouldBe(HttpStatusCode.OK, src);
+            var code = await script.Content.ReadAsStringAsync(Ct);
+            Regex.IsMatch(code, @"\beval\s*\(|new\s+Function\s*\(|set(?:Timeout|Interval)\s*\(\s*[""']").ShouldBeFalse($"{src} evaluates strings ('unsafe-eval').");
+        }
     }
 
     private async Task<string> LoginTokenAsync() => (await LoginOkAsync("platform@example.com")).AccessToken;

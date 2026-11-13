@@ -1,6 +1,6 @@
 import { readFile } from 'node:fs/promises';
 
-import { BrowserContext, Page, expect, test } from '@playwright/test';
+import { BrowserContext, Page, expect, test } from '../support/test';
 
 import { expectNoSeriousA11yViolations } from '../support/a11y';
 import { ApiClient } from '../support/api';

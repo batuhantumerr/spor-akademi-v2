@@ -44,6 +44,11 @@ public sealed class ApiFactory(
                 // Fee reminders are off by default (DEC-355); the tests turn them on from before the test clock's dates.
                 ["Billing:DuesReminders:Enabled"] = "true",
                 ["Billing:DuesReminders:StartsOn"] = "2026-01-01",
+                // P4-02: every test client is one address and few users; the general API limits are lifted so that only
+                // ApiRateLimitingTests (which sets small ones) meets them. The per-endpoint limits stay as in production.
+                ["RateLimiting:UserPermitsPerMinute"] = "1000000",
+                ["RateLimiting:SchoolWritePermitsPerMinute"] = "1000000",
+                ["RateLimiting:AnonymousPermitsPerMinute"] = "1000000",
             })
             .AddInMemoryCollection(storage ?? new Dictionary<string, string?>()));
         builder.ConfigureServices(services =>
