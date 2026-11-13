@@ -43,8 +43,8 @@ public sealed class QueryCountTests(DatabaseFixture database) : ParentTest(datab
     {
         // endpoint, command budget, connection opening budget
         { "GET /dashboard", 11, 11 },
-        { "GET /students", 2, 2 },
-        { "GET /students/{id}", 4, 4 },
+        { "GET /students", 3, 3 },
+        { "GET /students/{id}", 5, 5 },
         { "GET /dues/outstanding", 6, 6 },
         { "GET /payments", 4, 4 },
         { "GET /groups", 5, 5 },

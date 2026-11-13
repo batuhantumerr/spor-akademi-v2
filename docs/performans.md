@@ -124,15 +124,15 @@ Ne zaman yeniden bakılır: production metriklerinde (P4-07 dashboard'u) okuma p
 | GET /dashboard | 11 | 11 |
 | GET /parent/children/{id}/dues | 7 | 7 |
 | GET /dues/outstanding | 6 | 6 |
-| GET /groups, GET /reports/* (üçü), GET /parent/children/{id}/attendance | 5 | 5 |
-| GET /students/{id}, GET /payments, GET /groups/{id}/attendance, GET /groups/{id}/sessions/{key}/attendance | 4 | 4 |
-| GET /groups/{id}/roster | 3 | 3 |
-| GET /students, GET /me/sessions | 2 | 2 |
+| GET /students/{id}, GET /groups, GET /reports/* (üçü), GET /parent/children/{id}/attendance | 5 | 5 |
+| GET /payments, GET /groups/{id}/attendance, GET /groups/{id}/sessions/{key}/attendance | 4 | 4 |
+| GET /students, GET /groups/{id}/roster | 3 | 3 |
+| GET /me/sessions | 2 | 2 |
 | GET /parent/children | 1 | 1 |
 | PUT yoklama | 10 | 5 |
 | POST /payments | 12 | 4 |
 
-Bir değişiklik sayıyı artırırsa test, çalışan SQL'lerin listesiyle kırılır. Bilinçli bir artışta bütçe bu tabloyla birlikte güncellenir.
+Öğrenci listesi ve detayı P4-05'in kişisel veri audit kaydını da yazar (istek başına bir `INSERT`, okul büyüklüğünden bağımsız). Yük testi ölçümleri (§4.1–4.3) bu kayıttan önce yapıldı; bu iki uçta istek başına bir komut ve bir bağlantı açılışı fazlası beklenir. Bir değişiklik sayıyı artırırsa test, çalışan SQL'lerin listesiyle kırılır. Bilinçli bir artışta bütçe bu tabloyla birlikte güncellenir.
 
 ## 5. İki örnek ve durumsuzluk (NFR-SCL-01, DEC-564, DEC-565)
 
