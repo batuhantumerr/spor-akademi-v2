@@ -64,7 +64,7 @@ Kapsamın tamamı ve maddelerin açıklamaları: [proje dokümanı, Ek G](proje-
 - [x] P1-37 MVP güvenlik kontrol listesi
 - [x] P1-38 Demo verisi seed betiği
 - [x] P1-39 CHANGELOG (etiket sahipte)
-- [ ] P1-40 Faz 1 geçişi (sahip)
+- [x] P1-40 Faz 1 geçişi ve `v0.1.0` etiketi (sahip; etiket 2026-11-13, ae38efd)
 
 ## Faz 2 — İş mantığı derinliği (`v0.2.0`)
 
@@ -80,7 +80,7 @@ Kapsamın tamamı ve maddelerin açıklamaları: [proje dokümanı, Ek G](proje-
 ### Sürüm hazırlığı
 - [x] P2-R1 Çıkış kriterlerinin otomatik testlerle doğrulanması ([faz-2-cikis-kriterleri.md](faz-2-cikis-kriterleri.md); online ödeme e2e'si, e2e API'si `Staging` + Fake, DEC-241)
 - [x] P2-R2 Faz 2 geçişi (sahip onayı 2026-11-11)
-- [ ] P2-R3 `v0.2.0` etiketi (sahip)
+- [x] P2-R3 `v0.2.0` etiketi (sahip, 2026-11-13; 6eb0f17)
 
 ## Faz 3 — Veli deneyimi (`v0.3.0`)
 
