@@ -34,6 +34,17 @@ internal sealed class RateLimitingOptions
     /// <summary>Requests per parent account over all parent endpoints (DEC-388); like the sign-in limit, raised only for a load test.</summary>
     [Range(1, int.MaxValue)]
     public int ParentPermitsPerMinute { get; set; } = 60;
+
+    /// <summary>True when no limit is above its production value (the defaults); lower values are always allowed.</summary>
+    public bool WithinProductionValues()
+    {
+        var production = new RateLimitingOptions();
+        return UserPermitsPerMinute <= production.UserPermitsPerMinute
+            && SchoolWritePermitsPerMinute <= production.SchoolWritePermitsPerMinute
+            && AnonymousPermitsPerMinute <= production.AnonymousPermitsPerMinute
+            && AuthPermitsPerMinute <= production.AuthPermitsPerMinute
+            && ParentPermitsPerMinute <= production.ParentPermitsPerMinute;
+    }
 }
 
 /// <summary>
@@ -54,6 +65,11 @@ internal static class ApiRateLimiting
         services.AddOptions<RateLimitingOptions>()
             .BindConfiguration(RateLimitingOptions.Section)
             .ValidateDataAnnotations()
+            // DEC-561: a limit may be lowered anywhere, but raised only outside Production (the load test environment);
+            // in Production a raised value stops the start instead of silently weakening NFR-SEC-14.
+            .Validate<IHostEnvironment>(
+                (options, environment) => !environment.IsProduction() || options.WithinProductionValues(),
+                "A RateLimiting value is above the production value (DEC-504, DEC-561); only a load test environment may raise it.")
             .ValidateOnStart();
 
         return services.AddRateLimiter(options =>

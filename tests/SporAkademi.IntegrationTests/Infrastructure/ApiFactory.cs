@@ -31,6 +31,21 @@ public sealed class ApiFactory(
     /// <summary>P4-08: counts EF's commands and connection openings during a measurement (query count tests).</summary>
     public QueryCounter Queries { get; } = new();
 
+    /// <summary>
+    /// For a host switched to Production: the general limits back at their production values, since Production refuses to
+    /// start with the raised ones this factory uses (DEC-561).
+    /// </summary>
+    public static void UseProductionRateLimits(IWebHostBuilder builder)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        builder.ConfigureAppConfiguration((_, config) => config.AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            ["RateLimiting:UserPermitsPerMinute"] = "300",
+            ["RateLimiting:SchoolWritePermitsPerMinute"] = "300",
+            ["RateLimiting:AnonymousPermitsPerMinute"] = "120",
+        }));
+    }
+
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
         builder.UseEnvironment("Testing");

@@ -164,6 +164,40 @@ public sealed class ApiRateLimitingTests(DatabaseFixture database) : Integration
         return await http.SendAsync(request, Ct);
     }
 
+    [Theory]
+    [InlineData("AuthPermitsPerMinute", "11")]
+    [InlineData("ParentPermitsPerMinute", "61")]
+    [InlineData("UserPermitsPerMinute", "301")]
+    [InlineData("SchoolWritePermitsPerMinute", "301")]
+    [InlineData("AnonymousPermitsPerMinute", "121")]
+    [Trait("Story", "P4-08")]
+    public void Production_refuses_to_start_with_a_limit_above_the_production_value(string setting, string value)
+    {
+        // DEC-561: only the load test environment may raise the limits; in Production a raised value stops the start.
+        using var api = Api.WithWebHostBuilder(builder =>
+        {
+            builder.UseEnvironment("Production");
+            builder.ConfigureAppConfiguration((_, config) => config.AddInMemoryCollection(
+                new Dictionary<string, string?> { [$"RateLimiting:{setting}"] = value }));
+        });
+
+        Should.Throw<Exception>(() => api.CreateClient()).ToString().ShouldContain("above the production value");
+    }
+
+    [Fact]
+    [Trait("Story", "P4-08")]
+    public void Outside_production_the_limits_may_be_raised()
+    {
+        using var api = Api.WithWebHostBuilder(builder =>
+        {
+            builder.UseEnvironment("LoadTest");
+            builder.ConfigureAppConfiguration((_, config) => config.AddInMemoryCollection(
+                new Dictionary<string, string?> { ["RateLimiting:AuthPermitsPerMinute"] = "1000000", ["RateLimiting:ParentPermitsPerMinute"] = "1000000" }));
+        });
+
+        Should.NotThrow(() => api.CreateClient().Dispose());
+    }
+
     [Fact]
     [Trait("Story", "P4-08")]
     public void The_default_endpoint_limits_are_the_production_ones()
