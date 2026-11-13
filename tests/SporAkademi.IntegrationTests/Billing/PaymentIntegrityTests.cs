@@ -16,6 +16,13 @@ public sealed class PaymentIntegrityTests(DatabaseFixture database) : BillingTes
     {
         await using var connection = new NpgsqlConnection(Database.AppConnectionString);
         await connection.OpenAsync(Ct);
+        // As the school itself (row level security, P4-04): only the triggers and constraints can refuse the change.
+        await using (var school = new NpgsqlCommand("SELECT set_config('app.tenant_id', @tenant, false)", connection))
+        {
+            school.Parameters.AddWithValue("tenant", School.Value.ToString());
+            await school.ExecuteNonQueryAsync(Ct);
+        }
+
         await using var command = new NpgsqlCommand(sql, connection);
         foreach (var (name, value) in parameters)
         {

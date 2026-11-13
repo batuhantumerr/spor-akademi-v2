@@ -61,7 +61,7 @@ public sealed class TenantJobTests(DatabaseFixture database) : IdentityTest(data
 
         await Should.ThrowAsync<TenantJobException>(run);
         ran.ShouldBe([a, b], ignoreOrder: true);
-        var sports = await InScopeAsync(sp => sp.GetRequiredService<AppDbContext>().Set<Sport>().IgnoreQueryFilters().ToListAsync(Ct));
+        var sports = await AcrossSchoolsAsync(db => db.Set<Sport>().IgnoreQueryFilters().ToListAsync(Ct));
         sports.ShouldHaveSingleItem().TenantId.ShouldBe(b);
     }
 
@@ -90,11 +90,18 @@ public sealed class TenantJobTests(DatabaseFixture database) : IdentityTest(data
         (await LoadUserAsync(platform.Id)).RefreshTokens.ShouldBeEmpty();
     }
 
-    private Task SeedSportsAsync(params (SchoolId School, string Name)[] sports) =>
-        InScopeAsync(async sp =>
+    /// <summary>Each sport is saved in its school's scope (row level security, P4-04).</summary>
+    private async Task SeedSportsAsync(params (SchoolId School, string Name)[] sports)
+    {
+        foreach (var (school, name) in sports)
         {
-            var db = sp.GetRequiredService<AppDbContext>();
-            db.AddRange(sports.Select(s => Sport.Create(s.School, s.Name).Value));
-            await db.SaveChangesAsync(Ct);
-        });
+            await InScopeAsync(async sp =>
+            {
+                sp.GetRequiredService<BackgroundTenantContext>().Enter(school.Value);
+                var db = sp.GetRequiredService<AppDbContext>();
+                db.Add(Sport.Create(school, name).Value);
+                await db.SaveChangesAsync(Ct);
+            });
+        }
+    }
 }

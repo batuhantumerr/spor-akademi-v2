@@ -36,7 +36,14 @@ public sealed partial class DatabaseFixture : IAsyncLifetime
 
     public string AppConnectionString => Connection("spor_akademi_app", AppPassword);
 
-    public string MigratorConnectionString => Connection("spor_akademi_migrator", MigratorPassword);
+    /// <summary>
+    /// The migrator with the maintenance switch on (P4-04, DEC-522): its row level security policy then shows every
+    /// school's rows, so tests can reset and inspect the database. The application role has no such policy.
+    /// </summary>
+    public string MigratorConnectionString => Connection("spor_akademi_migrator", MigratorPassword, "-c app.maintenance=on");
+
+    /// <summary>The migrator without the maintenance switch, as a bare connection (P4-04).</summary>
+    public string PlainMigratorConnectionString => Connection("spor_akademi_migrator", MigratorPassword);
 
     public async ValueTask InitializeAsync()
     {
@@ -76,12 +83,13 @@ public sealed partial class DatabaseFixture : IAsyncLifetime
         await Storage.DisposeAsync();
     }
 
-    private string Connection(string user, string password) =>
+    private string Connection(string user, string password, string? options = null) =>
         new NpgsqlConnectionStringBuilder(_container.GetConnectionString())
         {
             Database = Database,
             Username = user,
             Password = password,
+            Options = options,
         }.ConnectionString;
 
     /// <summary>compose.yaml is the single source of truth for the PostgreSQL image (tag + digest).</summary>

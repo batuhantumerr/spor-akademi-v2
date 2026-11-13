@@ -438,9 +438,22 @@ Soru 14'ün Faz 3 adımı. Sahip kararları agent'a bıraktı (futbol okulu yön
 2. **Sınırlar instance başına, Valkey'de değil (DEC-506).** İki instance'la etkili sınır iki katına kadar çıkabilir. Kalıcı olarak birden fazla instance çalıştırıldığında giriş ve okul yazma sınırları Valkey'e taşınır. Onay ya da "şimdi taşıyalım" kararı.
 3. **Proxy arkasında IP (DEC-507, Deploy bloğunda zorunlu).** API `X-Forwarded-For`'a yalnız `ForwardedHeaders:KnownProxies`'teki adresten güvenir. Caddy'nin adresi yazılmazsa bütün anonim trafik proxy'nin tek kovasına düşer ve dakikada 120 istekle herkes kilitlenir; Production açılışında uyarı loglanır.
 
+### P4-04 Row Level Security (DEC-520 – DEC-528)
+
+1. **Platform bayrağı kullanıcı ve outbox tablolarını okulsuz işe tamamen açar (DEC-521).** Giriş, refresh ve Platform Admin, kullanıcıları e-postayla okullar arasında bulmak zorunda (DEC-105). Bu yüzden `identity.users` okulsuz kapsamda bütün okulları gösterir; okula bağlı kapsamda yalnız kendi okulunu. Daha dar bir seçenek, kimlik akışlarının tamamını `SECURITY DEFINER` fonksiyonlarına taşımaktı.
+   - *Yönetici:* bir okul kullanıcısı artık veritabanı düzeyinde de başka okulun kullanıcılarını göremez. Girişte bir değişiklik yok.
+   - *Yazılımcı:* kimlik akışlarını fonksiyonlara taşımak giriş, refresh, şifre bağlantıları ve Platform Admin uçlarını yeniden yazmak demekti. Platform bayrağı okul tablolarını açmıyor ve okulsuz okul kullanıcısına hiç verilmiyor. Öneri: böyle kalsın.
+2. **Migrator da RLS'ye tabi, kimsede `BYPASSRLS` yok (DEC-522, DEC-528).** Migration'lar bakım anahtarını kendiliğinden açar, veri migration'ları bütün satırları görür.
+   - *Yazılımcı:* yedek (`pg_dump`) artık `--enable-row-security` ve bakım anahtarı ya da `BYPASSRLS`'li ayrı bir yedek rolü istiyor. Öneri: P4-09 tatbikatında ve Deploy bloğunda bu yolla alınsın; yedek rolü kararı sahibin.
+3. **Bağlantı açılışı başına bir ek gidiş-dönüş (DEC-524).** Ayar her bağlantı açılışında yazılıyor. Politika ifadesi index kullanıyor (testli).
+   - *Yazılımcı:* maliyet küçük ama ölçülmedi. Öneri: k6 maddesinde (NFR-PRF-01/02) ölçülsün, gerekirse ayar komutla birleştirilsin.
+4. **Tehdit modeli (DEC-525).** RLS uygulama hatalarına karşı ikinci katmandır. Uygulama rolüyle keyfi SQL çalıştırabilen biri okul ayarını da değiştirebilir. Öneri: kabul; proje dokümanı 5.4 ve Ek C'ye sahip onayından sonra işlensin.
+5. **Anonim kimlik uçları RLS'de token'dan bağımsız olarak platform kapsamında çalışır (DEC-526).** Giriş, refresh, şifre bağlantıları ve ödeme sağlayıcısı uçları `UsesPlatformData()` ile işaretli.
+   - *Yazılımcı:* yeni bir anonim uç okullar arası arama yapacaksa bu işareti almalıdır; işaret yalnız RLS oturumunu etkiler. Öneri: kabul.
+
 ### P4-11 Test ve CI iyileştirmeleri (DEC-590 – DEC-594)
 
 1. **Sahip işlemi: `a11y` check'ini ruleset'e ekleyin (DEC-591).** WCAG denetimi `e2e` job'undan ayrı `a11y` job'una taşındı; `a11y` zorunlu değilken bir erişilebilirlik gerilemesi merge'ü durdurmaz.
-   - *Yönetici:* önceden `e2e` zorunlu olduğu için denetim de kapıdaydı; ruleset'e eklenince kapsam aynı kalır, `e2e` yarıdan fazla hızlanır (~11–13 dk yerine ~4–6 dk; `a11y` paralel ~10–11 dk).
+   - *Yönetici:* önceden `e2e` zorunlu olduğu için denetim de kapıdaydı; ruleset'e eklenince kapsam aynı kalır, `e2e` yaklaşık yarıya iner (10,5–13 dk yerine ~6 dk 20 sn; `a11y` paralel ~9 dk, PR #140 CI koşusu).
 2. **Çıkışla yarışan eski token'ın yeniden denemesi (DEC-594).** Çıkış her iki sırada da kazanıyor (DEC-593). Ancak çıkışla yarışıp `409` alan sekmenin tek yeniden denemesi, belgelenmiş yeniden kullanım kuralı gereği kullanıcının diğer cihazlarındaki oturumları da kapatıyor. Davranış değişmedi.
    - *Yazılımcı:* yalnız çıkışla kapanan ailede alarmı kapatmak, iptal nedenini saklamayı (migration) gerektirir. Onay ya da "değiştirelim" kararı.

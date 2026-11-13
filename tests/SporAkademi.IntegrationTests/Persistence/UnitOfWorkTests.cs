@@ -236,8 +236,9 @@ public sealed class UnitOfWorkTests(DatabaseFixture database) : IntegrationTest(
             await db.SaveChangesAsync(TestContext.Current.CancellationToken);
         });
 
-        // Another connection holds the row lock for longer than lock_timeout.
-        await using var holder = new Npgsql.NpgsqlConnection(Database.AppConnectionString);
+        // Another connection holds the row lock for longer than lock_timeout (the migrator with the maintenance switch
+        // sees the row without a school, row level security P4-04).
+        await using var holder = new Npgsql.NpgsqlConnection(Database.MigratorConnectionString);
         await holder.OpenAsync(TestContext.Current.CancellationToken);
         await using var holderTransaction = await holder.BeginTransactionAsync(TestContext.Current.CancellationToken);
         await using (var command = new Npgsql.NpgsqlCommand("select 1 from tenancy.schools where id = @id for update", holder, holderTransaction))

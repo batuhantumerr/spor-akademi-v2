@@ -101,8 +101,7 @@ jobs:
   # project. The WCAG audit runs in the a11y job (P4-11, DEC-591).
   e2e:
     runs-on: ubuntu-24.04
-    # ~4-6 minutes without the WCAG audit (the flows took ~2-3 of the ~11-13 minute job until P4-11); keeps headroom
-    # for runner variance.
+    # ~6 minutes without the WCAG audit (10.5-13 with it until P4-11); keeps headroom for runner variance.
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -125,7 +124,7 @@ jobs:
   # (docs/pazartesi-onay-listesi.md).
   a11y:
     runs-on: ubuntu-24.04
-    # The audit took 6.4-7.4 minutes inside the e2e job on main (2026-11-12/13); keep headroom for runner variance.
+    # ~9 minutes on its own (PR #140, 2026-11-13); keeps headroom for runner variance.
     timeout-minutes: 25
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

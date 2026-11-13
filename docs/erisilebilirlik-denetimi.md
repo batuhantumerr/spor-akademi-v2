@@ -111,8 +111,8 @@ Grafikler (panel ve raporlar): ECharts canvas'ı `role="img"` ve dil izleyen öz
 
 ```bash
 docker compose up -d --wait            # PostgreSQL (bir kez)
-bash scripts/e2e.sh --suite=a11y       # yalnız denetim (~7 dk; CI'daki a11y job'u)
-bash scripts/e2e.sh --suite=flows      # denetim hariç akışlar (CI'daki e2e job'u)
+bash scripts/e2e.sh --suite=a11y       # yalnız denetim (CI'daki a11y job'u, ~9 dk)
+bash scripts/e2e.sh --suite=flows      # denetim hariç akışlar (CI'daki e2e job'u, ~6 dk)
 bash scripts/e2e.sh                     # ikisi birden
 node scripts/check-contrast.mjs --verbose   # tema token kontrastı, iki tema
 ```

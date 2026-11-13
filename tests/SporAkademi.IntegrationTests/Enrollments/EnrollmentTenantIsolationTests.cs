@@ -95,6 +95,7 @@ public sealed class EnrollmentTenantIsolationTests(DatabaseFixture database) : E
         // Bypass the policy as a lost race would: the database still refuses a second active enrollment.
         var result = await InScopeAsync(sp =>
         {
+            sp.GetRequiredService<BackgroundTenantContext>().Enter(School.Value);
             var db = sp.GetRequiredService<AppDbContext>();
             return sp.GetRequiredService<IUnitOfWork>().ExecuteInTransactionAsync(
                 _ =>
@@ -117,9 +118,11 @@ public sealed class EnrollmentTenantIsolationTests(DatabaseFixture database) : E
             [],
             new DateOnly(2027, 1, 14)).Value;
 
+    /// <summary>Saved in <paramref name="school"/>'s scope (row level security, P4-04), so only the foreign keys can refuse it.</summary>
     private Task<PostgresException?> InsertDirectlyAsync(SchoolId school, StudentId student, GroupId group) =>
         InScopeAsync(async sp =>
         {
+            sp.GetRequiredService<BackgroundTenantContext>().Enter(school.Value);
             var db = sp.GetRequiredService<AppDbContext>();
             db.Add(NewEnrollment(school, student, group));
             try
