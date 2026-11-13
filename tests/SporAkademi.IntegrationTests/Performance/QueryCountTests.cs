@@ -122,6 +122,10 @@ public sealed class QueryCountTests(DatabaseFixture database) : ParentTest(datab
     /// <summary>The request to measure; what a write needs first (the attendance list, the enrollment) is read here, unmeasured.</summary>
     private async Task<Func<Task<HttpResponseMessage>>> PrepareAsync(string endpoint)
     {
+        // The school's feature flags (P4-10) are cached and rarely change: warmed for both measurements alike, so a
+        // flag-gated endpoint is measured the way almost every request finds it.
+        (await Admin.GetAsync(Url("/api/v1/features"), Ct)).EnsureSuccessStatusCode();
+
         switch (endpoint)
         {
             case "PUT /groups/{id}/sessions/{key}/attendance (coach)":
