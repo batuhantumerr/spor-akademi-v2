@@ -121,6 +121,9 @@ describe('AuditLogPage', () => {
     expect(rows[2]).toContain(ui.auditLog.listQuery);
     const link = root.querySelector('tbody a') as HTMLAnchorElement;
     expect(link.getAttribute('href')).toBe('/students/01a1d44c-a1ad-746e-804a-5aeca2d62f49');
+    // WCAG 2.5.3 Label in Name: the accessible name starts with the visible short id; no aria-label replaces it.
+    expect(link.hasAttribute('aria-label')).toBe(false);
+    expect(link.textContent?.trim()).toBe(`a2d62f49 ${ui.auditLog.openStudent}`);
   });
 
   it('filters by record type, user and date range', async () => {

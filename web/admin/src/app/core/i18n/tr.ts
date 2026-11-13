@@ -600,7 +600,7 @@ const trUi = {
     system: 'Sistem',
     unknownUser: 'Bilinmeyen kullanıcı',
     listQuery: 'Liste sorgusu',
-    openStudent: 'Öğrenciyi aç ({id})',
+    openStudent: '(öğrenciyi aç)',
     empty: 'Bu filtrelere uyan erişim kaydı yok.',
     resultCount: '{count} kayıt bulundu.',
   },

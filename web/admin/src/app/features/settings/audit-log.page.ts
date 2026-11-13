@@ -113,7 +113,7 @@ const ENTITY_TYPES: AuditEntityType[] = ['Student', 'Guardian', 'StudentDocument
       </div>
     } @else if (list.items().length > 0) {
       <div
-        class="table-shell transition-opacity"
+        class="table-shell max-h-[calc(100dvh-14rem)] overflow-y-auto transition-opacity"
         tabindex="0"
         role="region"
         aria-labelledby="audit-caption"
@@ -166,8 +166,7 @@ const ENTITY_TYPES: AuditEntityType[] = ['Student', 'Guardian', 'StudentDocument
                       <a
                         class="font-mono text-xs text-primary underline-offset-4 hover:underline"
                         [routerLink]="['/students', id]"
-                        [attr.aria-label]="interpolate(text.openStudent, { id: shortId(id) })"
-                        >{{ shortId(id) }}</a
+                        >{{ shortId(id) }}<span class="sr-only"> {{ text.openStudent }}</span></a
                       >
                     } @else {
                       <span class="font-mono text-xs text-muted-foreground">{{ shortId(id) }}</span>
@@ -201,7 +200,6 @@ export class AuditLogPage {
   protected readonly text = ui.auditLog;
   protected readonly common = ui.common;
   protected readonly types = ENTITY_TYPES;
-  protected readonly interpolate = interpolate;
 
   protected readonly entityType = signal<AuditEntityType | ''>('');
   protected readonly userId = signal('');

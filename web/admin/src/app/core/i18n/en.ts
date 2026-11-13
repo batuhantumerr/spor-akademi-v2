@@ -595,7 +595,7 @@ export const enUi: UiText = {
     system: 'System',
     unknownUser: 'Unknown user',
     listQuery: 'List query',
-    openStudent: 'Open student ({id})',
+    openStudent: '(open student)',
     empty: 'No audit entries match these filters.',
     resultCount: '{count} entries found.',
   },
