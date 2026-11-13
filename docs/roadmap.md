@@ -195,11 +195,11 @@ Migration ekleyen işler (RLS → audit log → KVKK başvuruları) art arda yap
   - Okuma p95 < 300 ms, yazma p95 < 500 ms; demo verisiyle yerelde ölçülür, sonuçlar `docs/`'a yazılır.
   - N+1 sorgular ve eksik index'ler düzeltilir; regresyon için sorgu sayısı testleri.
   - Durumsuzluk (NFR-SCL-01): yük testi proxy arkasında iki API örneğiyle de koşar; oturum, SignalR ve rate limit sayaçlarının davranışı belgelenir.
-- [ ] P4-09 **Yedekten geri yükleme tatbikatı** (NFR-REL-04).
+- [x] P4-09 **Yedekten geri yükleme tatbikatı** (NFR-REL-04). (DEC-570 – DEC-577; `scripts/backup/`, `docs/geri-yukleme-tatbikati.md`)
   - Yerel yedek alma ve geri yükleme betikleri; WAL arşiviyle point-in-time recovery (15 dakikalık RPO).
   - Tatbikatta tam yedekten ve belirli bir ana (PITR) geri dönüş denenir.
   - Tatbikat ölçülür ve süresiyle belgelenir; production yedeği Deploy bloğunda.
-  - RLS notu (DEC-528): `FORCE`'lu tablolarda `pg_dump` sahip rolüyle `--enable-row-security` ve `PGOPTIONS='-c app.maintenance=on'` ister (ya da `BYPASSRLS`'li ayrı bir yedek rolü); tatbikat yedeğin bütün okulları içerdiğini doğrular.
+  - RLS notu (DEC-528, DEC-571): `FORCE`'lu tablolarda yedek ayrı, salt okunur `spor_akademi_backup_dump` rolüyle (`BYPASSRLS` + `pg_read_all_data`, varsayılan `row_security=off`) alınır; `--enable-row-security` yolu bakım ayarı unutulunca sessizce satırsız yedek ürettiği için seçilmedi; tatbikat yedeğin bütün okulları içerdiğini doğrular.
 - [x] P4-10 **Feature flag'ler** (kademeli yayın). (DEC-580 – DEC-585)
   - Okul bazında açılıp kapanan bayraklar; Platform Admin yönetir, istemciler bayrakları okur.
   - Kapalı bayraklı uç nokta `404` döner; bayrak değişikliği cache'i geçersiz kılar.
