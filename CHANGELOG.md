@@ -8,6 +8,7 @@ Bu dosya [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) biçimini ve [
 
 #### Faz 4 — Production sağlamlaştırma
 - Faz 3 geçişi sahip tarafından onaylandı (2026-11-13); Faz 4 planı roadmap'e yazıldı.
+- **Yedek ve geri yükleme tatbikatı (P4-09):** `scripts/backup/` altında mantıksal tam yedek, WAL arşivli taban yedek ve point-in-time recovery betikleri; RLS altında da tam yedek alan salt okunur yedek rolü; uçtan uca tatbikat (`scripts/backup/drill.sh`) ve haftalık, zorunlu olmayan `restore-drill` workflow'u. Ölçülen süreler ve runbook `docs/geri-yukleme-tatbikati.md`'de (DEC-570 – DEC-577).
 
 ## [0.3.0] - 2026-11-13
 

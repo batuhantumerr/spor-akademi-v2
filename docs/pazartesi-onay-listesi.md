@@ -89,6 +89,7 @@ Aşağıdaki metin karar anındaki hâliyle kayıt olarak bırakıldı.
 - **CSP `img-src` (güvenlik listesi, Fikirler 12).** CSP gelince fotoğraf küçük resmi doğrudan imzalı URL'den yüklendiği için depo origin'i `img-src`'ye eklenmeli. CSP ve güvenlik başlıkları (NFR-SEC-13) ile HTTPS/HSTS (NFR-SEC-02) de Deploy bloğu veya Faz 4.
 - **Production'da Valkey (DEC-310, DEC-316).** Yerelde isteğe bağlı; production'da L2 olarak çalıştırılıp çalıştırılmayacağı (yoksa sadece bellek) ve parolası Deploy bloğunda karara bağlanır.
 - **SignalR hub'ı Caddy'de (P3-08, DEC-399, DEC-402).** `/hubs/*` API'ye `reverse_proxy` ile yönlendirilmeli (WebSocket upgrade'i Caddy kendiliğinden taşır; nginx imajları `/hubs`'a `404` döner). Caddy erişim logunda sorgu dizesindeki `access_token` silinmeli (`log { format filter { request>uri query { delete access_token } } }`), çünkü tarayıcı WebSocket'i token'ı orada taşır. Birden çok API instance'ı çalışacaksa Valkey backplane için `ConnectionStrings__Cache` verilmeli; kullanıcı başına bağlantı sınırı instance başınadır (DEC-400).
+- **Production yedeği (P4-09, DEC-570 – DEC-577, [geri-yukleme-tatbikati.md](geri-yukleme-tatbikati.md) bölüm 5).** Betikler hazır ve tatbikatı yapıldı. Bağlanması gerekenler: günlük `backup-logical.sh` ve `backup-base.sh` zamanlayıcısı; `BACKUP_POST_HOOK` ile age şifreleme ve sunucu dışına (R2) gönderme; 30 gün saklama; WAL arşivi (`archive_timeout=300`) ve arşivin şifreli olarak en geç 10 dakikada bir sunucu dışına kopyalanması (15 dk RPO); yedek rolünün kurulması (`create-backup-role.sql`) ve parolasının gizli anahtar deposuna konması; deploy workflow'unda migration öncesi yedek; aylık production geri yükleme tatbikatı. pgBackRest (MIT) bu betiklerin yerine seçilebilir.
 - **Canlı ödeme (DEC-345).** iyzico canlı adresi şu an uygulamayı başlatmıyor; canlı ödeme Deploy bloğu ve sahip onayı ister.
 
 ## 4. Paketler ve lisanslar
@@ -421,3 +422,15 @@ Soru 14'ün Faz 3 adımı. Sahip kararları agent'a bıraktı (futbol okulu yön
 3. **Kapanmış ayın ödemesi de iade edilebilir (DEC-421).** Donmuş borç değişmez, borç yeniden açık görünür. Yasaklamak okulu sistem dışı iadeye iterdi.
 4. **Erken bitirmede uyarı, otomatik iade yok (DEC-422).** Kayıt bitirme penceresi peşin ödenmiş ayları listeler; iade kararı okulda kalır.
 5. **Açık konu (DEC-418, DEC-424):** iyzico iadesi gerçek sandbox'ta denenmedi (anahtar yok). Sonucu kaybolan iade artık ödeme detayıyla kurtarılıyor: iyzico'nun her reddi kontrol ediliyor, kesin değilse iade "İnceleme gerekli" olarak bekliyor ve yönetici "Sağlayıcıda kontrol et" ile sonuçlandırıyor. iyzico iade uç noktası, ret kodları ve raporlama API'sinin alanları gerçek sandbox denemesinde DEC-345'teki imza konusuyla birlikte doğrulanmalı.
+
+## 11. Faz 4 (2026-11-13)
+
+### P4-09 Yedekten geri yükleme tatbikatı (DEC-570 – DEC-577)
+
+1. **Yedek rolünde `BYPASSRLS` (DEC-571, DEC-522'ye istisna).** RLS'li şemada migrator ile alınan yedek ya hata veriyor ya da bakım anahtarı unutulursa sessizce satırsız çıkıyor. Bu yüzden yalnız okuyabilen ayrı bir yedek rolü kuruldu (`BYPASSRLS`, `REPLICATION`, `pg_read_all_data`).
+   - *Yönetici:* yedek her okulun bütün verisini içerir. Yedek parolası sızarsa okunabilir, ama hiçbir şey değiştirilemez.
+   - *Yazılımcı:* alternatif, migrator'ı `app.maintenance=on` ile kullanmaktı. Bu, yazma yetkili şema sahibinin parolasını yedek sunucusuna koyar ve tek bir ayar unutulursa boş yedek üretir. Öneri: ayrı rol kalsın.
+2. **RPO ayarı (DEC-573).** `archive_timeout=300`, arşivde en fazla 5 dakikalık boşluk bırakır. 15 dakikalık hedef, arşivin sunucu dışına en geç 10 dakikada bir kopyalanmasına bağlı (Deploy bloğu).
+3. **Tatbikat takvimi (DEC-576, DEC-577).** CI'da her hafta, zorunlu olmayan `restore-drill` workflow'u çalışıyor. Faz geçişlerinde elle tatbikat yapılıyor; Deploy'dan sonra ayda bir production yedeğiyle (sahip). Karar: workflow ruleset'e eklensin mi? Öneri: hayır; haftalık kırmızı sonuç incelenir, PR'ları bekletmez.
+4. **Ölçüm (DEC-577).** 393 MB'lık RLS'li veritabanı felaketten sonra tam yedekle 19,6 sn'de, PITR ile 19,5 sn'de geri geldi ve kaynakla birebir eşleşti. RTO'yu insan ve altyapı adımları belirliyor; runbook bütçesi yaklaşık 2–2,5 saat, hedef 4 saat.
+5. **Not:** P4-04 (#135) bu PR açıldığında main'de değildi. Tatbikat, #135 yerelde birleştirilerek RLS'li şemada da çalıştırıldı (24 tabloda `FORCE`, 48 politika korunuyor). #135 merge edildikten sonra CI'daki `restore-drill` aynı şemada tekrar çalışacak.
