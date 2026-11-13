@@ -7,8 +7,9 @@
 # the owners and grants (migrator owns the tables, the app role gets CRUD) and the tables have FORCE ROW LEVEL
 # SECURITY (P4-04), which only a superuser passes while loading every school's rows. PGDATABASE defaults to
 # spor_akademi.
-# The target must be a fresh server prepared like docker/postgres/initdb/10-create-roles.sh: the roles (cluster
-# objects, not in the dump) and the empty database with its owner and CONNECT grant exist. The script refuses a
+# The dump holds one database only: no roles, no passwords, no database-level grants (cluster objects). The target
+# must be a fresh server prepared like docker/postgres/initdb/10-create-roles.sh: the roles (with their passwords
+# from the secret store) and the empty database with its owner and CONNECT grant exist. The script refuses a
 # database that already has tables, so it never merges into or overwrites live data.
 set -euo pipefail
 
@@ -37,9 +38,19 @@ if [[ "$(query "SELECT rolsuper FROM pg_roles WHERE rolname = current_user")" !=
   echo "error: $PGUSER is not a superuser." >&2
   exit 1
 fi
-tables="$(query "SELECT count(*) FROM pg_tables WHERE schemaname NOT IN ('pg_catalog', 'information_schema')")"
-if [[ "$tables" != "0" ]]; then
-  echo "error: database $PGDATABASE already has $tables tables; restore only into an empty database." >&2
+# Empty means: no user schema besides public, and no relation, function or type of its own in any schema
+# (tables, views, sequences, indexes; extension members excluded).
+objects="$(query "
+  SELECT (SELECT count(*) FROM pg_namespace
+          WHERE nspname NOT IN ('public', 'information_schema') AND nspname NOT LIKE 'pg\_%')
+       + (SELECT count(*) FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+          WHERE n.nspname NOT IN ('pg_catalog', 'information_schema') AND n.nspname NOT LIKE 'pg\_%'
+            AND NOT EXISTS (SELECT FROM pg_depend d WHERE d.classid = 'pg_class'::regclass AND d.objid = c.oid AND d.deptype = 'e'))
+       + (SELECT count(*) FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
+          WHERE n.nspname NOT IN ('pg_catalog', 'information_schema') AND n.nspname NOT LIKE 'pg\_%'
+            AND NOT EXISTS (SELECT FROM pg_depend d WHERE d.classid = 'pg_proc'::regclass AND d.objid = p.oid AND d.deptype = 'e'))")"
+if [[ "$objects" != "0" ]]; then
+  echo "error: database $PGDATABASE is not empty ($objects schemas, relations or functions); restore only into an empty database." >&2
   exit 1
 fi
 

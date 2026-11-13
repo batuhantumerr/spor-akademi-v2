@@ -3,7 +3,8 @@
 #
 #   1. A throwaway PostgreSQL server (the compose.yaml image and init script) with WAL archiving. Migrations as the
 #      migrator role, the demo schools through the application layer (DemoSeed) and synthetic filler rows.
-#   2. Full logical backup (backup-logical.sh) and physical base backup (backup-base.sh) as the backup role.
+#   2. Full logical backup (backup-logical.sh) and physical base backup (backup-base.sh) as the two backup roles,
+#      over TCP with a password file and a pg_hba.conf without trust (scram-sha-256 only), as in production.
 #   3. Changes after the backup: change 1, the recovery target time, change 2 (an "accidental" delete).
 #   4. Disaster: the server and its data volume are destroyed; only the backups and the WAL archive remain.
 #   5. Restore A: a new empty server, the full dump restored (restore-logical.sh).
@@ -66,9 +67,11 @@ trap cleanup EXIT
 POSTGRES_PASSWORD="$(openssl rand -hex 24)"
 SPOR_AKADEMI_MIGRATOR_PASSWORD="$(openssl rand -hex 24)"
 SPOR_AKADEMI_APP_PASSWORD="$(openssl rand -hex 24)"
-BACKUP_PASSWORD="$(openssl rand -hex 24)"
+SPOR_AKADEMI_BACKUP_DUMP_PASSWORD="$(openssl rand -hex 24)"
+SPOR_AKADEMI_BACKUP_REPLICATION_PASSWORD="$(openssl rand -hex 24)"
 DEMO_PASSWORD="$(openssl rand -hex 16)"
-export POSTGRES_PASSWORD SPOR_AKADEMI_MIGRATOR_PASSWORD SPOR_AKADEMI_APP_PASSWORD BACKUP_PASSWORD DEMO_PASSWORD
+export POSTGRES_PASSWORD SPOR_AKADEMI_MIGRATOR_PASSWORD SPOR_AKADEMI_APP_PASSWORD DEMO_PASSWORD
+export SPOR_AKADEMI_BACKUP_DUMP_PASSWORD SPOR_AKADEMI_BACKUP_REPLICATION_PASSWORD
 export SPOR_AKADEMI_DB=spor_akademi
 pg_env=(-e POSTGRES_PASSWORD -e SPOR_AKADEMI_DB -e SPOR_AKADEMI_MIGRATOR_PASSWORD -e SPOR_AKADEMI_APP_PASSWORD)
 
@@ -101,6 +104,24 @@ wait_ready() {
     fi
     sleep 0.5
   done
+}
+
+# Replaces the image's pg_hba.conf (trust for local and loopback connections) with the production shape: the
+# superuser only through the socket as the postgres OS user (peer), each backup role only for its own kind of
+# connection, everything else scram-sha-256. Fails if any trust rule is left.
+harden_hba() {
+  docker exec -i --user postgres "$1" sh -c 'cat >"$PGDATA/pg_hba.conf"' <<'HBA'
+local   all          postgres                                   peer
+host    replication  spor_akademi_backup_replication  all       scram-sha-256
+host    spor_akademi spor_akademi_backup_dump         all       scram-sha-256
+host    all          spor_akademi_backup_replication  all       reject
+host    all          spor_akademi_backup_dump         all       reject
+host    all          all                              all       scram-sha-256
+HBA
+  sql "$1" "SELECT pg_reload_conf()" >/dev/null
+  sleep 0.5
+  expect "$(sql "$1" "SELECT count(*) FILTER (WHERE auth_method = 'trust' OR error IS NOT NULL) FROM pg_hba_file_rules")" "0" \
+    "pg_hba.conf of $1 has no trust rule"
 }
 
 host_port() { docker port "$1" 5432/tcp | head -n 1 | sed 's/.*://'; }
@@ -142,6 +163,9 @@ if ! docker image ls --digests --format '{{.Repository}}:{{.Tag}}@{{.Digest}}' |
   quietly docker pull "$image"
 fi
 
+# The image's data directory (PGDATA), so the PITR restore writes where the server will look.
+pgdata="$(docker run --rm --entrypoint sh "$image" -c 'printf %s "$PGDATA"')"
+
 # ---------------------------------------------------------------- 1. source server with data
 echo "drill: 1/6 source server with WAL archiving"
 t="$(now_ms)"
@@ -154,8 +178,27 @@ quietly docker run -d --name "$src" "${pg_env[@]}" -p 127.0.0.1::5432 \
   "$image" postgres -c wal_level=replica -c archive_mode=on -c archive_timeout=300 \
   -c "archive_command=bash /opt/backup/archive-wal.sh %p %f /archive"
 wait_ready "$src"
-docker exec -i --user postgres "$src" psql -X -q -v ON_ERROR_STOP=1 -d postgres \
-  -v db=spor_akademi -v backup_password="$BACKUP_PASSWORD" <scripts/backup/create-backup-role.sql
+# The same settings in postgresql.auto.conf, as on a production server: the base backup carries them, and the PITR
+# copy must switch archiving off itself (restore-pitr.sh) instead of writing into this archive.
+for setting in "wal_level = 'replica'" "archive_mode = 'on'" "archive_timeout = 300"   "archive_command = 'bash /opt/backup/archive-wal.sh %p %f /archive'"; do
+  sql "$src" "ALTER SYSTEM SET $setting" >/dev/null
+done
+harden_hba "$src"
+# Passwords by environment variable name only: neither on a command line nor in the server log.
+docker exec -i --user postgres -e SPOR_AKADEMI_BACKUP_DUMP_PASSWORD -e SPOR_AKADEMI_BACKUP_REPLICATION_PASSWORD "$src" \
+  psql -X -q -v ON_ERROR_STOP=1 -d postgres <scripts/backup/create-backup-role.sql
+# A password file for the backup roles, written through stdin (printf is a shell builtin, so no process lists it).
+printf '127.0.0.1:5432:*:spor_akademi_backup_dump:%s\n127.0.0.1:5432:*:spor_akademi_backup_replication:%s\n' \
+  "$SPOR_AKADEMI_BACKUP_DUMP_PASSWORD" "$SPOR_AKADEMI_BACKUP_REPLICATION_PASSWORD" |
+  docker exec -i --user postgres "$src" sh -c 'umask 077; cat >/tmp/backup.pgpass'
+backup_env=(-e PGHOST=127.0.0.1 -e PGPORT=5432 -e PGPASSFILE=/tmp/backup.pgpass)
+# Without the password file the backup roles get in nowhere: no trust path is left.
+if docker exec --user postgres -e PGHOST=127.0.0.1 -e PGPASSFILE=/dev/null "$src" \
+  psql -X -w -U spor_akademi_backup_dump -d spor_akademi -c 'SELECT 1' >/dev/null 2>&1; then
+  echo "error: the dump role connected without a password." >&2
+  exit 1
+fi
+echo "drill:   ok: the backup roles need their passwords (no trust)"
 record "Source server start" "$(seconds_since "$t")"
 src_port="$(host_port "$src")"
 
@@ -187,13 +230,13 @@ school_name="$(sql "$src" "SELECT name FROM tenancy.schools WHERE id = '$school_
 echo "drill:   database size $db_size; $(sql "$src" "SELECT count(*) FROM tenancy.schools") schools"
 
 # ---------------------------------------------------------------- 2. backups
-echo "drill: 2/6 backups (backup role)"
+echo "drill: 2/6 backups (backup roles over TCP, password file, scram-sha-256)"
 snapshot "$src" "$work_dir/source-at-backup.txt"
 t="$(now_ms)"
-dump="$(docker exec --user postgres -e PGUSER=spor_akademi_backup "$src" bash /opt/backup/backup-logical.sh /backup/logical | tail -n 1)"
+dump="$(docker exec --user postgres "${backup_env[@]}" -e PGUSER=spor_akademi_backup_dump "$src" bash /opt/backup/backup-logical.sh /backup/logical | tail -n 1)"
 record "Logical backup (pg_dump -Fc)" "$(seconds_since "$t")"
 t="$(now_ms)"
-base="$(docker exec --user postgres -e PGUSER=spor_akademi_backup "$src" bash /opt/backup/backup-base.sh /backup/base | tail -n 1)"
+base="$(docker exec --user postgres "${backup_env[@]}" -e PGUSER=spor_akademi_backup_replication "$src" bash /opt/backup/backup-base.sh /backup/base | tail -n 1)"
 record "Base backup (pg_basebackup)" "$(seconds_since "$t")"
 dump_size="$(docker exec "$src" du -h "$dump" | cut -f1)"
 base_size="$(docker exec "$src" du -sh "$base" | cut -f1)"
@@ -231,6 +274,7 @@ t="$(now_ms)"
 quietly docker run -d --name "$full" "${pg_env[@]}" \
   -v "$prefix-full-data:/var/lib/postgresql" -v "$prefix-backups:/backup:ro" -v "$initdb_mount" -v "$scripts_mount" "$image"
 wait_ready "$full"
+harden_hba "$full"
 record "A: new server (initdb, roles, empty database)" "$(seconds_since "$t")"
 t="$(now_ms)"
 quietly docker exec --user postgres -e PGUSER=postgres "$full" bash /opt/backup/restore-logical.sh "$dump"
@@ -250,7 +294,7 @@ rto_start="$(now_ms)"
 t="$(now_ms)"
 quietly docker run --rm --user postgres -v "$prefix-pitr-data:/var/lib/postgresql" -v "$prefix-backups:/backup:ro" \
   -v "$prefix-wal-archive:/archive:ro" -v "$scripts_mount" "$image" \
-  bash /opt/backup/restore-pitr.sh "$base" /archive /var/lib/postgresql/18/docker "$target"
+  bash /opt/backup/restore-pitr.sh "$base" /archive "$pgdata" "$target"
 record "B: prepare data directory" "$(seconds_since "$t")"
 t="$(now_ms)"
 quietly docker run -d --name "$pitr" -e POSTGRES_PASSWORD \
@@ -261,6 +305,7 @@ t="$(now_ms)"
 snapshot "$pitr" "$work_dir/restore-pitr.txt"
 compare "$work_dir/source-at-target.txt" "$work_dir/restore-pitr.txt" "restore B"
 check_app_login "$pitr"
+expect "$(sql "$pitr" "SHOW archive_mode")" "off" "restore B does not archive into the old WAL archive"
 expect "$(sql "$pitr" "SELECT name FROM tenancy.schools WHERE id = '$school_id'")" "$school_name (PITR)" "restore B has change 1 (before the target)"
 expect "$(sql "$pitr" "SELECT string_agg(label, ',') FROM drill.markers")" "before-target" "restore B has no change after the target"
 expect "$(sql "$pitr" "SELECT count(*) FROM drill.filler")" "$filler_rows" "restore B undid the accidental delete"

@@ -1,12 +1,47 @@
--- The backup login (P4-09, DEC-571). Run once per server as a superuser:
---   psql -v ON_ERROR_STOP=1 -U postgres -d postgres -v db=spor_akademi -v backup_password="..." -f create-backup-role.sql
+-- The two backup logins (P4-09, DEC-571). Run as a superuser, once per server and again to rotate the passwords
+-- (idempotent: missing roles are created, the attributes and passwords are set every time):
+--   SPOR_AKADEMI_BACKUP_DUMP_PASSWORD=... SPOR_AKADEMI_BACKUP_REPLICATION_PASSWORD=... \
+--     psql -X -v ON_ERROR_STOP=1 -U postgres -d postgres -f create-backup-role.sql
+-- The passwords come from the environment (\getenv), never from the command line. Statement logging is turned off
+-- for this session, so the plain-text password in ALTER ROLE does not reach the server log either; the server
+-- stores only the SCRAM-SHA-256 verifier. The database name defaults to spor_akademi (-v db=... to change it).
 --
--- Read-only: pg_read_all_data gives SELECT on every table and sequence and USAGE on every schema, nothing else.
--- BYPASSRLS: tenant tables have FORCE ROW LEVEL SECURITY (P4-04). pg_dump runs with row_security=off and stops
--- with an error instead of writing a dump that silently lacks rows; with BYPASSRLS it sees every row. The role
--- cannot write, so bypassing the read policies opens nothing the dump itself does not already contain.
--- REPLICATION: pg_basebackup (physical base backup for point-in-time recovery) needs a replication connection.
-CREATE ROLE spor_akademi_backup LOGIN REPLICATION BYPASSRLS PASSWORD :'backup_password';
-GRANT pg_read_all_data TO spor_akademi_backup;
+-- spor_akademi_backup_dump (pg_dump, backup-logical.sh): read-only. pg_read_all_data gives SELECT on every table
+--   and sequence and USAGE on every schema, nothing else. BYPASSRLS: tenant tables have FORCE ROW LEVEL SECURITY
+--   (P4-04); pg_dump runs with row_security=off and stops with an error instead of writing a dump that silently
+--   lacks rows. The role cannot write, so bypassing the read policies opens nothing the dump does not contain.
+-- spor_akademi_backup_replication (pg_basebackup, backup-base.sh): REPLICATION only; no SQL access to the data and
+--   no BYPASSRLS. pg_hba.conf must allow it a replication connection (and nothing else).
+\set QUIET on
+\getenv dump_password SPOR_AKADEMI_BACKUP_DUMP_PASSWORD
+\getenv replication_password SPOR_AKADEMI_BACKUP_REPLICATION_PASSWORD
+\if :{?db}
+\else
+  \set db spor_akademi
+\endif
+\if :{?dump_password}
+\else
+  DO $$ BEGIN RAISE EXCEPTION 'SPOR_AKADEMI_BACKUP_DUMP_PASSWORD is not set'; END $$;
+\endif
+\if :{?replication_password}
+\else
+  DO $$ BEGIN RAISE EXCEPTION 'SPOR_AKADEMI_BACKUP_REPLICATION_PASSWORD is not set'; END $$;
+\endif
+
+SET client_min_messages = 'warning';
+SET log_statement = 'none';
+SET log_min_error_statement = 'panic';
+SET password_encryption = 'scram-sha-256';
+
+SELECT format('CREATE ROLE %I', role_name)
+FROM unnest(ARRAY['spor_akademi_backup_dump', 'spor_akademi_backup_replication']) AS role_name
+WHERE NOT EXISTS (SELECT FROM pg_roles WHERE rolname = role_name)
+\gexec
+
+ALTER ROLE spor_akademi_backup_dump LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION BYPASSRLS
+  PASSWORD :'dump_password';
+ALTER ROLE spor_akademi_backup_replication LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE REPLICATION NOBYPASSRLS
+  PASSWORD :'replication_password';
+GRANT pg_read_all_data TO spor_akademi_backup_dump;
 -- The database revokes CONNECT from PUBLIC (10-create-roles.sh).
-GRANT CONNECT ON DATABASE :"db" TO spor_akademi_backup;
+GRANT CONNECT ON DATABASE :"db" TO spor_akademi_backup_dump;

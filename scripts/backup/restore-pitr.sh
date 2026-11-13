@@ -25,6 +25,16 @@ for file in base.tar.gz pg_wal.tar.gz; do
     exit 1
   fi
 done
+# Tablespaces outside the data directory come as extra <oid>.tar.gz files; this script restores only the data
+# directory, so it refuses rather than bring back a cluster with missing tablespaces.
+for file in "$base_dir"/*; do
+  case "$(basename "$file")" in
+    base.tar.gz | pg_wal.tar.gz | backup_manifest) ;;
+    *)
+      echo "error: unexpected $(basename "$file") in the base backup (a tablespace?); restore-pitr.sh only handles the data directory." >&2
+      exit 1 ;;
+  esac
+done
 if [[ ! -d "$archive_dir" ]]; then
   echo "error: WAL archive $archive_dir not found." >&2
   exit 1
@@ -57,5 +67,9 @@ tar -xzf "$base_dir/pg_wal.tar.gz" -C "$pgdata/pg_wal"
     echo "recovery_target_time = '$target'"
   fi
   echo "recovery_target_action = 'promote'"
+  # The copy keeps the original server's archive settings and would write its new timeline into the old archive.
+  # Archiving is switched on again deliberately, into a fresh archive, with a new base backup (runbook step 8).
+  # A value given on the server's command line (-c archive_mode=on) would still win over this file.
+  echo "archive_mode = 'off'"
 } >>"$pgdata/postgresql.auto.conf"
 touch "$pgdata/recovery.signal"

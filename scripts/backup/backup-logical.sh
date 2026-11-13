@@ -4,7 +4,7 @@
 #
 # Usage: backup-logical.sh <output-dir>
 # Connection: the standard libpq variables (PGHOST, PGPORT, PGUSER, PGDATABASE). PGUSER defaults to
-# spor_akademi_backup (create-backup-role.sql) and PGDATABASE to spor_akademi. The password comes from a
+# spor_akademi_backup_dump (create-backup-role.sql) and PGDATABASE to spor_akademi. The password comes from a
 # .pgpass / PGPASSFILE, never from the command line.
 # Row level security: pg_dump keeps row_security=off, so a role that would see only part of a table makes the
 # dump fail instead of producing an incomplete one. The backup role has BYPASSRLS for that reason (DEC-571).
@@ -18,7 +18,7 @@ if [[ $# -ne 1 ]]; then
   exit 2
 fi
 out_dir="$1"
-export PGUSER="${PGUSER:-spor_akademi_backup}"
+export PGUSER="${PGUSER:-spor_akademi_backup_dump}"
 export PGDATABASE="${PGDATABASE:-spor_akademi}"
 
 umask 077
