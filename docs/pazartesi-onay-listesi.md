@@ -445,7 +445,7 @@ Soru 14'ün Faz 3 adımı. Sahip kararları agent'a bıraktı (futbol okulu yön
    - *Yönetici:* bir okul kullanıcısı artık veritabanı düzeyinde de başka okulun kullanıcılarını göremez. Girişte bir değişiklik yok.
    - *Yazılımcı:* kimlik akışlarını fonksiyonlara taşımak giriş, refresh, şifre bağlantıları ve Platform Admin uçlarını yeniden yazmak demekti. Platform bayrağı okul tablolarını açmıyor ve okulsuz okul kullanıcısına hiç verilmiyor. Öneri: böyle kalsın.
 2. **Migrator da RLS'ye tabi, kimsede `BYPASSRLS` yok (DEC-522, DEC-528).** Migration'lar bakım anahtarını kendiliğinden açar, veri migration'ları bütün satırları görür.
-   - *Yazılımcı:* yedek (`pg_dump`) artık `--enable-row-security` ve bakım anahtarı ya da `BYPASSRLS`'li ayrı bir yedek rolü istiyor. Öneri: P4-09 tatbikatında ve Deploy bloğunda bu yolla alınsın; yedek rolü kararı sahibin.
+   - *Yazılımcı:* yedek (`pg_dump`) DEC-571'deki ayrı, salt okunur `spor_akademi_backup_dump` rolüyle (`BYPASSRLS` + `pg_read_all_data`, varsayılan `row_security=off`) alınır; P4-09 tatbikatı bunu kanıtlıyor. `--enable-row-security` yolu seçilmedi: bakım ayarı unutulduğunda hata vermeden satırsız yedek üretiyor (tatbikatta denendi) ve yazma yetkili sahip rolünün parolasını yedek sunucusuna koyuyor.
 3. **Bağlantı açılışı başına bir ek gidiş-dönüş (DEC-524).** Ayar her bağlantı açılışında yazılıyor. Politika ifadesi index kullanıyor (testli).
    - *Yazılımcı:* maliyet küçük ama ölçülmedi. Öneri: k6 maddesinde (NFR-PRF-01/02) ölçülsün, gerekirse ayar komutla birleştirilsin.
 4. **Tehdit modeli (DEC-525).** RLS uygulama hatalarına karşı ikinci katmandır. Uygulama rolüyle keyfi SQL çalıştırabilen biri okul ayarını da değiştirebilir. Öneri: kabul; proje dokümanı 5.4 ve Ek C'ye sahip onayından sonra işlensin.
