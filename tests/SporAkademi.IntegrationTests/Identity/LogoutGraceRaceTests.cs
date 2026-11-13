@@ -1,5 +1,6 @@
 using System.Net;
 using System.Reflection;
+using System.Runtime.ExceptionServices;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
@@ -177,7 +178,18 @@ public sealed class LogoutGraceRaceTests(DatabaseFixture database) : IdentityTes
         protected override object? Invoke(MethodInfo? targetMethod, object?[]? args)
         {
             ArgumentNullException.ThrowIfNull(targetMethod);
-            var result = targetMethod.Invoke(_inner, args);
+            object? result;
+            try
+            {
+                result = targetMethod.Invoke(_inner, args);
+            }
+            catch (TargetInvocationException exception) when (exception.InnerException is not null)
+            {
+                // The repository's own exception, not the reflection wrapper (e.g. a cancellation stays a cancellation).
+                ExceptionDispatchInfo.Throw(exception.InnerException);
+                throw;
+            }
+
             return targetMethod.Name == nameof(IUserRepository.GetByRefreshTokenHashAsync)
                 ? ((LoadGate)_gate).AfterLoadAsync((Task<User?>)result!)
                 : result;
