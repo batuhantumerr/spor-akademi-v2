@@ -1,4 +1,5 @@
 import { expect, takeCspViolations, test } from '../support/test';
+import { answerRefreshWithoutSession } from '../support/ui';
 import { parentUrl } from '../support/urls';
 
 /**
@@ -8,7 +9,11 @@ import { parentUrl } from '../support/urls';
  */
 test('both apps are served under the production policy, and a violation is caught', async ({
   page,
+  context,
 }) => {
+  // Both apps restore the session at start; answered in the browser so the per-IP refresh budget (10/min) stays for
+  // the session tests of the other browsers.
+  await answerRefreshWithoutSession(context);
   for (const [url, styles] of [
     ['/', "style-src 'self' 'unsafe-inline'"],
     [`${parentUrl}/`, "style-src 'self';"],
