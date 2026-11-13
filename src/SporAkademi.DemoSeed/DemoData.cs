@@ -57,6 +57,21 @@ internal static class DemoData
             GroupCount: 10),
     ];
 
+    private static readonly string[] LoadDistricts = ["Üsküdar", "Beşiktaş", "Ataşehir", "Maltepe", "Karşıyaka", "Bayraklı", "Buca", "Konak"];
+
+    /// <summary>
+    /// P4-08 (DEC-562): an extra school for the load test, larger than the two demo schools (about 400 students): the
+    /// largest school of the capacity assumptions has 500. Same sports and facility rules, so the same slot planning works.
+    /// </summary>
+    public static SchoolPlan LoadSchool(int number) => new(
+        string.Create(CultureInfo.InvariantCulture, $"Yük Testi Spor Okulu {number}"),
+        string.Create(CultureInfo.InvariantCulture, $"yuk-testi-{number:00}"),
+        LoadDistricts[(number - 1) % LoadDistricts.Length],
+        [new("Futbol", FacilityType.Field), new("Yüzme", FacilityType.Pool), new("Basketbol", FacilityType.Court), new("Voleybol", FacilityType.Court)],
+        [new("Ana Saha", FacilityType.Field), new("Kapalı Havuz", FacilityType.Pool), new("Spor Salonu", FacilityType.Court), new("Voleybol Salonu", FacilityType.Court)],
+        CoachCount: 10,
+        GroupCount: 36);
+
     /// <summary>Age bands of the groups (ages in the school's current year); the last one is the adult group.</summary>
     public static readonly (string Label, int MinAge, int MaxAge)[] AgeBands =
     [
@@ -80,7 +95,7 @@ internal static class DemoData
     /// <paramref name="sequence"/> within a school.
     /// </summary>
     public static string Phone(int schoolIndex, int sequence) =>
-        string.Create(CultureInfo.InvariantCulture, $"+90 5{schoolIndex + 3}{sequence / 10_000 % 10} 000 {sequence % 10_000:0000}");
+        string.Create(CultureInfo.InvariantCulture, $"+90 5{(schoolIndex + 3) % 10}{sequence / 10_000 % 10} 000 {sequence % 10_000:0000}");
 }
 
 internal sealed record SportPlan(string Name, FacilityType Facility);

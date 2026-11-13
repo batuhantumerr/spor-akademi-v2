@@ -1,4 +1,5 @@
 using System.Data.Common;
+using System.Text.Json;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -55,10 +56,18 @@ internal static class DemoSeedProgram
     public static async Task<int> Main(string[] args)
     {
         using var host = DemoSeedHost.Create(args);
-        return await RunAsync(host, new DemoSeedOptions(TimeProvider.System.GetUtcNow(), Password: Environment.GetEnvironmentVariable("DEMO_PASSWORD")));
+        // P4-08 (DEC-562): the load test asks for extra schools, parent accounts and a manifest of the sign-in addresses
+        // (DemoSeed:LoadSchools, DemoSeed:ParentAccounts, DemoSeed:Manifest); by default nothing changes.
+        var settings = host.Services.GetRequiredService<IConfiguration>().GetSection("DemoSeed");
+        var options = new DemoSeedOptions(
+            TimeProvider.System.GetUtcNow(),
+            Password: Environment.GetEnvironmentVariable("DEMO_PASSWORD"),
+            LoadSchools: settings.GetValue("LoadSchools", 0),
+            ParentAccounts: settings.GetValue("ParentAccounts", 0));
+        return await RunAsync(host, options, settings["Manifest"]);
     }
 
-    public static async Task<int> RunAsync(IHost host, DemoSeedOptions options)
+    public static async Task<int> RunAsync(IHost host, DemoSeedOptions options, string? manifestPath = null)
     {
         ArgumentNullException.ThrowIfNull(host);
         ArgumentNullException.ThrowIfNull(options);
@@ -105,6 +114,12 @@ internal static class DemoSeedProgram
             Console.WriteLine($"  {school.Name} ({school.Slug}): School Admin {school.AdminEmail}, coaches antrenor1..n@{school.Slug}.test");
         }
 
+        if (!string.IsNullOrWhiteSpace(manifestPath))
+        {
+            await WriteManifestAsync(manifestPath, result.Schools);
+            Console.WriteLine($"  Sign-in addresses (no passwords) written to {manifestPath}");
+        }
+
         if (string.IsNullOrWhiteSpace(configuredPassword))
         {
             // Shown once; it is stored only as a hash.
@@ -113,4 +128,19 @@ internal static class DemoSeedProgram
 
         return 0;
     }
+
+    /// <summary>
+    /// P4-08: the k6 scenarios read who signs in where (perf/k6). Synthetic <c>.test</c> addresses only; the password is
+    /// never written (the load test gets DEMO_PASSWORD from its environment).
+    /// </summary>
+    internal static async Task WriteManifestAsync(string path, IReadOnlyList<DemoSchoolSummary> schools)
+    {
+        var manifest = new
+        {
+            schools = schools.Select(s => new { slug = s.Slug, admin = s.AdminEmail, coaches = s.CoachEmails, parents = s.ParentEmails }),
+        };
+        await File.WriteAllTextAsync(path, JsonSerializer.Serialize(manifest, ManifestJson));
+    }
+
+    private static readonly JsonSerializerOptions ManifestJson = new() { WriteIndented = true };
 }
