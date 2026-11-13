@@ -1,8 +1,15 @@
 # Changelog
 
-Bu dosya [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) biçimini ve [SemVer](https://semver.org/) sürümlemesini izler. Sürüm etiketi (`v0.1.0`) ve faz geçişi sahibe aittir; aşağıdaki maddeler etiketlenene kadar `Unreleased` altında durur.
+Bu dosya [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) biçimini ve [SemVer](https://semver.org/) sürümlemesini izler. Sürüm etiketleri ve faz geçişleri sahibe aittir; maddeler etiketlenene kadar `Unreleased` altında durur. `v0.3.0` (2026-11-13) Faz 0 – Faz 3'ün tamamını içerir; ara sürümler (`v0.1.0`, `v0.2.0`) etiketlenmedi.
 
 ## [Unreleased]
+
+### Added
+
+#### Faz 4 — Production sağlamlaştırma
+- Faz 3 geçişi sahip tarafından onaylandı (2026-11-13); Faz 4 planı roadmap'e yazıldı.
+
+## [0.3.0] - 2026-11-13
 
 ### Added
 
@@ -48,9 +55,6 @@ Bu dosya [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) biçimini ve [
 - **Okul Admini raporları (P3-09):** yeni Raporlar sayfası (menüde Panel'in altında) üç sekmeli: **devam** (aylık devam oranı; grup, branş veya antrenör bazında, branş ve antrenörden gruplara inilir), **doluluk** (ay sonundaki kayıtlar ve açık grupların kapasitesi; içinde bulunulan ayda bugün) ve **gelir** (dönem başına liste tutarı, kardeş indirimi, grup değişikliğinde alınmayan, tahakkuk, döneme ve ay içinde tahsilat, kalan borç, tahsil oranı; bugünkü geciken borçların 1–30/31–60/61–90/91+ gün yaşlandırması). Ay aralığı seçilebilir (en çok 12 ay, son 24 ay içinde; varsayılan son 6 ay). Gelir tutarları borç listesiyle aynı servisten gelir (aidat kuralları ve kapanmış aylar dahil). Grafikler dashboard'un erişilebilir kartıyla (metin özeti, veri tablosu, açık/koyu tema), raporun tamamı tablo olarak. Her rapor CSV indirilebilir: Excel için UTF-8 BOM, `;` ayraç, Türkçe başlıklar, ondalık virgül; formül enjeksiyonuna karşı hücre kaçışı; yalnız toplam veri, öğrenci adı yok; hesap başına dakikada 10 dışa aktarma. API: `GET /api/v1/reports/{attendance,occupancy,revenue}` ve `…/csv`; yeni hata kodu `Report.InvalidRange`. Raporlar okul başına önbelleğe alınır ve okulun her yazmasında silinir; yeni migration yok. Sayfa ve CSV panelin diliyle değişir (İngilizcede `,` ayraç ve ondalık nokta); iptal ve iade edilen ödemeler tahsilata girmez (DEC-406 – DEC-413).
 - **WCAG 2.2 AA denetimi (P3-11):** yönetim paneli (Okul Admini ve antrenör) ve veli uygulamasının 38 önemli ekranı (raporlar dahil) Türkçe ve İngilizce, açık ve koyu tema, masaüstü ve 360 px genişlikte axe ile taranıyor (yeni e2e projeleri `a11y` ve `a11y-parent`). Betikli kontroller de var: Tab turu (görünür odak, odağın yapışkan başlık ya da alt çubuk altında kalmaması), 320 px reflow, metin aralığı, diyalog ve sayfa değişiminde odak. Bulgular CI'da `a11y-report` artefaktı olarak her koşuda yükleniyor; serious ve critical bulgular CI'ı kırıyor. Düzeltmeler: sayfa değişince başlık duyuruluyor ve odak yeni sayfaya geçiyor; admin'de "Ana içeriğe geç" bağlantısı ve oturumsuz sayfalarda `main`; form kontrollerinde 3:1 kenarlık (yeni `--control-border` token'ı) ve tam renkli odak halkası; diyalogu açan düğmeye odak dönüyor (düğme o sırada devre dışı olsa da); mobil menü açılınca odak kapat düğmesine gidiyor; admin bildirimleri Escape ile kapanıyor ve kapat düğmesi 24 px; telefonda yapışkan başlık ve alt sekme çubuğu için kaydırma boşluğu var; yoklama tonlarında kontrast düzeldi; adlar üç noktayla kesilmiyor; öğrenci ayrıntısı ve borçlar listesi 320 px'te taşmıyor; telefonda yana kayan tablolar klavyeyle kaydırılabiliyor; veli uygulaması sistem temasını her sayfada izliyor. Admin'in e-postayla açılan şifre sayfalarında artık dil seçici var. Veli davet bağlantısında dil değiştirmek token'ı kaybettirmiyor, odak dil seçicisine dönüyor. `repo-checks` tema token kontrastını iki temada ölçüyor (`scripts/check-contrast.mjs`). Rapor: `docs/erisilebilirlik-denetimi.md`. Gerçek ekran okuyucuyla elle tur sahipte (DEC-436 – DEC-443).
 
-#### Faz 4 — Production sağlamlaştırma
-- Faz 3 geçişi sahip tarafından onaylandı (2026-11-13); Faz 4 planı roadmap'e yazıldı.
-
 ### Fixed
 - Admin arayüzü: yanıt gövdesi olmayan uç noktaların (ör. iş paneli oturumu) hataları metin olarak gelen ProblemDetails'ten okunur; "Beklenmeyen hata" yerine doğru Türkçe mesaj görünür (DEC-354).
 - Oturum: refresh yanıtı tarayıcıya ulaşmadığında (refresh sırasında sayfa yenileme, sekme kapatma, kaybolan mobil yanıt) bir sonraki açılış artık kullanıcının bütün cihazlardaki oturumlarını kapatmıyor. Rotasyondan sonraki 30 saniye içinde, halef hiç kullanılmamışsa eski token aynı oturumda yeni bir token alır; pencere dışında ya da halef kullanılmışsa yeniden kullanım tespiti eskisi gibi her şeyi kapatır (DEC-446). Admin açılışı yalnız reddedilen çerezde giriş sayfasına düşer; ağ, `409` ve sunucu hatasında bir kez yeniden dener ve 5 saniyelik beklemede refresh isteğini iptal etmez; o arada başka biri giriş yaparsa eski geri yükleme sonucu yok sayılır (DEC-447).
@@ -58,3 +62,6 @@ Bu dosya [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) biçimini ve [
 
 ### Security
 - Admin imajında zlib ve musl güvenlik yükseltmeleri (DEC-104, DEC-202; öneri aşamasında). Veli imajı aynı yükseltmeleri taşır (P3-04).
+
+[Unreleased]: https://github.com/batuhantumerr/spor-akademi-v2/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/batuhantumerr/spor-akademi-v2/releases/tag/v0.3.0

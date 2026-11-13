@@ -154,7 +154,7 @@ Veli yalnızca **kendi çocuklarını** görür. Bu, okul izolasyonunun yanında
   - Uygulama iki dilde de çalışır.
   - WCAG raporunda açık kritik bulgu kalmaz.
 - [x] P3-R2 Faz 3 geçişi (sahip onayı 2026-11-13)
-- [ ] P3-R3 `v0.3.0` etiketi (sahip)
+- [x] P3-R3 `v0.3.0` etiketi (sahip, 2026-11-13; `main` 5260643, Faz 0 – Faz 3)
 
 ## Faz 4 — Production sağlamlaştırma (`v0.4.0`)
 
