@@ -514,3 +514,9 @@ Kararlar `Proposed (agent, 2026-11-13)`. Sahibin bakması gerekenler:
 3. **Tatbikat takvimi (DEC-576, DEC-577).** CI'da her hafta, zorunlu olmayan `restore-drill` workflow'u çalışıyor. Faz geçişlerinde elle tatbikat yapılıyor; Deploy'dan sonra ayda bir production yedeğiyle (sahip). Karar: workflow ruleset'e eklensin mi? Öneri: hayır; haftalık kırmızı sonuç incelenir, PR'ları bekletmez.
 4. **Ölçüm (DEC-577, sentetik veri, tek makine; production süresi değil).** 393 MB'lık RLS'li veritabanı felaketten sonra tam yedekle 19,6 sn'de, PITR ile 19,5 sn'de geri geldi ve kaynakla birebir eşleşti. RTO'yu insan ve altyapı adımları belirliyor; runbook bütçesi yaklaşık 2–2,5 saat, hedef 4 saat.
 5. **Not:** P4-04 (#135) bu PR açıldığında main'de değildi. Tatbikat, #135 yerelde birleştirilerek RLS'li şemada da çalıştırıldı (#135'in güncel hâlinde 27 tabloda `FORCE`, 54 politika korunuyor). #135 merge edildikten sonra CI'daki `restore-drill` aynı şemada tekrar çalışacak.
+### P4-11 Test ve CI iyileştirmeleri (DEC-590 – DEC-594)
+
+1. **Sahip işlemi: `a11y` check'ini ruleset'e ekleyin (DEC-591).** WCAG denetimi `e2e` job'undan ayrı `a11y` job'una taşındı; `a11y` zorunlu değilken bir erişilebilirlik gerilemesi merge'ü durdurmaz.
+   - *Yönetici:* önceden `e2e` zorunlu olduğu için denetim de kapıdaydı; ruleset'e eklenince kapsam aynı kalır, `e2e` yaklaşık yarıya iner (10,5–13 dk yerine ~6 dk 20 sn; `a11y` paralel ~9 dk, PR #140 CI koşusu).
+2. **Çıkışla yarışan eski token'ın yeniden denemesi (DEC-594).** Çıkış her iki sırada da kazanıyor (DEC-593). Ancak çıkışla yarışıp `409` alan sekmenin tek yeniden denemesi, belgelenmiş yeniden kullanım kuralı gereği kullanıcının diğer cihazlarındaki oturumları da kapatıyor. Davranış değişmedi.
+   - *Yazılımcı:* yalnız çıkışla kapanan ailede alarmı kapatmak, iptal nedenini saklamayı (migration) gerektirir. Onay ya da "değiştirelim" kararı.

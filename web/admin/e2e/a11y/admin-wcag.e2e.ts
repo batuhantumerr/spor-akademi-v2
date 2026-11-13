@@ -264,8 +264,12 @@ test('admin panel screens meet WCAG 2.2 AA', async ({ page, context, browser }, 
 /** Through the side menu (an in-app navigation keeps the in-memory session); opens the drawer on a phone. */
 async function nav(page: Page, label: string): Promise<void> {
   const link = page.getByRole('link', { name: label, exact: true });
+  const menu = page.getByRole('button', { name: 'Menüyü aç' });
+  // Right after a viewport change the layout may still be switching between the side menu and the drawer: wait until
+  // one of the two is there instead of deciding on a snapshot.
+  await expect(link.or(menu).first()).toBeVisible();
   if (!(await link.isVisible())) {
-    await page.getByRole('button', { name: 'Menüyü aç' }).click();
+    await menu.click();
   }
   await link.click();
 }

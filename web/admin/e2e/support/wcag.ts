@@ -207,8 +207,7 @@ export class A11yAudit {
   /** 1.4.10: at 320 CSS px nothing but data tables (which scroll in their own box) may need horizontal scrolling. */
   private async reflow(page: Page, name: string): Promise<void> {
     await page.setViewportSize({ width: 320, height: 640 });
-    // Charts redraw on a throttled resize observer; give them time to take the new width.
-    await page.waitForTimeout(500);
+    await chartsFitContainers(page);
     await settle(page);
     const overflow = await page.evaluate(horizontalOverflow);
     if (overflow.length > 0) {
@@ -356,19 +355,104 @@ export async function applyVariant(page: Page, variant: Variant): Promise<void> 
     await expect(page.locator('html')).toHaveAttribute('lang', variant.language);
   }
   await expect(page.locator('html')).toHaveClass(new RegExp(`\\b${variant.theme}\\b`));
+  // The theme is applied in the computed style too (both apps set color-scheme per theme class on <html>).
+  await expect
+    .poll(() => page.evaluate(() => getComputedStyle(document.documentElement).colorScheme), {
+      message: `the ${variant.theme} theme reaches the computed style`,
+    })
+    .toBe(variant.theme);
   await settle(page);
 }
 
-/** Waits until finite animations and transitions are over, so colours and positions are final. */
+/** How long the page must stay quiet without interruption before it counts as settled. */
+const quietMs = 300;
+
+/**
+ * Waits until the page is quiet, so colours and positions are final (P4-11, DEC-590): no region is loading
+ * (`aria-busy="true"`, which every refreshing admin list sets), no finite animation or transition is running, and the
+ * computed colours and opacity of the controls do not change, all without interruption for {@link quietMs}, measured
+ * with `performance.now()` on every animation frame. Watching the colours themselves catches a theme or language
+ * switch whose transitions start a frame after the switch, and a list that finishes reloading late and re-enables its
+ * buttons, which then fade in (P3-11: a half-faded button reads as low contrast).
+ */
 export async function settle(page: Page): Promise<void> {
-  // Twice, a moment apart: a list that finishes reloading just after the first check re-enables its buttons, which
-  // then fade in (P3-11: a half-faded button reads as low contrast).
-  for (let check = 0; check < 2; check++) {
-    if (check > 0) await page.waitForTimeout(250);
-    await page.waitForFunction(() =>
-      document
-        .getAnimations()
-        .every((a) => a.playState !== 'running' || a.effect?.getTiming().iterations === Infinity),
+  try {
+    await page.waitForFunction(
+      (quiet) =>
+        new Promise<boolean>((resolve) => {
+          const started = performance.now();
+          const look = (): string | null => {
+            if (document.querySelector('[aria-busy="true"]')) return null;
+            const running = document
+              .getAnimations()
+              .some(
+                (a) => a.playState === 'running' && a.effect?.getTiming().iterations !== Infinity,
+              );
+            if (running) return null;
+            return Array.from(
+              document.querySelectorAll<HTMLElement>(
+                'button, a[href], input, select, [role="tab"], .btn',
+              ),
+            )
+              .slice(0, 300)
+              .map((el) => {
+                const s = getComputedStyle(el);
+                return `${s.color};${s.backgroundColor};${s.borderColor};${s.opacity}`;
+              })
+              .join('|');
+          };
+          let last = look();
+          let since = performance.now();
+          const frame = () => {
+            const now = performance.now();
+            const current = look();
+            if (current === null || current !== last) {
+              last = current;
+              since = now;
+            } else if (now - since >= quiet) {
+              resolve(true);
+              return;
+            }
+            // Hand back to waitForFunction now and then, so its own timeout and polling stay in charge.
+            if (now - started > 5_000) resolve(false);
+            else requestAnimationFrame(frame);
+          };
+          requestAnimationFrame(frame);
+        }),
+      quietMs,
+      { timeout: 30_000 },
+    );
+  } catch (error) {
+    throw new Error(
+      'The page did not settle within 30 s (a region stays aria-busy, an animation keeps running or control colours keep changing)',
+      { cause: error },
+    );
+  }
+}
+
+/**
+ * ECharts redraws on a throttled resize observer (ngx-echarts `autoResize`, 100 ms trailing), so right after a
+ * viewport change a canvas still has the old width and would read as overflow. Waits until every chart's canvas is as
+ * wide as its host again.
+ */
+async function chartsFitContainers(page: Page): Promise<void> {
+  try {
+    await page.waitForFunction(
+      () =>
+        Array.from(document.querySelectorAll<HTMLElement>('[_echarts_instance_]')).every((host) => {
+          const canvas = host.querySelector('canvas');
+          return (
+            !canvas ||
+            Math.abs(canvas.getBoundingClientRect().width - host.getBoundingClientRect().width) <= 1
+          );
+        }),
+      undefined,
+      { timeout: 10_000 },
+    );
+  } catch (error) {
+    throw new Error(
+      "A chart canvas did not take its container's new width within 10 s of the viewport change",
+      { cause: error },
     );
   }
 }
