@@ -36,6 +36,8 @@ builder.Host.UseDefaultServiceProvider(options =>
 builder.WebHost.ConfigureKestrel(kestrel => kestrel.Limits.MaxRequestBodySize = 1_048_576);
 
 builder.AddStructuredLogging();
+builder.AddTelemetry(); // P4-07: OpenTelemetry, exported only when an OTLP endpoint is configured
+builder.AddErrorTracking(); // P4-07: Sentry, sends only when Sentry:Dsn is configured
 builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<ICurrentUser, HttpCurrentUser>(); // before AddInfrastructure, which only adds a fallback
