@@ -91,6 +91,28 @@ public sealed class SecurityHeadersTests(DatabaseFixture database) : Integration
         plain.Headers.Contains("Strict-Transport-Security").ShouldBeFalse();
     }
 
+    [Fact]
+    [Trait("Story", "P4-01")]
+    public async Task Behind_a_known_proxy_production_sends_hsts_when_the_client_used_https()
+    {
+        using var production = Api.WithWebHostBuilder(builder =>
+        {
+            builder.UseEnvironment("Production");
+            RemoteAddress.Enable(builder);
+            builder.UseSetting("ForwardedHeaders:KnownProxies:0", "10.0.0.5");
+        });
+        using var client = production.CreateClient();
+
+        // TLS ends at the proxy: the API sees plain HTTP, and the scheme only in X-Forwarded-Proto.
+        using var viaProxy = new HttpRequestMessage(HttpMethod.Get, "http://api.example.test/health/live").From("10.0.0.5", "203.0.113.1", "https");
+        var secure = await client.SendAsync(viaProxy, Ct);
+        using var spoofed = new HttpRequestMessage(HttpMethod.Get, "http://api.example.test/health/live").From("198.51.100.7", "203.0.113.1", "https");
+        var direct = await client.SendAsync(spoofed, Ct);
+
+        Header(secure, "Strict-Transport-Security").ShouldBe("max-age=31536000");
+        direct.Headers.Contains("Strict-Transport-Security").ShouldBeFalse();
+    }
+
     private static string Header(HttpResponseMessage response, string name) =>
         response.Headers.TryGetValues(name, out var values) || response.Content.Headers.TryGetValues(name, out values)
             ? string.Join(", ", values)

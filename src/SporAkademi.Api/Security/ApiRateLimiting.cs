@@ -1,5 +1,7 @@
 using System.ComponentModel.DataAnnotations;
 using System.Globalization;
+using System.Net;
+using System.Net.Sockets;
 using System.Threading.RateLimiting;
 using Microsoft.Extensions.Options;
 
@@ -53,6 +55,9 @@ internal static class ApiRateLimiting
                 context.HttpContext.Response.Headers.RetryAfter = seconds.ToString(CultureInfo.InvariantCulture);
                 return ValueTask.CompletedTask;
             };
+            // The chain takes the caller's permit first; when the school's write budget then refuses, that permit is not
+            // given back (fixed windows cannot return one), and Retry-After is mostly the rest of the school's window
+            // (DEC-503).
             options.GlobalLimiter = PartitionedRateLimiter.CreateChained(
                 PartitionedRateLimiter.Create<HttpContext, string>(Caller),
                 PartitionedRateLimiter.Create<HttpContext, string>(SchoolWrites));
@@ -69,7 +74,33 @@ internal static class ApiRateLimiting
         var settings = Settings(context);
         return context.User.FindFirst("sub")?.Value is { Length: > 0 } user
             ? FixedWindow($"user:{user}", settings.UserPermitsPerMinute)
-            : FixedWindow($"ip:{context.Connection.RemoteIpAddress?.ToString() ?? "unknown"}", settings.AnonymousPermitsPerMinute);
+            : FixedWindow($"ip:{ClientNetwork(context.Connection.RemoteIpAddress)}", settings.AnonymousPermitsPerMinute);
+    }
+
+    /// <summary>
+    /// The anonymous bucket: an IPv4 address, or the /64 network of an IPv6 address, since one subscriber usually gets a
+    /// whole /64 and could otherwise take a fresh address, and a fresh bucket, for every request (DEC-504).
+    /// </summary>
+    internal static string ClientNetwork(IPAddress? address)
+    {
+        if (address is null)
+        {
+            return "unknown";
+        }
+
+        if (address.IsIPv4MappedToIPv6)
+        {
+            return address.MapToIPv4().ToString();
+        }
+
+        if (address.AddressFamily != AddressFamily.InterNetworkV6)
+        {
+            return address.ToString();
+        }
+
+        var bytes = address.GetAddressBytes();
+        Array.Clear(bytes, 8, 8);
+        return $"{new IPAddress(bytes)}/64";
     }
 
     private static RateLimitPartition<string> SchoolWrites(HttpContext context)

@@ -49,9 +49,8 @@ internal static class OnlinePaymentEndpoints
     public const long WebhookMaxBodyBytes = 16_384;
 
     /// <summary>
-    /// Partitioned by client IP and path. Behind a reverse proxy the forwarded client address must be applied first,
-    /// otherwise every caller shares the proxy's bucket: <c>UseForwardedHeaders</c> with the proxy as the only known
-    /// proxy is a Deploy-block item (docs/guvenlik-kontrol-listesi.md), not configured here.
+    /// Partitioned by client IP and path. Behind a reverse proxy the client address comes from the known proxy's
+    /// <c>X-Forwarded-For</c> (<c>ForwardedHeaders</c> section, DEC-507); without it every caller shares the proxy's bucket.
     /// </summary>
     public static IServiceCollection AddPaymentNotificationRateLimiting(this IServiceCollection services) =>
         services.AddRateLimiter(options =>

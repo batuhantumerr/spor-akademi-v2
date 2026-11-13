@@ -21,6 +21,8 @@ public sealed class ApiRateLimitingTests(DatabaseFixture database) : Integration
     private static readonly Guid SchoolA = Guid.CreateVersion7();
     private static readonly Guid SchoolB = Guid.CreateVersion7();
 
+    private const string Proxy = "10.0.0.5";
+
     private static CancellationToken Ct => TestContext.Current.CancellationToken;
 
     [Fact]
@@ -141,6 +143,61 @@ public sealed class ApiRateLimitingTests(DatabaseFixture database) : Integration
         Should.Throw<Exception>(() => api.CreateClient()).ToString().ShouldContain("RateLimiting");
     }
 
+    [Fact]
+    [Trait("Story", "P4-02")]
+    public async Task Behind_a_known_proxy_each_forwarded_client_has_its_own_budget()
+    {
+        using var api = Limited(anonymous: 1, knownProxy: Proxy);
+        using var http = api.CreateClient();
+
+        (await AnonymousAsync(http, Proxy, "203.0.113.1")).StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
+        await ShouldBeRateLimitedAsync(await AnonymousAsync(http, Proxy, "203.0.113.1"));
+        // Another client behind the same proxy is not affected.
+        (await AnonymousAsync(http, Proxy, "203.0.113.2")).StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
+    }
+
+    [Fact]
+    [Trait("Story", "P4-02")]
+    public async Task X_forwarded_for_from_an_unknown_source_is_ignored()
+    {
+        using var api = Limited(anonymous: 1, knownProxy: Proxy);
+        using var http = api.CreateClient();
+
+        (await AnonymousAsync(http, "198.51.100.7", "203.0.113.1")).StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
+        // A client cannot buy a fresh budget by naming another address: it is counted by its own.
+        await ShouldBeRateLimitedAsync(await AnonymousAsync(http, "198.51.100.7", "203.0.113.2"));
+    }
+
+    [Fact]
+    [Trait("Story", "P4-02")]
+    public async Task Without_a_configured_proxy_no_forwarded_header_is_trusted_not_even_from_loopback()
+    {
+        using var api = Limited(anonymous: 1);
+        using var http = api.CreateClient();
+
+        (await AnonymousAsync(http, "127.0.0.1", "203.0.113.1")).StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
+        await ShouldBeRateLimitedAsync(await AnonymousAsync(http, "127.0.0.1", "203.0.113.2"));
+    }
+
+    [Fact]
+    [Trait("Story", "P4-02")]
+    public async Task Ipv6_clients_are_counted_per_64_network()
+    {
+        using var api = Limited(anonymous: 1);
+        using var http = api.CreateClient();
+
+        (await AnonymousAsync(http, "2001:db8:0:1::1")).StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
+        // Another address of the same /64 shares the budget; the next /64 does not.
+        await ShouldBeRateLimitedAsync(await AnonymousAsync(http, "2001:db8:0:1:ffff::2"));
+        (await AnonymousAsync(http, "2001:db8:0:2::1")).StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
+    }
+
+    private static async Task<HttpResponseMessage> AnonymousAsync(HttpClient http, string address, string? forwardedFor = null)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Get, "/api/v1/sports").From(address, forwardedFor);
+        return await http.SendAsync(request, Ct);
+    }
+
     private string SchoolAdmin(Guid school) =>
         TestTokens.Create(Guid.CreateVersion7(), "SchoolAdmin", school, Api.Clock.GetUtcNow());
 
@@ -151,12 +208,17 @@ public sealed class ApiRateLimitingTests(DatabaseFixture database) : Integration
         return client;
     }
 
-    private WebApplicationFactory<Program> Limited(int user = 1_000, int schoolWrites = 1_000, int anonymous = 1_000) =>
-        Api.WithWebHostBuilder(builder => builder.ConfigureAppConfiguration((_, config) => config.AddInMemoryCollection(
-            new Dictionary<string, string?>
-            {
-                ["RateLimiting:UserPermitsPerMinute"] = user.ToString(CultureInfo.InvariantCulture),
-                ["RateLimiting:SchoolWritePermitsPerMinute"] = schoolWrites.ToString(CultureInfo.InvariantCulture),
-                ["RateLimiting:AnonymousPermitsPerMinute"] = anonymous.ToString(CultureInfo.InvariantCulture),
-            })));
+    private WebApplicationFactory<Program> Limited(int user = 1_000, int schoolWrites = 1_000, int anonymous = 1_000, string? knownProxy = null) =>
+        Api.WithWebHostBuilder(builder =>
+        {
+            RemoteAddress.Enable(builder);
+            builder.ConfigureAppConfiguration((_, config) => config.AddInMemoryCollection(
+                new Dictionary<string, string?>
+                {
+                    ["RateLimiting:UserPermitsPerMinute"] = user.ToString(CultureInfo.InvariantCulture),
+                    ["RateLimiting:SchoolWritePermitsPerMinute"] = schoolWrites.ToString(CultureInfo.InvariantCulture),
+                    ["RateLimiting:AnonymousPermitsPerMinute"] = anonymous.ToString(CultureInfo.InvariantCulture),
+                    ["ForwardedHeaders:KnownProxies:0"] = knownProxy,
+                }));
+        });
 }
