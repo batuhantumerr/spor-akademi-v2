@@ -355,34 +355,79 @@ export async function applyVariant(page: Page, variant: Variant): Promise<void> 
     await expect(page.locator('html')).toHaveAttribute('lang', variant.language);
   }
   await expect(page.locator('html')).toHaveClass(new RegExp(`\\b${variant.theme}\\b`));
+  // The theme is applied in the computed style too (both apps set color-scheme per theme class on <html>).
+  await expect
+    .poll(() => page.evaluate(() => getComputedStyle(document.documentElement).colorScheme), {
+      message: `the ${variant.theme} theme reaches the computed style`,
+    })
+    .toBe(variant.theme);
   await settle(page);
 }
 
+/** How long the page must stay quiet without interruption before it counts as settled. */
+const quietMs = 300;
+
 /**
- * Waits until the page is quiet, so colours and positions are final: no region is loading (`aria-busy="true"`, which
- * every refreshing admin list sets) and no finite animation or transition is running, and both still hold two
- * animation frames later. The second look catches a list that finishes reloading just after the first one: it
- * re-enables its buttons, which then fade in (P3-11: a half-faded button reads as low contrast). Reading
- * `getAnimations()` flushes styles, so a transition that the re-render starts is already visible to it.
+ * Waits until the page is quiet, so colours and positions are final (P4-11, DEC-590): no region is loading
+ * (`aria-busy="true"`, which every refreshing admin list sets), no finite animation or transition is running, and the
+ * computed colours and opacity of the controls do not change, all without interruption for {@link quietMs}, measured
+ * with `performance.now()` on every animation frame. Watching the colours themselves catches a theme or language
+ * switch whose transitions start a frame after the switch, and a list that finishes reloading late and re-enables its
+ * buttons, which then fade in (P3-11: a half-faded button reads as low contrast).
  */
 export async function settle(page: Page): Promise<void> {
-  await page.waitForFunction(
-    () =>
-      new Promise<boolean>((resolve) => {
-        const quiet = () =>
-          !document.querySelector('[aria-busy="true"]') &&
-          document
-            .getAnimations()
-            .every(
-              (a) => a.playState !== 'running' || a.effect?.getTiming().iterations === Infinity,
-            );
-        if (!quiet()) {
-          resolve(false);
-          return;
-        }
-        requestAnimationFrame(() => requestAnimationFrame(() => resolve(quiet())));
-      }),
-  );
+  try {
+    await page.waitForFunction(
+      (quiet) =>
+        new Promise<boolean>((resolve) => {
+          const started = performance.now();
+          const look = (): string | null => {
+            if (document.querySelector('[aria-busy="true"]')) return null;
+            const running = document
+              .getAnimations()
+              .some(
+                (a) => a.playState === 'running' && a.effect?.getTiming().iterations !== Infinity,
+              );
+            if (running) return null;
+            return Array.from(
+              document.querySelectorAll<HTMLElement>(
+                'button, a[href], input, select, [role="tab"], .btn',
+              ),
+            )
+              .slice(0, 300)
+              .map((el) => {
+                const s = getComputedStyle(el);
+                return `${s.color};${s.backgroundColor};${s.borderColor};${s.opacity}`;
+              })
+              .join('|');
+          };
+          let last = look();
+          let since = performance.now();
+          const frame = () => {
+            const now = performance.now();
+            const current = look();
+            if (current === null || current !== last) {
+              last = current;
+              since = now;
+            } else if (now - since >= quiet) {
+              resolve(true);
+              return;
+            }
+            // Hand back to waitForFunction now and then, so its own timeout and polling stay in charge.
+            if (now - started > 5_000) resolve(false);
+            else requestAnimationFrame(frame);
+          };
+          requestAnimationFrame(frame);
+        }),
+      quietMs,
+      { timeout: 30_000 },
+    );
+  } catch (error) {
+    throw new Error(
+      'The page did not settle within 30 s (a region stays aria-busy, an animation keeps running or control colours keep changing)',
+      { cause: error },
+    );
+  }
 }
 
 /**
@@ -391,12 +436,25 @@ export async function settle(page: Page): Promise<void> {
  * wide as its host again.
  */
 async function chartsFitContainers(page: Page): Promise<void> {
-  await page.waitForFunction(() =>
-    Array.from(document.querySelectorAll<HTMLElement>('[_echarts_instance_]')).every((host) => {
-      const canvas = host.querySelector('canvas');
-      return !canvas || Math.abs(canvas.getBoundingClientRect().width - host.clientWidth) <= 1;
-    }),
-  );
+  try {
+    await page.waitForFunction(
+      () =>
+        Array.from(document.querySelectorAll<HTMLElement>('[_echarts_instance_]')).every((host) => {
+          const canvas = host.querySelector('canvas');
+          return (
+            !canvas ||
+            Math.abs(canvas.getBoundingClientRect().width - host.getBoundingClientRect().width) <= 1
+          );
+        }),
+      undefined,
+      { timeout: 10_000 },
+    );
+  } catch (error) {
+    throw new Error(
+      "A chart canvas did not take its container's new width within 10 s of the viewport change",
+      { cause: error },
+    );
+  }
 }
 
 interface FocusProbe {
