@@ -77,7 +77,10 @@ public sealed class EndpointSecurityTests : IDisposable
 
     private static bool NamesRoles(RouteEndpoint endpoint) =>
         endpoint.Metadata.GetOrderedMetadata<AuthorizationPolicy>().Any(p => p.Requirements.OfType<RolesAuthorizationRequirement>().Any())
-        || endpoint.Metadata.GetOrderedMetadata<IAuthorizeData>().Any(a => !string.IsNullOrEmpty(a.Roles) || !string.IsNullOrEmpty(a.Policy));
+        || endpoint.Metadata.GetOrderedMetadata<IAuthorizeData>().Any(a => !string.IsNullOrEmpty(a.Roles) || (a.Policy is { } policy && NamedPolicies.Contains(policy)));
+
+    /// <summary>Named policies reviewed to gate by role or stricter (the job panel: active Platform Admin with its own cookie).</summary>
+    private static readonly string[] NamedPolicies = ["JobsDashboard"];
 
     [Fact]
     public void Fallback_policy_requires_an_authenticated_user()

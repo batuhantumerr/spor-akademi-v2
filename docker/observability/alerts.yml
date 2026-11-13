@@ -106,7 +106,7 @@ groups:
           description: Normal expiry is spread out; a burst means stolen or replayed refresh tokens (token reuse revokes the whole session family) or a client loop.
 
       - alert: AuthorizationFailureSpike
-        expr: sum(rate(http_server_request_duration_seconds_count{job="spor-akademi-api", http_route=~"/api/.*", http_response_status_code="403"}[5m])) * 60 > 30
+        expr: sum by (http_route) (rate(http_server_request_duration_seconds_count{job="spor-akademi-api", http_route=~"/api/.*", http_response_status_code="403"}[5m])) * 60 > 30
         for: 5m
         labels:
           severity: warning
