@@ -3,6 +3,7 @@ using SporAkademi.Api.Errors;
 using SporAkademi.Application.Abstractions;
 using SporAkademi.Application.Abstractions.Authentication;
 using SporAkademi.Domain.SharedKernel;
+using SporAkademi.Infrastructure.Persistence;
 
 namespace SporAkademi.Api.Endpoints;
 
@@ -27,6 +28,19 @@ internal static class EndpointConventions
 
         return builder;
     }
+
+    /// <summary>
+    /// The endpoint's database work is platform-level whatever access token the request carries (P4-04, DEC-526): the
+    /// row level security session gets no school and the platform flag. For anonymous endpoints that must search every
+    /// school (DEC-105) or resolve the school themselves (DEC-344).
+    /// </summary>
+    public static TBuilder UsesPlatformData<TBuilder>(this TBuilder builder)
+        where TBuilder : IEndpointConventionBuilder =>
+        builder.AddEndpointFilter(static (context, next) =>
+        {
+            context.HttpContext.RequestServices.GetRequiredService<PlatformDataScope>().Enter();
+            return next(context);
+        });
 
     public static PageRequest ToPageRequest(int? page, int? pageSize) =>
         new(page ?? 1, pageSize ?? PageRequest.DefaultPageSize);

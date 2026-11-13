@@ -1,5 +1,6 @@
 using System.Reflection;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Migrations;
 using SporAkademi.Application.Abstractions.Authentication;
 using SporAkademi.Domain.Groups;
 using SporAkademi.Domain.SharedKernel;
@@ -17,6 +18,14 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options, ICurren
 
     /// <summary>Read by the tenant query filters for every query; an empty id matches no rows.</summary>
     internal SchoolId CurrentTenantId => currentUser.TenantId is { } tenant ? SchoolId.From(tenant) : NoTenant;
+
+    protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
+    {
+        ArgumentNullException.ThrowIfNull(optionsBuilder);
+
+        // P4-04 (DEC-522): migrations run with the owner's maintenance switch, whichever tool runs them.
+        optionsBuilder.ReplaceService<IMigrationsSqlGenerator, MaintenanceMigrationsSqlGenerator>();
+    }
 
     protected override void ConfigureConventions(ModelConfigurationBuilder configurationBuilder)
     {

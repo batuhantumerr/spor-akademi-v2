@@ -114,7 +114,7 @@ public sealed class AnonymizationTests(DatabaseFixture database) : BillingTest(d
         runsB[0].GetProperty("anonymizedCount").GetInt32().ShouldBe(0);
         runsB[0].GetProperty("personalDataMonths").GetInt32().ShouldBe(120);
         runsB[0].GetProperty("id").GetGuid().ShouldNotBe(runsA[0].GetProperty("id").GetGuid());
-        var stored = await InScopeAsync(sp => sp.GetRequiredService<AppDbContext>().Set<AnonymizationRun>().IgnoreQueryFilters().ToListAsync(Ct));
+        var stored = await AcrossSchoolsAsync(db => db.Set<AnonymizationRun>().IgnoreQueryFilters().ToListAsync(Ct));
         stored.Select(r => r.TenantId).ShouldBe([School, schoolB], ignoreOrder: true);
     }
 
@@ -139,7 +139,7 @@ public sealed class AnonymizationTests(DatabaseFixture database) : BillingTest(d
         paid.GetRawText().ShouldNotContain("Ödeyen");
         var enrollments = await admin.GetFromJsonAsync<JsonElement>($"/api/v1/students/{student}/enrollments", Ct);
         enrollments.GetRawText().ShouldContain(enrollment.ToString());
-        (await InScopeAsync(sp => sp.GetRequiredService<AppDbContext>().Set<Payment>().IgnoreQueryFilters().CountAsync(Ct))).ShouldBe(1);
+        (await AcrossSchoolsAsync(db => db.Set<Payment>().IgnoreQueryFilters().CountAsync(Ct))).ShouldBe(1);
     }
 
     [Fact]
@@ -155,10 +155,10 @@ public sealed class AnonymizationTests(DatabaseFixture database) : BillingTest(d
 
         (await RunJobAsync()).ShouldBe(2);
 
-        var guardians = await InScopeAsync(sp => sp.GetRequiredService<AppDbContext>().Set<Guardian>().IgnoreQueryFilters().Select(g => g.Id.Value).ToListAsync(Ct));
+        var guardians = await AcrossSchoolsAsync(db => db.Set<Guardian>().IgnoreQueryFilters().Select(g => g.Id.Value).ToListAsync(Ct));
         guardians.ShouldBe([sharedGuardian]);
         guardians.ShouldNotContain(aloneGuardian);
-        var links = await InScopeAsync(sp => sp.GetRequiredService<AppDbContext>().Set<StudentGuardian>().IgnoreQueryFilters().ToListAsync(Ct));
+        var links = await AcrossSchoolsAsync(db => db.Set<StudentGuardian>().IgnoreQueryFilters().ToListAsync(Ct));
         links.ShouldHaveSingleItem().GuardianId.Value.ShouldBe(sharedGuardian);
     }
 
@@ -304,7 +304,7 @@ public sealed class AnonymizationTests(DatabaseFixture database) : BillingTest(d
         await linking.CommitAsync(Ct);
 
         (await run).ShouldBe(1);
-        var guardians = await InScopeAsync(sp => sp.GetRequiredService<AppDbContext>().Set<Guardian>().IgnoreQueryFilters().Select(g => g.Id.Value).ToListAsync(Ct));
+        var guardians = await AcrossSchoolsAsync(db => db.Set<Guardian>().IgnoreQueryFilters().Select(g => g.Id.Value).ToListAsync(Ct));
         guardians.ShouldContain(guardian);
         (await LoadAsync(stays)).Guardians.Select(g => g.GuardianId.Value).ShouldContain(guardian);
         (await LoadAsync(gone)).AnonymizedAt.ShouldNotBeNull();
@@ -324,7 +324,7 @@ public sealed class AnonymizationTests(DatabaseFixture database) : BillingTest(d
 
         (await RunJobAsync()).ShouldBe(0);
 
-        (await InScopeAsync(sp => sp.GetRequiredService<AppDbContext>().Set<Guardian>().IgnoreQueryFilters().AnyAsync(g => g.Id == GuardianId.From(guardian), Ct)))
+        (await AcrossSchoolsAsync(db => db.Set<Guardian>().IgnoreQueryFilters().AnyAsync(g => g.Id == GuardianId.From(guardian), Ct)))
             .ShouldBeFalse();
     }
 
@@ -355,7 +355,7 @@ public sealed class AnonymizationTests(DatabaseFixture database) : BillingTest(d
         (await RunJobAsync()).ShouldBe(1);
 
         (await LoadAsync(student)).AnonymizedAt.ShouldNotBeNull();
-        var run = await InScopeAsync(sp => sp.GetRequiredService<AppDbContext>().Set<AnonymizationRun>().IgnoreQueryFilters().SingleAsync(Ct));
+        var run = await AcrossSchoolsAsync(db => db.Set<AnonymizationRun>().IgnoreQueryFilters().SingleAsync(Ct));
         run.Cutoff.ShouldBe(new DateOnly(2025, 1, 15));
     }
 
@@ -514,7 +514,7 @@ public sealed class AnonymizationTests(DatabaseFixture database) : BillingTest(d
         InScopeAsync(sp => sp.GetRequiredService<StudentAnonymizationJob>().RunAsync(Ct));
 
     private Task<Student> LoadAsync(Guid id) =>
-        InScopeAsync(sp => sp.GetRequiredService<AppDbContext>().Set<Student>().IgnoreQueryFilters()
+        AcrossSchoolsAsync(db => db.Set<Student>().IgnoreQueryFilters()
             .Include(s => s.Guardians)
             .SingleAsync(s => s.Id == StudentId.From(id), Ct));
 

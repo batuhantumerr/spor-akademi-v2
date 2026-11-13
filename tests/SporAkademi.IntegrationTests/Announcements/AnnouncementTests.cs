@@ -237,6 +237,8 @@ public sealed class AnnouncementTests(DatabaseFixture database) : GroupsTest(dat
 
         var violation = await InScopeAsync(async sp =>
         {
+            // School B's own scope (row level security, P4-04): only the composite foreign key can refuse it.
+            sp.GetRequiredService<BackgroundTenantContext>().Enter(schoolB.Value);
             var db = sp.GetRequiredService<AppDbContext>();
             db.Add(Announcement.Publish(schoolB, group, UserId.From(Guid.CreateVersion7()), "Sızma", "Metin", Api.Clock.GetUtcNow()).Value);
             return await Should.ThrowAsync<DbUpdateException>(() => db.SaveChangesAsync(Ct));
