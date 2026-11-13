@@ -146,12 +146,19 @@ export default defineConfig({
         Email__Smtp__Security: 'None',
         Email__AppBaseUrl: `${appUrl}/`,
         Email__ParentAppBaseUrl: `${parentUrl}/`,
+        // P4-02 (DEC-505): every browser of the suite reaches the API from one address and as few users, much faster
+        // than people do (the WCAG audit loads hundreds of screens a minute). The general limits are raised; the
+        // per-endpoint limits (sign-in, refresh, the parent API) stay as in production.
+        RateLimiting__UserPermitsPerMinute: '100000',
+        RateLimiting__SchoolWritePermitsPerMinute: '100000',
+        RateLimiting__AnonymousPermitsPerMinute: '100000',
       },
     },
     {
       name: 'admin',
       // The production bundle that scripts/e2e.sh built (same as the admin image), with /api proxied.
-      command: `node e2e/serve.mjs ${appPort} ${apiUrl}`,
+      // P4-01: with the image's security headers (Content-Security-Policy), read from its nginx include file.
+      command: `node e2e/serve.mjs ${appPort} ${apiUrl} dist/admin/browser ../../docker/admin/security-headers.inc.template`,
       url: appUrl,
       ignoreHTTPSErrors: true,
       reuseExistingServer: false,
@@ -162,7 +169,7 @@ export default defineConfig({
     {
       name: 'parent',
       // The parent app's production build (scripts/e2e.sh builds it, same as the parent image).
-      command: `node e2e/serve.mjs ${parentPort} ${apiUrl} ../parent/dist`,
+      command: `node e2e/serve.mjs ${parentPort} ${apiUrl} ../parent/dist ../../docker/parent/security-headers.inc`,
       url: parentUrl,
       ignoreHTTPSErrors: true,
       reuseExistingServer: false,
