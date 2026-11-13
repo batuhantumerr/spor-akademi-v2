@@ -58,6 +58,7 @@ export const enErrorMessages: ErrorMessageText = {
   'School.SlugTaken': 'Another school already uses this short name.',
   'School.InvalidTimeZone': 'Choose a valid time zone.',
   'School.NotFound': 'School not found.',
+  'Feature.NotFound': 'Feature not found.',
   'Sport.NameTaken': 'A sport with this name already exists.',
   'Sport.InUse': 'This sport can’t be deleted because groups use it. You can archive it instead.',
   'Sport.Archived': 'New groups can’t be created for an archived sport.',
@@ -602,6 +603,30 @@ export const enUi: UiText = {
     empty: 'No schools added yet.',
     created: 'School created.',
     statuses: { Active: 'Active', Deactivated: 'Inactive' },
+    back: 'Back to schools',
+  },
+  schoolFeatures: {
+    title: 'Features',
+    description:
+      'Features switched on or off per school (gradual rollout). A disabled feature leaves the school’s menu and its endpoints answer not found.',
+    caption: 'Feature list',
+    feature: 'Feature',
+    state: 'Status',
+    source: 'Source',
+    on: 'On',
+    off: 'Off',
+    fromDefault: 'Default ({value})',
+    fromSchool: 'Set for this school',
+    saved: '{feature} is {state} for this school.',
+    loadError: 'The features could not be loaded.',
+    names: {
+      reports: 'Reports',
+      'parent-online-payments': 'Parent online payment',
+    },
+    hints: {
+      reports: 'The School Admin’s reports page and CSV exports.',
+      'parent-online-payments': 'Paying dues online from the parent app.',
+    },
   },
   coaches: {
     title: 'Coaches',
