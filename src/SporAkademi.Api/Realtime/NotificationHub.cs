@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.SignalR;
 using SporAkademi.Api.Authentication;
 using SporAkademi.Application.Abstractions.Authentication;
+using SporAkademi.Application.Abstractions.Observability;
 using SporAkademi.Application.Abstractions.Realtime;
 
 namespace SporAkademi.Api.Realtime;
@@ -106,14 +107,30 @@ internal sealed class NotificationHub : Hub<INotificationClient>
 /// <summary>Sends through the hub (and through the Valkey backplane to other instances when it is configured).</summary>
 internal sealed class HubRealtimeNotifier(IHubContext<NotificationHub, INotificationClient> hub) : IRealtimeNotifier
 {
-    public Task NotifyUsersAsync(Guid tenantId, IReadOnlyCollection<Guid> userIds, RealtimeEvent realtimeEvent, CancellationToken cancellationToken)
+    public async Task NotifyUsersAsync(Guid tenantId, IReadOnlyCollection<Guid> userIds, RealtimeEvent realtimeEvent, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(userIds);
-        return userIds.Count == 0
-            ? Task.CompletedTask
-            : hub.Clients.Groups([.. userIds.Distinct().Select(u => RealtimeGroups.User(tenantId, u))]).Notify(realtimeEvent);
+        if (userIds.Count == 0)
+        {
+            return;
+        }
+
+        using var activity = Started("users");
+        await hub.Clients.Groups([.. userIds.Distinct().Select(u => RealtimeGroups.User(tenantId, u))]).Notify(realtimeEvent);
     }
 
-    public Task NotifyRoleAsync(Guid tenantId, Role role, RealtimeEvent realtimeEvent, CancellationToken cancellationToken) =>
-        hub.Clients.Group(RealtimeGroups.Role(tenantId, role)).Notify(realtimeEvent);
+    public async Task NotifyRoleAsync(Guid tenantId, Role role, RealtimeEvent realtimeEvent, CancellationToken cancellationToken)
+    {
+        using var activity = Started("role");
+        await hub.Clients.Group(RealtimeGroups.Role(tenantId, role)).Notify(realtimeEvent);
+    }
+
+    /// <summary>P4-07 (DEC-551): a span per send (the backplane's work is inside it) and a counter; the audience kind only, no group name.</summary>
+    private static System.Diagnostics.Activity? Started(string audience)
+    {
+        AppTelemetry.RealtimeNotices.Add(1, new KeyValuePair<string, object?>("audience", audience));
+        var activity = AppTelemetry.StartActivity("realtime.notify", System.Diagnostics.ActivityKind.Producer);
+        activity?.SetTag("spor_akademi.realtime.audience", audience);
+        return activity;
+    }
 }

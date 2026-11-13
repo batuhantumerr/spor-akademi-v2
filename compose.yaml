@@ -109,6 +109,60 @@ services:
       timeout: 3s
       retries: 30
 
+  # Local observability (P4-07, DEC-554): optional, only started with `docker compose --profile observability up -d --wait`;
+  # scripts/run-api.sh then sends the API's traces and metrics there over OTLP. All Apache-2.0 (no AGPL image, as with
+  # DEC-320): Jaeger v2 receives OTLP, keeps traces in memory and passes metrics to Prometheus, which evaluates the alert
+  # rules; Perses shows the dashboards. Configuration, alert rules and dashboards are files under docker/observability.
+  # Every port listens on 127.0.0.1 only and needs no .env key (the host ports have defaults). Nothing is persisted.
+  jaeger:
+    image: jaegertracing/jaeger:2.23.0@sha256:3823829974ccfc2485d2e48b165579091f32295022ae80ca49704e2f4834116e
+    profiles: ["observability"]
+    command: ["--config", "/etc/jaeger/jaeger.yaml"]
+    volumes:
+      - ./docker/observability/jaeger.yaml:/etc/jaeger/jaeger.yaml:ro
+    ports:
+      - "127.0.0.1:${OTLP_GRPC_HOST_PORT:-54317}:4317"
+      - "127.0.0.1:${OTLP_HTTP_HOST_PORT:-54318}:4318"
+      - "127.0.0.1:${JAEGER_UI_HOST_PORT:-56686}:16686"
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:13133/status"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  prometheus:
+    image: prom/prometheus:v3.16.0@sha256:e04987641b57704f408e31f6373ba4138ecf27cb4a165d24aabb6c38fddd0f06
+    profiles: ["observability"]
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.retention.time=2d
+    volumes:
+      - ./docker/observability/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./docker/observability/alerts.yml:/etc/prometheus/alerts.yml:ro
+    ports:
+      - "127.0.0.1:${PROMETHEUS_HOST_PORT:-57090}:9090"
+    depends_on:
+      jaeger:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:9090/-/ready"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  perses:
+    image: persesdev/perses:v0.55.1@sha256:292605f009770f07aa17217e70f877fabbc74858d0af9054d395064e1c411c06
+    profiles: ["observability"]
+    command: ["--config", "/etc/perses/config.yaml"]
+    volumes:
+      - ./docker/observability/perses/config.yaml:/etc/perses/config.yaml:ro
+      - ./docker/observability/perses/provisioning:/etc/perses/provisioning:ro
+    ports:
+      - "127.0.0.1:${PERSES_HOST_PORT:-58080}:8080"
+    depends_on:
+      prometheus:
+        condition: service_healthy
+
 volumes:
   postgres-data:
   seq-data:

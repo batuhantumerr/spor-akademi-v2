@@ -1,0 +1,13 @@
+# The local Prometheus of the compose "observability" profile, reached by the Perses server (not the browser).
+kind: GlobalDatasource
+metadata:
+  name: prometheus
+spec:
+  default: true
+  plugin:
+    kind: PrometheusDatasource
+    spec:
+      proxy:
+        kind: HTTPProxy
+        spec:
+          url: http://prometheus:9090

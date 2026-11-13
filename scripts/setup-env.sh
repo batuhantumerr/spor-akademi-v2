@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Creates .env with fresh random secrets. Never overwrites an existing .env: it only appends keys added
-# since it was created (the optional Valkey cache, DEC-316, document storage, DEC-326, and Mailpit ports, DEC-357);
+# since it was created (the optional Valkey cache, DEC-316, document storage, DEC-326, Mailpit ports, DEC-357, and the
+# observability ports, DEC-554);
 # existing values are neither changed nor printed.
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -23,10 +24,15 @@ if [[ -e "$ROOT/.env" ]]; then
   append_missing STORAGE_BUCKET spor-akademi-documents
   append_missing MAILPIT_SMTP_HOST_PORT 51025
   append_missing MAILPIT_UI_HOST_PORT 58025
+  append_missing OTLP_GRPC_HOST_PORT 54317
+  append_missing OTLP_HTTP_HOST_PORT 54318
+  append_missing JAEGER_UI_HOST_PORT 56686
+  append_missing PROMETHEUS_HOST_PORT 57090
+  append_missing PERSES_HOST_PORT 58080
   if [[ $added -eq 0 ]]; then
     echo ".env already exists and has every key; nothing changed (remove it first if you want new secrets)."
   else
-    echo ".env already exists; appended $added missing key(s) (Valkey cache, document storage, Mailpit ports). Existing values are unchanged."
+    echo ".env already exists; appended $added missing key(s) (Valkey cache, document storage, Mailpit and observability ports). Existing values are unchanged."
   fi
   exit 0
 fi
@@ -46,6 +52,11 @@ platform_admin_password="$(openssl rand -hex 16)"
   echo "STORAGE_SECRET_KEY=$(openssl rand -hex 20)"
   echo "STORAGE_HOST_PORT=58333"
   echo "STORAGE_BUCKET=spor-akademi-documents"
+  echo "OTLP_GRPC_HOST_PORT=54317"
+  echo "OTLP_HTTP_HOST_PORT=54318"
+  echo "JAEGER_UI_HOST_PORT=56686"
+  echo "PROMETHEUS_HOST_PORT=57090"
+  echo "PERSES_HOST_PORT=58080"
   echo "PLATFORM_ADMIN_EMAIL=platform@spor-akademi.local"
   echo "PLATFORM_ADMIN_PASSWORD=$platform_admin_password"
 } > "$ROOT/.env"
