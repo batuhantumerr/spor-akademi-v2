@@ -429,8 +429,10 @@ Soru 14'ün Faz 3 adımı. Sahip kararları agent'a bıraktı (futbol okulu yön
 1. **Platform bayrağı kullanıcı ve outbox tablolarını okulsuz işe tamamen açar (DEC-521).** Giriş, refresh ve Platform Admin, kullanıcıları e-postayla okullar arasında bulmak zorunda (DEC-105). Bu yüzden `identity.users` okulsuz kapsamda bütün okulları gösterir; okula bağlı kapsamda yalnız kendi okulunu. Daha dar bir seçenek, kimlik akışlarının tamamını `SECURITY DEFINER` fonksiyonlarına taşımaktı.
    - *Yönetici:* bir okul kullanıcısı artık veritabanı düzeyinde de başka okulun kullanıcılarını göremez. Girişte bir değişiklik yok.
    - *Yazılımcı:* kimlik akışlarını fonksiyonlara taşımak giriş, refresh, şifre bağlantıları ve Platform Admin uçlarını yeniden yazmak demekti. Platform bayrağı okul tablolarını açmıyor ve okulsuz okul kullanıcısına hiç verilmiyor. Öneri: böyle kalsın.
-2. **Migrator da RLS'ye tabi, kimsede `BYPASSRLS` yok (DEC-522).** Veri değiştiren gelecekteki migration'lar `app.maintenance` anahtarını açmak zorunda, yoksa sıfır satırı etkilerler.
-   - *Yazılımcı:* bu, ileride bir veri düzeltme migration'ının sessizce hiçbir şey yapmaması riskini getiriyor. Karşılığında tablo sahibi bile izolasyonu kazara aşamıyor. Öneri: kabul; migration incelemesinde kontrol edilsin.
+2. **Migrator da RLS'ye tabi, kimsede `BYPASSRLS` yok (DEC-522, DEC-528).** Migration'lar bakım anahtarını kendiliğinden açar, veri migration'ları bütün satırları görür.
+   - *Yazılımcı:* yedek (`pg_dump`) artık `--enable-row-security` ve bakım anahtarı ya da `BYPASSRLS`'li ayrı bir yedek rolü istiyor. Öneri: P4-09 tatbikatında ve Deploy bloğunda bu yolla alınsın; yedek rolü kararı sahibin.
 3. **Bağlantı açılışı başına bir ek gidiş-dönüş (DEC-524).** Ayar her bağlantı açılışında yazılıyor. Politika ifadesi index kullanıyor (testli).
    - *Yazılımcı:* maliyet küçük ama ölçülmedi. Öneri: k6 maddesinde (NFR-PRF-01/02) ölçülsün, gerekirse ayar komutla birleştirilsin.
 4. **Tehdit modeli (DEC-525).** RLS uygulama hatalarına karşı ikinci katmandır. Uygulama rolüyle keyfi SQL çalıştırabilen biri okul ayarını da değiştirebilir. Öneri: kabul; proje dokümanı 5.4 ve Ek C'ye sahip onayından sonra işlensin.
+5. **Anonim kimlik uçları RLS'de token'dan bağımsız olarak platform kapsamında çalışır (DEC-526).** Giriş, refresh, şifre bağlantıları ve ödeme sağlayıcısı uçları `UsesPlatformData()` ile işaretli.
+   - *Yazılımcı:* yeni bir anonim uç okullar arası arama yapacaksa bu işareti almalıdır; işaret yalnız RLS oturumunu etkiler. Öneri: kabul.

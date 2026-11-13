@@ -8,7 +8,7 @@ Bu dosya [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) biçimini ve [
 
 #### Faz 4 — Production sağlamlaştırma
 - Faz 3 geçişi sahip tarafından onaylandı (2026-11-13); Faz 4 planı roadmap'e yazıldı.
-- **Row Level Security (P4-04):** tenant izolasyonunun veritabanı katmanı. `tenant_id`'li her tabloda zorlanmış RLS politikası; okul bağlamı her bağlantı açılışında oturuma yazılır. Filtre atlansa bile (ham SQL, `IgnoreQueryFilters`) başka okulun satırı okunamaz, eklenemez, değiştirilemez. Okullar arası tek okumalar (ödeme webhook'unun okulu, billing-close health check) dar `SECURITY DEFINER` fonksiyonlarıyla yapılır. Uygulama rolünde `BYPASSRLS` yoktur (DEC-520 – DEC-525).
+- **Row Level Security (P4-04):** tenant izolasyonunun veritabanı katmanı. `tenant_id`'li her tabloda zorlanmış RLS politikası; okul bağlamı her bağlantı açılışında oturuma yazılır. Filtre atlansa bile (ham SQL, `IgnoreQueryFilters`) başka okulun satırı okunamaz, eklenemez, değiştirilemez. Okullar arası tek okumalar (ödeme webhook'unun okulu, billing-close health check) dar `SECURITY DEFINER` fonksiyonlarıyla yapılır. Okul sütunu olmayan tablolar üst satırlarını izler, anonim kimlik uçları RLS'de token'dan bağımsız olarak platform kapsamında çalışır, migration'lar bakım anahtarıyla çalışır. Uygulama rolünde `BYPASSRLS` yoktur (DEC-520 – DEC-528).
 
 ## [0.3.0] - 2026-11-13
 
