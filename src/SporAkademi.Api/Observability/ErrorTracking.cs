@@ -19,7 +19,30 @@ internal static class ErrorTracking
     public static WebApplicationBuilder AddErrorTracking(this WebApplicationBuilder builder)
     {
         builder.WebHost.UseSentry(Configure);
+        // The DSN comes from Sentry:Dsn only (read from the final configuration, so test hosts can set it). The SDK replaces
+        // an empty DSN with SENTRY_DSN from the environment, a second, easily forgotten switch; without Sentry:Dsn every
+        // event is therefore dropped before sending and the transport discards anything else.
+        builder.Services.AddOptions<SentryAspNetCoreOptions>().PostConfigure<IConfiguration>((options, configuration) =>
+        {
+            var dsn = configuration["Sentry:Dsn"];
+            if (!string.IsNullOrWhiteSpace(dsn))
+            {
+                options.Dsn = dsn;
+                return;
+            }
+
+            options.Dsn = string.Empty;
+            options.SetBeforeSend((_, _) => null);
+            options.SetBeforeSendTransaction((_, _) => null);
+            options.Transport = new DiscardingTransport();
+        });
         return builder;
+    }
+
+    /// <summary>Sends nothing anywhere.</summary>
+    private sealed class DiscardingTransport : ITransport
+    {
+        public Task SendEnvelopeAsync(Sentry.Protocol.Envelopes.Envelope envelope, CancellationToken cancellationToken = default) => Task.CompletedTask;
     }
 
     public static void Configure(SentryAspNetCoreOptions options)

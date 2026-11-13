@@ -36,6 +36,7 @@ public sealed class TelemetryTests(DatabaseFixture database) : IdentityTest(data
     private const string ResetSecret = "reset-secret-p407";
     private const string HeaderSecret = "header-secret-p407";
     private const string CookieSecret = "cookie-secret-p407";
+    private const string BadUuid = "uuid-gizli-deger-p407";
 
     private static CancellationToken Ct => TestContext.Current.CancellationToken;
 
@@ -67,20 +68,28 @@ public sealed class TelemetryTests(DatabaseFixture database) : IdentityTest(data
         await client.PostAsync(new Uri($"/hubs/notifications/negotiate?negotiateVersion=1&access_token={HubSecret}", UriKind.Relative), null, Ct);
         await client.GetAsync(new Uri($"/api/v1/me?token={ResetSecret}&email={Uri.EscapeDataString(Email)}", UriKind.Relative), Ct);
         (await client.PostAsJsonAsync($"/test/duplicate-user?school={school.Value}", new { email = Email }, Ct)).StatusCode.ShouldBe(HttpStatusCode.InternalServerError);
+        // PostgreSQL quotes the rejected value in its error message (22P02).
+        (await client.PostAsJsonAsync("/test/bad-uuid", new { value = BadUuid }, Ct)).StatusCode.ShouldBe(HttpStatusCode.InternalServerError);
 
-        var recorded = await SettledAsync(api, spans, s => s.Kind == ActivityKind.Server && s.GetTagItem("url.path") as string == "/test/duplicate-user");
+        var recorded = await SettledAsync(api, spans, s => s.Kind == ActivityKind.Server && s.GetTagItem("url.path") as string == "/test/bad-uuid");
 
         // Proof that the interesting spans exist, otherwise the checks below prove nothing.
         var loginSpan = recorded.Single(s => s.Kind == ActivityKind.Server && Equals(s.GetTagItem("spor_akademi.correlation_id"), "corr-p407-login"));
         loginSpan.GetTagItem("http.route").ShouldBe("/api/v1/auth/login");
         recorded.Any(s => s.Source.Name == "Npgsql" && s.GetTagItem("db.query.text") is string sql && sql.Contains("users", StringComparison.Ordinal)).ShouldBeTrue();
-        recorded.ShouldContain(s => s.Source.Name == "Npgsql" && s.Status == ActivityStatusCode.Error);
+        // A failed command's span carries the driver's exception event (with PostgreSQL's message); it is not exported,
+        // and the request's span keeps the error's SQLSTATE instead (DEC-551).
+        recorded.ShouldNotContain(s => s.Events.Any(e => e.Name == "exception"));
+        recorded.Single(s => s.Kind == ActivityKind.Server && Equals(s.GetTagItem("url.path"), "/test/bad-uuid"))
+            .GetTagItem("db.response.status_code").ShouldBe("22P02");
+        recorded.Single(s => s.Kind == ActivityKind.Server && Equals(s.GetTagItem("url.path"), "/test/duplicate-user"))
+            .GetTagItem("db.response.status_code").ShouldBe("23505");
         recorded.ShouldContain(s => Equals(s.GetTagItem("url.path"), "/hubs/notifications/negotiate"));
 
         recorded.ShouldNotContain(s => s.GetTagItem("url.query") != null);
         string[] forbidden =
         [
-            Email, "iz.gizli", WrongPassword, OwnPassword, SearchTerm, HubSecret, ResetSecret, HeaderSecret, CookieSecret,
+            Email, "iz.gizli", BadUuid, WrongPassword, OwnPassword, SearchTerm, HubSecret, ResetSecret, HeaderSecret, CookieSecret,
             session.AccessToken, session.RefreshToken, session.AccessToken.Split('.')[2],
         ];
         foreach (var span in recorded)
@@ -163,8 +172,57 @@ public sealed class TelemetryTests(DatabaseFixture database) : IdentityTest(data
         var http = Read(("OTEL_EXPORTER_OTLP_ENDPOINT", "http://127.0.0.1:4318"), ("OTEL_EXPORTER_OTLP_PROTOCOL", "http/protobuf"));
         http.Enabled.ShouldBeTrue();
         http.Exporter("v1/metrics")!.Endpoint.ShouldBe(new Uri("http://127.0.0.1:4318/v1/metrics"));
-        Should.Throw<InvalidOperationException>(() => Read(("OpenTelemetry:Otlp:Endpoint", "file:///etc/passwd")));
-        Should.Throw<InvalidOperationException>(() => Read(("OpenTelemetry:Tracing:SampleRatio", "2")));
+        // A path-based endpoint keeps its path.
+        Read(("OpenTelemetry:Otlp:Endpoint", "http://127.0.0.1:4318/otlp"), ("OpenTelemetry:Otlp:Protocol", "http/protobuf"))
+            .Exporter("v1/traces")!.Endpoint.ShouldBe(new Uri("http://127.0.0.1:4318/otlp/v1/traces"));
+        Read(("OpenTelemetry:Otlp:Endpoint", "http://127.0.0.1:4318/otlp/"), ("OpenTelemetry:Otlp:Protocol", "http/protobuf"))
+            .Exporter("v1/traces")!.Endpoint.ShouldBe(new Uri("http://127.0.0.1:4318/otlp/v1/traces"));
+
+        // An invalid value turns telemetry off with a reason instead of stopping the API.
+        foreach (var invalid in new[]
+                 {
+                     Read(("OpenTelemetry:Otlp:Endpoint", "file:///etc/passwd")),
+                     Read(("OTEL_EXPORTER_OTLP_ENDPOINT", "http://127.0.0.1:4317"), ("OTEL_EXPORTER_OTLP_PROTOCOL", "http/json")),
+                     Read(("OpenTelemetry:Otlp:Endpoint", "http://127.0.0.1:4317"), ("OpenTelemetry:Tracing:SampleRatio", "2")),
+                 })
+        {
+            invalid.Enabled.ShouldBeFalse();
+            invalid.Exporter("v1/traces").ShouldBeNull();
+            invalid.Problem.ShouldNotBeNull();
+        }
+    }
+
+    [Fact]
+    public void A_remote_callers_trace_id_and_sampled_flag_do_not_decide_sampling()
+    {
+        var sampler = new SporAkademi.Api.Observability.ApiSampler(0.5);
+        var remote = new ActivityContext(ActivityTraceId.CreateFromString("00000000000000000000000000000001"), ActivitySpanId.CreateRandom(), ActivityTraceFlags.Recorded, isRemote: true);
+        var decisions = Enumerable.Range(0, 200)
+            .Select(_ => sampler.ShouldSample(new SamplingParameters(remote, remote.TraceId, "GET /api/v1/me", ActivityKind.Server)).Decision)
+            .ToHashSet();
+
+        // The same chosen trace id, sampled by the caller, is sometimes dropped and sometimes recorded.
+        decisions.ShouldBe([SamplingDecision.Drop, SamplingDecision.RecordAndSample], ignoreOrder: true);
+        new SporAkademi.Api.Observability.ApiSampler(0).ShouldSample(new SamplingParameters(remote, remote.TraceId, "x", ActivityKind.Server))
+            .Decision.ShouldBe(SamplingDecision.Drop);
+    }
+
+    [Fact]
+    public async Task An_unknown_protocol_turns_telemetry_off_and_the_api_still_starts()
+    {
+        var spans = new ConcurrentQueue<Activity>();
+        using var api = TelemetryApi(spans: spans, configuration: new Dictionary<string, string?>
+        {
+            ["OpenTelemetry:Otlp:Endpoint"] = "http://127.0.0.1:9",
+            ["OpenTelemetry:Otlp:Protocol"] = "http/json",
+            ["OpenTelemetry:Enabled"] = null,
+        });
+        using var client = api.CreateClient();
+
+        (await client.GetAsync(new Uri("/health/ready", UriKind.Relative), Ct)).StatusCode.ShouldBe(HttpStatusCode.OK);
+        api.Services.GetRequiredService<TracerProvider>().ForceFlush().ShouldBeTrue();
+
+        spans.ShouldBeEmpty();
     }
 
     /// <summary>The API with telemetry on (no OTLP endpoint) and in-memory exporters.</summary>

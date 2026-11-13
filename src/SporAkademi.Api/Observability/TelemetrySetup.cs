@@ -33,19 +33,20 @@ internal static class TelemetrySetup
 
     public static WebApplicationBuilder AddTelemetry(this WebApplicationBuilder builder)
     {
-        // DEC-553: only the W3C trace context crosses process boundaries; a caller's baggage is neither read nor passed on
-        // to the payment provider or any other outgoing call.
-        Sdk.SetDefaultTextMapPropagator(new TraceContextPropagator());
-        if (DistributedContextPropagator.Current is not TraceContextOnlyPropagator)
-        {
-            DistributedContextPropagator.Current = new TraceContextOnlyPropagator(DistributedContextPropagator.CreateDefaultPropagator());
-        }
-
         var version = typeof(TelemetrySetup).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion;
         builder.Services.AddOpenTelemetry()
             .ConfigureResource(resource => resource.AddService(ServiceName, serviceVersion: version))
             .WithTracing(tracing => tracing
-                .SetSampler(provider => TelemetrySettings.From(provider.GetRequiredService<IConfiguration>()).CreateSampler())
+                .SetSampler(provider =>
+                {
+                    var settings = TelemetrySettings.From(provider.GetRequiredService<IConfiguration>());
+                    if (settings.Enabled)
+                    {
+                        UseTraceContextOnly();
+                    }
+
+                    return settings.CreateSampler();
+                })
                 .AddSource(AppTelemetry.Name)
                 // Npgsql's own spans (db.query.text is the parameterised SQL; parameter values are never recorded).
                 .AddSource("Npgsql")
@@ -83,6 +84,20 @@ internal static class TelemetrySetup
         return builder;
     }
 
+    /// <summary>
+    /// DEC-553: only the W3C trace context crosses process boundaries; a caller's baggage is neither read nor passed on to
+    /// the payment provider or any other outgoing call. The propagators are process-wide, so they are changed only when
+    /// telemetry is on (once set they stay: trace context only is also safe for a later host in the same process).
+    /// </summary>
+    private static void UseTraceContextOnly()
+    {
+        Sdk.SetDefaultTextMapPropagator(new TraceContextPropagator());
+        if (DistributedContextPropagator.Current is not TraceContextOnlyPropagator)
+        {
+            DistributedContextPropagator.Current = new TraceContextOnlyPropagator(DistributedContextPropagator.CreateDefaultPropagator());
+        }
+    }
+
     /// <summary>Configures the provider once the service provider exists (the exporter depends on configuration read then).</summary>
     private static TracerProviderBuilder Deferred(this TracerProviderBuilder tracing, Action<IServiceProvider, TracerProviderBuilder> configure) =>
         tracing is IDeferredTracerProviderBuilder deferred
@@ -97,59 +112,79 @@ internal static class TelemetrySetup
 
 /// <summary>
 /// The <c>OpenTelemetry</c> section, with the standard <c>OTEL_EXPORTER_OTLP_ENDPOINT</c> and
-/// <c>OTEL_EXPORTER_OTLP_PROTOCOL</c> environment variables as fallbacks.
+/// <c>OTEL_EXPORTER_OTLP_PROTOCOL</c> environment variables as fallbacks. An invalid value never stops the API: telemetry
+/// is then off and <see cref="Problem"/> says why (logged as a warning at start).
 /// </summary>
-internal sealed record TelemetrySettings(Uri? Endpoint, OtlpExportProtocol Protocol, bool Enabled, double SampleRatio, TimeSpan MetricInterval, TimeSpan HealthInterval)
+internal sealed record TelemetrySettings(
+    Uri? Endpoint,
+    OtlpExportProtocol Protocol,
+    bool Enabled,
+    double SampleRatio,
+    TimeSpan MetricInterval,
+    TimeSpan HealthInterval,
+    string? Problem = null)
 {
     public static TelemetrySettings From(IConfiguration configuration)
     {
         ArgumentNullException.ThrowIfNull(configuration);
         var section = configuration.GetSection("OpenTelemetry");
+        var metricInterval = section.GetValue("Metrics:ExportInterval", TimeSpan.FromSeconds(15));
+        var healthInterval = section.GetValue("Metrics:HealthInterval", TimeSpan.FromSeconds(30));
+        TelemetrySettings Off(string problem) => new(null, OtlpExportProtocol.Grpc, false, 0, metricInterval, healthInterval, problem);
+
         var endpointText = FirstNonEmpty(section["Otlp:Endpoint"], configuration["OTEL_EXPORTER_OTLP_ENDPOINT"]);
         Uri? endpoint = null;
         if (endpointText is not null && (!Uri.TryCreate(endpointText, UriKind.Absolute, out endpoint) || endpoint.Scheme is not ("http" or "https")))
         {
-            throw new InvalidOperationException("OpenTelemetry:Otlp:Endpoint (or OTEL_EXPORTER_OTLP_ENDPOINT) must be an absolute http(s) URL.");
+            return Off("OpenTelemetry:Otlp:Endpoint (or OTEL_EXPORTER_OTLP_ENDPOINT) is not an absolute http(s) URL");
         }
 
-        var protocol = FirstNonEmpty(section["Otlp:Protocol"], configuration["OTEL_EXPORTER_OTLP_PROTOCOL"]) switch
+        OtlpExportProtocol protocol;
+        switch (FirstNonEmpty(section["Otlp:Protocol"], configuration["OTEL_EXPORTER_OTLP_PROTOCOL"]))
         {
-            null or "grpc" => OtlpExportProtocol.Grpc,
-            "http/protobuf" => OtlpExportProtocol.HttpProtobuf,
-            _ => throw new InvalidOperationException("OpenTelemetry:Otlp:Protocol must be grpc or http/protobuf."),
-        };
+            case null or "grpc":
+                protocol = OtlpExportProtocol.Grpc;
+                break;
+            case "http/protobuf":
+                protocol = OtlpExportProtocol.HttpProtobuf;
+                break;
+            default:
+                return Off("OpenTelemetry:Otlp:Protocol (or OTEL_EXPORTER_OTLP_PROTOCOL) is neither grpc nor http/protobuf");
+        }
+
         var ratio = section.GetValue("Tracing:SampleRatio", 1.0);
         if (ratio is < 0 or > 1)
         {
-            throw new InvalidOperationException("OpenTelemetry:Tracing:SampleRatio must be between 0 and 1.");
+            return Off("OpenTelemetry:Tracing:SampleRatio is not between 0 and 1");
         }
 
-        return new TelemetrySettings(
-            endpoint,
-            protocol,
-            endpoint is not null || section.GetValue("Enabled", false),
-            ratio,
-            section.GetValue("Metrics:ExportInterval", TimeSpan.FromSeconds(15)),
-            section.GetValue("Metrics:HealthInterval", TimeSpan.FromSeconds(30)));
+        return new TelemetrySettings(endpoint, protocol, endpoint is not null || section.GetValue("Enabled", false), ratio, metricInterval, healthInterval);
     }
 
     public Sampler CreateSampler() => Enabled ? new ApiSampler(SampleRatio) : new AlwaysOffSampler();
 
-    /// <summary>The exporter options for one signal, or <c>null</c> without an endpoint. OTLP/HTTP needs the signal's path.</summary>
+    /// <summary>
+    /// The exporter options for one signal, or <c>null</c> without an endpoint. OTLP/HTTP needs the signal's path, appended
+    /// to the endpoint's own path (<c>http://host:4318/otlp</c> → <c>http://host:4318/otlp/v1/traces</c>).
+    /// </summary>
     public OtlpExporterOptions? Exporter(string signalPath) => Endpoint is null
         ? null
         : new OtlpExporterOptions
         {
             Protocol = Protocol,
-            Endpoint = Protocol == OtlpExportProtocol.HttpProtobuf ? new Uri(Endpoint, signalPath) : Endpoint,
+            Endpoint = Protocol == OtlpExportProtocol.HttpProtobuf ? new Uri(WithTrailingSlash(Endpoint), signalPath) : Endpoint,
         };
+
+    private static Uri WithTrailingSlash(Uri uri) =>
+        uri.AbsolutePath.EndsWith('/') ? uri : new UriBuilder(uri) { Path = uri.AbsolutePath + "/" }.Uri;
 
     private static string? FirstNonEmpty(params string?[] values) => values.FirstOrDefault(v => !string.IsNullOrWhiteSpace(v));
 }
 
 /// <summary>
 /// DEC-551: a request's (and a job's) spans follow the root's decision, taken here by trace id ratio. A remote caller's
-/// "sampled" flag is not trusted (anyone on the internet can send one). Root client spans, i.e. database or HTTP calls
+/// "sampled" flag is not trusted (anyone on the internet can send one), nor its trace id (which it could choose to fall
+/// under the ratio): a request with a remote parent is sampled at random with the same ratio. Root client spans, i.e. database or HTTP calls
 /// made outside any request, job or outbox delivery (Hangfire's and the health publisher's polling), are dropped: they are
 /// noise, every few seconds.
 /// </summary>
@@ -169,7 +204,9 @@ internal sealed class ApiSampler(double ratio) : Sampler
 
         if (parent.IsRemote)
         {
-            return _root.ShouldSample(samplingParameters);
+#pragma warning disable CA5394 // Sampling, not security: an unpredictable decision is the point.
+            return new SamplingResult(ratio >= 1 || Random.Shared.NextDouble() < ratio ? SamplingDecision.RecordAndSample : SamplingDecision.Drop);
+#pragma warning restore CA5394
         }
 
         return new SamplingResult((parent.TraceFlags & ActivityTraceFlags.Recorded) != 0 ? SamplingDecision.RecordAndSample : SamplingDecision.Drop);

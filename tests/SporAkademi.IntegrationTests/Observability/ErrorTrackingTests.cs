@@ -46,6 +46,30 @@ public sealed class ErrorTrackingTests(DatabaseFixture database) : IntegrationTe
         transport.Envelopes.ShouldBeEmpty();
     }
 
+    /// <summary>Only <c>Sentry:Dsn</c> sends to Sentry; the SDK's own <c>SENTRY_DSN</c> fallback sends nothing (DEC-556).</summary>
+    [Fact]
+    public async Task The_sentry_dsn_environment_variable_alone_sends_nothing()
+    {
+        var previous = Environment.GetEnvironmentVariable("SENTRY_DSN");
+        Environment.SetEnvironmentVariable("SENTRY_DSN", FakeDsn);
+        try
+        {
+            var transport = new CapturingTransport();
+            using var api = SentryApi(transport, dsn: null);
+            using var client = api.CreateClient();
+
+            (await ThrowAsync(client, AccessToken)).StatusCode.ShouldBe(HttpStatusCode.InternalServerError);
+            await api.Services.GetRequiredService<IHub>().FlushAsync(TimeSpan.FromSeconds(5));
+
+            // The SDK itself takes SENTRY_DSN and starts; every event is dropped before it reaches the transport.
+            transport.Envelopes.ShouldBeEmpty();
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("SENTRY_DSN", previous);
+        }
+    }
+
     [Fact]
     public async Task With_a_dsn_an_unexpected_error_is_sent_without_personal_data()
     {

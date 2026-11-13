@@ -40,6 +40,12 @@ internal sealed partial class HealthMetrics(
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         var settings = TelemetrySettings.From(configuration);
+        if (settings.Problem is { } problem)
+        {
+            // The setting's name only, never its value (an endpoint may carry credentials).
+            LogTelemetryOff(logger, problem);
+        }
+
         if (!settings.Enabled)
         {
             return;
@@ -77,6 +83,9 @@ internal sealed partial class HealthMetrics(
         _last?.Entries.TryGetValue("outbox", out var outbox) == true && outbox.Data.TryGetValue(key, out var value) && value is int or long
             ? [new Measurement<long>(Convert.ToInt64(value, System.Globalization.CultureInfo.InvariantCulture))]
             : [];
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Telemetry is off: {Problem}")]
+    private static partial void LogTelemetryOff(ILogger logger, string problem);
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "Health metrics run failed with {Error}")]
     private static partial void LogCheckFailed(ILogger logger, string error);

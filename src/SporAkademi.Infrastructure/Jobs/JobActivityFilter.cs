@@ -17,6 +17,9 @@ internal sealed class JobActivityFilter : IServerFilter
     public void OnPerforming(PerformingContext context)
     {
         ArgumentNullException.ThrowIfNull(context);
+        // A job runs on a long-lived worker thread: should an earlier job's OnPerformed never have run, its span must not
+        // stay current and become this job's parent.
+        Activity.Current = null;
         var job = context.BackgroundJob.Job;
         if (job.Type == typeof(OutboxJobs) && job.Method.Name == nameof(OutboxJobs.ProcessAsync))
         {

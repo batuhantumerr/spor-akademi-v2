@@ -3,6 +3,7 @@ using System.Text.Json;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using SporAkademi.Application.Identity;
 using SporAkademi.Domain.Identity;
@@ -40,6 +41,13 @@ internal sealed class DuplicateUserEndpoint : IStartupFilter
             var db = services.GetRequiredService<AppDbContext>();
             db.Add(user);
             await db.SaveChangesAsync(context.RequestAborted);
+        }));
+        app.Map("/test/bad-uuid", branch => branch.Run(async context =>
+        {
+            // PostgreSQL quotes the rejected value in its message: 22P02 invalid input syntax for type uuid: "…".
+            var body = await context.Request.ReadFromJsonAsync<JsonElement>(context.RequestAborted);
+            var db = context.RequestServices.GetRequiredService<AppDbContext>();
+            await db.Database.ExecuteSqlAsync($"SELECT CAST({body.GetProperty("value").GetString()} AS uuid)", context.RequestAborted);
         }));
         app.Map("/test/throw", branch => branch.Run(async context =>
         {

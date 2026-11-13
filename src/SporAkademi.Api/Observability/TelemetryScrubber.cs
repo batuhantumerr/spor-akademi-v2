@@ -28,6 +28,10 @@ internal sealed class TelemetryScrubber : BaseProcessor<Activity>
 
     private static readonly string[] UrlKeys = ["url.full", "http.url", "http.target"];
 
+    private const string ExceptionEvent = "exception";
+
+    private static readonly string[] ErrorKeys = ["error.type", "db.response.status_code"];
+
     public override void OnEnd(Activity data)
     {
         ArgumentNullException.ThrowIfNull(data);
@@ -50,6 +54,35 @@ internal sealed class TelemetryScrubber : BaseProcessor<Activity>
         if (data.StatusDescription is not null && data.Source.Name != AppTelemetry.Name)
         {
             data.SetStatus(data.Status);
+        }
+
+        if (data.Events.Any(e => e.Name == ExceptionEvent))
+        {
+            Withhold(data);
+        }
+    }
+
+    /// <summary>
+    /// An exception event carries the exception's message and stack, and events cannot be removed from a span. Npgsql adds
+    /// one to a failed command's span, with PostgreSQL's message, which may quote a value (e.g. 22P02 invalid input syntax
+    /// for type uuid: "…"); Npgsql has no option to leave it out. Such a span is not exported (no exporter takes a span
+    /// that is not recorded); its error code and SQLSTATE move to the in-process parent (request, job or outbox delivery)
+    /// unless the parent already has them, so the failure stays visible in the trace.
+    /// </summary>
+    private static void Withhold(Activity data)
+    {
+        data.ActivityTraceFlags &= ~ActivityTraceFlags.Recorded;
+        if (data.Parent is not { } parent)
+        {
+            return;
+        }
+
+        foreach (var key in ErrorKeys)
+        {
+            if (data.GetTagItem(key) is { } value && parent.GetTagItem(key) is null)
+            {
+                parent.SetTag(key, value);
+            }
         }
     }
 

@@ -24,11 +24,11 @@ Hepsi yalnız 127.0.0.1'e bağlanır ve hiçbir şey kalıcı değildir; trace'l
 | Anahtar | Varsayılan | Açıklama |
 | --- | --- | --- |
 | `OpenTelemetry:Otlp:Endpoint` (yoksa `OTEL_EXPORTER_OTLP_ENDPOINT`) | yok | Yoksa hiçbir şey kaydedilmez ve gönderilmez; uygulama aynen çalışır. |
-| `OpenTelemetry:Otlp:Protocol` (yoksa `OTEL_EXPORTER_OTLP_PROTOCOL`) | `grpc` | `grpc` veya `http/protobuf`. HTTP'de `/v1/traces` ve `/v1/metrics` eklenir. Kimlik başlıkları standart `OTEL_EXPORTER_OTLP_HEADERS` ile verilir. |
+| `OpenTelemetry:Otlp:Protocol` (yoksa `OTEL_EXPORTER_OTLP_PROTOCOL`) | `grpc` | `grpc` veya `http/protobuf`. HTTP'de endpoint'in yoluna `/v1/traces` ve `/v1/metrics` eklenir. Geçersiz bir değer telemetriyi kapatır ve uyarı loglar; API yine açılır. Kimlik başlıkları standart `OTEL_EXPORTER_OTLP_HEADERS` ile verilir. |
 | `OpenTelemetry:Tracing:SampleRatio` | `1.0` | Kök span'lerin örneklenme oranı. |
 | `OpenTelemetry:Metrics:ExportInterval` / `HealthInterval` | 15 sn / 30 sn | Metrik gönderimi ve sağlık ölçümü aralığı. |
 | `OpenTelemetry:Enabled` | `false` | Endpoint olmadan kayıt (testlerde in-memory exporter için). |
-| `Sentry:Dsn` (ortam değişkeni `Sentry__Dsn`) | yok | Yoksa Sentry kapalıdır ve hiçbir şey göndermez. Gerçek DSN Deploy bloğunda. |
+| `Sentry:Dsn` (ortam değişkeni `Sentry__Dsn`) | yok | Yoksa Sentry hiçbir şey göndermez; SDK'nın kendi `SENTRY_DSN` değişkeni tek başına bir şey açmaz. Gerçek DSN Deploy bloğunda. |
 
 ## Sinyaller
 
@@ -54,7 +54,7 @@ Ayrıca HttpClient, SignalR bağlantıları ve .NET runtime (GC, thread pool) me
 
 ## Kişisel veri
 
-Hiçbir sinyal kişisel veri veya token taşımaz (NFR-PRV-03, DEC-551). Her span dışarı çıkmadan önce `TelemetryScrubber`'dan geçer. Query string'ler (`access_token`, SignalR bağlantı kimliği, ödeme dönüş token'ı, arama terimi) silinir. Header, cookie, istemci IP'si, user agent ve SQL parametreleri yazılmaz. Exception mesajı span'e eklenmez. Çağıranın baggage'ı okunmaz ve dışarı aktarılmaz; uzak çağıranın "sampled" bayrağına da güvenilmez (DEC-553). Kanıt: `IntegrationTests/Observability/TelemetryTests` ve `ErrorTrackingTests` (in-memory exporter, sahte Sentry transport'u). Kalan risk: Npgsql bir veritabanı hatasında span'e PostgreSQL'in hata metnini olay olarak ekleyebilir. Bu metinde değerin kendisi (`Detail`) yoktur, çünkü `Include Error Detail` kapalıdır.
+Hiçbir sinyal kişisel veri veya token taşımaz (NFR-PRV-03, DEC-551). Her span dışarı çıkmadan önce `TelemetryScrubber`'dan geçer. Query string'ler (`access_token`, SignalR bağlantı kimliği, ödeme dönüş token'ı, arama terimi) silinir. Header, cookie, istemci IP'si, user agent ve SQL parametreleri yazılmaz. Exception mesajı span'e eklenmez. Çağıranın baggage'ı okunmaz ve dışarı aktarılmaz; uzak çağıranın "sampled" bayrağına da güvenilmez (DEC-553). Kanıt: `IntegrationTests/Observability/TelemetryTests` ve `ErrorTrackingTests` (in-memory exporter, sahte Sentry transport'u). Npgsql başarısız bir komutun span'ine PostgreSQL'in hata metnini içeren bir `exception` olayı ekler; bu metin değeri alıntılayabilir. Böyle bir span dışarı aktarılmaz, hata kodu (`error.type`, SQLSTATE) üst span'de kalır.
 
 ## Alarmlar
 

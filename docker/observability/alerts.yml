@@ -23,7 +23,7 @@ groups:
       - alert: ApiSlowP95
         expr: |
           histogram_quantile(0.95,
-            sum by (le) (rate(http_server_request_duration_seconds_bucket{job="spor-akademi-api", http_route!~"/hubs/.*|/jobs.*"}[5m]))
+            sum by (le) (rate(http_server_request_duration_seconds_bucket{job="spor-akademi-api", http_route!="", http_route!~"/hubs/.*|/jobs/.*"}[5m]))
           ) > 0.5
           and sum(rate(http_server_request_duration_seconds_count{job="spor-akademi-api"}[5m])) > 0.05
         for: 10m
@@ -31,6 +31,8 @@ groups:
           severity: warning
         annotations:
           summary: The API's p95 latency is above 500 ms for 10 minutes (budget NFR-PRF-01, read 300 ms, write 500 ms).
+          # Excluded: SignalR (/hubs/..., long polling waits by design), the Hangfire panel (/jobs/{**path}) and requests
+          # matching no route (http_route is empty: 404/405, answered without work).
           description: The dashboard's per-route p95 shows which route; Jaeger shows its slowest traces.
 
       - alert: ApiNotReady
