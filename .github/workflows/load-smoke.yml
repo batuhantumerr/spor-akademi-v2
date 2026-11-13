@@ -67,9 +67,13 @@ jobs:
         env:
           INSTANCES: ${{ inputs.instances }}
         run: |
-          # The k6 image runs as an unprivileged user; it writes its results into the mounted directory.
-          chmod 777 perf/k6/out
+          # The k6 image runs as its own unprivileged user (uid 12345). The results directory goes to it, with the runner's
+          # group kept (setgid, group-writable) so run-k6.sh can add the pg_stat_statements file; nothing is world-writable.
+          sudo chown 12345:"$(id -g)" perf/k6/out && sudo chmod 2775 perf/k6/out
           bash scripts/perf/run-k6.sh --profile smoke --instances "$INSTANCES" --label smoke-ci
+      - name: Give the results back to the runner
+        if: always()
+        run: sudo chown -R "$(id -u)" perf/k6/out
       - name: Results in the job summary
         if: always()
         run: |

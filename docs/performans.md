@@ -117,7 +117,7 @@ Ne zaman yeniden bakılır: production metriklerinde (P4-07 dashboard'u) okuma p
 
 ### 4.5 Sorgu sayısı testleri (regresyon, DEC-566)
 
-`tests/SporAkademi.IntegrationTests/Performance/QueryCountTests.cs`: test API'sine bir EF interceptor'ı (`QueryCounter`) eklenir. Her uç nokta için okul iki öğrenci ve bir grupla, sonra sekiz öğrenci ve dört grupla ölçülür. Komut sayısı değişmemeli ve bütçeyi aşmamalı. Bağlantı açılışları da sayılır, çünkü her biri ayrıca RLS gidiş-dönüşü demek. Ölçülen değerler bütçe olarak yazıldı:
+`tests/SporAkademi.IntegrationTests/Performance/QueryCountTests.cs`: test API'sine bir EF interceptor'ı (`QueryCounter`) eklenir. Her uç nokta için okul iki öğrenci ve bir grupla, sonra sekiz öğrenci ve dört grupla ölçülür. Komut sayısı değişmemeli ve bütçeyi aşmamalı. Bağlantı açılışları da sayılır, çünkü her biri ayrıca RLS gidiş-dönüşü demek. Her ölçümden önce aynı istek bir kez ölçülmeden yapılır. Böylece küçük önbellekler (okulun saat dilimi, bayraklar, branş ve tesis) iki ölçümde de sıcak olur. Bütün olarak cache'lenen dashboard ve raporlar bunun dışındadır: onların maliyeti zaten cache kaçağıdır, büyütmenin yazmaları da onları ölçümden önce geçersiz kılar. Onlarda yalnız bayraklar ısıtılır. Ölçülen değerler bütçe olarak yazıldı:
 
 | Uç nokta | Komut | Bağlantı açılışı |
 | --- | ---: | ---: |
@@ -129,7 +129,7 @@ Ne zaman yeniden bakılır: production metriklerinde (P4-07 dashboard'u) okuma p
 | GET /groups/{id}/roster | 3 | 3 |
 | GET /students, GET /me/sessions | 2 | 2 |
 | GET /parent/children | 1 | 1 |
-| PUT yoklama | 11 | 5 |
+| PUT yoklama | 10 | 5 |
 | POST /payments | 12 | 4 |
 
 Bir değişiklik sayıyı artırırsa test, çalışan SQL'lerin listesiyle kırılır. Bilinçli bir artışta bütçe bu tabloyla birlikte güncellenir.
@@ -154,6 +154,7 @@ Bir değişiklik sayıyı artırırsa test, çalışan SQL'lerin listesiyle kır
 
 ## 6. Sınırlar ve sonraki adımlar
 
+- API `LoadTest` ortamında koştu (yükseltilmiş limitler, DEC-561). Production'a özgü davranışlar ölçümde yok: HSTS (yalnız Production ve HTTPS, DEC-501), proxy yapılandırılmamışsa açılış uyarısı (DEC-507), Production'daki limit doğrulaması (DEC-561) ve TLS. TLS Deploy bloğundaki Caddy'de sonlanacak; ölçümdeki proxy düz HTTP konuşuyor.
 - Ölçüm tek makinede ve ağ gecikmesi olmadan yapıldı. Production'da veritabanı ayrı bir sunucuda olursa her gidiş-dönüş ağ gecikmesi kadar pahalanır. O zaman §4.4'teki bağlantı açılışı sayısı (istek başına 4,6) önemli hale gelir; ilk bakılacak yer orası.
 - k6, API ve veritabanı aynı makinede CPU paylaşıyor. Sonuçlar kötü durum yönünde yanlı.
 - Okul sayısı varsayımın altında (14 / 50). Sorgular okul içi olduğu için etkisi tablo boyutuyla sınırlı.
