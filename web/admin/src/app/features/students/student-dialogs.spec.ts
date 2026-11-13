@@ -7,7 +7,12 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { GuardianDto, StudentDto } from '../../api/models';
 import { AuthService, CurrentUser } from '../../core/auth/auth.service';
 import { ui } from '../../core/i18n/tr';
-import { GuardianEditDialog, StudentEditDialog, StudentLeaveDialog } from './student-dialogs';
+import {
+  GuardianEditDialog,
+  StudentEditDialog,
+  StudentErasureDialog,
+  StudentLeaveDialog,
+} from './student-dialogs';
 
 const student: StudentDto = {
   id: 'st1',
@@ -188,6 +193,90 @@ describe('student dialogs', () => {
       expect(root.textContent).toContain(ui.studentDetail.guardianGone);
       expect(input('ge-email').value).toBe('zeynep@example.test');
       expect(buttonWith(ui.conflict.applyMine)).toBeUndefined();
+    });
+  });
+
+  describe('StudentErasureDialog', () => {
+    const select = (id: string) => root.querySelector(`#${id}`) as HTMLSelectElement;
+    async function choose(value: string): Promise<void> {
+      select('erasure-reason').value = value;
+      select('erasure-reason').dispatchEvent(new Event('change'));
+      await settle(fixture);
+    }
+    async function tick(): Promise<void> {
+      const box = input('erasure-confirm');
+      box.checked = true;
+      box.dispatchEvent(new Event('change'));
+      await settle(fixture);
+    }
+
+    it('warns that it is irreversible and that an active student leaves today', async () => {
+      await open(StudentErasureDialog, student);
+
+      expect(root.textContent).toContain(ui.erasure.irreversible);
+      expect(root.textContent).toContain(ui.erasure.activeEffect);
+      expect(root.textContent).toContain('Ayşe Yılmaz');
+    });
+
+    it('does not mention leaving for a student who already left', async () => {
+      await open(StudentErasureDialog, { ...student, status: 'Left', leftAt: '2026-12-01' });
+
+      expect(root.textContent).not.toContain(ui.erasure.activeEffect);
+    });
+
+    it('needs a reason and the confirmation before anything is sent', async () => {
+      await open(StudentErasureDialog, student);
+
+      await submit();
+
+      expect(root.textContent).toContain(ui.erasure.reasonRequired);
+      expect(root.textContent).toContain(ui.erasure.confirmRequired);
+      expect(select('erasure-reason').getAttribute('aria-invalid')).toBe('true');
+      backend.expectNone('/api/v1/students/st1/erasure');
+
+      await choose('DataSubjectRequest');
+      await submit();
+      expect(root.textContent).not.toContain(ui.erasure.reasonRequired);
+      expect(root.textContent).toContain(ui.erasure.confirmRequired);
+      backend.expectNone('/api/v1/students/st1/erasure');
+    });
+
+    it('sends the reason and closes with the anonymized student', async () => {
+      await open(StudentErasureDialog, student);
+      await choose('ConsentWithdrawn');
+      await tick();
+
+      await submit();
+
+      const request = backend.expectOne('/api/v1/students/st1/erasure');
+      expect(request.request.method).toBe('POST');
+      expect(request.request.body).toEqual({ reason: 'ConsentWithdrawn' });
+      const erased = {
+        ...student,
+        firstName: 'Anonim',
+        status: 'Left',
+        anonymizedAt: '2027-01-14T09:00:00Z',
+      };
+      request.flush(erased);
+      await settle(fixture);
+      expect(close).toHaveBeenCalledWith(erased);
+    });
+
+    it('shows the API error and stays open', async () => {
+      await open(StudentErasureDialog, student);
+      await choose('DataSubjectRequest');
+      await tick();
+      await submit();
+
+      backend
+        .expectOne('/api/v1/students/st1/erasure')
+        .flush({ code: 'Student.AlreadyAnonymized' }, { status: 422, statusText: 'Unprocessable' });
+      await settle(fixture);
+
+      expect(root.querySelector('[role="alert"]')?.textContent).toContain(
+        'Bu öğrenci zaten anonimleştirildi.',
+      );
+      expect(close).not.toHaveBeenCalled();
     });
   });
 

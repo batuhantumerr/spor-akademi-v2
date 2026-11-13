@@ -13,6 +13,7 @@ import { Api } from '../../api/api';
 import {
   apiV1GuardiansGet,
   apiV1GuardiansIdPut,
+  apiV1StudentsIdErasurePost,
   apiV1StudentsIdGet,
   apiV1StudentsIdLeavePost,
   apiV1StudentsIdPut,
@@ -20,7 +21,7 @@ import {
 import { GuardianDto, StudentDto } from '../../api/models';
 import { problemMessage, toProblem } from '../../core/api/problem';
 import { formatPhone } from '../../core/format/format';
-import { ui } from '../../core/i18n/tr';
+import { interpolate, ui } from '../../core/i18n/tr';
 import { SchoolClock } from '../../core/time/school-clock';
 import { ConflictState } from '../../shared/data/conflict-state';
 import { ConflictNoticeComponent } from '../../shared/ui/conflict-notice.component';
@@ -607,6 +608,160 @@ export class StudentLeaveDialog {
       } else {
         this.error.set(message);
       }
+      this.saving.set(false);
+    }
+  }
+}
+
+export const ERASURE_TITLE_ID = 'student-erasure-title';
+
+/** P4-06 (DEC-541): the reason codes the API accepts, in the order the dialog offers them. */
+export const ERASURE_REASONS = [
+  'DataSubjectRequest',
+  'ConsentWithdrawn',
+  'RecordedInError',
+] as const;
+
+/**
+ * P4-06 (NFR-PRV-05, DEC-540 – DEC-542): erases a student's personal data on request. Irreversible, so the dialog
+ * names what happens (an active student leaves today, guardians without other students and the documents are
+ * deleted, payments stay without a name), asks for a reason and for an explicit confirmation. Closes with the
+ * anonymized student.
+ */
+@Component({
+  selector: 'app-student-erasure-dialog',
+  changeDetection: ChangeDetectionStrategy.OnPush,
+  imports: [ReactiveFormsModule],
+  template: `
+    <form
+      class="max-h-[calc(100dvh-2rem)] w-[min(32rem,calc(100vw-2rem))] overflow-y-auto rounded-lg border border-border bg-background p-6 shadow-lg"
+      (submit)="$event.preventDefault(); save()"
+      novalidate
+    >
+      <h2 [id]="titleId" class="text-lg font-semibold">{{ text.title }}</h2>
+      <div
+        role="note"
+        class="mt-3 rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive"
+      >
+        <p class="font-semibold">{{ text.irreversible }}</p>
+        <ul class="mt-2 list-disc space-y-1 pl-5">
+          @if (active) {
+            <li>{{ text.activeEffect }}</li>
+          }
+          <li>{{ text.effect }}</li>
+          <li>{{ text.keptEffect }}</li>
+        </ul>
+      </div>
+      @if (error()) {
+        <p
+          role="alert"
+          class="mt-3 rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive"
+        >
+          {{ error() }}
+        </p>
+      }
+      <div class="mt-4">
+        <label class="field-label" for="erasure-reason">{{ text.reason }}</label>
+        <select
+          id="erasure-reason"
+          class="input"
+          [formControl]="reason"
+          [attr.aria-invalid]="!!reasonError()"
+          [attr.aria-describedby]="reasonError() ? 'erasure-reason-error' : null"
+        >
+          <option value="">{{ text.chooseReason }}</option>
+          @for (code of reasons; track code) {
+            <option [value]="code">{{ text.reasons[code] }}</option>
+          }
+        </select>
+        @if (reasonError(); as m) {
+          <p id="erasure-reason-error" class="field-error">{{ m }}</p>
+        }
+      </div>
+      <div class="mt-4 flex items-start gap-2">
+        <input
+          id="erasure-confirm"
+          type="checkbox"
+          class="mt-1 size-4 shrink-0"
+          [formControl]="confirmed"
+          [attr.aria-invalid]="!!confirmError()"
+          [attr.aria-describedby]="confirmError() ? 'erasure-confirm-error' : null"
+        />
+        <label for="erasure-confirm" class="text-sm">{{ confirmLabel }}</label>
+      </div>
+      @if (confirmError(); as m) {
+        <p id="erasure-confirm-error" class="field-error">{{ m }}</p>
+      }
+      <div class="mt-6 flex flex-wrap justify-end gap-2">
+        <button type="button" class="btn btn-secondary" (click)="ref.close()">
+          {{ actions.cancel }}
+        </button>
+        <button type="submit" class="btn btn-destructive" [disabled]="saving()">
+          {{ saving() ? text.erasing : text.erase }}
+        </button>
+      </div>
+    </form>
+  `,
+})
+export class StudentErasureDialog {
+  private readonly api = inject(Api);
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
+  protected readonly ref = inject<DialogRef<StudentDto>>(DialogRef);
+  private readonly student = inject<StudentDto>(DIALOG_DATA);
+
+  protected readonly titleId = ERASURE_TITLE_ID;
+  protected readonly text = ui.erasure;
+  protected readonly actions = ui.actions;
+  protected readonly reasons = ERASURE_REASONS;
+  protected readonly active = this.student.status === 'Active';
+  protected readonly confirmLabel = interpolate(this.text.confirm, {
+    name: `${this.student.firstName} ${this.student.lastName}`,
+  });
+  protected readonly reason = new FormControl('', { nonNullable: true });
+  protected readonly confirmed = new FormControl(false, { nonNullable: true });
+  protected readonly saving = signal(false);
+  protected readonly error = signal<string | null>(null);
+  private readonly submitted = signal(false);
+  private readonly values = signal({ reason: '', confirmed: false });
+
+  constructor() {
+    const subs = [
+      this.reason.valueChanges.subscribe((reason) => this.values.update((v) => ({ ...v, reason }))),
+      this.confirmed.valueChanges.subscribe((confirmed) =>
+        this.values.update((v) => ({ ...v, confirmed })),
+      ),
+    ];
+    inject(DestroyRef).onDestroy(() => subs.forEach((s) => s.unsubscribe()));
+  }
+
+  protected reasonError(): string | null {
+    return this.submitted() && this.values().reason === '' ? this.text.reasonRequired : null;
+  }
+
+  protected confirmError(): string | null {
+    return this.submitted() && !this.values().confirmed ? this.text.confirmRequired : null;
+  }
+
+  protected async save(): Promise<void> {
+    if (this.saving()) {
+      return;
+    }
+    this.submitted.set(true);
+    if (this.reasonError() || this.confirmError()) {
+      // Let the error messages render, then move focus to the first invalid field.
+      setTimeout(() => focusFirstInvalid(this.host.nativeElement));
+      return;
+    }
+    this.saving.set(true);
+    this.error.set(null);
+    try {
+      const erased = await this.api.invoke(apiV1StudentsIdErasurePost, {
+        id: this.student.id,
+        body: { reason: this.reason.value },
+      });
+      this.ref.close(erased);
+    } catch (err) {
+      this.error.set(problemMessage(toProblem(err)));
       this.saving.set(false);
     }
   }

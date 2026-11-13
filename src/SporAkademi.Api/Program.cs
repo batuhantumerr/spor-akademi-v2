@@ -3,6 +3,7 @@ using SporAkademi.Api;
 using SporAkademi.Api.Authentication;
 using SporAkademi.Api.Endpoints.Announcements;
 using SporAkademi.Api.Endpoints.Attendance;
+using SporAkademi.Api.Endpoints.Audit;
 using SporAkademi.Api.Endpoints.Billing;
 using SporAkademi.Api.Endpoints.Dashboard;
 using SporAkademi.Api.Endpoints.Enrollments;
@@ -20,6 +21,7 @@ using SporAkademi.Api.OpenApi;
 using SporAkademi.Api.Realtime;
 using SporAkademi.Api.Security;
 using SporAkademi.Application;
+using SporAkademi.Application.Abstractions.Auditing;
 using SporAkademi.Application.Abstractions.Authentication;
 using SporAkademi.Infrastructure;
 
@@ -46,6 +48,7 @@ builder.AddErrorTracking(); // P4-07: Sentry, sends only when Sentry:Dsn is conf
 builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<ICurrentUser, HttpCurrentUser>(); // before AddInfrastructure, which only adds a fallback
+builder.Services.AddScoped<IRequestCorrelation, HttpRequestCorrelation>(); // P4-05; likewise
 builder.Services.AddRealtime(); // P3-08; also before AddInfrastructure (its notifier is the fallback's replacement)
 builder.Services.AddApplication();
 builder.Services.AddInfrastructure(builder.Configuration);
@@ -114,6 +117,7 @@ app.MapOnlinePaymentEndpoints();
 app.MapDashboardEndpoints();
 app.MapReportEndpoints();
 app.MapParentEndpoints();
+app.MapAuditLogEndpoints();
 app.MapRealtime();
 app.MapJobsDashboard();
 app.MapApiDocument();

@@ -375,6 +375,46 @@ test('the reports page shows occupancy and revenue and downloads the revenue rep
   expect(bytes.subarray(3).toString('utf8')).toMatch(/^Ay;Liste tutarı \(TL\);/);
 });
 
+test('exports and erases a student on request; the audit log shows both (P4-05, P4-06)', async () => {
+  // The student registered above; nothing after this step uses them.
+  const testInfo = test.info();
+  await nav('Öğrenciler');
+  await page.getByRole('link', { name: `${names.studentFirst} ${names.studentLast}` }).click();
+  await expect(page).toHaveURL(/\/students\/[0-9a-f-]{36}$/);
+
+  const download = page.waitForEvent('download');
+  await page.getByRole('button', { name: 'Verilerini dışa aktar' }).click();
+  const file = await download;
+  expect(file.suggestedFilename()).toMatch(/^ogrenci-verisi-[0-9a-f-]{36}\.json$/);
+  const exported = JSON.parse(await readFile(await file.path(), 'utf8')) as {
+    format: string;
+    student: { lastName: string };
+    guardians: unknown[];
+  };
+  expect(exported.format).toBe('spor-akademi.student-data-export/v1');
+  expect(exported.student.lastName).toBe(names.studentLast);
+  expect(exported.guardians).toHaveLength(1);
+
+  await page.getByRole('button', { name: 'Kişisel verilerini sil' }).click();
+  const erase = dialog(page);
+  await expect(erase.getByText('Bu işlem geri alınamaz.')).toBeVisible();
+  await erase.getByRole('button', { name: 'Kalıcı olarak sil' }).click();
+  await expect(erase.getByText('Bir gerekçe seçin.')).toBeVisible();
+  await erase.getByLabel('Silme gerekçesi', { exact: true }).selectOption('DataSubjectRequest');
+  await erase.getByRole('checkbox').check();
+  await expectNoSeriousA11yViolations(page, testInfo, 'student-erasure');
+  await erase.getByRole('button', { name: 'Kalıcı olarak sil' }).click();
+  await expect(toast(page, 'Öğrencinin kişisel verileri silindi.')).toBeVisible();
+  await expect(page.getByRole('heading', { name: /^Anonim Öğrenci #/, level: 1 })).toBeVisible();
+
+  await nav('Erişim kayıtları');
+  await expect(page.getByRole('heading', { name: 'Erişim kayıtları', level: 1 })).toBeVisible();
+  await page.getByLabel('Kayıt türü', { exact: true }).selectOption('Student');
+  await expect(page.getByRole('cell', { name: /Talep üzerine silme/ }).first()).toBeVisible();
+  await expect(page.getByRole('cell', { name: /Dışa aktarma/ }).first()).toBeVisible();
+  await expectNoSeriousA11yViolations(page, testInfo, 'audit-log');
+});
+
 test('signs out; the refresh cookie is gone and a reload stays signed out', async () => {
   await page.getByRole('button', { name: 'Çıkış yap' }).click();
   await expect(page).toHaveURL(/\/login$/);

@@ -176,6 +176,8 @@ jobs:
         run: node scripts/check-contrast.mjs
       - name: UI text only in the dictionaries (P3-10, DEC-429)
         run: node scripts/check-i18n.mjs
+      - name: Privacy notice pages match docs/aydinlatma-metni.md (P4-06, DEC-543)
+        run: node scripts/privacy-notice.mjs --check
       - name: Secret scan (gitleaks, pinned binary + checksum, DEC-200)
         run: |
           curl -fsSLo gitleaks.tgz "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"

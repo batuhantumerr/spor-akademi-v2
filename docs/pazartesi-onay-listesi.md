@@ -452,6 +452,29 @@ Soru 14'ün Faz 3 adımı. Sahip kararları agent'a bıraktı (futbol okulu yön
 5. **Anonim kimlik uçları RLS'de token'dan bağımsız olarak platform kapsamında çalışır (DEC-526).** Giriş, refresh, şifre bağlantıları ve ödeme sağlayıcısı uçları `UsesPlatformData()` ile işaretli.
    - *Yazılımcı:* yeni bir anonim uç okullar arası arama yapacaksa bu işareti almalıdır; işaret yalnız RLS oturumunu etkiler. Öneri: kabul.
 
+### P4-05 Kişisel veri audit log'u (DEC-530 – DEC-537)
+
+1. **Saklama süresi 2 yıl, veritabanında sabit (DEC-536).** Süre `audit.purge_expired` fonksiyonunun içinde; uygulama rolü kesim tarihini seçemez ve tabloda `DELETE` yetkisi yoktur. Süreyi değiştirmek bir migration ister.
+   - *Yönetici:* bir şikâyet veya ihlal iki yıl geriye doğru incelenebilir; okulların varsayılan veri saklama süresiyle (24 ay) aynı ufuk.
+   - *Yazılımcı:* ele geçirilmiş bir uygulama kendi izini silemez. Onay ya da farklı süre.
+2. **Hangi okumalar kaydediliyor (DEC-532).** Öğrenci ayrıntısı, öğrenci listesi/araması (sorgu başına bir satır), veli telefon araması, belge listesi ve belge açma, fotoğraf (antrenör dahil), antrenör listesi/ayrıntısı ve veri dışa aktarma. Veli uygulaması ve antrenörün yoklama/kadro ekranları kaydedilmiyor.
+   - *Yönetici:* "bu öğrencinin verisine kim baktı" sorusu Ayarlar > Erişim kayıtları ekranından cevaplanır. Antrenör ekranlarının da kaydı istenirse tek satırlık bir ekleme.
+   - *Yazılımcı:* audit satırı yazılamazsa okuma 500 ile biter (kapalı başarısızlık). Onay ya da "açık başarısızlık" (veri gösterilir, hata loglanır) tercihi.
+3. **Kapsam dışı (DEC-531).** Ödeme, yoklama ve kayıt satırlarının değişiklikleri audit'e girmez (kendi `recorded_by`/iptal/iade izleri var); kullanıcının giriş sayaçları da girmez. Öneri: kabul.
+4. **RLS'de platform tablosu (DEC-535).** E-posta bağlantısıyla şifre belirleme ve Platform Admin'in okula yönetici açması okulsuz kapsamda çalıştığı için audit tablosu platform tablosu gibi korunur (okulsuz kapsam bütün okullara yazabilir ve okuyabilir). Okula bağlı kapsam yalnız kendi okulunu görür. Öneri: kabul.
+
+### P4-06 KVKK ilgili kişi başvuruları (DEC-538 – DEC-548)
+
+1. **Belgeler zip değil, kısa ömürlü imzalı bağlantıyla (DEC-539).** Dışa aktarılan JSON belgelerin bağlantılarını taşır; bağlantılar `Storage:DownloadLinkLifetime` sonunda (varsayılan 5 dakika, en çok 15) geçersizdir.
+   - *Yönetici:* belgeleri dışa aktarmadan hemen sonra indirmek gerekir; gerekirse dışa aktarma tekrarlanır (her biri audit'e yazılır).
+   - *Yazılımcı:* zip, büyük dosyaları API'den geçirir; gerekirse akışlı zip sonra eklenir. Onay ya da "zip isteriz".
+2. **Aktif öğrenci silinince bugün ayrılır (DEC-542).** Önce ayrıl, sonra sil diye iki adım istenmedi; onay penceresi bu etkiyi yazar. İleri tarihli kayıt varsa işlem yapılmaz (`422`). Öneri: kabul.
+3. **Başvuruyu okul yürütür (DEC-545).** Veli uygulamasında self servis dışa aktarma veya silme yok; veli okula başvurur, okul yöneticisi kimliği doğrulayıp işlemi yapar. Öneri: kabul; self servis istenirse ayrı madde.
+4. **Aydınlatma metni taslağı (DEC-543).** `docs/aydinlatma-metni.md` şablon; hukuki teyit ve okul başına doldurma sahipte. Uygulamalardaki `/aydinlatma-metni.html` kopyası metinle birlikte güncellenmeli.
+5. **Veri konumu: ADR-0014 (DEC-544, karar sahipte).** Öneri Türkiye'de barındırma (veritabanı, belgeler, yedekler). AB seçilirse standart sözleşme ve 5 iş günü içinde Kurul'a bildirim gerekir. Deploy bloğundan önce karar.
+6. **Para hareketi sürerken silme yok (DEC-546).** Bitmemiş online ödeme veya iade varken silme `Student.OpenPaymentActivity` ile reddedilir; yönetici sonucu bekler (mutabakat işi açık denemeleri süre sonunda kapatır). Öneri: kabul.
+7. **Aydınlatma metni tek kaynaktan (DEC-543).** HTML sayfaları md'den betikle üretilir, CI farkı yakalar. Metin artık ödeme iptal/iade açıklamalarının serbest metin olduğunu ve silinmediğini yazıyor (DEC-367); hukuki teyitte bu cümleye bakılmalı.
+
 ### P4-07 OpenTelemetry ve hata takibi (DEC-550 – DEC-557)
 
 Kararlar `Proposed (agent, 2026-11-13)`. Sahibin bakması gerekenler:

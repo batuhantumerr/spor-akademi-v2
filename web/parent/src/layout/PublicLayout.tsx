@@ -46,6 +46,15 @@ export function PublicLayout({
           {children}
         </div>
       </main>
+      {/* P4-06 (DEC-543): the privacy notice (KVKK md. 10), a static page served next to the app. */}
+      <footer className="px-4 pb-6 text-center text-xs">
+        <a
+          href="/aydinlatma-metni.html"
+          className="text-muted-foreground underline underline-offset-4 hover:text-foreground"
+        >
+          {text.app.privacyNotice}
+        </a>
+      </footer>
     </div>
   );
 }

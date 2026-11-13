@@ -211,6 +211,7 @@ test('admin panel screens meet WCAG 2.2 AA', async ({ page, context, browser }, 
     for (const [label, name] of [
       ['Veri saklama', 'settings-data-retention'],
       ['Aidat kuralları', 'settings-billing-rules'],
+      ['Erişim kayıtları', 'settings-audit-log'],
     ] as const) {
       await test.step(name, async () => {
         await nav(page, label);
