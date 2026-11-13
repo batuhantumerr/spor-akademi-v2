@@ -17,6 +17,7 @@ public sealed class NotificationRulesTests
         "SporAkademi.Application.Billing.SendDuesReminderEmail",
         "SporAkademi.Application.Billing.SendPaymentRefundedEmail",
         "SporAkademi.Application.Identity.Passwords.PasswordLinkMailer",
+        "SporAkademi.Application.Identity.Passwords.SendPasswordChangedEmail", // P4-03 (DEC-512)
     ];
 
     [Fact]

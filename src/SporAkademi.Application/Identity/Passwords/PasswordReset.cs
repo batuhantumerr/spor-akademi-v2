@@ -102,6 +102,30 @@ internal sealed class PublishParentInvited(IOutbox outbox) : IDomainEventConsume
     }
 }
 
+/// <summary>
+/// P4-03 (DEC-512): a password change becomes the notice to the account's owner, in the same transaction. The first
+/// password a user sets themselves is not announced.
+/// </summary>
+internal sealed class PublishPasswordChanged(IOutbox outbox, IUserRepository users) : IDomainEventConsumer<PasswordChanged>
+{
+    public async Task<Result> Handle(PasswordChanged domainEvent, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(domainEvent);
+        if (domainEvent.FirstPassword)
+        {
+            return Result.Success();
+        }
+
+        var user = await users.GetByIdAsync(domainEvent.UserId, cancellationToken);
+        if (user is not null)
+        {
+            outbox.Enqueue(new PasswordChangedMessage(user.Id.Value), user.TenantId?.Value);
+        }
+
+        return Result.Success();
+    }
+}
+
 /// <summary>P2-F4: a committed new account becomes the welcome e-mail message, in the same transaction (DEC-351).</summary>
 internal sealed class PublishAccountOpened(IOutbox outbox) : IDomainEventConsumer<UserCreated>
 {

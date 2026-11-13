@@ -6,6 +6,10 @@ using System.Text.Json;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+using SporAkademi.Application.Abstractions.Messaging;
+using SporAkademi.Application.Students.Documents;
+using SporAkademi.Domain.SharedKernel;
 using SporAkademi.IntegrationTests.Infrastructure;
 
 namespace SporAkademi.IntegrationTests.Security;
@@ -170,6 +174,7 @@ public sealed class ApiRateLimitingTests(DatabaseFixture database) : Integration
     [InlineData("UserPermitsPerMinute", "301")]
     [InlineData("SchoolWritePermitsPerMinute", "301")]
     [InlineData("AnonymousPermitsPerMinute", "121")]
+    [InlineData("ConcurrentUploadsPerSchool", "4")]
     [Trait("Story", "P4-08")]
     public void Production_refuses_to_start_with_a_limit_above_the_production_value(string setting, string value)
     {
@@ -213,6 +218,60 @@ public sealed class ApiRateLimitingTests(DatabaseFixture database) : Integration
         using var request = new HttpRequestMessage(HttpMethod.Post, "/api/v1/auth/refresh");
         request.Headers.Add("X-Requested-With", "XMLHttpRequest");
         return await anonymous.SendAsync(request, Ct);
+    }
+
+    [Fact]
+    [Trait("Story", "P4-03")]
+    public async Task Uploads_in_flight_are_capped_per_school()
+    {
+        // A04 (DEC-514): the form is read into memory, so N parallel uploads cost N x 5 MB; one school cannot hold more
+        // than the cap at a time and another school is not affected.
+        var gate = new GatedUpload();
+        using var api = Limited(uploads: 1).WithWebHostBuilder(builder => builder.ConfigureServices(services =>
+            services.AddScoped<ICommandHandler<UploadStudentDocumentCommand, StudentDocumentDto>>(_ => gate)));
+        using var first = SignedIn(api, SchoolAdmin(SchoolA));
+        using var second = SignedIn(api, SchoolAdmin(SchoolA));
+        using var otherSchool = SignedIn(api, SchoolAdmin(SchoolB));
+        var student = Guid.CreateVersion7();
+
+        // The first upload stays inside the endpoint until the gate opens, so its permit stays taken.
+        var inFlight = UploadAsync(first, student);
+        await gate.Entered.Task.WaitAsync(TimeSpan.FromSeconds(30), Ct);
+
+        await ShouldBeRateLimitedAsync(await UploadAsync(second, student));
+        // Another school has slots of its own: its upload gets as far as the handler (which is also gated), not a 429.
+        var other = UploadAsync(otherSchool, student);
+
+        gate.Open.SetResult();
+        (await inFlight).StatusCode.ShouldNotBe(HttpStatusCode.TooManyRequests);
+        (await other).StatusCode.ShouldNotBe(HttpStatusCode.TooManyRequests);
+        // The permit is back once the first upload is over.
+        (await UploadAsync(second, student)).StatusCode.ShouldNotBe(HttpStatusCode.TooManyRequests);
+    }
+
+    /// <summary>Stands in for the upload handler: reports that a request got inside, then waits to be released.</summary>
+    private sealed class GatedUpload : ICommandHandler<UploadStudentDocumentCommand, StudentDocumentDto>
+    {
+        public TaskCompletionSource Entered { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public TaskCompletionSource Open { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public async Task<Result<StudentDocumentDto>> Handle(UploadStudentDocumentCommand command, CancellationToken cancellationToken)
+        {
+            Entered.TrySetResult();
+            await Open.Task.WaitAsync(cancellationToken);
+            return Result.Failure<StudentDocumentDto>(Error.Validation("Test.Gated", "Stopped by the test."));
+        }
+    }
+
+    private static Uri UploadUrl(Guid student) => new(string.Create(CultureInfo.InvariantCulture, $"/api/v1/students/{student}/documents"), UriKind.Relative);
+
+    private static async Task<HttpResponseMessage> UploadAsync(HttpClient client, Guid student)
+    {
+        using var form = new MultipartFormDataContent();
+        form.Add(new StringContent("Photo"), "type");
+        form.Add(new ByteArrayContent([1, 2, 3]), "file", "photo.png");
+        return await client.PostAsync(UploadUrl(student), form, Ct);
     }
 
     private static async Task ShouldBeRateLimitedAsync(HttpResponseMessage response)
@@ -306,7 +365,7 @@ public sealed class ApiRateLimitingTests(DatabaseFixture database) : Integration
         return client;
     }
 
-    private WebApplicationFactory<Program> Limited(int user = 1_000, int schoolWrites = 1_000, int anonymous = 1_000, string? knownProxy = null) =>
+    private WebApplicationFactory<Program> Limited(int user = 1_000, int schoolWrites = 1_000, int anonymous = 1_000, string? knownProxy = null, int uploads = 1_000) =>
         Api.WithWebHostBuilder(builder =>
         {
             RemoteAddress.Enable(builder);
@@ -316,6 +375,7 @@ public sealed class ApiRateLimitingTests(DatabaseFixture database) : Integration
                     ["RateLimiting:UserPermitsPerMinute"] = user.ToString(CultureInfo.InvariantCulture),
                     ["RateLimiting:SchoolWritePermitsPerMinute"] = schoolWrites.ToString(CultureInfo.InvariantCulture),
                     ["RateLimiting:AnonymousPermitsPerMinute"] = anonymous.ToString(CultureInfo.InvariantCulture),
+                    ["RateLimiting:ConcurrentUploadsPerSchool"] = uploads.ToString(CultureInfo.InvariantCulture),
                     ["ForwardedHeaders:KnownProxies:0"] = knownProxy,
                 }));
         });
