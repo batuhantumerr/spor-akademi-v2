@@ -215,4 +215,4 @@ Migration ekleyen işler (RLS → audit log → KVKK başvuruları) art arda yap
   - RLS, uygulama filtresi kapalıyken bile okullar arası okuma ve yazmayı engelliyor.
   - Kişisel veri erişimi audit log'da; ilgili kişinin verisi dışa aktarılıp silinebiliyor.
   - Trace ve metrikler dashboard'da görünüyor; yük testi bütçe içinde ve iki API örneğiyle çalışıyor; geri yükleme tatbikatı süresiyle belgeli; bir özellik okul bazında bayrakla açılıp kapanıyor.
-- [ ] P4-R2 Faz 4 geçişi ve `v0.4.0` etiketi (sahip)
+- [x] P4-R2 Faz 4 geçişi (sahip onayı 2026-11-16) ve `v0.4.0` etiketi (sahip talimatıyla bu PR'ın merge commit'inde, Faz 4)
