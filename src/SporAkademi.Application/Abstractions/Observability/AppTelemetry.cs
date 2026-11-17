@@ -26,6 +26,13 @@ public static class AppTelemetry
     public static readonly Counter<long> OutboxMessages = Meter.CreateCounter<long>(
         "spor_akademi.outbox.messages", "{message}", "Outbox delivery attempts by result and message type.");
 
+    /// <summary>
+    /// Integration messages through the broker (P5-03) by <c>operation</c> (published, consumed, duplicate, failed, dead_lettered,
+    /// broker_unavailable) and <c>message_type</c>.
+    /// </summary>
+    public static readonly Counter<long> MessagingMessages = Meter.CreateCounter<long>(
+        "spor_akademi.messaging.messages", "{message}", "Broker messages by operation and message type.");
+
     /// <summary>Online payment notifications (webhook, browser return, reconcile) by <c>outcome</c> and resulting <c>status</c>.</summary>
     public static readonly Counter<long> PaymentNotifications = Meter.CreateCounter<long>(
         "spor_akademi.payments.online.notifications", "{notification}", "Online payment notifications by outcome and resulting status.");

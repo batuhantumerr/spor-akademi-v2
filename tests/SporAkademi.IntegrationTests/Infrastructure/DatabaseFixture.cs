@@ -96,7 +96,7 @@ public sealed partial class DatabaseFixture : IAsyncLifetime
     private static string ReadPostgresImage() => ReadImage(PostgresImage());
 
     /// <summary>The image (tag + digest) of a compose.yaml service, so tests run exactly what development runs.</summary>
-    private static string ReadImage(Regex pattern)
+    internal static string ReadImage(Regex pattern)
     {
         var compose = File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "Infrastructure", "compose.yaml"));
         var match = pattern.Match(compose);

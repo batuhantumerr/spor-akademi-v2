@@ -35,6 +35,7 @@ using SporAkademi.Infrastructure.Enrollments;
 using SporAkademi.Infrastructure.Groups;
 using SporAkademi.Infrastructure.Identity;
 using SporAkademi.Infrastructure.Jobs;
+using SporAkademi.Infrastructure.Messaging;
 using SporAkademi.Infrastructure.Notifications;
 using SporAkademi.Infrastructure.Organization;
 using SporAkademi.Infrastructure.Outbox;
@@ -161,6 +162,8 @@ public static class DependencyInjection
             .AddCheck<DocumentStorageHealthCheck>("storage", HealthStatus.Degraded, tags: ["ready"])
             // A broken outbox degrades readiness but never fails it; the database check covers outages.
             .AddCheck<OutboxHealthCheck>("outbox", failureStatus: HealthStatus.Degraded, tags: ["ready"])
+            // An unreachable broker (when configured) degrades readiness; the outbox keeps the messages (P5-03).
+            .AddCheck<RabbitMqHealthCheck>("rabbitmq", failureStatus: HealthStatus.Degraded, tags: ["ready"])
             // A stopped job server degrades readiness too (DEC-335).
             .AddCheck<JobsHealthCheck>("jobs", failureStatus: HealthStatus.Degraded, tags: ["ready"])
             // A school's past month left open by a failing close job degrades readiness (DEC-375).
@@ -219,6 +222,27 @@ internal static class OutboxRegistration
         // Always registered; it returns at once unless Outbox:Scheduler is Worker (read at start, so test hosts can set it).
         services.AddHostedService<OutboxWorker>();
 
+        services.AddRabbitMq(configuration);
+
+        return services;
+    }
+
+    /// <summary>
+    /// P5-03: the broker connection, the consumers and their catalog. Always registered and inert without
+    /// <c>ConnectionStrings:RabbitMq</c> (read when first used, so test hosts can set it); the outbox then delivers in process.
+    /// </summary>
+    public static IServiceCollection AddRabbitMq(this IServiceCollection services, IConfiguration configuration)
+    {
+        services.AddOptions<RabbitMqOptions>()
+            .Bind(configuration.GetSection(RabbitMqOptions.Section))
+            .PostConfigure<IConfiguration>((options, root) => options.ConnectionString = root.GetConnectionString(RabbitMqOptions.ConnectionStringName))
+            .Validate(o => o.IsValid(), "The RabbitMq configuration section or ConnectionStrings:RabbitMq has an invalid value.")
+            .ValidateOnStart();
+        services.AddSingleton<ConsumerCatalog>();
+        services.AddSingleton<RabbitMqBroker>();
+
+        // Selectable by host: a process without consumers (Consumers:Enabled=false) or with some modules only (P5-04).
+        services.AddHostedService<RabbitMqConsumerService>();
         return services;
     }
 

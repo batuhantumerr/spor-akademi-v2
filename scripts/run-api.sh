@@ -22,6 +22,15 @@ if [[ -n "${VALKEY_PASSWORD:-}" && "$VALKEY_PASSWORD" != change-me* ]] \
 else
   echo "run-api: Valkey not running (docker compose --profile cache up -d --wait); in-memory cache only"
 fi
+# Optional (DEC-628): integration events go through RabbitMQ when the compose "messaging" profile's rabbitmq service is
+# running; otherwise the outbox delivers in process as before. The user name is fixed in compose.yaml.
+if [[ -n "${RABBITMQ_PASSWORD:-}" ]] \
+  && (cd "$REPO_ROOT" && docker compose --profile messaging ps --status running --services 2>/dev/null | grep -qx rabbitmq); then
+  export ConnectionStrings__RabbitMq="amqp://spor_akademi:$RABBITMQ_PASSWORD@127.0.0.1:${RABBITMQ_HOST_PORT:-55672}/"
+  echo "run-api: integration events go through RabbitMQ (management UI http://127.0.0.1:${RABBITMQ_UI_HOST_PORT:-55673})"
+else
+  echo "run-api: RabbitMQ not running (docker compose --profile messaging up -d --wait); the outbox delivers in process"
+fi
 # Optional (DEC-357): e-mail goes to the local Mailpit catcher when the compose "mail" profile's mailpit service is
 # running (plain SMTP on 127.0.0.1, nothing is relayed); otherwise the API only logs each e-mail's template name.
 if (cd "$REPO_ROOT" && docker compose --profile mail ps --status running --services 2>/dev/null | grep -qx mailpit); then

@@ -232,7 +232,7 @@ Ek: başka okulun kaydı → `404`; `IgnoreQueryFilters()` sadece `Tenancy`'de; 
 ### 5.6 Domain event'leri ve modül iletişimi (ADR-0009)
 
 - Event'ler aynı transaction içinde, commit'ten önce; hata olursa her şey geri alınır.
-- Event işleyicileri sadece DB değişikliği yapar; dış sistemler faz 2'de outbox ile.
+- Event işleyicileri sadece DB değişikliği yapar; dış sistemler faz 2'de outbox ile, faz 5'te isteğe bağlı olarak RabbitMQ üzerinden (5.11).
 - Senkron komut listesi: `Tenancy → IIdentityModule.CreateSchoolAdminAsync` (US-01 atomik).
 
 ### 5.7 Kimlik doğrulama (ADR-0006)
@@ -271,6 +271,13 @@ Ek: başka okulun kaydı → `404`; `IgnoreQueryFilters()` sadece `Tenancy`'de; 
 
 Planlanan production yapısı (sunucu alındığında): tek VPS, Caddy (TLS, yönlendirme, HSTS) → nginx (statik admin) ve API; ortam başına ayrı PostgreSQL; Seq sadece SSH tüneliyle; `app.` ve `staging.` alt alan adları.
 
+### 5.11 Entegrasyon event'leri ve RabbitMQ (ADR-0015, P5-03)
+
+- Outbox kalır; `ConnectionStrings:RabbitMq` varsa teslim yolu broker olur, yoksa süreç içi teslim (varsayılan) aynen çalışır.
+- Topic exchange (`spor-akademi.events`), yönlendirme anahtarı mesaj türü; her `IOutboxMessageHandler` için ayrı quorum kuyruğu, TTL'li yeniden deneme kuyruğu ve tek dead-letter kuyruğu.
+- At-least-once: outbox satırı publisher confirm'den sonra işlenmiş sayılır, broker kesintisi deneme tüketmez; tüketici `outbox.inbox` ile idempotent.
+- Tüketici mesajın okul bağlamında (`tenant-id` başlığı) çalışır; W3C trace context başlıkta taşınır. Tüketiciler modül başına seçilebilir (`RabbitMq:Consumers`).
+
 ---
 
 ## 6. API kuralları
@@ -307,6 +314,7 @@ Her ADR'ın bağlamı, seçenekleri, kararı ve sonuçları Ek F'de özetlenmiş
 | 0011 | Production migration stratejisi (bundle + SQL incelemesi) | Accepted |
 | 0012 | Veli uygulaması teknoloji yığını ([docs/adr](adr/0012-veli-uygulamasi-teknoloji-yigini.md)) | Accepted |
 | 0013 | Okul başına alt alan adı: şimdi yapılmaz ([docs/adr](adr/0013-okul-alt-alan-adi.md)) | Accepted |
+| 0015 | Entegrasyon event'leri için RabbitMQ ([docs/adr](adr/0015-entegrasyon-event-leri-rabbitmq.md)) | Proposed |
 
 ---
 
