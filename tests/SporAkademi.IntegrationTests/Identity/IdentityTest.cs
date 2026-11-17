@@ -85,12 +85,47 @@ public abstract class IdentityTest(DatabaseFixture database) : IntegrationTest(d
     protected Task<HttpResponseMessage> LoginAsync(string email, string password) =>
         Http.PostAsJsonAsync("/api/v1/auth/login", new { email, password }, TestContext.Current.CancellationToken);
 
-    /// <summary>Logs in and returns the access token and the refresh cookie value.</summary>
+    /// <summary>
+    /// Logs in and returns the access token and the refresh cookie value. A Platform Admin must have MFA (P5-01), so the
+    /// first login enrols it and later ones answer the second step with one of the recovery codes shown at enrolment:
+    /// the tests that only need a Platform Admin session do not care how it is reached, and no clock has to move.
+    /// </summary>
     protected async Task<Session> LoginOkAsync(string email, string password = OwnPassword)
     {
         var response = await LoginAsync(email, password);
+        if (response.StatusCode == HttpStatusCode.Accepted)
+        {
+            return await SecondStepAsync(email, response);
+        }
+
         response.StatusCode.ShouldBe(HttpStatusCode.OK);
         return await SessionFromAsync(response);
+    }
+
+    private readonly Dictionary<string, Queue<string>> _recoveryCodes = new(StringComparer.Ordinal);
+
+    private async Task<Session> SecondStepAsync(string email, HttpResponseMessage challenge)
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var body = await challenge.Content.ReadFromJsonAsync<JsonElement>(Json, ct);
+        var token = body.GetProperty("mfaToken").GetString()!;
+        if (body.GetProperty("purpose").GetString() == "Verify")
+        {
+            var verified = await Http.PostAsJsonAsync("/api/v1/auth/mfa/verify", new { mfaToken = token, code = _recoveryCodes[email].Dequeue() }, ct);
+            verified.StatusCode.ShouldBe(HttpStatusCode.OK);
+            return await SessionFromAsync(verified);
+        }
+
+        var started = await Http.PostAsJsonAsync("/api/v1/auth/mfa/enrollment/start", new { mfaToken = token }, ct);
+        var secret = (await started.Content.ReadFromJsonAsync<JsonElement>(Json, ct)).GetProperty("secret").GetString()!;
+        var code = Totp.Compute(Base32.Decode(secret), Totp.StepOf(Api.Clock.GetUtcNow()));
+        var done = await Http.PostAsJsonAsync("/api/v1/auth/mfa/enrollment/confirm", new { mfaToken = token, code }, ct);
+        done.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var enrolled = await done.Content.ReadFromJsonAsync<JsonElement>(Json, ct);
+        _recoveryCodes[email] = new Queue<string>(enrolled.GetProperty("recoveryCodes").EnumerateArray().Select(c => c.GetString()!));
+        var cookie = RefreshCookieOf(done);
+        cookie.ShouldNotBeNull();
+        return new Session(enrolled.GetProperty("accessToken").GetString()!, cookie.Value, JsonSerializer.Deserialize<SessionBody>(enrolled.GetRawText(), Json)!);
     }
 
     protected Task<HttpResponseMessage> RefreshAsync(string? refreshToken, bool withHeader = true) =>

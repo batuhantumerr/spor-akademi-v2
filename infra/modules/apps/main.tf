@@ -8,6 +8,7 @@ locals {
     {
       ConnectionStrings__App = "conn-app"
       Jwt__SigningKey        = "jwt-signing-key"
+      Mfa__EncryptionKey     = "mfa-encryption-key"
     },
     var.redis_enabled ? { ConnectionStrings__Cache = "conn-cache" } : {},
     var.extra_secret_env,

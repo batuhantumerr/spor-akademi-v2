@@ -263,6 +263,7 @@ jobs:
           docker run -d --name api --network smoke -p 127.0.0.1:8080:8080 \
             -e ConnectionStrings__App="Host=pg;Database=spor_akademi;Username=spor_akademi_app;Password=smokeapp" \
             -e Jwt__SigningKey=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef \
+            -e Mfa__EncryptionKey=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef \
             spor-akademi-api:ci
           for i in $(seq 1 30); do curl -fsS http://127.0.0.1:8080/health/live >/dev/null 2>&1 && break; sleep 1; done
           curl -fsS --max-time 10 http://127.0.0.1:8080/health/live

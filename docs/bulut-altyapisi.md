@@ -94,6 +94,7 @@ flowchart LR
 | `conn-app` | sahip | `Host=<postgres_fqdn>;Database=spor_akademi;Username=spor_akademi_app;Password=...;SSL Mode=Require` |
 | `conn-migrator` | sahip | Aynı, `spor_akademi_migrator` rolüyle |
 | `jwt-signing-key` | sahip | **64 karakter onaltılık (hex)**, 32 bayt rastgele: `openssl rand -hex 32` (JWT anahtarı döndürme runbook'u: DEC-518) |
+| `mfa-encryption-key` | sahip | Tam 32 bayt rastgele, 64 hex karakter (`openssl rand -hex 32`); TOTP sırlarını şifreler. **Zorunlu**: yoksa API açılmaz. Değiştirmek bütün MFA kayıtlarını okunamaz yapar (DEC-602): önce döndürme tasarlanmalı, yoksa herkesin MFA'sı Platform Admin'ce sıfırlanır. JWT anahtarından bağımsızdır |
 | `conn-cache` | sahip | Yalnız Redis açıksa: `<host>:6380,password=...,ssl=True` |
 | `rabbitmq-password` | sahip | Yalnız RabbitMQ açıksa |
 | `ghcr-pull-token` | sahip | Yalnız özel paketlerde; `read:packages` |
@@ -245,7 +246,7 @@ Batı Avrupa (`westeurope`, Hollanda) ve Almanya Batı-Orta (`germanywestcentral
    ortamı). Sunucu bir kez yeniden başlar (`pg_stat_statements`).
 7. PostgreSQL'e VNet içinden bağlan (örn. geçici bir kapsayıcı ya da Azure Cloud Shell VNet entegrasyonu), `postgres-admin-password`
    ile rolleri kur (`10-create-roles.sh` mantığı), `CREATE EXTENSION pg_stat_statements`, yedek rollerini dene (bölüm 8).
-8. Key Vault sırlarını yaz: `conn-app`, `conn-migrator`, `jwt-signing-key` (ve gerekene göre `conn-cache`, `rabbitmq-password`,
+8. Key Vault sırlarını yaz: `conn-app`, `conn-migrator`, `jwt-signing-key`, `mfa-encryption-key` (ve gerekene göre `conn-cache`, `rabbitmq-password`,
    `ghcr-pull-token`). Yazan kullanıcıya `Key Vault Secrets Officer` gerekir (apply eden kullanıcıya otomatik verilir).
 9. **Aşama 2:** `deploy_apps=true` ile `plan` / `apply`. Ardından `az containerapp job start -n migrator -g rg-spor-<ortam>` ile
    migration'ları çalıştır; `api` hazır olunca `gateway_fqdn` çıktısına bak.

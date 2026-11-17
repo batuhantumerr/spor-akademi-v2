@@ -7,8 +7,10 @@ import {
   AuthService,
   CurrentUser,
   LOGIN_RESTORE_WAIT_MS,
+  MfaChallenge,
   REFRESH_LOCK,
   RESTORE_RETRY_DELAY_MS,
+  isMfaChallenge,
   sameSubject,
 } from './auth.service';
 
@@ -83,6 +85,69 @@ describe('AuthService', () => {
 
       expect(restored).toBe(false);
       expect(auth.isAuthenticated()).toBe(false);
+    });
+  });
+
+  describe('two-step verification (P5-01)', () => {
+    const challenge: MfaChallenge = { purpose: 'Verify', mfaToken: 'challenge-1', expiresIn: 300 };
+
+    it('keeps no session when the password is right but a second step is due', () => {
+      let result: CurrentUser | MfaChallenge | undefined;
+      auth.login('admin@example.test', 'Sentetik-Sifre-2027').subscribe((r) => (result = r));
+      backend
+        .expectOne('/api/v1/auth/login')
+        .flush(challenge, { status: 202, statusText: 'Accepted' });
+
+      expect(result && isMfaChallenge(result)).toBe(true);
+      expect(result).toEqual(challenge);
+      backend.expectNone('/api/v1/me');
+      expect(auth.token()).toBeNull();
+      expect(auth.isAuthenticated()).toBe(false);
+    });
+
+    it('signs in with the code: the challenge token and the code go to the verify endpoint', () => {
+      let signedIn: CurrentUser | undefined;
+      auth.verifyMfa('challenge-1', '123456').subscribe((u) => (signedIn = u));
+      const request = backend.expectOne('/api/v1/auth/mfa/verify');
+      expect(request.request.body).toEqual({ mfaToken: 'challenge-1', code: '123456' });
+      request.flush({ accessToken: 'token-mfa', expiresIn: 900 });
+      backend.expectOne('/api/v1/me').flush(user);
+
+      expect(signedIn).toEqual(user);
+      expect(auth.token()).toBe('token-mfa');
+      expect(auth.isAuthenticated()).toBe(true);
+    });
+
+    it('leaves the user signed out when the code is wrong', () => {
+      let code: string | undefined;
+      auth.verifyMfa('challenge-1', '000000').subscribe({
+        error: (err: { error?: { code?: string } }) => (code = err.error?.code),
+      });
+      backend
+        .expectOne('/api/v1/auth/mfa/verify')
+        .flush({ code: 'Mfa.CodeInvalid' }, { status: 422, statusText: 'Unprocessable' });
+
+      expect(code).toBe('Mfa.CodeInvalid');
+      expect(auth.isAuthenticated()).toBe(false);
+    });
+
+    it('enrols before it has a session and returns the recovery codes with the signed-in user', () => {
+      let started: unknown;
+      auth.startMfaEnrollment('challenge-2').subscribe((s) => (started = s));
+      const start = backend.expectOne('/api/v1/auth/mfa/enrollment/start');
+      expect(start.request.body).toEqual({ mfaToken: 'challenge-2' });
+      start.flush({ otpAuthUri: 'otpauth://totp/x', secret: 'ABCD' });
+      expect(started).toEqual({ otpAuthUri: 'otpauth://totp/x', secret: 'ABCD' });
+
+      let done: { user: CurrentUser; recoveryCodes: string[] } | undefined;
+      auth.completeMfaEnrollment('challenge-2', '123456').subscribe((r) => (done = r));
+      backend
+        .expectOne('/api/v1/auth/mfa/enrollment/confirm')
+        .flush({ accessToken: 'token-enrolled', expiresIn: 900, recoveryCodes: ['aaaa-bbbb'] });
+      backend.expectOne('/api/v1/me').flush(user);
+
+      expect(done).toEqual({ user, recoveryCodes: ['aaaa-bbbb'] });
+      expect(auth.token()).toBe('token-enrolled');
     });
   });
 
@@ -338,7 +403,9 @@ describe('AuthService', () => {
       it('waits for the pending refresh, drops its result and signs in the new user', async () => {
         const refresh = await lateBoot();
         let signedIn: CurrentUser | undefined;
-        auth.login('other@example.test', 'Diger-Sifre-2027').subscribe((u) => (signedIn = u));
+        auth
+          .login('other@example.test', 'Diger-Sifre-2027')
+          .subscribe((u) => (signedIn = u as CurrentUser));
 
         // The login request waits until the old refresh call has settled.
         backend.expectNone('/api/v1/auth/login');

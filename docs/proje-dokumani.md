@@ -1441,13 +1441,21 @@ Roller: **PA** = Platform Admin, **SA** = Okul Admini, **CO** = Antrenör, **Her
 
 | Metot | Yol | Açıklama | Rol | Hikaye |
 | --- | --- | --- | --- | --- |
-| `POST` | `/auth/login` | E-posta ve şifreyle giriş; gövdede access token, cookie'de refresh token | Herkese açık | US-03 |
+| `POST` | `/auth/login` | E-posta ve şifreyle giriş; gövdede access token, cookie'de refresh token. MFA'lı ya da MFA'sı zorunlu hesapta `202` ve `{ purpose, mfaToken, expiresIn }` (token yok, DEC-601) | Herkese açık | US-03, P5-01 |
 | `POST` | `/auth/refresh` | Refresh token ile yeni token çifti | Refresh cookie | US-04 |
 | `POST` | `/auth/logout` | Refresh token'ı iptal eder, cookie'yi siler | Refresh cookie | US-04 |
 | `POST` | `/auth/change-password` | Şifre değiştirme; `pwd_change_required` olan token ile de çalışır | Herkes | US-05 |
 | `POST` | `/auth/password-reset/request` | Şifre belirleme bağlantısı e-postası ister; her zaman `202`, adresin kayıtlı olup olmadığını belli etmez (P2-F4, DEC-353) | Herkese açık | — |
 | `POST` | `/auth/password-reset/confirm` | E-postadaki bağlantının token'ıyla yeni şifre belirler, bütün oturumları bitirir; `204` (DEC-352) | Herkese açık | — |
 | `GET` | `/me` | Giriş yapmış kullanıcının profili ve rolü | Herkes | — |
+| `POST` | `/auth/mfa/verify` | `{ mfaToken, code }`: girişin ikinci adımı; TOTP kodu ya da kurtarma kodu, `login` gibi oturum açar (DEC-601) | Herkese açık (challenge token) | P5-01 |
+| `POST` | `/auth/mfa/enrollment/start` | `{ mfaToken }`: MFA'sı zorunlu rolün ilk kurulumu için yeni sır; `{ otpAuthUri, secret }` (DEC-606) | Herkese açık (challenge token) | P5-01 |
+| `POST` | `/auth/mfa/enrollment/confirm` | `{ mfaToken, code }`: kurulumu onaylar, oturumu açar ve 10 kurtarma kodunu bir kez döner | Herkese açık (challenge token) | P5-01 |
+| `GET` | `/me/mfa` | Kendi MFA durumu: `{ available, enabled, required, recoveryCodesRemaining }` | PA, SA | P5-01 |
+| `POST` | `/me/mfa/enrollment` | Oturum açıkken kurulumu başlatır (yeni sır) | PA, SA | P5-01 |
+| `POST` | `/me/mfa/enrollment/confirm` | `{ code }`: kurulumu onaylar, `{ codes }` ile kurtarma kodlarını bir kez döner | PA, SA | P5-01 |
+| `POST` | `/me/mfa/disable` | `{ code }`: güncel kod ya da kurtarma koduyla kapatır; Platform Admin için `422 Mfa.RequiredForRole` | PA, SA | P5-01 |
+| `POST` | `/platform/users/{userId}/mfa/reset` | `{ reason }` (`LostDevice`, `SuspectedCompromise`, `Other`): başkasının MFA'sını kaldırır, oturumlarını bitirir; denetim kaydı ve e-posta (DEC-605) | PA | P5-01 |
 
 ##### 2.2 Platform — `Tenancy`
 
@@ -1675,6 +1683,15 @@ API'nin döndüğü tüm hata ve uyarı kodlarının kataloğu. Kurallar:
 | `Auth.PasswordTooWeak` | Validation | Şifre en az 12 karakter olmalı ve çok yaygın bir şifre olmamalı. | US-05 |
 | `Auth.PasswordUnchanged` | Validation | Yeni şifre mevcut şifrenizle aynı olamaz. | US-05 |
 | `Auth.ResetTokenInvalid` | BusinessRule | Bu bağlantı geçersiz, kullanılmış veya süresi dolmuş. Yeni bir şifre belirleme bağlantısı isteyin. | P2-F4 |
+| `Mfa.ChallengeInvalid` | Unauthorized | Giriş adımının süresi doldu veya çok fazla hatalı deneme yapıldı. Lütfen yeniden giriş yapın. | P5-01 |
+| `Mfa.CodeInvalid` | BusinessRule | Doğrulama kodu hatalı. | P5-01 |
+| `Mfa.AlreadyEnabled` | Conflict | İki adımlı doğrulama zaten açık. | P5-01 |
+| `Mfa.NotEnabled` | BusinessRule | İki adımlı doğrulama açık değil. | P5-01 |
+| `Mfa.EnrollmentNotStarted` | BusinessRule | Önce kurulumu başlatın. | P5-01 |
+| `Mfa.NotAvailableForRole` | Forbidden | İki adımlı doğrulama bu rol için kullanılamaz. | P5-01 |
+| `Mfa.RequiredForRole` | BusinessRule | Bu rol için iki adımlı doğrulama zorunludur, kapatılamaz. | P5-01 |
+| `Mfa.SecretUnreadable` | BusinessRule | İki adımlı doğrulama anahtarı okunamıyor. Bir platform yöneticisinden sıfırlamasını isteyin. | P5-01 |
+| `Mfa.CannotResetOwn` | BusinessRule | Kendi iki adımlı doğrulamanızı sıfırlayamazsınız. | P5-01 |
 | `User.EmailTaken` | Conflict | Bu e-posta adresi zaten kullanılıyor. | US-01, US-08 |
 | `User.NotFound` | NotFound | Kullanıcı bulunamadı. | US-08 |
 | `ParentAccount.AlreadyActive` | BusinessRule | Veli hesabı zaten aktif. Şifresini unuttuysa "Şifremi unuttum" ile yenileyebilir. | P3-02 |

@@ -3,6 +3,7 @@ using NSubstitute;
 using SporAkademi.Application.Abstractions.Authentication;
 using SporAkademi.Application.Identity;
 using SporAkademi.Application.Identity.Login;
+using SporAkademi.Application.Identity.Mfa;
 using SporAkademi.Application.Identity.Passwords;
 using SporAkademi.Application.Tenancy.Contracts;
 using SporAkademi.Domain.Identity;
@@ -22,6 +23,7 @@ public sealed class IdentityHandlerTests
     private readonly IAccessTokenIssuer _accessTokens = Substitute.For<IAccessTokenIssuer>();
     private readonly ITenancyModule _tenancy = Substitute.For<ITenancyModule>();
     private readonly ICurrentUser _currentUser = Substitute.For<ICurrentUser>();
+    private readonly IMfaPolicy _mfaPolicy = Substitute.For<IMfaPolicy>();
 
     public IdentityHandlerTests()
     {
@@ -41,7 +43,7 @@ public sealed class IdentityHandlerTests
         return user;
     }
 
-    private LoginHandler Login() => new(_users, _hasher, _refreshTokens, _accessTokens, _tenancy, _clock);
+    private LoginHandler Login() => new(_users, _hasher, _refreshTokens, _accessTokens, _tenancy, _mfaPolicy, _clock);
 
     [Fact]
     [Trait("Story", "US-03")]
@@ -76,6 +78,22 @@ public sealed class IdentityHandlerTests
             .Error.ShouldBe(AuthErrors.InvalidCredentials);
         (await Login().Handle(new LoginCommand("coach@example.com", "Gecici-Sifre-1"), CancellationToken.None))
             .Error.ShouldBe(AuthErrors.AccountInactive);
+    }
+
+    [Fact]
+    [Trait("Story", "P5-01")]
+    public async Task A_right_password_of_a_role_that_must_have_mfa_ends_in_a_challenge_not_a_session()
+    {
+        var user = Coach();
+        _mfaPolicy.IsRequired(UserRole.Coach).Returns(true);
+
+        var result = await Login().Handle(new LoginCommand("coach@example.com", "Gecici-Sifre-1"), CancellationToken.None);
+
+        result.IsSuccess.ShouldBeTrue();
+        result.Value.Session.ShouldBeNull();
+        result.Value.Challenge.ShouldNotBeNull().Purpose.ShouldBe(MfaChallengePurpose.Enroll);
+        user.RefreshTokens.ShouldBeEmpty();
+        user.MfaChallenges.ShouldHaveSingleItem();
     }
 
     [Fact]

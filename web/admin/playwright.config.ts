@@ -25,6 +25,7 @@ const a11yParentSpecs = /[\\/]a11y[\\/]parent-[^\\/]+\.e2e\.ts$/;
 const required = [
   'E2E_API_CONNECTION',
   'E2E_JWT_SIGNING_KEY',
+  'E2E_MFA_ENCRYPTION_KEY',
   'E2E_PLATFORM_ADMIN_EMAIL',
   'E2E_PLATFORM_ADMIN_PASSWORD',
   'E2E_TLS_KEY',
@@ -149,6 +150,8 @@ export default defineConfig({
         ASPNETCORE_URLS: apiUrl,
         ConnectionStrings__App: process.env['E2E_API_CONNECTION']!,
         Jwt__SigningKey: process.env['E2E_JWT_SIGNING_KEY']!,
+        // P5-01 (DEC-602): outside Development the TOTP encryption key is required.
+        Mfa__EncryptionKey: process.env['E2E_MFA_ENCRYPTION_KEY']!,
         PlatformAdmin__Email: process.env['E2E_PLATFORM_ADMIN_EMAIL']!,
         PlatformAdmin__InitialPassword: process.env['E2E_PLATFORM_ADMIN_PASSWORD']!,
         // P3-05: e-mail (the parent invitation) goes to the run's Mailpit catcher, plain SMTP on loopback;

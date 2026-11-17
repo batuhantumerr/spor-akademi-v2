@@ -574,6 +574,22 @@ Sonuç: **yüksek bulgu yok.** Ayrıntı ve kanıt `guvenlik-kontrol-listesi.md`
 
 ## 12. Faz 5 (2026-11-17)
 
+### P5-01 Yöneticiler için MFA, TOTP (DEC-600 – DEC-609)
+
+Sonuç: Platform Admin artık yalnız şifreyle giriş yapamaz; Okul Admini isteğe bağlı açar. Telefon kaybı için kurtarma kodu, Platform Admin sıfırlaması ve (kimse kalmazsa) veritabanı betiği var.
+
+1. **Zorunluluk ve yerel geliştirme (DEC-604, DEC-606, DEC-608).** Platform Admin her girişte şifreden sonra kod girer; ilk girişte kurulum şarttır. Yerelde (`Development`) zorunluluk kapalıdır, başka ortamda kapatılırsa API açılmaz.
+   - *Yönetici:* tüm okulları gören hesap artık şifre sızsa da açılmaz; bedeli, yönetici başına bir telefon ve girişte bir adım. Önceden açılmış oturumlar ilk yenilemede (en çok 15 dk) düşer.
+   - *Yazılımcı:* demo/e2e için sabit bir TOTP sırrı tohumlamadım (repoya ve gitleaks'e girerdi); e2e gerçek akışı yapar. Onay ya da "başka türlü olsun" kararı.
+2. **Antrenör ve veli MFA dışı (DEC-604).** Antrenörün kodunu kaybetmesi halinde onu sıfırlayacak bir akış yazılmadı; kurtarılamayan hesap bırakmamak için antrenöre MFA açılmadı. *Yönetici:* antrenör hesabı hâlâ yalnız şifreyle korunuyor; erişimi tek grupla sınırlı. Okul Admini'nin antrenör MFA'sını sıfırlaması istenirse küçük bir ek iş.
+3. **Anahtar yönetimi (DEC-602).** TOTP sırları AES-256-GCM ile şifreli; anahtar `Mfa:EncryptionKey`, verilmezse JWT anahtarından türetilir. *Yönetici/Deploy:* Production'a ayrı bir `Mfa:EncryptionKey` verilmeli (P5-05 altyapı kodunda uygulamanın sırlarına `Mfa__EncryptionKey` eklenmeli; şimdilik eklenmedi); türetilen anahtarla JWT anahtarını döndürmek bütün MFA sırlarını geçersiz kılar (herkes yeniden kurar). Anahtar döndürme (eskiyle çöz, yeniyle şifrele) yapılmadı.
+   - *Yazılımcı:* ASP.NET Core Data Protection seçilmedi (anahtar halkasının kalıcılığı ve yedeği gerekirdi). Onay ya da "Data Protection olsun" kararı.
+4. **Sıfırlama denetimi (DEC-605).** Platform Admin bir hesabın MFA'sını sabit bir nedenle (`Telefon kayboldu`, `Hesap ele geçirilmiş olabilir`, `Diğer`) sıfırlar; Okul Admini hedefinde okulun denetim kaydına düşer, e-posta gider. *Sınır:* hedef başka bir Platform Admin ise okulu olmadığı için denetim kaydı girdisi olmaz (yalnız e-posta ve komut günlüğü). Platform Admin kendi MFA'sını sıfırlayamaz. Platform Admin için ayrı bir denetim kaydı Faz 5'te istenebilir.
+5. **Son Platform Admin her şeyini kaybederse (DEC-605).** API'de yol yok; `guvenlik-kontrol-listesi.md` 4.6'daki SQL betiği veritabanı sahibi rolüyle çalışır. *Yönetici:* bu işlem bir değişiklik talebine bağlanmalı. Bilinçli olarak uygulamaya bir "kurtarma anahtarı" eklenmedi.
+6. **Bilinen eksikler.** Kurtarma kodlarını yenileme uç noktası yok (kodlar bitince MFA kapatılıp açılır ya da sıfırlama istenir); MFA'lı hesap için "güvenilir cihaz" yok; Platform Admin için listede sıfırlama düğmesi yok (API var; okul listesindeki ilk Okul Admini için düğme var).
+
+**Yeni paket (DEC-609):** `qrcode-generator` 2.0.4, npm (`web/admin`), MIT, yayın 2025-08-07 (7 günlük beklemeyi geçti), bağımlılığı yok. QR'ı admin panelinde SVG olarak çizer; alternatif: sunucuda QRCoder (MIT). Yeni NuGet paketi yok (TOTP `HMACSHA1` ile kendi kodumuz).
+
 ### P5-06 Bulut çalıştırmaya hazırlık (DEC-650 – DEC-657)
 
 Bulut hesabı yok: her şey yerelde ve CI'da kanıtlandı, Azure'da hiçbir şey çalıştırılmadı. Adım adım taşıma: [docs/bulut-tasima-runbook.md](bulut-tasima-runbook.md).
@@ -607,4 +623,4 @@ Bulut hesabı yok: kod ve belge hazır, hiçbir kaynak oluşturulmadı, `plan`/`
 4. **RabbitMQ barındırma (DEC-645).** Azure Files'lı tek kopya container app (varsayılan kapalı; +~9 USD/ay). SMB üstünde kırılgan olabilir; Azure Service Bus AMQP 1.0 konuştuğu için RabbitMQ istemcisiyle uyuşmaz. *Yazılımcı:* P5-04 aracı seçince karar yeniden açılır. Öneri: P5-04'ün çıktısına göre karar; şimdilik kapalı.
 5. **Gerçek veriden önce kapatılacak açık (DEC-644).** Gateway iki vekil zinciri yaratıyor, `ForwardLimit = 1` sabit olduğundan API istemci IP'sini yanlış görür (oran sınırı ve kilitlenme bozulur). Çözüm küçük bir kod işi (`ForwardedHeaders:ForwardLimit` ayarı); ayrı issue olarak açılmalı. Öneri: P5-06 ile birlikte yap.
 6. **Güvenlik tarayıcısı bulguları (DEC-641).** Key Vault ağ ACL'i ve belge deposunun genel uç noktası, gerekçeleriyle kabul edildi (RBAC/Entra, anahtarsız, kısa ömürlü SAS); özel uç nokta (~7 USD/ay) sonraki adım. Öneri: kabul.
-7. **Sahibin ilk `apply` işleri:** abonelik ve kullanıcı yetkisi, uzak state hesabı (`backend.tf` yorumunu doldurmak), Key Vault sırları (`conn-app`, `conn-migrator`, `jwt-signing-key`), rol kurulumu ve alan adı. Sıralı kontrol listesi docs/bulut-altyapisi.md bölüm 10'da.
+7. **Sahibin ilk `apply` işleri:** abonelik ve kullanıcı yetkisi, uzak state hesabı (`backend.tf` yorumunu doldurmak), Key Vault sırları (`conn-app`, `conn-migrator`, `mfa-encryption-key`, `jwt-signing-key`), rol kurulumu ve alan adı. Sıralı kontrol listesi docs/bulut-altyapisi.md bölüm 10'da.

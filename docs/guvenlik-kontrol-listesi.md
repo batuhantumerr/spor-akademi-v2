@@ -53,7 +53,7 @@ Sadece bu uygulamaya uygulanabilen maddeler listelenir (SOAP, GraphQL, OAuth/OID
 | 2.3.1, 2.5.x Veli daveti (P3-02) | ✅ | Veli hesabı kimsenin bilmediği rastgele şifreyle açılır; ilk şifre 72 saat geçerli, tek kullanımlık, sadece SHA-256 hash'i saklanan davet bağlantısıyla belirlenir; yeniden gönderme ve iptal önceki bağlantıyı hemen geçersiz kılar; kabul `password-reset/confirm` ile aynı rate limit'le (`ParentInvitationTests`, DEC-383). |
 | 2.4.1 Şifreler tuzlu ve yavaş hash ile | ✅ | NFR-SEC-03. |
 | 2.5.1 – 2.5.4 Kurtarma | 🟡 | Sadece admin sıfırlaması; varsayılan hesap yok (ilk Platform Admin seed'i zorunlu değişimle, `PlatformAdminSeedTests`). |
-| 2.7 – 2.9 OTP / MFA | — | MVP'de yok; Fikirler 5. |
+| 2.7 – 2.9 OTP / MFA | ✅ | P5-01: TOTP (RFC 6238), tekrar koruması, tek kullanımlık kurtarma kodları, yanlış kodlar kilit sayacında; `MfaTests`, `TotpTests`, `UserMfaTests` (DEC-600 – DEC-609). |
 | Kullanıcı sayımı engeli | ✅ | Bilinmeyen e-posta ile yanlış şifre aynı yanıt + benzer süre (`LoginTests`, `IdentityHandlerTests`, DEC-115). |
 
 ### V3 Oturum yönetimi
@@ -77,7 +77,7 @@ Sadece bu uygulamaya uygulanabilen maddeler listelenir (SOAP, GraphQL, OAuth/OID
 | 4.2.1 IDOR / başka okulun kaydı | ✅ | Tenant filtresi + bileşik FK + yazma koruması; başka okulun kaydı `404` (her modülün `*TenantIsolationTests` sınıfı). |
 | 4.2.2 CSRF | ✅ | Bearer token cookie'de değil; cookie ile çalışan refresh/çıkış `SameSite=Strict` + `X-Requested-With` ister (`SessionTests`), CORS yok (`CorsTests`). |
 | İş paneli (Hangfire Dashboard, tüm okulların işleri) | ✅ | Sadece aktif Platform Admin, sadece panel çereziyle: anonim, bearer token, Okul Admini ve Antrenör `401`/`403`; kullanıcı her istekte yeniden kontrol edilir (devre dışı bırakılan admin anında düşer); Hangfire'ın kendi filtresi de rol ister; varsayılan salt okunur, işlemler açıksa antiforgery (`sa_jobs_af`, `X-Jobs-Antiforgery`); `no-store`, `X-Frame-Options: DENY`; bağlantı dizesi gösterilmez (`JobsDashboardTests`, `EndpointSecurityTests.The_job_panel_requires_its_platform_admin_policy`). İş argümanları sadece ID (`ArchitectureTests/JobsRulesTests`). |
-| 4.3.1 Yönetim arayüzlerinde ek koruma | 🟡 | Platform Admin rolüyle ayrılmış; MFA yok (Fikirler 5). |
+| 4.3.1 Yönetim arayüzlerinde ek koruma | ✅ | Platform Admin rolüyle ayrılmış ve MFA'sı zorunlu (P5-01, DEC-604 – DEC-606); Okul Admini isteğe bağlı. |
 | Antrenör görünümü (NFR-PRV-02) | ✅ | Roster yanıt şekli sabit (`IntegrationTests/Enrollments/RosterTests`). |
 | 4.1.3, 4.2.1 Veli sınırı (P3-01, ikinci yetki sınırı) | ✅ | `Parent` rolü sadece `/api/v1/parent/...` uç noktalarına açık; her uç nokta `IParentChildren` ile çocuğun çağıranın aktif çocuğu olduğunu ve hesabın aktif olduğunu doğrular, başka aile ve başka okul `404` (DEC-382, DEC-385). `IntegrationTests/Parents/ParentIsolationTests`: her veli uç noktası aynı okuldaki başka ailenin ve başka okulun ID'leriyle `404`, yazma yok, kendi listelerinde başka ailenin verisi ve acil durum kişisi yok, bütün Okul Admini/antrenör/Platform Admin uç noktaları veliye `403`; uç nokta listesi sabit (DEC-387). |
 | Mevcut veliyi telefonla bağlamak | 🟡 | Okul Admini bir öğrenciye mevcut bir veliyi telefonla bağladığında (kardeş, US-13), o velinin veli hesabı yeni öğrenciyi de hemen görür. Bilinçli: veli hesabı veli kaydına bağlıdır. Okul Admininin doğru veliyi seçmesi gerekir; yanlış bağlantı veli çıkarılarak geri alınır (DEC-382, DEC-384). |
@@ -238,7 +238,7 @@ Durum: **zaten sabit.** `ci.yml` başında `TRIVY_VERSION` / `TRIVY_SHA256` ve `
 | 2 Güvenlik başlıkları (NFR-SEC-13) | **Yapıldı** | P4-01 (DEC-500 – DEC-502). Kalan: admin `style-src 'unsafe-inline'` (izlenir) |
 | 3 Şifre uzunluğu | **Yapıldı** | DEC-369 |
 | 4 İhlal edilmiş şifre listesi | **Faz 5** | Çevrimdışı büyük liste (şifre dışarı çıkmamalı); ASVS 2.1.7 kısmen |
-| 5 MFA (Platform Admin, Okul Admini) | **Faz 5** | TOTP; kurtarma kodları ve cihaz kaybı akışı tasarım ister. Gerçek veriden önce en az Platform Admin için istenir (DEC-517, sahibin kararı) |
+| 5 MFA (Platform Admin, Okul Admini) | **Yapıldı** | P5-01 (DEC-600 – DEC-609): Platform Admin için zorunlu, Okul Admini için isteğe bağlı; kurtarma kodları ve Platform Admin sıfırlaması dahil. Kalan: kurtarma kodu yenileme, anahtar döndürme, antrenör MFA'sı |
 | 6 Güvenlik denetim kaydı | **Kısmen yapıldı / Faz 5** | Kişisel veri erişim kaydı P4-05'te (DEC-530 – DEC-537); kimlik olayları için alarm yapıldı (DEC-513), aktör içeren olay kaydı Faz 5 |
 | 7 Arama terimi sorgu dizesinde | **Gerek yok / Deploy** | API'de istek günlüğü kapalı (`Logging.cs`, `LogPrivacyTests`), telemetri sorguyu yazmaz (DEC-551). Caddy erişim günlüğünde sorgu dizesi atılmalı: Deploy bloğu |
 | 8 Kişisel veri envanteri | **Faz 5** | P4-06 aydınlatma metni kategorilerinden türetilir, hukuki teyitle |
@@ -248,3 +248,25 @@ Durum: **zaten sabit.** `ci.yml` başında `TRIVY_VERSION` / `TRIVY_SHA256` ve `
 | 12 Yüklemede antivirüs ve derin PDF | **Deploy / Faz 5** | ClamAV (GPL-2.0, ayrı servis) veya yönetilen tarama bir hizmet kararı; yapısal denetim ve etkin içerik reddi şimdilik yeterli kabul |
 | 13 Yetim nesne temizliği | **Faz 5** (düşük) | Yalnız depo maliyeti; erişilebilir bir risk değil |
 | 14 Yükleme bellek sınırı | **Yapıldı** | DEC-514: okul başına 3 eşzamanlı yükleme |
+
+### 4.6 Faz 5 — MFA (P5-01)
+
+Karar kayıtları DEC-600 – DEC-609. Özet: Platform Admin'in girişi iki adımlıdır ve kurulum girişten önce şarttır; Okul Admini isteğe bağlı açar. Anahtar AES-256-GCM ile şifreli, kurtarma kodları hash'li, yanlış kodlar hesap kilit sayacında, her değişiklik hesabın e-postasına bildirilir.
+
+**Tüm Platform Admin'ler telefonunu ve kurtarma kodlarını kaybederse** (başka Platform Admin yoksa) API'de yol yoktur; veritabanı sahibi (migrator) rolüyle şu betik çalıştırılır. Sır, kodlar, bekleyen girişler ve oturumlar silinir; hesap bir sonraki girişte yeniden kurar. İşlemi kimin, ne zaman yaptığı kayda geçmesi için sahibi bir değişiklik talebine bağlar.
+
+```sql
+BEGIN;
+SET LOCAL app.maintenance = 'on'; -- migrator da satır düzeyi güvenliğe tabidir (DEC-522)
+-- Hedef: e-postası bilinen Platform Admin (e-posta küçük harfle saklanır).
+CREATE TEMP TABLE target AS
+  SELECT id FROM identity.users WHERE email = '<platform-admin-eposta>' AND role = 'PlatformAdmin';
+DELETE FROM identity.mfa_challenges     WHERE user_id IN (SELECT id FROM target);
+DELETE FROM identity.mfa_recovery_codes WHERE user_id IN (SELECT id FROM target);
+DELETE FROM identity.mfa_credentials    WHERE user_id IN (SELECT id FROM target);
+UPDATE identity.refresh_tokens SET revoked_at = now() WHERE user_id IN (SELECT id FROM target) AND revoked_at IS NULL;
+UPDATE identity.users SET mfa_enabled = false WHERE id IN (SELECT id FROM target);
+COMMIT;
+```
+
+Şifre de kayıpsa `PlatformAdmin:Email` / `PlatformAdmin:InitialPassword` ile yeni bir hesap tohumlanamaz (seed yalnız hiç Platform Admin yokken çalışır); önce "Şifremi unuttum" bağlantısı ya da sahibin `identity.users.password_hash` güncellemesi gerekir. Betik güvenlik kararı olarak uygulamaya eklenmedi: kimlik doğrulayamayan biri için bir uç nokta ya da yapılandırma anahtarı, tam da korunan şeyi açan bir arka kapı olurdu.
