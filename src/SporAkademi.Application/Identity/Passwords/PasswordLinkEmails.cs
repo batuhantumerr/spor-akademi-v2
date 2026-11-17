@@ -152,6 +152,7 @@ internal static class IdentityEmails
     public const string WelcomeTemplate = "identity.welcome";
     public const string PasswordResetTemplate = "identity.password-reset";
     public const string PasswordChangedTemplate = "identity.password-changed";
+    public const string MfaChangedTemplate = "identity.mfa-changed";
     public const string ParentInvitationTemplate = "identity.parent-invitation";
 
     /// <summary>P3-02 (DEC-383): no child's name and no password; only the school, the login and the link.</summary>
@@ -188,6 +189,35 @@ internal static class IdentityEmails
             .Paragraph("Bu değişikliği siz yaptıysanız bir şey yapmanız gerekmez.")
             .Paragraph("Siz yapmadıysanız hesabınız başkasının eline geçmiş olabilir: okul yöneticinizle hemen iletişime geçin ve giriş sayfasındaki \"Şifremi unuttum\" ile şifrenizi yeniden belirleyin.")
             .Build(PasswordChangedTemplate, user.Email.Value, "Spor Akademi şifreniz değiştirildi");
+
+    /// <summary>P5-01 (DEC-607): says what happened to the second factor; never a code, secret or link.</summary>
+    public static EmailMessage MfaChanged(User user, MfaNotice notice)
+    {
+        var (subject, what, advice) = notice switch
+        {
+            MfaNotice.Enabled => (
+                "Spor Akademi iki adımlı doğrulama açıldı",
+                "Spor Akademi hesabınız için iki adımlı doğrulama (kimlik doğrulayıcı uygulama) açıldı. Girişte şifrenizden sonra uygulamadaki altı haneli kod da istenecek.",
+                "Bunu siz yaptıysanız bir şey yapmanız gerekmez. Kurtarma kodlarınızı güvenli bir yerde saklayın."),
+            MfaNotice.Disabled => (
+                "Spor Akademi iki adımlı doğrulama kapatıldı",
+                "Spor Akademi hesabınız için iki adımlı doğrulama kapatıldı. Girişte yalnızca şifreniz istenecek.",
+                "Bunu siz yaptıysanız bir şey yapmanız gerekmez."),
+            MfaNotice.Reset => (
+                "Spor Akademi iki adımlı doğrulamanız sıfırlandı",
+                "Bir platform yöneticisi Spor Akademi hesabınızın iki adımlı doğrulamasını sıfırladı ve bütün oturumlarınız kapandı.",
+                "Telefonunuzu kaybettiğiniz için bunu siz istediyseniz bir sonraki girişinizde yeniden kurun."),
+            _ => (
+                "Spor Akademi hesabınızda kurtarma kodu kullanıldı",
+                "Spor Akademi hesabınıza giriş yapılırken iki adımlı doğrulama için bir kurtarma kodu kullanıldı; o kod artık geçersiz.",
+                "Bunu siz yaptıysanız bir şey yapmanız gerekmez."),
+        };
+        return new EmailBody($"Merhaba {user.FirstName} {user.LastName},")
+            .Paragraph(what)
+            .Paragraph(advice)
+            .Paragraph("Siz yapmadıysanız hesabınız başkasının eline geçmiş olabilir: şifrenizi hemen değiştirin ve sistem yöneticinizle iletişime geçin.")
+            .Build(MfaChangedTemplate, user.Email.Value, subject);
+    }
 
     public static EmailMessage PasswordReset(User user, Uri setPassword) =>
         new EmailBody($"Merhaba {user.FirstName} {user.LastName},")

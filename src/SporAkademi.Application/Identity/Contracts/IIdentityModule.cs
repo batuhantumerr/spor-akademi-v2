@@ -7,7 +7,7 @@ namespace SporAkademi.Application.Identity.Contracts;
 /// <summary>A new account and its temporary password, which is shown once and never stored in clear.</summary>
 public sealed record NewAccount(Guid UserId, string TemporaryPassword);
 
-public sealed record SchoolAdminSummary(Guid Id, string FirstName, string LastName, string Email, UserStatus Status);
+public sealed record SchoolAdminSummary(Guid Id, string FirstName, string LastName, string Email, UserStatus Status, bool MfaEnabled = false);
 
 /// <summary>Where a guardian's parent account stands (P3-02, DEC-383), as the School Admin sees it.</summary>
 public enum ParentAccountStatus

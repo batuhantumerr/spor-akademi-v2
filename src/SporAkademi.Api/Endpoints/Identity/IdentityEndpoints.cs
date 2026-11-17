@@ -7,6 +7,7 @@ using SporAkademi.Application.Abstractions.Messaging;
 using SporAkademi.Application.Abstractions.Observability;
 using SporAkademi.Application.Identity;
 using SporAkademi.Application.Identity.Login;
+using SporAkademi.Application.Identity.Mfa;
 using SporAkademi.Application.Identity.Passwords;
 using SporAkademi.Application.Identity.Profile;
 using SporAkademi.Application.Identity.Sessions;
@@ -36,6 +37,7 @@ internal static partial class IdentityEndpoints
             .UsesPlatformData()
             .RequireRateLimiting(AuthRateLimiting.Policy)
             .Produces<SessionResponse>()
+            .Produces<MfaChallengeResponse>(StatusCodes.Status202Accepted)
             .ProducesProblem(StatusCodes.Status400BadRequest)
             .ProducesProblem(StatusCodes.Status401Unauthorized)
             .ProducesProblem(StatusCodes.Status429TooManyRequests);
@@ -103,12 +105,12 @@ internal static partial class IdentityEndpoints
             .ProducesProblem(StatusCodes.Status403Forbidden)
             .ProducesProblem(StatusCodes.Status404NotFound);
 
-        return app;
+        return app.MapMfaEndpoints();
     }
 
     private static async Task<IResult> Login(
         LoginRequest request,
-        ICommandHandler<LoginCommand, AuthSession> handler,
+        ICommandHandler<LoginCommand, LoginOutcome> handler,
         TimeProvider timeProvider,
         HttpContext httpContext,
         CancellationToken cancellationToken)
@@ -120,9 +122,15 @@ internal static partial class IdentityEndpoints
             AppTelemetry.LoginFailures.Add(1, new KeyValuePair<string, object?>("reason", result.Error.Code));
         }
 
-        return result.IsSuccess
-            ? StartSession(httpContext, result.Value, timeProvider.GetUtcNow())
-            : ProblemResults.Problem(result.Error);
+        if (result.IsFailure)
+        {
+            return ProblemResults.Problem(result.Error);
+        }
+
+        // P5-01: after the password a second step may be due; the client then has a challenge token and no session.
+        return result.Value.Challenge is { } challenge
+            ? TypedResults.Accepted((string?)null, MfaChallengeResponse.From(challenge, timeProvider.GetUtcNow()))
+            : StartSession(httpContext, result.Value.Session!, timeProvider.GetUtcNow());
     }
 
     private static async Task<IResult> Refresh(

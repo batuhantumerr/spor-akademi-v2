@@ -38,6 +38,14 @@ export const routes: Routes = [
     children: [
       { path: '', pathMatch: 'full', canActivate: [homeRedirectGuard], children: [] },
       {
+        // P5-01: two-step verification of the signed-in admin.
+        path: 'security',
+        canActivate: [roleGuard('PlatformAdmin', 'SchoolAdmin')],
+        title: () => ui.mfa.settings.title,
+        loadComponent: () =>
+          import('./features/settings/security.page').then((m) => m.SecurityPage),
+      },
+      {
         path: 'platform',
         canActivate: [roleGuard('PlatformAdmin')],
         children: [

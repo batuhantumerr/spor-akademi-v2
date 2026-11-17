@@ -7,6 +7,7 @@ import {
   LucideDumbbell,
   LucideGraduationCap,
   LucideIconInput,
+  LucideKeyRound,
   LucideLayoutDashboard,
   LucideListChecks,
   LucideMapPin,
@@ -61,6 +62,7 @@ function menuFor(role: Role | null): NavSection[] {
           items: [
             { label: ui.nav.schools, path: '/platform/schools', icon: LucideBuilding },
             { label: ui.nav.jobs, path: '/platform/jobs', icon: LucideListChecks },
+            { label: ui.nav.security, path: '/security', icon: LucideKeyRound },
           ],
         },
       ];
@@ -111,6 +113,7 @@ function menuFor(role: Role | null): NavSection[] {
             },
             { label: ui.nav.billingRules, path: '/settings/billing-rules', icon: LucidePercent },
             { label: ui.nav.auditLog, path: '/settings/audit-log', icon: LucideScrollText },
+            { label: ui.nav.security, path: '/security', icon: LucideKeyRound },
           ],
         },
       ];

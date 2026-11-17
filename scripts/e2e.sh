@@ -83,9 +83,10 @@ quietly bash scripts/ef.sh database update
 # Handed to playwright.config.ts through the environment only; never printed or written to disk.
 E2E_API_CONNECTION="$(connection_string spor_akademi_app SPOR_AKADEMI_APP_PASSWORD)"
 E2E_JWT_SIGNING_KEY="$JWT_SIGNING_KEY"
+E2E_MFA_ENCRYPTION_KEY="$(openssl rand -hex 32)"
 E2E_PLATFORM_ADMIN_EMAIL="platform-$(openssl rand -hex 4)@e2e.test"
 E2E_PLATFORM_ADMIN_PASSWORD="$(openssl rand -hex 24)"
-export E2E_API_CONNECTION E2E_JWT_SIGNING_KEY E2E_PLATFORM_ADMIN_EMAIL E2E_PLATFORM_ADMIN_PASSWORD
+export E2E_API_CONNECTION E2E_JWT_SIGNING_KEY E2E_MFA_ENCRYPTION_KEY E2E_PLATFORM_ADMIN_EMAIL E2E_PLATFORM_ADMIN_PASSWORD
 
 # A throwaway self-signed certificate for https://localhost (the refresh cookie is Secure). On Git
 # Bash, paths are passed in Windows form and MSYS_NO_PATHCONV keeps "/CN=localhost" from being

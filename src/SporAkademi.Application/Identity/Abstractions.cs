@@ -66,6 +66,9 @@ public interface IUserRepository
     Task<User?> GetByRefreshTokenHashAsync(string tokenHash, CancellationToken cancellationToken);
 
     /// <summary>The user whose pending set-password token has this hash (P2-F4), with its tokens.</summary>
+    /// <summary>The user whose current MFA challenge has this hash (P5-01), with their tokens and MFA state.</summary>
+    Task<User?> GetByMfaChallengeHashAsync(string tokenHash, CancellationToken cancellationToken);
+
     Task<User?> GetByPasswordTokenHashAsync(string tokenHash, CancellationToken cancellationToken);
 
     Task<UserSummary?> GetSummaryAsync(UserId id, CancellationToken cancellationToken);

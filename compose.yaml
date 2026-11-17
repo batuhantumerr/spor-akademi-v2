@@ -220,6 +220,8 @@ services:
       ConnectionStrings__App: Host=postgres;Port=5432;Database=spor_akademi_perf;Username=spor_akademi_app;Password=${SPOR_AKADEMI_APP_PASSWORD:-};Maximum Pool Size=${PERF_DB_POOL_SIZE:-40}
       ConnectionStrings__Cache: valkey:6379,password=${VALKEY_PASSWORD:-}
       Jwt__SigningKey: ${JWT_SIGNING_KEY:-}
+      # P5-01 (DEC-602): required outside Development; the load test has no real secrets, so the JWT key stands in.
+      Mfa__EncryptionKey: ${MFA_ENCRYPTION_KEY:-${JWT_SIGNING_KEY:-}}
       ForwardedHeaders__KnownProxies__0: 172.30.208.10
       # scripts/perf/run-k6.sh --checks sets the production values (DEC-504, DEC-388) to observe the limits themselves.
       RateLimiting__UserPermitsPerMinute: ${PERF_USER_PERMITS:-1000000}

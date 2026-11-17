@@ -8,6 +8,7 @@ locals {
     {
       ConnectionStrings__App = "conn-app"
       Jwt__SigningKey        = "jwt-signing-key"
+      Mfa__EncryptionKey     = "mfa-encryption-key"
     },
     var.redis_enabled ? { ConnectionStrings__Cache = "conn-cache" } : {},
     # P5-03/P5-04: with the broker, the outbox publishes through it (the API also consumes what the worker does not).

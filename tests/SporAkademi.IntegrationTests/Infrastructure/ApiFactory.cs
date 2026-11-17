@@ -56,6 +56,8 @@ public sealed class ApiFactory(
                 ["ConnectionStrings:App"] = appConnectionString,
                 ["ConnectionStrings:Cache"] = cacheConnectionString,
                 ["Jwt:SigningKey"] = JwtSigningKey,
+                // P5-01: Production hosts of the tests need the TOTP key too (DEC-602); Testing could derive it.
+                ["Mfa:EncryptionKey"] = JwtSigningKey,
                 ["Seq:ServerUrl"] = null,
                 ["Serilog:MinimumLevel:Default"] = "Fatal",
                 // Tests drive OutboxProcessor themselves so delivery happens exactly when they decide (OutboxWorkerTests and

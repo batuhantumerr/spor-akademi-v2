@@ -38,6 +38,8 @@ public sealed partial class CrossTenantEndpointTests(DatabaseFixture database) :
         // P4-10: a school's feature flags (FeatureFlagTests pins the 403 for school roles).
         "GET /api/v1/platform/schools/{id:guid}/features",
         "PUT /api/v1/platform/schools/{id:guid}/features/{key}",
+        // P5-01: a Platform Admin takes another user's MFA off (MfaTests pins the 403 for a School Admin of another school).
+        "POST /api/v1/platform/users/{userId:guid}/mfa/reset",
     ];
 
     /// <summary>Writes without a route parameter whose body names no other record, so there is no foreign id to try.</summary>
@@ -49,6 +51,14 @@ public sealed partial class CrossTenantEndpointTests(DatabaseFixture database) :
         ["POST /api/v1/auth/change-password"] = "the caller's own password",
         ["POST /api/v1/auth/password-reset/request"] = "anonymous; e-mail only, always 202, signed-in callers are ignored (DEC-353)",
         ["POST /api/v1/auth/password-reset/confirm"] = "anonymous; set-password token and new password only (DEC-352)",
+        // P5-01: the second step of a login. The challenge token identifies the user and is single use (MfaTests); the
+        // signed-in routes act on the caller's own account only and take a code, never an id.
+        ["POST /api/v1/auth/mfa/verify"] = "anonymous; challenge token and code only (DEC-601)",
+        ["POST /api/v1/auth/mfa/enrollment/start"] = "anonymous; challenge token only (DEC-606)",
+        ["POST /api/v1/auth/mfa/enrollment/confirm"] = "anonymous; challenge token and code only (DEC-606)",
+        ["POST /api/v1/me/mfa/enrollment"] = "the caller's own account; no body",
+        ["POST /api/v1/me/mfa/enrollment/confirm"] = "the caller's own account; a code only",
+        ["POST /api/v1/me/mfa/disable"] = "the caller's own account; a code only",
         ["POST /api/v1/sports"] = "name only",
         ["POST /api/v1/facilities"] = "name, type, address, capacity",
         ["POST /api/v1/coaches"] = "names, e-mail, phone",
@@ -311,6 +321,7 @@ public sealed partial class CrossTenantEndpointTests(DatabaseFixture database) :
             "/api/v1/me",
             "/api/v1/me/announcements",
             "/api/v1/me/groups",
+            "/api/v1/me/mfa",
             "/api/v1/me/sessions",
             "/api/v1/online-payments",
             "/api/v1/payments",
