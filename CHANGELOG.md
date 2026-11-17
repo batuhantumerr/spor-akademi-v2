@@ -8,6 +8,7 @@ Bu dosya [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) biçimini ve [
 
 #### Faz 5 — Ölçek ve mimari
 - Faz 4 geçişi sahip tarafından onaylandı (2026-11-16); Faz 5 planı roadmap'e yazıldı.
+- Bulut çalıştırmaya hazırlık (P5-06): `Storage:Provider` ile seçilen Azure Blob adaptörü (yönetilen kimlik, kullanıcı delegasyonlu SAS, Azurite testleri; S3 varsayılan), `ForwardedHeaders:ForwardLimit` ayarı, migrator'ın `ConnectionStrings__Migrator` ile çalışması, S3 → Blob kopya betiği ve `docs/bulut-tasima-runbook.md` (DEC-650 – DEC-657).
 
 ## [0.4.0] - 2026-11-16
 

@@ -571,3 +571,18 @@ Sonuç: **yüksek bulgu yok.** Ayrıntı ve kanıt `guvenlik-kontrol-listesi.md`
 5. **Deploy bloğu için yeni maddeler (DEC-516, DEC-518).** `AllowedHosts` alan adlarıyla verilmeli; Caddy erişim günlüğünde sorgu dizesi (arama terimi) atılmalı; JWT anahtarı için döndürme runbook'u; yeni alarmlar (`RefreshFailureSpike`, `AuthorizationFailureSpike`) için bildirim kanalı mevcut alarmlarla birlikte.
 6. **Başka okulun e-postası sızıntısı (DEC-516, O5).** Okul Admini bir antrenör eklerken adres başka bir okulda kayıtlıysa `409` alır; yani adresin sistemde olduğunu öğrenir. Kapatmak ürün değişikliği (okul başına e-posta ya da giriş formunda okul seçimi). Öneri: şimdilik kabul.
 7. **Trivy/gitleaks checksum (DEC-515).** Zaten sabitti; resmi dosyalarla doğrulandı, ek iş yok. CI'da `persist-credentials: false` ve bağlam değerlerinin ortam değişkeniyle verilmesi eklendi; `ci.yml` değiştiği için bu PR code-owner incelemesine girer.
+
+## 12. Faz 5 (2026-11-17)
+
+### P5-06 Bulut çalıştırmaya hazırlık (DEC-650 – DEC-657)
+
+Bulut hesabı yok: her şey yerelde ve CI'da kanıtlandı, Azure'da hiçbir şey çalıştırılmadı. Adım adım taşıma: [docs/bulut-tasima-runbook.md](bulut-tasima-runbook.md).
+
+1. **Yeni paketler ve imaj (DEC-650).** `Azure.Storage.Blobs` 12.30.1 (MIT), `Azure.Identity` 1.21.0 (MIT), test için `Testcontainers.Azurite` 4.16.0 (MIT) ve Azurite imajı 3.36.0 (MIT, digest ile `compose.yaml`'da). Ticari ya da copyleft paket yok. Öneri: kabul.
+2. **Belge deposu Azure'da anahtarsız (DEC-650).** API yönetilen kimlikle Blob'a yazar, indirme bağlantısı kısa ömürlü kullanıcı delegasyonlu SAS'tır; hesap anahtarı hiçbir yerde yok. S3 varsayılan kalır ve değişmedi. *Yönetici:* bir okulun belgesi yalnız kısa süreli bağlantıyla açılır, bağlantı kendiliğinden ölür. *Yazılımcı:* Azurite bu imza türünü desteklemediği için testte yalnız test projesindeki paylaşılan anahtarlı imzalayıcı kullanıldı; gerçek doğrulama ilk staging'dir. Öneri: kabul.
+3. **İstemci IP'si açığı kapandı (DEC-651, DEC-652).** `ForwardedHeaders:ForwardLimit` ayarı (varsayılan 1, Azure'da 2 önerilir). Alt ağ güveni korunuyor, "herkese güven" yok. *Yazılımcı:* `2` Azure giriş zincirine dair bir varsayım; runbook bölüm 8'deki iki ağdan deneme staging'de yapılmalı, yanlışsa yalnız ayar değişir. Gerçek veriden önce şart. Öneri: kabul ve staging doğrulaması.
+4. **Migrator hatası bulundu ve düzeltildi (DEC-653).** Belge `ConnectionStrings__Migrator` diyordu ama imaj bunu okumuyordu (yalnız `--connection`); Container Apps işi için işe yaramazdı. Düzeltildi, CI duman testi artık bu değişkenle çalışıyor, yerelde de denendi. Öneri: kabul.
+5. **Sağlık sondaları (DEC-654).** Hazırlık yalnız veritabanı için `503`; depo, RabbitMQ gibi isteğe bağlı bağımlılıklar `Degraded` (HTTP 200). P5-03/P5-04 yeni denetim eklerse `Degraded` olmalı. Öneri: kabul.
+6. **JWT anahtarı hex olmalı (DEC-655).** P5-05 belgesi "32 bayt rastgele" diyor; uygulama 64 karakterlik hex ister (`openssl rand -hex 32`). Yanlış biçim API'yi başlatmaz. *Yönetici:* ilk kurulumda sır yazarken bu biçime dikkat. Öneri: kabul; P5-05 belgesi birleşince düzeltilecek.
+7. **Veri taşıma (DEC-656).** Yönetilen PostgreSQL'de yönetici süper kullanıcı değil, bu yüzden `restore-logical.sh` çalışmaz; yerine migrator rolüyle `pg_restore` önerilir (yerelde denendi, Flexible Server'da denenmedi). Belge dosyaları için `scripts/copy-documents-to-blob.sh`. *Yönetici:* taşıma sırasında API'yi durdurmak (bakım penceresi) gerekir. Öneri: kabul; staging'de provası şart.
+8. **P5-05'e bırakılanlar (DEC-657).** `infra/` ana dalda olmadığı için bu PR ona dokunmadı: `Storage__*`, `ForwardLimit` ve kimliğin istemci kimliği modüle P5-05 birleşince eklenmeli; o zamana kadar `extra_env` ile verilir. Öneri: P5-05 sonrası küçük bir issue aç.

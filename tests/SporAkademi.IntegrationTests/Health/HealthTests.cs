@@ -41,6 +41,26 @@ public sealed class HealthTests(DatabaseFixture database) : IntegrationTest(data
     }
 
     [Fact]
+    [Trait("Story", "P5-06")]
+    public async Task Ready_stays_200_but_degraded_when_azure_blob_storage_is_unreachable()
+    {
+        // P5-06 (DEC-654): a Container Apps readiness probe must not pull every replica out of rotation over an optional dependency.
+        await using var factory = new ApiFactory(Database.AppConnectionString, storage: new Dictionary<string, string?>
+        {
+            ["Storage:Provider"] = "AzureBlob",
+            ["Storage:BlobServiceUrl"] = "http://127.0.0.1:1/devstoreaccount1",
+            ["Storage:Container"] = "documents",
+            ["Storage:ManagedIdentityClientId"] = Guid.CreateVersion7().ToString(),
+        });
+        using var client = factory.CreateClient();
+
+        var ready = await client.GetAsync(new Uri("/health/ready", UriKind.Relative), TestContext.Current.CancellationToken);
+
+        ready.StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await ready.Content.ReadAsStringAsync(TestContext.Current.CancellationToken)).ShouldBe("Degraded");
+    }
+
+    [Fact]
     public void Startup_fails_fast_without_a_connection_string()
     {
         using var factory = new ApiFactory(string.Empty);
