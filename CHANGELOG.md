@@ -8,6 +8,7 @@ Bu dosya [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) biçimini ve [
 
 #### Faz 5 — Ölçek ve mimari
 - Faz 4 geçişi sahip tarafından onaylandı (2026-11-16); Faz 5 planı roadmap'e yazıldı.
+- **Azure için infrastructure as code (P5-05):** `infra/` altında OpenTofu (Terraform dili, ADR-0015) ile staging ve production: Container Apps (API, admin, veli, Caddy gateway, migration job, RabbitMQ ve bildirim servisi için yer), PostgreSQL Flexible Server, Key Vault (sırlar yönetilen kimlikle), Log Analytics, belge depolama. `repo-checks` `fmt`, `validate` ve Trivy config taraması çalıştırır; `apply` yok, gerçek kaynaklar sahipte. Maliyet tahmini (~89 USD/ay, 20 USD hedefinin üstünde) ve Türkiye bölgesi olmamasının ADR-0014 ile ilişkisi `docs/bulut-altyapisi.md`'de (DEC-640 – DEC-649).
 
 ## [0.4.0] - 2026-11-16
 
