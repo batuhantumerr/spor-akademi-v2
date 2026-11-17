@@ -73,6 +73,18 @@ bash scripts/run-api.sh                            # RabbitMQ çalışıyorsa Co
 
 Yönetim arayüzü `http://127.0.0.1:55673` (kullanıcı `spor_akademi`, parola `.env`'deki `RABBITMQ_PASSWORD`); kuyruklar, `spor-akademi.events.dead-letter` kuyruğu ve mesaj başlıkları (`x-attempt`, `x-error`) orada görünür. `ConnectionStrings:RabbitMq` yoksa (ör. testlerde) hiçbir şey değişmez. Broker kapanırsa mesajlar outbox'ta bekler, `/health/ready` `rabbitmq` kontrolü Degraded olur ve broker dönünce teslim sürer. Ayarlar `RabbitMq` bölümündedir (`MaxDeliveryAttempts`, `RetryDelay`, `Consumers:Enabled`, `Consumers:Modules`); bir host yalnız yayımlayacaksa `RabbitMq__Consumers__Enabled=false`.
 
+### Bildirim worker'ı (P5-04)
+
+E-posta gönderen tüketiciler (`notifications` grubu: karşılama, davet, şifre sıfırlama/değişti, aidat hatırlatması, iade e-postası) ayrı bir süreçte, `src/SporAkademi.Notifications` host'unda çalışabilir (DEC-630 – DEC-639, ADR-0017). Worker yalnız bu tüketicileri RabbitMQ'dan çalıştırır; gerçek zamanlı (SignalR) bildirimler API'de kalır. Worker'ın ayarları kodda sabittir: başka bir tüketici grubunu, Hangfire sunucusunu ya da outbox yayımını yapılandırmayla açamazsınız.
+
+```bash
+docker compose --profile messaging --profile mail up -d --wait    # PostgreSQL, RabbitMQ, Mailpit
+API_EXCLUDE_NOTIFICATION_CONSUMERS=1 bash scripts/run-api.sh      # API e-posta mesajlarına dokunmaz
+bash scripts/run-notifications.sh                                 # worker: http://127.0.0.1:5081/health/ready
+```
+
+`SPOR_AKADEMI_ENV_FILE` iki betikte de geçerlidir. Worker çalışmıyorsa e-posta mesajları kuyrukta bekler ve worker açılınca gider; `API_EXCLUDE_NOTIFICATION_CONSUMERS` verilmezse API de bu kuyrukları tüketir. Aynı kuyruğu iki süreç tükettiğinde iş bölüşülür ve her mesaj yine tek kez işlenir (kuyruk ve inbox kaydı tüketici başına, süreç başına değil), ama e-postanın hangi süreçten çıktığı belirsiz olur; bu yüzden worker kurulunca API'de dışlama yapılır. RabbitMQ yokken (`ConnectionStrings:RabbitMq` boş) hiçbir şey değişmez: outbox e-postayı API sürecinde gönderir ve worker başlamayı reddeder. Docker: `docker build -f docker/notifications/Dockerfile -t spor-akademi-notifications .`. API'de dışlama ayarı: `RabbitMq__Consumers__ExcludeGroups__0=notifications`.
+
 ### Cache (P2-F7)
 
 Branş ve tesis listeleri, okulun saat dilimi ve dashboard `HybridCache` ile cache'lenir (DEC-310 – DEC-316). Bellek içi cache her zaman vardır; Valkey (L2) isteğe bağlıdır ve compose'un `cache` profilindedir, yani düz `docker compose up` onu başlatmaz ve `VALKEY_PASSWORD` istemez:

@@ -165,13 +165,51 @@ variable "rabbitmq_storage_account_key" {
 }
 
 variable "notifications_enabled" {
-  description = "Placeholder for the P5-04 worker. Turn on once its image exists."
+  description = "Run the P5-04 notifications worker; the API then leaves the e-mail consumers to it. Needs rabbitmq_enabled."
   type        = bool
   default     = false
 }
 
-variable "notifications_image_name" {
-  description = "Image name under image_registry for the P5-04 worker."
-  type        = string
-  default     = "spor-akademi-v2-notifications"
+variable "notifications_min_replicas" {
+  type    = number
+  default = 1
+}
+
+variable "notifications_max_replicas" {
+  type    = number
+  default = 1
+}
+
+variable "notifications_cpu" {
+  type    = number
+  default = 0.25
+}
+
+variable "notifications_memory" {
+  type    = string
+  default = "0.5Gi"
+}
+
+variable "email_env" {
+  description = "Plain e-mail settings for the API and the worker (Email__Smtp__Host, Email__FromAddress, Email__AppBaseUrl, ...)."
+  type        = map(string)
+  default     = {}
+}
+
+variable "email_secret_env" {
+  description = "E-mail settings from Key Vault for the API and the worker: environment variable name => secret name (e.g. Email__Smtp__Password = smtp-password)."
+  type        = map(string)
+  default     = {}
+}
+
+variable "notifications_extra_env" {
+  description = "More plain settings for the worker only."
+  type        = map(string)
+  default     = {}
+}
+
+variable "notifications_extra_secret_env" {
+  description = "More Key Vault settings for the worker only: environment variable name => secret name."
+  type        = map(string)
+  default     = {}
 }
