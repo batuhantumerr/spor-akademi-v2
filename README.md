@@ -61,6 +61,18 @@ Tarayıcının geliştirici araçlarında Application → Service workers / Cach
 
 İki uygulama da istemcisini commit edilen OpenAPI belgesinden (`openapi/spor-akademi.json`) çalıştırma/build/test öncesi otomatik üretir. Tema token'ları admin'den kopyalanır; `bash scripts/check-theme-tokens.sh` sapmayı yakalar (DEC-378).
 
+### Mesaj broker'ı (P5-03)
+
+Entegrasyon event'leri (e-posta, bildirim, belge silme) outbox'tan varsayılan olarak aynı süreçte teslim edilir. RabbitMQ isteğe bağlıdır ve compose'un `messaging` profilindedir; çalışırken API outbox mesajlarını broker'a yayımlar, tüketiciler handler'ları kendi kuyruklarından çalıştırır (DEC-620 – DEC-629, ADR-0016):
+
+```bash
+bash scripts/setup-env.sh                          # eski bir .env'e sadece eksik RABBITMQ_* anahtarlarını ekler
+docker compose --profile messaging up -d --wait    # PostgreSQL, Seq ve RabbitMQ
+bash scripts/run-api.sh                            # RabbitMQ çalışıyorsa ConnectionStrings__RabbitMq'yu ayarlar
+```
+
+Yönetim arayüzü `http://127.0.0.1:55673` (kullanıcı `spor_akademi`, parola `.env`'deki `RABBITMQ_PASSWORD`); kuyruklar, `spor-akademi.events.dead-letter` kuyruğu ve mesaj başlıkları (`x-attempt`, `x-error`) orada görünür. `ConnectionStrings:RabbitMq` yoksa (ör. testlerde) hiçbir şey değişmez. Broker kapanırsa mesajlar outbox'ta bekler, `/health/ready` `rabbitmq` kontrolü Degraded olur ve broker dönünce teslim sürer. Ayarlar `RabbitMq` bölümündedir (`MaxDeliveryAttempts`, `RetryDelay`, `Consumers:Enabled`, `Consumers:Modules`); bir host yalnız yayımlayacaksa `RabbitMq__Consumers__Enabled=false`.
+
 ### Cache (P2-F7)
 
 Branş ve tesis listeleri, okulun saat dilimi ve dashboard `HybridCache` ile cache'lenir (DEC-310 – DEC-316). Bellek içi cache her zaman vardır; Valkey (L2) isteğe bağlıdır ve compose'un `cache` profilindedir, yani düz `docker compose up` onu başlatmaz ve `VALKEY_PASSWORD` istemez:
