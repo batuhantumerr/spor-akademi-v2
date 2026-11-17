@@ -21,6 +21,9 @@ env:
   TRIVY_SHA256: c7cbe3137fb8a48a17574bede3dd6beb16742d1e9772929940fc90082c39d9c0
   GITLEAKS_VERSION: 8.30.1
   GITLEAKS_SHA256: 551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb
+  # P5-05 (DEC-642): OpenTofu (MPL-2.0), checksum from the release's tofu_<version>_SHA256SUMS (linux_amd64.tar.gz).
+  OPENTOFU_VERSION: 1.13.9
+  OPENTOFU_SHA256: b34b327cc1ef07178207b6f2cd1f5276537d3e5b7be316500f6dac50d4c0a857
 
 jobs:
   backend:
@@ -162,7 +165,8 @@ jobs:
 
   repo-checks:
     runs-on: ubuntu-24.04
-    timeout-minutes: 5
+    # 10: the infrastructure step downloads the azurerm provider (about 100 MB) once for both environments.
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -189,6 +193,26 @@ jobs:
         run: node scripts/check-i18n.mjs
       - name: Privacy notice pages match docs/aydinlatma-metni.md (P4-06, DEC-543)
         run: node scripts/privacy-notice.mjs --check
+      - name: Infrastructure as code (OpenTofu fmt, validate; Trivy config; pinned binaries + checksums, P5-05, DEC-642)
+        run: |
+          set -euo pipefail
+          bin="$RUNNER_TEMP/bin"; mkdir -p "$bin" "$RUNNER_TEMP/plugin-cache"
+          curl -fsSLo "$RUNNER_TEMP/tofu.tgz" "https://github.com/opentofu/opentofu/releases/download/v${OPENTOFU_VERSION}/tofu_${OPENTOFU_VERSION}_linux_amd64.tar.gz"
+          echo "${OPENTOFU_SHA256}  $RUNNER_TEMP/tofu.tgz" | sha256sum -c -
+          tar -xzf "$RUNNER_TEMP/tofu.tgz" -C "$bin" tofu
+          curl -fsSLo "$RUNNER_TEMP/trivy.tgz" "https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/trivy_${TRIVY_VERSION}_Linux-64bit.tar.gz"
+          echo "${TRIVY_SHA256}  $RUNNER_TEMP/trivy.tgz" | sha256sum -c -
+          tar -xzf "$RUNNER_TEMP/trivy.tgz" -C "$bin" trivy
+          export PATH="$bin:$PATH" TF_PLUGIN_CACHE_DIR="$RUNNER_TEMP/plugin-cache"
+          tofu fmt -check -recursive -diff infra
+          # -lockfile=readonly: the committed .terraform.lock.hcl must already pin the providers (with hashes).
+          for env in staging production; do
+            echo "== infra/envs/$env"
+            (cd "infra/envs/$env" && tofu init -backend=false -input=false -lockfile=readonly && tofu validate)
+          done
+          # Misconfiguration scan of the code (high and critical fail). Accepted findings are inline #trivy:ignore
+          # comments with the reason next to them.
+          trivy config --quiet --skip-version-check --severity HIGH,CRITICAL --exit-code 1 infra
       - name: Secret scan (gitleaks, pinned binary + checksum, DEC-200)
         run: |
           curl -fsSLo gitleaks.tgz "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"

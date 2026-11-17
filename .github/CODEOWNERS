@@ -14,6 +14,7 @@
 
 # Images, database roles and scripts
 /docker/                      @batuhantumerr
+/infra/                       @batuhantumerr
 /scripts/                     @batuhantumerr
 
 # Application code and tests that guard it
