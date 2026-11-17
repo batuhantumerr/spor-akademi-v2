@@ -5,6 +5,7 @@ import {
   HttpErrorResponse,
   HttpHeaders,
 } from '@angular/common/http';
+import { DOCUMENT } from '@angular/common';
 import { Injectable, computed, inject, signal } from '@angular/core';
 import { Router } from '@angular/router';
 import {
@@ -81,6 +82,16 @@ export const RESTORE_RETRY_DELAY_MS = 500;
 /** Longest a login waits for a still-running startup restore call to settle (DEC-447). */
 export const LOGIN_RESTORE_WAIT_MS = 15000;
 
+/**
+ * P5-02 (DEC-612): a background reconnect of the real-time connection may renew the session only if the user did
+ * something (pointer, key, touch, scroll, returning to the tab) within this time. Otherwise the session is left to
+ * run into the server's idle timeout instead of being kept alive by the machine.
+ */
+export const BACKGROUND_REFRESH_WINDOW_MS = 10 * 60 * 1000;
+
+/** User interactions that count as activity; no event is read, only its time. */
+const ACTIVITY_EVENTS = ['pointerdown', 'keydown', 'touchstart', 'wheel'] as const;
+
 /** Marks requests that must not get a bearer token or trigger a refresh retry. */
 export const SKIP_AUTH = new HttpContextToken<boolean>(() => false);
 
@@ -93,6 +104,10 @@ export const SKIP_AUTH = new HttpContextToken<boolean>(() => false);
 export class AuthService {
   private readonly http = inject(HttpClient);
   private readonly router = inject(Router);
+  private readonly document = inject(DOCUMENT);
+
+  /** Time of the last user interaction (P5-02); starts at page load, which is itself an interaction. */
+  private lastInteractionAt = Date.now();
 
   private readonly accessToken = signal<string | null>(null);
   private readonly currentUser = signal<CurrentUser | null>(null);
@@ -110,8 +125,33 @@ export class AuthService {
   readonly role = computed(() => this.currentUser()?.role ?? null);
   readonly mustChangePassword = computed(() => this.currentUser()?.mustChangePassword ?? false);
 
+  constructor() {
+    const touch = (): void => this.noteInteraction();
+    for (const name of ACTIVITY_EVENTS) {
+      this.document.addEventListener(name, touch, { passive: true, capture: true });
+    }
+    this.document.addEventListener('visibilitychange', () => {
+      if (this.document.visibilityState === 'visible') {
+        this.noteInteraction();
+      }
+    });
+  }
+
   token(): string | null {
     return this.accessToken();
+  }
+
+  /** Records that the user is at the keyboard now (P5-02). */
+  noteInteraction(now = Date.now()): void {
+    this.lastInteractionAt = now;
+  }
+
+  /**
+   * Whether the user did something recently enough for a refresh nobody asked for (P5-02, DEC-612). Refreshes caused by
+   * a request that the user's own action started do not need this: the request itself is the activity.
+   */
+  recentlyActive(now = Date.now()): boolean {
+    return now - this.lastInteractionAt < BACKGROUND_REFRESH_WINDOW_MS;
   }
 
   /** Identifies the current session; changes on login, logout and expiry. */

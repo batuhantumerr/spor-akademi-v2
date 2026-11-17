@@ -39,7 +39,7 @@ public sealed class LoginTests(DatabaseFixture database) : IdentityTest(database
         var cookie = RefreshCookieOf(response)!;
         cookie.Value.Length.ShouldBe(43); // 256 bits, base64url
         cookie.Attributes["path"].ShouldBe("/api/v1/auth");
-        cookie.Attributes["max-age"].ShouldBe("604800");
+        cookie.Attributes["max-age"].ShouldBe("1800"); // P5-02: a coach is a panel role, 30 minutes idle
         cookie.Attributes["samesite"].ShouldBe("strict");
         cookie.Attributes.ShouldContainKey("secure");
         cookie.Attributes.ShouldContainKey("httponly");

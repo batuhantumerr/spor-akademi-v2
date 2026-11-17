@@ -92,7 +92,7 @@ public sealed class ParentAccountTests
         var parent = Invite();
         parent.IssuePasswordToken("davet", PasswordTokenPurpose.Invitation, Now);
         parent.SetPasswordWithToken("davet", "own-hash", Now);
-        var session = parent.CompleteLogin("r1", Now).Value;
+        var session = parent.CompleteLogin("r1", Now, SessionPolicy.Standard).Value;
         parent.Deactivate(Now).IsSuccess.ShouldBeTrue();
 
         parent.ReinviteParent(Email.Create("yeni@example.com").Value, "new-unusable", "Ayşe", "Yılmaz", null, Now.AddDays(1)).IsSuccess.ShouldBeTrue();
@@ -123,7 +123,7 @@ public sealed class ParentAccountTests
         var parent = User.InviteParent(School, Email.Create("veli@example.com").Value, "unusable-hash", "Ayşe", "Deneme", PhoneNumber.Create("0532 111 22 33").Value, Now).Value;
         parent.IssuePasswordToken("davet", PasswordTokenPurpose.Invitation, Now);
         parent.SetPasswordWithToken("davet", "own-hash", Now);
-        var session = parent.CompleteLogin("r1", Now).Value;
+        var session = parent.CompleteLogin("r1", Now, SessionPolicy.Standard).Value;
 
         parent.EraseParent(Now.AddDays(1));
 

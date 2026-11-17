@@ -57,9 +57,22 @@ public abstract class IdentityTest(DatabaseFixture database) : IntegrationTest(d
             var user = User.Create(school, Email.Create(email).Value, hasher.Hash(TemporaryPassword), role, "Deniz", "Kaya", null).Value;
             if (!temporary)
             {
-                user.ChangePassword(hasher.Hash(OwnPassword), sp.GetRequiredService<IRefreshTokenFactory>().Create().Hash, Api.Clock.GetUtcNow());
+                user.ChangePassword(hasher.Hash(OwnPassword), sp.GetRequiredService<IRefreshTokenFactory>().Create().Hash, Api.Clock.GetUtcNow(), SessionPolicy.Standard);
             }
 
+            var db = sp.GetRequiredService<AppDbContext>();
+            db.Add(user);
+            await db.SaveChangesAsync();
+            return user;
+        });
+
+    /// <summary>A parent account whose password is <see cref="OwnPassword"/> (a parent is normally opened by an invitation).</summary>
+    protected Task<User> SeedParentAsync(string email, SchoolId school) =>
+        InScopeAsync(async sp =>
+        {
+            var hasher = sp.GetRequiredService<IPasswordHasher>();
+            var user = User.InviteParent(school, Email.Create(email).Value, hasher.Hash(TemporaryPassword), "Deniz", "Kaya", null, Api.Clock.GetUtcNow()).Value;
+            user.ChangePassword(hasher.Hash(OwnPassword), sp.GetRequiredService<IRefreshTokenFactory>().Create().Hash, Api.Clock.GetUtcNow(), SessionPolicy.Standard);
             var db = sp.GetRequiredService<AppDbContext>();
             db.Add(user);
             await db.SaveChangesAsync();

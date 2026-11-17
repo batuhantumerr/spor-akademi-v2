@@ -62,7 +62,7 @@ public sealed class LoginLockoutTests
             user.RecordFailedLogin(Now);
         }
 
-        user.CompleteLogin("token-hash", Now).IsSuccess.ShouldBeTrue();
+        user.CompleteLogin("token-hash", Now, SessionPolicy.Standard).IsSuccess.ShouldBeTrue();
 
         user.FailedLoginCount.ShouldBe(0);
         user.RecordFailedLogin(Now).ShouldBe(AuthErrors.InvalidCredentials);
@@ -92,7 +92,7 @@ public sealed class LoginLockoutTests
         var user = UserTests.NewCoach();
         user.Deactivate(Now);
 
-        user.CompleteLogin("token-hash", Now).Error.ShouldBe(AuthErrors.AccountInactive);
+        user.CompleteLogin("token-hash", Now, SessionPolicy.Standard).Error.ShouldBe(AuthErrors.AccountInactive);
         user.RefreshTokens.ShouldBeEmpty();
     }
 }

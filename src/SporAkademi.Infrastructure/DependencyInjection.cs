@@ -129,6 +129,9 @@ public static class DependencyInjection
             services.AddMfa();
         }
 
+        // P5-02: defaults apply when unset; registered for every host so session-starting handlers resolve.
+        services.AddSessionPolicies();
+
         services.AddSingleton<PlatformAdminSeed>();
         services.AddHostedService(provider => provider.GetRequiredService<PlatformAdminSeed>());
         services.AddScoped<ISportRepository, SportRepository>();

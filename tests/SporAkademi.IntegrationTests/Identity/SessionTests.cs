@@ -14,6 +14,13 @@ public sealed class SessionTests(DatabaseFixture database) : IdentityTest(databa
         return (coach, await LoginOkAsync("coach@example.com"));
     }
 
+    private async Task<Session> ParentSessionAsync()
+    {
+        var school = await SeedSchoolAsync();
+        await SeedParentAsync("parent@example.com", school);
+        return await LoginOkAsync("parent@example.com");
+    }
+
     [Fact]
     public async Task Refresh_returns_a_new_token_pair_and_invalidates_the_old_refresh_token()
     {
@@ -28,7 +35,7 @@ public sealed class SessionTests(DatabaseFixture database) : IdentityTest(databa
         second.AccessToken.ShouldNotBe(first.AccessToken);
         second.Body.User.Id.ShouldBe(coach.Id.Value);
         Decode(second.AccessToken).ValidTo.ShouldBe(Api.Clock.GetUtcNow().AddMinutes(15).UtcDateTime);
-        RefreshCookieOf(response)!.Attributes["max-age"].ShouldBe("604800");
+        RefreshCookieOf(response)!.Attributes["max-age"].ShouldBe("1800"); // P5-02: panel roles, 30 minutes idle
         (await SendAsync(HttpMethod.Get, "/api/v1/me", second.AccessToken)).StatusCode.ShouldBe(HttpStatusCode.OK);
     }
 
@@ -120,9 +127,9 @@ public sealed class SessionTests(DatabaseFixture database) : IdentityTest(databa
     }
 
     [Fact]
-    public async Task Refresh_tokens_expire_after_seven_days()
+    public async Task Refresh_tokens_of_a_parent_expire_after_seven_days()
     {
-        var (_, session) = await CoachSessionAsync();
+        var session = await ParentSessionAsync();
 
         Api.Clock.Advance(TimeSpan.FromDays(7));
         var response = await RefreshAsync(session.RefreshToken);
@@ -132,9 +139,9 @@ public sealed class SessionTests(DatabaseFixture database) : IdentityTest(databa
     }
 
     [Fact]
-    public async Task A_session_ends_thirty_days_after_login_however_often_it_is_refreshed()
+    public async Task A_parent_session_ends_thirty_days_after_login_however_often_it_is_refreshed()
     {
-        var (_, session) = await CoachSessionAsync();
+        var session = await ParentSessionAsync();
         var token = session.RefreshToken;
 
         for (var day = 6; day <= 24; day += 6)

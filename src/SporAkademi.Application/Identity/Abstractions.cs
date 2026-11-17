@@ -31,7 +31,7 @@ public sealed record AccessToken(string Value, DateTimeOffset ExpiresAt);
 /// <summary>Issues the short-lived access token (ADR-0006): claims carry ids and flags only, no personal data.</summary>
 public interface IAccessTokenIssuer
 {
-    AccessToken Issue(User user, DateTimeOffset now);
+    AccessToken Issue(User user, DateTimeOffset now, DateTimeOffset sessionEnd);
 }
 
 /// <summary>A new opaque refresh token: <see cref="Token"/> goes to the client once, only <see cref="Hash"/> is stored.</summary>
@@ -54,6 +54,12 @@ public interface IPasswordTokenFactory
     NewPasswordToken Create();
 
     string Hash(string token);
+}
+
+/// <summary>How long a session of a role lasts: idle timeout and absolute lifetime (P5-02, DEC-610, DEC-611).</summary>
+public interface ISessionPolicies
+{
+    SessionPolicy ForRole(UserRole role);
 }
 
 /// <summary>Loads users with their refresh tokens. Users are not tenant-filtered (DEC-105).</summary>

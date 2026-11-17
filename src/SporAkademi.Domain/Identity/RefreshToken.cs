@@ -15,7 +15,7 @@ public sealed class RefreshToken : Entity<RefreshTokenId>
 {
     public const int TokenHashLength = 64;
 
-    private RefreshToken(RefreshTokenId id, UserId userId, string tokenHash, Guid familyId, DateTimeOffset issuedAt, DateTimeOffset expiresAt, DateTimeOffset familyExpiresAt)
+    private RefreshToken(RefreshTokenId id, UserId userId, string tokenHash, Guid familyId, DateTimeOffset issuedAt, DateTimeOffset expiresAt, DateTimeOffset familyStartedAt, DateTimeOffset familyExpiresAt)
         : base(id)
     {
         UserId = userId;
@@ -23,6 +23,7 @@ public sealed class RefreshToken : Entity<RefreshTokenId>
         FamilyId = familyId;
         IssuedAt = issuedAt;
         ExpiresAt = expiresAt;
+        FamilyStartedAt = familyStartedAt;
         FamilyExpiresAt = familyExpiresAt;
     }
 
@@ -40,7 +41,10 @@ public sealed class RefreshToken : Entity<RefreshTokenId>
 
     public DateTimeOffset ExpiresAt { get; private set; }
 
-    /// <summary>The absolute end of the session this token belongs to: 30 days after the login (NFR-SEC-05).</summary>
+    /// <summary>The login that started the session this token belongs to (P5-02): the base of the absolute lifetime of a role.</summary>
+    public DateTimeOffset FamilyStartedAt { get; private set; }
+
+    /// <summary>The absolute end of the session this token belongs to: a role's absolute lifetime after the login (NFR-SEC-05, P5-02).</summary>
     public DateTimeOffset FamilyExpiresAt { get; private set; }
 
     public DateTimeOffset? RevokedAt { get; private set; }
@@ -53,11 +57,11 @@ public sealed class RefreshToken : Entity<RefreshTokenId>
 
     public bool IsActive(DateTimeOffset now) => RevokedAt is null && now < ExpiresAt;
 
-    internal static RefreshToken Issue(UserId userId, string tokenHash, Guid familyId, DateTimeOffset now, DateTimeOffset familyExpiresAt)
+    internal static RefreshToken Issue(UserId userId, string tokenHash, Guid familyId, DateTimeOffset now, TimeSpan sliding, DateTimeOffset familyStartedAt, DateTimeOffset familyExpiresAt)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(tokenHash);
-        var expiresAt = Min(now + User.RefreshTokenLifetime, familyExpiresAt);
-        return new RefreshToken(EntityId.New<RefreshTokenId>(), userId, tokenHash, familyId, now, expiresAt, familyExpiresAt);
+        var expiresAt = Min(now + sliding, familyExpiresAt);
+        return new RefreshToken(EntityId.New<RefreshTokenId>(), userId, tokenHash, familyId, now, expiresAt, familyStartedAt, familyExpiresAt);
     }
 
     internal void Revoke(DateTimeOffset now) => RevokedAt ??= now;

@@ -268,7 +268,7 @@ export class RealtimeService {
 
   /**
    * Called by SignalR before every (re)connect. Throws when the session is over. A hidden tab does
-   * not refresh: it waits until it is visible again (the token may be fresh by then).
+   * not refresh: it waits until it is visible again (the token may be fresh by then). Nor does an idle one (P5-02).
    */
   private async freshToken(): Promise<string> {
     const current = this.usableToken();
@@ -279,6 +279,12 @@ export class RealtimeService {
     const renewed = this.usableToken();
     if (renewed) {
       return renewed;
+    }
+    // P5-02 (DEC-612): a reconnect is not the user. After a network drop in an idle tab the token would be renewed
+    // again and again, and the session would never reach its idle timeout. Without recent activity no refresh happens;
+    // the restart schedule asks again and goes through once the user is back.
+    if (!this.auth.recentlyActive()) {
+      throw new Error('Idle: the session is not renewed in the background.');
     }
     this.forceRefresh = false;
     const refreshed = await firstValueFrom(this.auth.refresh());

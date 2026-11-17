@@ -5,6 +5,7 @@ import { Router, provideRouter } from '@angular/router';
 
 import {
   AuthService,
+  BACKGROUND_REFRESH_WINDOW_MS,
   CurrentUser,
   LOGIN_RESTORE_WAIT_MS,
   MfaChallenge,
@@ -56,6 +57,42 @@ describe('AuthService', () => {
     backend.expectOne('/api/v1/auth/refresh').flush({ accessToken: 'token-1', expiresIn: 900 });
     backend.expectOne('/api/v1/me').flush(user);
   }
+
+  describe('idle sessions (P5-02)', () => {
+    it('is recently active after an interaction and not after the window has passed', () => {
+      const start = Date.now();
+      auth.noteInteraction(start);
+      expect(auth.recentlyActive(start + BACKGROUND_REFRESH_WINDOW_MS - 1)).toBe(true);
+      expect(auth.recentlyActive(start + BACKGROUND_REFRESH_WINDOW_MS)).toBe(false);
+    });
+
+    it('counts a key press or a click as interaction, but not an ordinary event', () => {
+      const past = Date.now() - BACKGROUND_REFRESH_WINDOW_MS * 2;
+      auth.noteInteraction(past);
+      expect(auth.recentlyActive()).toBe(false);
+
+      document.dispatchEvent(new Event('mousemove'));
+      expect(auth.recentlyActive()).toBe(false);
+
+      document.dispatchEvent(new Event('keydown'));
+      expect(auth.recentlyActive()).toBe(true);
+    });
+
+    it('ends the session without an alarm when the server finds it expired: sign-in page with the expired notice, no logout call', () => {
+      restoreSession();
+      let result: string | null | undefined;
+      auth.refresh().subscribe((token) => (result = token));
+      backend
+        .expectOne('/api/v1/auth/refresh')
+        .flush({ code: 'Auth.SessionExpired' }, { status: 401, statusText: 'Unauthorized' });
+
+      expect(result).toBeNull();
+      expect(auth.isAuthenticated()).toBe(false);
+      expect(auth.token()).toBeNull();
+      // Nothing else is sent: no logout (which would call out the other devices), only the local state ends.
+      backend.expectNone('/api/v1/auth/logout');
+    });
+  });
 
   describe('parent accounts (P3-01)', () => {
     it('refuses a parent at login: the session ends, the cookie is dropped and the error says why', () => {

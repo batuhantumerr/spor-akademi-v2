@@ -18,11 +18,11 @@ internal sealed class JwtAccessTokenIssuer(IOptions<JwtOptions> options) : IAcce
 
     private static readonly JsonWebTokenHandler Handler = new();
 
-    public AccessToken Issue(User user, DateTimeOffset now)
+    public AccessToken Issue(User user, DateTimeOffset now, DateTimeOffset sessionEnd)
     {
         ArgumentNullException.ThrowIfNull(user);
         var jwt = options.Value;
-        var expiresAt = now + jwt.AccessTokenLifetime;
+        var expiresAt = Min(now + jwt.AccessTokenLifetime, sessionEnd);
 
         var claims = new Dictionary<string, object>(StringComparer.Ordinal)
         {
@@ -49,4 +49,6 @@ internal sealed class JwtAccessTokenIssuer(IOptions<JwtOptions> options) : IAcce
 
         return new AccessToken(token, expiresAt);
     }
+
+    private static DateTimeOffset Min(DateTimeOffset a, DateTimeOffset b) => a <= b ? a : b;
 }

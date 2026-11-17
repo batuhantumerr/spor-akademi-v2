@@ -227,7 +227,7 @@ Migration ekleyen işler (MFA → oturum süresi) art arda yapılır; RabbitMQ v
 - [x] P5-01 **Yöneticiler için MFA (TOTP).** (DEC-600 – DEC-609) Platform Admin için zorunlu, Okul Admini için isteğe bağlı; kurtarma kodları, Platform Admin sıfırlaması ve e-posta bildirimleri dahil. Kalan: kurtarma kodu yenileme, anahtar döndürme, antrenör MFA'sı (onay listesi 12).
   - Platform Admin için zorunlu, Okul Admini için açılabilir (okul ayarı ya da kişisel tercih); RFC 6238 TOTP, QR ile kurulum, tek kullanımlık kurtarma kodları.
   - Giriş iki adımlı olur; ikinci adım rate limit'li, gizli anahtar veritabanında şifreli; "telefon kayboldu" akışı (kurtarma kodu ya da Platform Admin'in sıfırlaması, audit'li).
-- [ ] P5-02 **Rol bazlı oturum süresi.** Yönetici ve antrenör oturumları için kısa mutlak süre ve hareketsizlik sınırı (ASVS L2: 12 saat ya da 30 dk hareketsizlik; hareketsizlik kuralının refresh ile nasıl uygulanacağı DEC olarak yazılır), veli için mevcut 7 gün kayan / 30 gün mutlak. (DEC-610 – DEC-614)
+- [x] P5-02 **Rol bazlı oturum süresi.** Yönetici ve antrenör oturumları için kısa mutlak süre ve hareketsizlik sınırı (ASVS L2: 12 saat ya da 30 dk hareketsizlik; hareketsizlik kuralının refresh ile nasıl uygulanacağı DEC olarak yazılır), veli için mevcut 7 gün kayan / 30 gün mutlak. (DEC-610 – DEC-614)
 
 ### 5.2 Mesajlaşma ve servis sınırları (P5-F1, P5-F2)
 - [x] P5-03 **Entegrasyon event'leri için RabbitMQ.** (DEC-620 – DEC-629; ADR-0016)

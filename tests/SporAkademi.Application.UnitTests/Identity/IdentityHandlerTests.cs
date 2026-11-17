@@ -24,6 +24,7 @@ public sealed class IdentityHandlerTests
     private readonly ITenancyModule _tenancy = Substitute.For<ITenancyModule>();
     private readonly ICurrentUser _currentUser = Substitute.For<ICurrentUser>();
     private readonly IMfaPolicy _mfaPolicy = Substitute.For<IMfaPolicy>();
+    private readonly ISessionPolicies _sessionPolicies = Substitute.For<ISessionPolicies>();
 
     public IdentityHandlerTests()
     {
@@ -31,8 +32,9 @@ public sealed class IdentityHandlerTests
         _hasher.Verify(Arg.Any<string>(), Arg.Any<string>())
             .Returns(c => c.ArgAt<string>(0) == "hash:" + c.ArgAt<string>(1) ? PasswordVerification.Success : PasswordVerification.Failed);
         _refreshTokens.Create().Returns(new NewRefreshToken("token", "token-hash"));
-        _accessTokens.Issue(Arg.Any<User>(), Arg.Any<DateTimeOffset>()).Returns(new AccessToken("jwt", _clock.GetUtcNow().AddMinutes(15)));
+        _accessTokens.Issue(Arg.Any<User>(), Arg.Any<DateTimeOffset>(), Arg.Any<DateTimeOffset>()).Returns(new AccessToken("jwt", _clock.GetUtcNow().AddMinutes(15)));
         _tenancy.IsSchoolActiveAsync(Arg.Any<SchoolId>(), Arg.Any<CancellationToken>()).Returns(true);
+        _sessionPolicies.ForRole(Arg.Any<UserRole>()).Returns(SessionPolicy.Standard);
     }
 
     private User Coach(SchoolId? school = null)
@@ -43,7 +45,7 @@ public sealed class IdentityHandlerTests
         return user;
     }
 
-    private LoginHandler Login() => new(_users, _hasher, _refreshTokens, _accessTokens, _tenancy, _mfaPolicy, _clock);
+    private LoginHandler Login() => new(_users, _hasher, _refreshTokens, _accessTokens, _tenancy, _mfaPolicy, _sessionPolicies, _clock);
 
     [Fact]
     [Trait("Story", "US-03")]
@@ -115,7 +117,7 @@ public sealed class IdentityHandlerTests
     public async Task Wrong_current_password_changes_nothing_but_counts_towards_the_lockout()
     {
         var user = Coach();
-        var handler = new ChangePasswordHandler(_users, _hasher, _refreshTokens, _accessTokens, _clock);
+        var handler = new ChangePasswordHandler(_users, _hasher, _refreshTokens, _accessTokens, _sessionPolicies, _clock);
 
         var result = await handler.Handle(new ChangePasswordCommand(user.Id.Value, "wrong-password", "Yeni-Sifre-2027"), CancellationToken.None);
 
@@ -129,7 +131,7 @@ public sealed class IdentityHandlerTests
     public async Task New_password_equal_to_the_current_one_is_rejected()
     {
         var user = Coach();
-        var handler = new ChangePasswordHandler(_users, _hasher, _refreshTokens, _accessTokens, _clock);
+        var handler = new ChangePasswordHandler(_users, _hasher, _refreshTokens, _accessTokens, _sessionPolicies, _clock);
 
         var result = await handler.Handle(new ChangePasswordCommand(user.Id.Value, "Gecici-Sifre-1", "Gecici-Sifre-1"), CancellationToken.None);
 

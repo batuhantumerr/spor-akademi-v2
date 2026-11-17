@@ -72,5 +72,5 @@ internal sealed class SeedClock : TimeProvider
 /// <summary>Password changes return a session; the seeder has no use for access tokens.</summary>
 internal sealed class NoAccessTokens : IAccessTokenIssuer
 {
-    public AccessToken Issue(User user, DateTimeOffset now) => new(string.Empty, now);
+    public AccessToken Issue(User user, DateTimeOffset now, DateTimeOffset sessionEnd) => new(string.Empty, now);
 }

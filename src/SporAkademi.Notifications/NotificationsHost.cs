@@ -97,5 +97,6 @@ internal static class NotificationsHost
 /// <summary>The worker issues no access tokens; the API does.</summary>
 internal sealed class NoAccessTokens : IAccessTokenIssuer
 {
-    public AccessToken Issue(User user, DateTimeOffset now) => throw new NotSupportedException("The notifications worker issues no access tokens.");
+    public AccessToken Issue(User user, DateTimeOffset now, DateTimeOffset sessionEnd) =>
+        throw new NotSupportedException("The notifications worker issues no access tokens.");
 }

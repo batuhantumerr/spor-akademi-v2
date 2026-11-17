@@ -2,6 +2,7 @@ using FluentValidation;
 using SporAkademi.Application.Abstractions.Authentication;
 using SporAkademi.Application.Abstractions.Behaviors;
 using SporAkademi.Application.Abstractions.Messaging;
+using SporAkademi.Application.Identity.Mfa;
 using SporAkademi.Domain.Identity;
 using SporAkademi.Domain.SharedKernel;
 
@@ -30,6 +31,7 @@ internal sealed class ChangePasswordHandler(
     IPasswordHasher passwordHasher,
     IRefreshTokenFactory refreshTokens,
     IAccessTokenIssuer accessTokens,
+    ISessionPolicies sessionPolicies,
     TimeProvider timeProvider) : ICommandHandler<ChangePasswordCommand, AuthSession>
 {
     public async Task<Result<AuthSession>> Handle(ChangePasswordCommand command, CancellationToken cancellationToken)
@@ -60,7 +62,7 @@ internal sealed class ChangePasswordHandler(
         }
 
         var refreshToken = refreshTokens.Create();
-        var session = user.ChangePassword(passwordHasher.Hash(command.NewPassword), refreshToken.Hash, now);
+        var session = user.ChangePassword(passwordHasher.Hash(command.NewPassword), refreshToken.Hash, now, sessionPolicies.ForRole(user.Role));
         return session.IsSuccess
             ? Result.Success(AuthSessions.Create(accessTokens, user, refreshToken, session.Value, now))
             : Result.Failure<AuthSession>(session.Error);
