@@ -71,6 +71,19 @@ public sealed class ForwardedHeadersHopsTests(DatabaseFixture database) : Integr
         (await GetAsync(http, "198.51.100.7", "203.0.113.51")).StatusCode.ShouldBe(HttpStatusCode.TooManyRequests);
     }
 
+    [Fact]
+    [Trait("Story", "P5-06")]
+    public async Task With_a_limit_of_two_and_one_forwarded_hop_a_spoofed_first_entry_is_not_the_client()
+    {
+        // "spoof, client" from the inner proxy: the last entry is the client's own address, the spoofed one is never read.
+        using var api = Anonymous(1, new() { ["ForwardedHeaders:KnownNetworks:0"] = "10.0.0.0/24", ["ForwardedHeaders:ForwardLimit"] = "2" });
+        using var http = api.CreateClient();
+
+        (await GetAsync(http, Caddy, $"198.51.100.1, {RealClient}")).StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
+        (await GetAsync(http, Caddy, $"198.51.100.2, {RealClient}")).StatusCode.ShouldBe(HttpStatusCode.TooManyRequests);
+        (await GetAsync(http, Caddy, "198.51.100.3, 203.0.113.2")).StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
+    }
+
     [Theory]
     [InlineData("0")]
     [InlineData("-1")]

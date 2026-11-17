@@ -65,19 +65,19 @@ Doğrulama: `tofu plan` ikinci çalıştırmada "No changes" der; portalda kayna
 
 Doğrulama: `az keyvault secret list --vault-name <kv-adı> --query "[].name"` üç sırrı listeler; sır değerleri komut çıktısına yazılmaz.
 
-## 4. Uygulama ayarları: `extra_env` ile eklenecekler [denenmedi]
+## 4. Uygulama ayarları: `infra/` modülü verir [denenmedi]
 
-`infra/modules/apps` bugün yalnız şunları verir: `ConnectionStrings__App`, `Jwt__SigningKey`, (`ConnectionStrings__Cache`), `AllowedHosts`, `ForwardedHeaders__KnownNetworks__0`,
-`OpenTelemetry__Otlp__Endpoint`. Aşağıdakiler P5-06 ile uygulamaya eklendi ve **ortam değişkeniyle verilmelidir**; `infra/envs/<ortam>/main.tf` içinde `extra_env` değişkenine yazın
-(altyapı koduna dokunmadan çalışır; P5-05 birleşince bu değerlerin modüle varsayılan olarak eklenmesi ayrı bir iştir, DEC-657):
+`infra/modules/apps` API'ye şu ayarları ortam değişkeni olarak verir; ayrıca elle bir şey yazılmaz. `plan` çıktısında `api` uygulamasının ortam değişkenlerinde görünmelidir:
 
 | Ortam değişkeni | Değer | Neden |
 | --- | --- | --- |
 | `Storage__Provider` | `AzureBlob` | Varsayılan `S3`'tür; bu olmadan API S3 ayarı arar ve belgeler `Degraded` kalır |
 | `Storage__AccountName` | `tofu output documents_account_name` | Uç nokta `https://<ad>.blob.core.windows.net` olur |
 | `Storage__Container` | `tofu output documents_container` (`documents`) | |
-| `Storage__ManagedIdentityClientId` | Kullanıcı atamalı kimliğin **istemci kimliği**: `az identity show -g rg-spor-<ortam> -n id-spor-<ortam>-apps --query clientId -o tsv` | Kimlik kullanıcı atamalı olduğundan bu olmadan `DefaultAzureCredential` kimliği seçemez |
+| `Storage__ManagedIdentityClientId` | `tofu output identity_client_id` (kullanıcı atamalı kimliğin istemci kimliği) | Kimlik kullanıcı atamalı olduğundan bu olmadan `DefaultAzureCredential` kimliği seçemez |
 | `ForwardedHeaders__ForwardLimit` | `2` (bölüm 8'deki doğrulamayla) | İstek iki vekilden geçer (DEC-651) |
+
+Bir ayar yanlışsa API, `Storage` bölümü varsa **başlarken** durur ve günlükte hangi ayarın yanlış olduğunu yazar (DEC-650); ayar hiç yoksa API başlar ve belge deposu `Degraded` kalır.
 
 Hesap anahtarı ya da bağlantı dizesi **verilmez**: belge hesabında paylaşılan anahtarlar kapalıdır (P5-05); API yönetilen kimlikle (Entra ID) Blob'a yazar ve indirme bağlantılarını
 **kullanıcı delegasyon anahtarı** (user delegation SAS) ile imzalar. Kimlikte `Storage Blob Data Contributor` rolü P5-05'te atanır; delegasyon anahtarı bu rolün
@@ -203,5 +203,3 @@ Kesimden **sonra**, ilk günlerde:
 
 - Bu belgedeki Azure adımları hiç gerçek abonelikte çalıştırılmadı. Yerelde kanıtlananlar: Blob adaptörü (Azurite), imza ve yapılandırma testleri, migrator imajının ortam değişkeniyle çalışması, bölüm 6'nın iki yerel PostgreSQL arasındaki provası, `ForwardLimit` testleri.
 - Kullanıcı delegasyonlu SAS **Azurite'te denenemez** (öykünücü yönetilen kimlik vermez). Testler paylaşılan anahtarla imzalayan, yalnız testte bulunan bir imzalayıcı kullanır; kullanıcı delegasyon imzalayıcısı sahte bir istemciyle (anahtarı bir kez alıp yeniden kullanma ve yenileme mantığı) test edilir. İlk gerçek doğrulama staging'dir (bölüm 10, belge indirme).
-- `infra/` içine `Storage__*`, `ForwardedHeaders__ForwardLimit` ve istemci kimliği çıktısı henüz varsayılan olarak eklenmedi (bölüm 4: `extra_env`). P5-05 birleşince ayrı küçük bir iş.
-- JWT anahtarı hex biçimi bulut-altyapisi.md'de "32 bayt rastgele" diye geçer; bu belge doğrusunu yazar (bölüm 0).

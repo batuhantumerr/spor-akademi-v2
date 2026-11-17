@@ -6,6 +6,8 @@ using Azure.Storage.Sas;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
+using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Hosting.Internal;
 using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Time.Testing;
 using SporAkademi.Application.Abstractions.Storage;
@@ -163,10 +165,50 @@ public sealed class AzureBlobAdapterTests(AzuriteFixture azurite) : IClassFixtur
         }
     }
 
-    private static ServiceProvider Services(Dictionary<string, string?> settings)
+    [Theory]
+    [InlineData("Production")]
+    [InlineData("Development")]
+    [Trait("Story", "P5-06")]
+    public void Azure_blob_must_use_https_in_every_environment(string environment)
+    {
+        using var services = Services(
+            new() { ["Storage:Provider"] = "AzureBlob", ["Storage:BlobServiceUrl"] = "http://127.0.0.1:10000/devstoreaccount1", ["Storage:Container"] = "documents" },
+            environment);
+
+        Should.Throw<OptionsValidationException>(() => services.GetRequiredService<IDocumentStorage>()).Message.ShouldContain("https");
+    }
+
+    [Fact]
+    [Trait("Story", "P5-06")]
+    public async Task A_host_with_storage_settings_that_are_wrong_does_not_start()
+    {
+        // A typo or a missing account name must stop the start, not leave readiness Degraded (DEC-650).
+        var settings = new Dictionary<string, string?> { ["Storage:Provider"] = "AzureBlob", ["Storage:Container"] = "documents" };
+        using var services = Services(settings);
+        var check = new DocumentStorageStartupCheck(
+            new ConfigurationBuilder().AddInMemoryCollection(settings).Build(), services.GetRequiredService<IOptions<DocumentStorageOptions>>());
+
+        var thrown = await Should.ThrowAsync<OptionsValidationException>(() => check.StartAsync(Ct));
+
+        thrown.Message.ShouldContain("Storage:AccountName");
+    }
+
+    [Fact]
+    [Trait("Story", "P5-06")]
+    public async Task A_host_without_any_storage_setting_still_starts()
+    {
+        using var services = Services(new());
+        var check = new DocumentStorageStartupCheck(new ConfigurationBuilder().Build(), services.GetRequiredService<IOptions<DocumentStorageOptions>>());
+
+        await Should.NotThrowAsync(() => check.StartAsync(Ct));
+    }
+
+    private static ServiceProvider Services(Dictionary<string, string?> settings, string environment = "Development")
     {
         var configuration = new ConfigurationBuilder().AddInMemoryCollection(settings).Build();
-        return new ServiceCollection().AddDocumentStorage(configuration).BuildServiceProvider();
+        var services = new ServiceCollection();
+        services.AddSingleton<IHostEnvironment>(new HostingEnvironment { EnvironmentName = environment });
+        return services.AddDocumentStorage(configuration).BuildServiceProvider();
     }
 
     private static async Task<HealthCheckResult> CheckAsync(AzureBlobClients clients)

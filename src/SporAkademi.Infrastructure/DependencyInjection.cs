@@ -183,6 +183,7 @@ internal static class DocumentStorageRegistration
         services.AddOptions<DocumentStorageOptions>()
             .Bind(configuration.GetSection(DocumentStorageOptions.Section));
         services.AddSingleton<Microsoft.Extensions.Options.IValidateOptions<DocumentStorageOptions>, DocumentStorageOptionsValidator>();
+        services.AddHostedService<DocumentStorageStartupCheck>();
         services.AddSingleton(new StorageClock(TimeProvider.System));
         services.AddSingleton<S3Clients>();
         services.AddSingleton<S3DocumentStorage>();

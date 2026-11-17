@@ -48,7 +48,7 @@ public sealed class HealthTests(DatabaseFixture database) : IntegrationTest(data
         await using var factory = new ApiFactory(Database.AppConnectionString, storage: new Dictionary<string, string?>
         {
             ["Storage:Provider"] = "AzureBlob",
-            ["Storage:BlobServiceUrl"] = "http://127.0.0.1:1/devstoreaccount1",
+            ["Storage:BlobServiceUrl"] = "https://127.0.0.1:1/devstoreaccount1",
             ["Storage:Container"] = "documents",
             ["Storage:ManagedIdentityClientId"] = Guid.CreateVersion7().ToString(),
         });

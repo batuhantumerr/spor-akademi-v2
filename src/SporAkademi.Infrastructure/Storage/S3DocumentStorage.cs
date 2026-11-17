@@ -4,8 +4,10 @@ using Amazon.Runtime;
 using Amazon.S3;
 using Amazon.S3.Model;
 using Azure;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
 using SporAkademi.Application.Abstractions.Storage;
 
@@ -98,11 +100,45 @@ public sealed class DocumentStorageOptions
         Uri.TryCreate(value, UriKind.Absolute, out var uri) && (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps);
 }
 
-/// <summary>Names the wrong setting in the error the first use of the store throws (and the readiness check reports).</summary>
+/// <summary>
+/// Names the wrong setting in the error the first use of the store throws (and the readiness check reports). Azure Blob
+/// must be reached over https: the Azure SDK refuses to send a bearer token over plain http anyway, so an http endpoint
+/// could only ever fail at the first request. Tests reach the Azurite emulator with its own client, not through this setting.
+/// </summary>
 internal sealed class DocumentStorageOptionsValidator : IValidateOptions<DocumentStorageOptions>
 {
-    public ValidateOptionsResult Validate(string? name, DocumentStorageOptions options) =>
-        options.IsValidForProvider(out var error) ? ValidateOptionsResult.Success : ValidateOptionsResult.Fail(error);
+    public ValidateOptionsResult Validate(string? name, DocumentStorageOptions options)
+    {
+        ArgumentNullException.ThrowIfNull(options);
+        if (!options.IsValidForProvider(out var error))
+        {
+            return ValidateOptionsResult.Fail(error);
+        }
+
+        return options.Provider == DocumentStorageProvider.AzureBlob && options.AzureEndpoint.Scheme != Uri.UriSchemeHttps
+            ? ValidateOptionsResult.Fail("Storage:BlobServiceUrl must be https (a managed identity token is never sent over http).")
+            : ValidateOptionsResult.Success;
+    }
+}
+
+/// <summary>
+/// Fail fast (P5-06, DEC-650): when any <c>Storage</c> setting is present the host is meant to have a store, so a typo or a
+/// missing account name stops the start instead of leaving readiness "Degraded". With no <c>Storage</c> setting at all the
+/// host still starts (DEC-326: CI smoke test, demo seeder) and only first use reports it.
+/// </summary>
+internal sealed class DocumentStorageStartupCheck(IConfiguration configuration, IOptions<DocumentStorageOptions> options) : IHostedService
+{
+    public Task StartAsync(CancellationToken cancellationToken)
+    {
+        if (configuration.GetSection(DocumentStorageOptions.Section).GetChildren().Any())
+        {
+            _ = options.Value; // throws OptionsValidationException naming the setting
+        }
+
+        return Task.CompletedTask;
+    }
+
+    public Task StopAsync(CancellationToken cancellationToken) => Task.CompletedTask;
 }
 
 /// <summary>The real clock used for link expiry: signatures are checked by the store against real time, not the app's clock.</summary>
@@ -214,7 +250,8 @@ internal sealed class DocumentStorageHealthCheck(IServiceProvider services) : IH
             if (provider == DocumentStorageProvider.AzureBlob)
             {
                 var azure = services.GetRequiredService<AzureBlobClients>();
-                await azure.Container.GetBlobsAsync(cancellationToken: timeout.Token).AsPages(pageSizeHint: 1).GetAsyncEnumerator(timeout.Token).MoveNextAsync();
+                await using var pages = azure.Container.GetBlobsAsync(cancellationToken: timeout.Token).AsPages(pageSizeHint: 1).GetAsyncEnumerator(timeout.Token);
+                await pages.MoveNextAsync();
                 return HealthCheckResult.Healthy();
             }
 

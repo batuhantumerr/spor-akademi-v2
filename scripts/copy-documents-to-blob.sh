@@ -13,7 +13,7 @@
 #   BLOB_CONTAINER        container name (tofu output documents_container)
 #
 # Usage: bash scripts/copy-documents-to-blob.sh [--dry-run]
-# Re-running is safe: existing blobs with the same name are overwritten by the same content.
+# Re-running is safe: blobs already there and not older than the source are skipped.
 set -euo pipefail
 
 dry_run=false
@@ -41,7 +41,7 @@ if [ -n "${S3_ENDPOINT_URL:-}" ]; then
 fi
 
 echo "Downloading s3://$S3_BUCKET to a temporary directory..."
-aws s3 sync "${endpoint[@]}" "s3://$S3_BUCKET" "$work" --only-show-errors
+aws s3 sync ${endpoint[@]+"${endpoint[@]}"} "s3://$S3_BUCKET" "$work" --only-show-errors
 count=$(find "$work" -type f | wc -l | tr -d ' ')
 echo "Found $count object(s)."
 
@@ -52,6 +52,6 @@ if [ "$dry_run" = true ]; then
 fi
 
 # The directory's own name must not become part of the blob names: copy its contents.
-azcopy copy "$work/*" "$target" --recursive --overwrite=true
+azcopy copy "$work/*" "$target" --recursive --overwrite=ifSourceNewer
 
 echo "Copied $count object(s). Check the count in the container (Azure portal, or: azcopy list $target)."
