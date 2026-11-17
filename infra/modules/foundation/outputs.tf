@@ -7,6 +7,7 @@ output "application_insights_connection_string" {
   sensitive = true
 }
 output "identity_id" { value = azurerm_user_assigned_identity.apps.id }
+output "identity_client_id" { value = azurerm_user_assigned_identity.apps.client_id }
 output "identity_principal_id" { value = azurerm_user_assigned_identity.apps.principal_id }
 output "key_vault_id" { value = azurerm_key_vault.this.id }
 output "key_vault_name" { value = azurerm_key_vault.this.name }

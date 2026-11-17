@@ -8,7 +8,9 @@ namespace SporAkademi.Api.Security;
 /// so the client address (rate limits, DEC-504) and the scheme (HSTS, DEC-501) come from <c>X-Forwarded-For</c> and
 /// <c>X-Forwarded-Proto</c>. Only from the proxies named in <c>ForwardedHeaders:KnownProxies</c> (addresses) or
 /// <c>ForwardedHeaders:KnownNetworks</c> (CIDR): by default the list is empty and the headers are ignored, so a client
-/// cannot pick its own address. One proxy hop (<c>ForwardLimit</c> 1). An invalid entry stops the start.
+/// cannot pick its own address. One proxy hop by default (<c>ForwardedHeaders:ForwardLimit</c> 1); behind two proxies (Azure
+/// Container Apps, P5-06, DEC-651) it is set to 2. Each hop peeled off must still come from a configured proxy or network.
+/// An invalid entry or limit stops the start.
 /// </summary>
 internal static partial class ForwardedHeadersSetup
 {
@@ -19,7 +21,7 @@ internal static partial class ForwardedHeadersSetup
         services.AddOptions<ForwardedHeadersOptions>().Configure<IConfiguration>((options, configuration) =>
         {
             options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
-            options.ForwardLimit = 1;
+            options.ForwardLimit = ForwardLimit(configuration);
             // The framework trusts loopback by default; nothing is trusted unless configured.
             options.KnownProxies.Clear();
             options.KnownIPNetworks.Clear();
@@ -62,6 +64,20 @@ internal static partial class ForwardedHeadersSetup
         }
 
         return app;
+    }
+
+    /// <summary>1 – 10 proxy hops; the default 1 is the single Caddy of the VPS setup.</summary>
+    private static int ForwardLimit(IConfiguration configuration)
+    {
+        var value = configuration[$"{Section}:ForwardLimit"];
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return 1;
+        }
+
+        return int.TryParse(value, System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out var limit) && limit is >= 1 and <= 10
+            ? limit
+            : throw new InvalidOperationException($"{Section}:ForwardLimit must be a whole number from 1 to 10: {value}");
     }
 
     private static IEnumerable<string> Entries(IConfiguration configuration, string key) =>
