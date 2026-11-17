@@ -15,34 +15,62 @@ internal sealed record ConsumerRegistration(OutboxMessageType Type, Type Handler
     public string Queue => $"{Type.Name}.{HandlerType.Name}";
 
     public string RetryQueue => Queue + ".retry";
+
+    /// <summary>The handler's <see cref="OutboxConsumerGroupAttribute"/> group (P5-04), or <c>null</c>.</summary>
+    public string? Group => HandlerType.GetCustomAttributes(typeof(OutboxConsumerGroupAttribute), inherit: false)
+        .Cast<OutboxConsumerGroupAttribute>().SingleOrDefault()?.Group;
 }
 
 /// <summary>
 /// The consumers of this process image: every <see cref="IOutboxMessageHandler{TMessage}"/> registered for a known message
-/// type, found once through the container (so test hosts and later modules register handlers the usual way). The publisher
-/// declares every queue too, so a message is never published into an exchange without its queues, whichever host consumes.
+/// type, found once from the service registrations (so test hosts and later modules register handlers the usual way). The
+/// registrations are read, not resolved: a worker that never runs a handler (the notifications worker has no document store
+/// for the handler that deletes documents) must not have to construct it. A registration made by a factory is the one case
+/// that needs an instance to learn its type. The publisher declares every queue too, so a message is never published into an
+/// exchange without its queues, whichever host consumes.
 /// </summary>
-internal sealed class ConsumerCatalog(OutboxMessageTypes types, IServiceScopeFactory scopeFactory)
+internal sealed class ConsumerCatalog(OutboxMessageTypes types, IServiceScopeFactory scopeFactory, IServiceCollection registrations)
 {
-    private readonly Lazy<IReadOnlyList<ConsumerRegistration>> _all = new(() => Discover(types, scopeFactory));
+    private readonly Lazy<IReadOnlyList<ConsumerRegistration>> _all = new(() => Discover(types, scopeFactory, registrations));
 
     public IReadOnlyList<ConsumerRegistration> All => _all.Value;
 
-    private static List<ConsumerRegistration> Discover(OutboxMessageTypes types, IServiceScopeFactory scopeFactory)
+    private static List<ConsumerRegistration> Discover(OutboxMessageTypes types, IServiceScopeFactory scopeFactory, IServiceCollection registrations)
     {
-        using var scope = scopeFactory.CreateScope();
-        // A background scope without a school: constructing a handler never reads a request's user.
-        scope.ServiceProvider.GetRequiredService<BackgroundTenantContext>().Enter(null);
         var result = new List<ConsumerRegistration>();
         foreach (var type in types.All.OrderBy(t => t.Name, StringComparer.Ordinal))
         {
             var handlerInterface = typeof(IOutboxMessageHandler<>).MakeGenericType(type.ClrType);
-            foreach (var handler in scope.ServiceProvider.GetServices(handlerInterface).Select(h => h!.GetType()).Distinct())
+            var handlers = registrations.Where(d => d.ServiceType == handlerInterface).Select(d => HandlerTypeOf(d, handlerInterface, scopeFactory)).Distinct();
+            foreach (var handler in handlers)
             {
                 result.Add(new ConsumerRegistration(type, handler));
             }
         }
 
         return result;
+    }
+
+    private static Type HandlerTypeOf(ServiceDescriptor descriptor, Type handlerInterface, IServiceScopeFactory scopeFactory)
+    {
+        if (descriptor.IsKeyedService)
+        {
+            throw new InvalidOperationException($"Keyed outbox handlers are not supported ({handlerInterface.Name}).");
+        }
+
+        if (descriptor.ImplementationType is { } implementation)
+        {
+            return implementation;
+        }
+
+        if (descriptor.ImplementationInstance is { } instance)
+        {
+            return instance.GetType();
+        }
+
+        // A factory: the type is known only from an instance, built in a background scope without a school.
+        using var scope = scopeFactory.CreateScope();
+        scope.ServiceProvider.GetRequiredService<BackgroundTenantContext>().Enter(null);
+        return descriptor.ImplementationFactory!(scope.ServiceProvider).GetType();
     }
 }

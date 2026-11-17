@@ -86,6 +86,7 @@ internal sealed partial class PasswordLinkMailer(
     private static partial void LogSkipped(ILogger logger, PasswordTokenPurpose purpose, Guid userId, Guid messageId, string reason);
 }
 
+[OutboxConsumerGroup(OutboxConsumerGroups.Notifications)]
 internal sealed class SendWelcomeEmail(PasswordLinkMailer mailer) : IOutboxMessageHandler<AccountOpenedMessage>
 {
     public Task Handle(AccountOpenedMessage message, OutboxMessageContext context, CancellationToken cancellationToken)
@@ -97,6 +98,7 @@ internal sealed class SendWelcomeEmail(PasswordLinkMailer mailer) : IOutboxMessa
 }
 
 /// <summary>P3-02 (DEC-383): the parent invitation e-mail.</summary>
+[OutboxConsumerGroup(OutboxConsumerGroups.Notifications)]
 internal sealed class SendParentInvitationEmail(PasswordLinkMailer mailer) : IOutboxMessageHandler<ParentInvitedMessage>
 {
     public Task Handle(ParentInvitedMessage message, OutboxMessageContext context, CancellationToken cancellationToken)
@@ -107,6 +109,7 @@ internal sealed class SendParentInvitationEmail(PasswordLinkMailer mailer) : IOu
     }
 }
 
+[OutboxConsumerGroup(OutboxConsumerGroups.Notifications)]
 internal sealed class SendPasswordResetEmail(PasswordLinkMailer mailer) : IOutboxMessageHandler<PasswordResetRequestedMessage>
 {
     public Task Handle(PasswordResetRequestedMessage message, OutboxMessageContext context, CancellationToken cancellationToken)
@@ -118,6 +121,7 @@ internal sealed class SendPasswordResetEmail(PasswordLinkMailer mailer) : IOutbo
 }
 
 /// <summary>P4-03 (DEC-512): tells the owner that the password of their account changed. No link, token or password.</summary>
+[OutboxConsumerGroup(OutboxConsumerGroups.Notifications)]
 internal sealed partial class SendPasswordChangedEmail(
     IUserRepository users,
     IEmailSender emailSender,

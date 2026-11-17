@@ -238,7 +238,9 @@ internal static class OutboxRegistration
             .PostConfigure<IConfiguration>((options, root) => options.ConnectionString = root.GetConnectionString(RabbitMqOptions.ConnectionStringName))
             .Validate(o => o.IsValid(), "The RabbitMq configuration section or ConnectionStrings:RabbitMq has an invalid value.")
             .ValidateOnStart();
-        services.AddSingleton<ConsumerCatalog>();
+        // Reads the registrations (the collection stays valid after the container is built); see ConsumerCatalog.
+        services.AddSingleton(provider => new ConsumerCatalog(
+            provider.GetRequiredService<OutboxMessageTypes>(), provider.GetRequiredService<IServiceScopeFactory>(), services));
         services.AddSingleton<ConsumerState>();
         services.AddSingleton<RabbitMqBroker>();
 
