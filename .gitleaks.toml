@@ -93,3 +93,10 @@ targetRules = ["generic-api-key"]
 condition = "AND"
 paths = ['''^tests/SporAkademi\.IntegrationTests/Identity/PasswordChangedNotificationTests\.cs$''']
 regexes = ['''^Yepyeni-Sifre-2027$''']
+
+[[allowlists]]
+description = "Name of the Key Vault secret that holds the GHCR pull token (a reference, not a value): the Container Apps registry blocks in the infrastructure code (P5-05)"
+targetRules = ["hashicorp-tf-password"]
+condition = "AND"
+paths = ['''^infra/modules/apps/main\.tf$''']
+regexes = ['''^"ghcr-pull-token"$''']
