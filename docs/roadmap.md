@@ -233,9 +233,10 @@ Migration ekleyen işler (MFA → oturum süresi) art arda yapılır; RabbitMQ v
 - [x] P5-03 **Entegrasyon event'leri için RabbitMQ.** (DEC-620 – DEC-629; ADR-0016)
   - Outbox mesajları yapılandırılmışsa RabbitMQ'ya yayımlanır (en az bir kez teslim, idempotent tüketici, dead-letter, yeniden deneme); yapılandırılmamışsa bugünkü süreç içi teslim aynen çalışır.
   - Compose profili, Testcontainers ile entegrasyon testleri, mesaj sözleşmelerinin sürümlenmesi ve metrikleri.
-- [ ] P5-04 **Bildirim modülünün ayrı servise çıkarılması.** (DEC-630 – DEC-639)
+- [x] P5-04 **Bildirim modülünün ayrı servise çıkarılması.** (DEC-630 – DEC-639; ADR-0017; `src/SporAkademi.Notifications`, `docker/notifications`)
   - E-posta (ve uygun olursa anlık bildirim yayını) RabbitMQ'dan tüketen ayrı bir worker servisine taşınır; kendi imajı, health check'i ve telemetrisi.
   - Ödünleşimler ADR olarak: ağ ve operasyon maliyeti, eventual consistency, hata ayıklama, "neden yalnız bu modül".
+  - Yapıldı: yalnız e-posta tüketicileri (`notifications` tüketici grubu) ayrı worker'da; gerçek zamanlı push'lar API'de kalır (hub orada). API'de dışlama `RabbitMq:Consumers:ExcludeGroups` ile, süreç içi mod değişmedi.
 
 ### 5.3 Bulut ve IaC (P5-F3, P5-F4)
 - [x] P5-05 **Azure için infrastructure as code (Terraform dili, HCL).** (DEC-640 – DEC-649; ADR-0015; `infra/`, `docs/bulut-altyapisi.md`)

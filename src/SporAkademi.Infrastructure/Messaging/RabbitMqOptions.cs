@@ -59,6 +59,20 @@ internal sealed class ConsumerSelection
     /// </summary>
     public string[] Modules { get; set; } = [];
 
-    public bool Includes(string module) =>
-        Modules.Length == 0 || Modules.Contains(module, StringComparer.OrdinalIgnoreCase);
+    /// <summary>
+    /// P5-04 (DEC-630): the consumer groups (<see cref="SporAkademi.Application.Abstractions.Outbox.OutboxConsumerGroupAttribute"/>)
+    /// that run here; empty means every handler, grouped or not. The notifications worker names <c>notifications</c>.
+    /// </summary>
+    public string[] Groups { get; set; } = [];
+
+    /// <summary>
+    /// The groups that do not run here. The API names <c>notifications</c> while the worker is deployed, so one message is
+    /// not handled by two hosts; excluding wins over <see cref="Groups"/>.
+    /// </summary>
+    public string[] ExcludeGroups { get; set; } = [];
+
+    public bool Includes(string module, string? group = null) =>
+        (Modules.Length == 0 || Modules.Contains(module, StringComparer.OrdinalIgnoreCase))
+        && (Groups.Length == 0 || (group is not null && Groups.Contains(group, StringComparer.OrdinalIgnoreCase)))
+        && (group is null || !ExcludeGroups.Contains(group, StringComparer.OrdinalIgnoreCase));
 }

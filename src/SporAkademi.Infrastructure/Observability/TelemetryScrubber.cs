@@ -2,7 +2,7 @@ using System.Diagnostics;
 using OpenTelemetry;
 using SporAkademi.Application.Abstractions.Observability;
 
-namespace SporAkademi.Api.Observability;
+namespace SporAkademi.Infrastructure.Observability;
 
 /// <summary>
 /// P4-07 (DEC-551): runs on every finished span before any exporter. Spans carry routes, status codes, ids and
@@ -15,7 +15,7 @@ namespace SporAkademi.Api.Observability;
 /// </list>
 /// Any remaining string attribute still matching a hub secret in a query is masked as in the logs (DEC-399).
 /// </summary>
-internal sealed class TelemetryScrubber : BaseProcessor<Activity>
+public sealed class TelemetryScrubber : BaseProcessor<Activity>
 {
     private static readonly string[] DroppedKeys =
     [

@@ -41,6 +41,25 @@ public interface IOutboxMessageHandler<in TMessage>
     Task Handle(TMessage message, OutboxMessageContext context, CancellationToken cancellationToken);
 }
 
+/// <summary>
+/// Names a deployment group for a handler's broker consumer (P5-04, DEC-630): a process can run or leave out the consumers of
+/// a group (<c>RabbitMq:Consumers:Groups</c>, <c>RabbitMq:Consumers:ExcludeGroups</c>). A message type's module (the first
+/// segment of its name) is not enough for this: the e-mail handlers sit in several modules next to handlers that must stay
+/// in the API (real-time pushes, document deletion). A handler without the attribute belongs to no group.
+/// </summary>
+[AttributeUsage(AttributeTargets.Class, Inherited = false)]
+public sealed class OutboxConsumerGroupAttribute(string group) : Attribute
+{
+    public string Group { get; } = group;
+}
+
+/// <summary>The consumer groups the application defines.</summary>
+public static class OutboxConsumerGroups
+{
+    /// <summary>Handlers that send e-mail; the notifications worker (P5-04) runs these.</summary>
+    public const string Notifications = "notifications";
+}
+
 /// <param name="MessageId">Unique per message and stable across retries: the de-duplication key.</param>
 /// <param name="TenantId">The message's school; it is also the current tenant while the handler runs.</param>
 /// <param name="OccurredAt">When the business change was made.</param>

@@ -22,7 +22,7 @@ internal static class Logging
                 .MinimumLevel.Override("Microsoft.EntityFrameworkCore", LogEventLevel.Warning)
                 .Enrich.FromLogContext()
                 // Last enricher: P3-08's hub token in a query string never reaches a sink (DEC-399).
-                .Enrich.With<Observability.AccessTokenRedaction>()
+                .Enrich.With<SporAkademi.Infrastructure.Observability.AccessTokenRedaction>()
                 .WriteTo.Console(new RenderedCompactJsonFormatter());
 
             var seqUrl = builder.Configuration["Seq:ServerUrl"];

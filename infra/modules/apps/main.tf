@@ -11,6 +11,9 @@ locals {
       Mfa__EncryptionKey     = "mfa-encryption-key"
     },
     var.redis_enabled ? { ConnectionStrings__Cache = "conn-cache" } : {},
+    # P5-03/P5-04: with the broker, the outbox publishes through it (the API also consumes what the worker does not).
+    var.rabbitmq_enabled ? { ConnectionStrings__RabbitMq = "conn-rabbitmq" } : {},
+    var.email_secret_env,
     var.extra_secret_env,
   )
 
@@ -32,15 +35,39 @@ locals {
       Storage__ManagedIdentityClientId = var.identity_client_id
     } : {},
     var.otlp_endpoint != "" ? { OpenTelemetry__Otlp__Endpoint = var.otlp_endpoint } : {},
+    # P5-04 (DEC-635): while the worker runs, the API leaves the e-mail consumers (group "notifications") to it.
+    # Without the worker (or without the broker) the API handles e-mail itself, as before.
+    local.notifications_active ? { RabbitMq__Consumers__ExcludeGroups__0 = "notifications" } : {},
+    var.email_env,
     var.extra_env,
   )
 
   rabbitmq_name = "rabbitmq"
 
+  notifications_active = var.notifications_enabled && var.rabbitmq_enabled
+
+  # The worker: the same database and broker as the API plus the e-mail settings, nothing else (no JWT key, no cache).
+  notifications_secret_env = merge(
+    {
+      ConnectionStrings__App      = "conn-app"
+      ConnectionStrings__RabbitMq = "conn-rabbitmq"
+    },
+    var.email_secret_env,
+    var.notifications_extra_secret_env,
+  )
+
+  notifications_plain_env = merge(
+    { ASPNETCORE_ENVIRONMENT = "Production" },
+    var.otlp_endpoint != "" ? { OpenTelemetry__Otlp__Endpoint = var.otlp_endpoint } : {},
+    var.email_env,
+    var.notifications_extra_env,
+  )
+
   # The Key Vault secret ids need no version: the app then follows the latest one (restart for a new value).
   secret_url = { for n in toset(concat(
     values(local.api_secret_env),
-    ["conn-migrator", "rabbitmq-password"],
+    values(local.notifications_secret_env),
+    ["conn-migrator", "rabbitmq-password", "conn-rabbitmq"],
     local.use_registry ? ["ghcr-pull-token"] : [],
   )) : n => "${var.key_vault_uri}secrets/${n}" }
 }
@@ -523,8 +550,10 @@ resource "azurerm_container_app" "rabbitmq" {
   }
 }
 
-# --- Notifications worker (P5-04 placeholder) ----------------------------------------------------------------
-# Off until the worker image exists. It reads the same Key Vault secrets as the API plus the broker address.
+# --- Notifications worker (P5-04, DEC-635) ---------------------------------------------------------------------
+# Runs only the e-mail consumers (src/SporAkademi.Notifications). No ingress: nobody calls it, it only consumes from the
+# broker, and Container Apps probes it on port 8080 without one. It reads the same Key Vault secrets as the API for the
+# database, the broker and the e-mail settings. Needs the broker (the precondition below refuses a plan without it).
 resource "azurerm_container_app" "notifications" {
   count                        = var.notifications_enabled && var.deploy_apps ? 1 : 0
   name                         = "notifications"
@@ -549,7 +578,7 @@ resource "azurerm_container_app" "notifications" {
   }
 
   dynamic "secret" {
-    for_each = toset(concat(["conn-app", "rabbitmq-password"], local.use_registry ? ["ghcr-pull-token"] : []))
+    for_each = toset(concat(values(local.notifications_secret_env), local.use_registry ? ["ghcr-pull-token"] : []))
     content {
       name                = secret.value
       identity            = var.identity_id
@@ -558,31 +587,64 @@ resource "azurerm_container_app" "notifications" {
   }
 
   template {
-    min_replicas = 1
-    max_replicas = 1
+    # One replica keeps e-mail flowing; more replicas share the queues (competing consumers) when the backlog grows.
+    min_replicas = var.notifications_min_replicas
+    max_replicas = var.notifications_max_replicas
 
     container {
       name   = "notifications"
-      image  = "${var.image_registry}/${var.notifications_image_name}:${var.image_tag}"
-      cpu    = 0.25
-      memory = "0.5Gi"
+      image  = "${local.image_prefix}-notifications:${var.image_tag}"
+      cpu    = var.notifications_cpu
+      memory = var.notifications_memory
 
-      env {
-        name  = "ASPNETCORE_ENVIRONMENT"
-        value = "Production"
+      dynamic "env" {
+        for_each = local.notifications_plain_env
+        content {
+          name  = env.key
+          value = env.value
+        }
       }
-      env {
-        name        = "ConnectionStrings__App"
-        secret_name = "conn-app"
+
+      dynamic "env" {
+        for_each = local.notifications_secret_env
+        content {
+          name        = env.key
+          secret_name = env.value
+        }
       }
-      env {
-        name  = "RabbitMq__Host"
-        value = local.rabbitmq_name
+
+      # /health/live has no dependency checks, so a database or broker outage never restarts the replica. There is no
+      # readiness probe on purpose: without ingress it routes nothing, and a broker blip would only flap the revision's
+      # health. /health/ready (database, broker, consumers running; src/SporAkademi.Notifications/NotificationsHost.cs)
+      # is for the CI smoke test and for operators. The startup probe holds the revision until the process answers.
+      startup_probe {
+        transport               = "HTTP"
+        port                    = 8080
+        path                    = "/health/live"
+        interval_seconds        = 3
+        failure_count_threshold = 20
       }
-      env {
-        name        = "RabbitMq__Password"
-        secret_name = "rabbitmq-password"
+
+      liveness_probe {
+        transport               = "HTTP"
+        port                    = 8080
+        path                    = "/health/live"
+        interval_seconds        = 10
+        failure_count_threshold = 3
       }
+
+    }
+  }
+
+  lifecycle {
+    precondition {
+      condition     = var.rabbitmq_enabled
+      error_message = "The notifications worker consumes from the broker: turn on rabbitmq_enabled (enable_rabbitmq) with it."
+    }
+    # Without an SMTP host the worker only logs e-mails and acknowledges them: they would be lost (the worker refuses to start too).
+    precondition {
+      condition     = contains(keys(merge(var.email_env, var.notifications_extra_env)), "Email__Smtp__Host")
+      error_message = "The notifications worker needs Email__Smtp__Host in email_env (or notifications_extra_env); otherwise e-mails are acknowledged and never sent."
     }
   }
 }

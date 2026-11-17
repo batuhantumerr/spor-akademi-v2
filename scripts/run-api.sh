@@ -28,6 +28,12 @@ if [[ -n "${RABBITMQ_PASSWORD:-}" ]] \
   && (cd "$REPO_ROOT" && docker compose --profile messaging ps --status running --services 2>/dev/null | grep -qx rabbitmq); then
   export ConnectionStrings__RabbitMq="amqp://spor_akademi:$RABBITMQ_PASSWORD@127.0.0.1:${RABBITMQ_HOST_PORT:-55672}/"
   echo "run-api: integration events go through RabbitMQ (management UI http://127.0.0.1:${RABBITMQ_UI_HOST_PORT:-55673})"
+  # Optional (DEC-633): the notifications worker (scripts/run-notifications.sh) handles e-mail; the API then leaves those
+  # messages in their queues. Without it the API consumes them itself.
+  if [[ "${API_EXCLUDE_NOTIFICATION_CONSUMERS:-}" == "1" ]]; then
+    export RabbitMq__Consumers__ExcludeGroups__0=notifications
+    echo "run-api: e-mail consumers excluded; start scripts/run-notifications.sh to send e-mail"
+  fi
 else
   echo "run-api: RabbitMQ not running (docker compose --profile messaging up -d --wait); the outbox delivers in process"
 fi

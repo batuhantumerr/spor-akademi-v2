@@ -363,7 +363,7 @@ public sealed class LogPrivacyTests(DatabaseFixture database) : IdentityTest(dat
     [InlineData("next=%2Fhubs%3Fid%3Dabc%26access_token%3DeyJ.x.y&page=2", "next=%2Fhubs%3Fid%3D[REDACTED]%26access_token%3D[REDACTED]&page=2")]
     [InlineData("groupId=7&studentid=8", "groupId=7&studentid=8")]
     public void Hub_secrets_are_masked_in_any_text(string text, string expected) =>
-        SporAkademi.Api.Observability.AccessTokenRedaction.RedactText(text).ShouldBe(expected);
+        SporAkademi.Infrastructure.Observability.AccessTokenRedaction.RedactText(text).ShouldBe(expected);
 
     /// <summary>
     /// The API with every configurable log level at its most verbose, including the categories the API pins in code

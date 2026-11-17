@@ -97,8 +97,10 @@ flowchart LR
 | `mfa-encryption-key` | sahip | Tam 32 bayt rastgele, 64 hex karakter (`openssl rand -hex 32`); TOTP sırlarını şifreler. **Zorunlu**: yoksa API açılmaz. Değiştirmek bütün MFA kayıtlarını okunamaz yapar (DEC-602): önce döndürme tasarlanmalı, yoksa herkesin MFA'sı Platform Admin'ce sıfırlanır. JWT anahtarından bağımsızdır |
 | `conn-cache` | sahip | Yalnız Redis açıksa: `<host>:6380,password=...,ssl=True` |
 | `rabbitmq-password` | sahip | Yalnız RabbitMQ açıksa |
+| `conn-rabbitmq` | sahip | Yalnız RabbitMQ açıksa: `amqp://spor_akademi:<rabbitmq-password>@rabbitmq:5672/` (API ve bildirim worker'ı bunu `ConnectionStrings__RabbitMq` olarak okur) |
 | `ghcr-pull-token` | sahip | Yalnız özel paketlerde; `read:packages` |
 | e-posta, ödeme, Sentry | sahip | `extra_secret_env` değişkeniyle bağlanır (ortam değişkeni adı → sır adı) |
+| SMTP parolası | sahip | `email_secret_env` ile bağlanır (ör. `Email__Smtp__Password` → `smtp-password`); API ve bildirim worker'ı ikisi de okur. Gönderen adresi ve SMTP ana bilgisayarı `email_env` ile (sır değil) |
 
 ## 4. Ortamlar ve çalıştırma
 

@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <!-- P5-04, DEC-630: the notifications worker. Same application and infrastructure layers as the API; runs only the
+       e-mail consumers from RabbitMQ and answers /health/live and /health/ready. Never references the API or the seeder. -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\SporAkademi.Application\SporAkademi.Application.csproj" />
+    <ProjectReference Include="..\SporAkademi.Infrastructure\SporAkademi.Infrastructure.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Serilog.AspNetCore" />
+    <PackageReference Include="Serilog.Sinks.Seq" />
+    <PackageReference Include="Serilog.Formatting.Compact" />
+    <PackageReference Include="OpenTelemetry.Extensions.Hosting" />
+    <PackageReference Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" />
+    <PackageReference Include="Sentry.AspNetCore" />
+  </ItemGroup>
+
+</Project>

@@ -38,6 +38,11 @@ public abstract class OutboxTest(DatabaseFixture database) : IntegrationTest(dat
         ["Outbox:HandlerTimeout"] = "00:00:30",
     };
 
+    /// <summary>More registrations for the host under test (e.g. another message type).</summary>
+    protected virtual void ConfigureServices(IServiceCollection services)
+    {
+    }
+
     public override async ValueTask InitializeAsync()
     {
         await base.InitializeAsync();
@@ -50,6 +55,7 @@ public abstract class OutboxTest(DatabaseFixture database) : IntegrationTest(dat
                 services.AddOutboxMessageType(typeof(OrphanMessage));
                 services.AddSingleton(Probe);
                 services.AddScoped<IOutboxMessageHandler<ProbeMessage>, ProbeHandler>();
+                ConfigureServices(services);
             });
         });
     }
