@@ -46,6 +46,32 @@ interface TokenResponse {
   expiresIn: number;
 }
 
+/**
+ * P5-01: a login whose password was right but whose second step is still due (HTTP 202, no session yet).
+ * `Verify` asks for a code; `Enroll` is a role that must set two-step verification up first.
+ */
+export interface MfaChallenge {
+  purpose: 'Verify' | 'Enroll';
+  mfaToken: string;
+  expiresIn: number;
+}
+
+/** The secret of a started enrolment: the otpauth URI for the QR code and the key as text. */
+export interface MfaEnrollmentStart {
+  otpAuthUri: string;
+  secret: string;
+}
+
+/** A finished first enrolment: the signed-in user and the recovery codes, shown once. */
+export interface MfaEnrollmentResult {
+  user: CurrentUser;
+  recoveryCodes: string[];
+}
+
+export function isMfaChallenge(result: CurrentUser | MfaChallenge): result is MfaChallenge {
+  return 'mfaToken' in result;
+}
+
 /** Web Lock that serializes refresh calls across the tabs of this origin. */
 export const REFRESH_LOCK = 'sa-refresh';
 
@@ -98,7 +124,7 @@ export class AuthService {
    * result (another person's session on a shared computer) is dropped, and the login request waits until that
    * refresh call has settled, so the login's cookie is the last one the browser stores.
    */
-  login(email: string, password: string): Observable<CurrentUser> {
+  login(email: string, password: string): Observable<CurrentUser | MfaChallenge> {
     return defer(() => {
       this.endSession();
       const epoch = this.sessionEpoch;
@@ -109,19 +135,56 @@ export class AuthService {
         : of(undefined);
       return settled.pipe(
         switchMap(() =>
-          this.http.post<TokenResponse>(
+          this.http.post<TokenResponse | MfaChallenge>(
             '/api/v1/auth/login',
             { email, password },
             { context: skipAuth() },
           ),
         ),
-        tap((response) => {
-          if (epoch === this.sessionEpoch) {
-            this.accessToken.set(response.accessToken);
-          }
-        }),
-        switchMap(() => this.loadMe(epoch)),
+        // P5-01: after the password the server may ask for a second step instead of handing out a session.
+        switchMap((response) =>
+          'mfaToken' in response ? of(response) : this.startedSession(epoch, response),
+        ),
       );
+    });
+  }
+
+  /** The second step of a login: the code of the authenticator app, or a recovery code. */
+  verifyMfa(mfaToken: string, code: string): Observable<CurrentUser> {
+    return defer(() => {
+      const epoch = this.sessionEpoch;
+      return this.http
+        .post<TokenResponse>('/api/v1/auth/mfa/verify', { mfaToken, code }, { context: skipAuth() })
+        .pipe(switchMap((response) => this.startedSession(epoch, response)));
+    });
+  }
+
+  /** The first enrolment of a role that must have two-step verification, before it has a session. */
+  startMfaEnrollment(mfaToken: string): Observable<MfaEnrollmentStart> {
+    return this.http.post<MfaEnrollmentStart>(
+      '/api/v1/auth/mfa/enrollment/start',
+      { mfaToken },
+      { context: skipAuth() },
+    );
+  }
+
+  /** Confirms that enrolment with a code; it also completes the login and returns the recovery codes. */
+  completeMfaEnrollment(mfaToken: string, code: string): Observable<MfaEnrollmentResult> {
+    return defer(() => {
+      const epoch = this.sessionEpoch;
+      return this.http
+        .post<TokenResponse & { recoveryCodes: string[] }>(
+          '/api/v1/auth/mfa/enrollment/confirm',
+          { mfaToken, code },
+          { context: skipAuth() },
+        )
+        .pipe(
+          switchMap((response) =>
+            this.startedSession(epoch, response).pipe(
+              map((user) => ({ user, recoveryCodes: response.recoveryCodes })),
+            ),
+          ),
+        );
     });
   }
 
@@ -320,6 +383,14 @@ export class AuthService {
       default:
         return '/login';
     }
+  }
+
+  /** Keeps the access token of a new session (unless a newer login or logout moved the epoch on) and loads the user. */
+  private startedSession(epoch: number, response: TokenResponse): Observable<CurrentUser> {
+    if (epoch === this.sessionEpoch) {
+      this.accessToken.set(response.accessToken);
+    }
+    return this.loadMe(epoch);
   }
 
   private loadMe(epoch: number): Observable<CurrentUser> {

@@ -1,5 +1,6 @@
 import { APIRequestContext, APIResponse, expect, request } from '@playwright/test';
 
+import { totpCode } from './totp';
 import { apiUrl } from './urls';
 
 interface SessionResponse {
@@ -15,11 +16,35 @@ export class ApiClient {
   private constructor(
     private readonly context: APIRequestContext,
     private token: string,
+    /** The setup key of the two-step verification this login enrolled (P5-01), if it had to. */
+    readonly mfaSecret?: string,
   ) {}
 
+  /**
+   * Signs in. A Platform Admin must have two-step verification (P5-01): a first login stops at an enrolment
+   * challenge, which is completed here through the API, computing the code from the setup key like an authenticator
+   * app; the session then comes from the confirmed enrolment and the client keeps the key in `mfaSecret`.
+   */
   static async login(email: string, password: string): Promise<ApiClient> {
     const context = await request.newContext({ baseURL: apiUrl });
     const response = await context.post('/api/v1/auth/login', { data: { email, password } });
+    if (response.status() === 202) {
+      const challenge = (await response.json()) as { purpose: string; mfaToken: string };
+      expect(challenge.purpose, 'only a first enrolment can be completed without a code').toBe(
+        'Enroll',
+      );
+      const started = await context.post('/api/v1/auth/mfa/enrollment/start', {
+        data: { mfaToken: challenge.mfaToken },
+      });
+      await expectStatus(started, 200, 'start MFA enrolment');
+      const { secret } = (await started.json()) as { secret: string };
+      const confirmed = await context.post('/api/v1/auth/mfa/enrollment/confirm', {
+        data: { mfaToken: challenge.mfaToken, code: totpCode(secret) },
+      });
+      await expectStatus(confirmed, 200, 'confirm MFA enrolment');
+      const session = (await confirmed.json()) as SessionResponse;
+      return new ApiClient(context, session.accessToken, secret);
+    }
     await expectStatus(response, 200, 'login');
     const session = (await response.json()) as SessionResponse;
     return new ApiClient(context, session.accessToken);

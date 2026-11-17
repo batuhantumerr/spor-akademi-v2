@@ -6,13 +6,14 @@ import { firstValueFrom } from 'rxjs';
 
 import { Api } from '../../api/api';
 import { apiV1PlatformSchoolsGet } from '../../api/functions';
-import { SchoolListItem } from '../../api/models';
-import { ui } from '../../core/i18n/tr';
+import { SchoolAdminSummary, SchoolListItem } from '../../api/models';
+import { interpolate, ui } from '../../core/i18n/tr';
 import { PagedList } from '../../shared/data/paged-list';
 import { PageHeaderComponent } from '../../shared/ui/page-header.component';
 import { PaginationComponent } from '../../shared/ui/pagination.component';
 import { TemporaryPasswordService } from '../../shared/ui/temporary-password.dialog';
 import { ToastService } from '../../shared/ui/toast.service';
+import { RESET_MFA_TITLE_ID, ResetMfaData, ResetMfaDialog } from './reset-mfa.dialog';
 import { CreatedSchool, SCHOOL_FORM_TITLE_ID, SchoolFormDialog } from './school-form.dialog';
 
 /** US-02: Platform Admin's list of schools; a new school comes with its first admin. */
@@ -101,6 +102,17 @@ import { CreatedSchool, SCHOOL_FORM_TITLE_ID, SchoolFormDialog } from './school-
                     <span class="block text-xs font-normal break-all text-muted-foreground">{{
                       admin.email
                     }}</span>
+                    @if (admin.mfaEnabled) {
+                      <!-- P5-01 (DEC-605): a lost phone; the Platform Admin removes the admin's two-step verification. -->
+                      <button
+                        type="button"
+                        class="btn btn-secondary btn-sm mt-2"
+                        [attr.aria-label]="resetLabel(admin)"
+                        (click)="resetMfa(admin)"
+                      >
+                        {{ mfa.action }}
+                      </button>
+                    }
                   } @else {
                     <span class="text-muted-foreground">{{ text.noAdmin }}</span>
                   }
@@ -127,6 +139,7 @@ export class SchoolsPage {
   private readonly temporaryPassword = inject(TemporaryPasswordService);
 
   protected readonly text = ui.schools;
+  protected readonly mfa = ui.mfa.reset;
   protected readonly common = ui.common;
   protected readonly busy = signal(false);
   protected readonly list = new PagedList<SchoolListItem>((page) =>
@@ -135,6 +148,24 @@ export class SchoolsPage {
 
   constructor() {
     void this.list.load();
+  }
+
+  protected resetLabel(admin: SchoolAdminSummary): string {
+    return interpolate(`${this.mfa.action}: {name}`, {
+      name: `${admin.firstName} ${admin.lastName}`,
+    });
+  }
+
+  protected async resetMfa(admin: SchoolAdminSummary): Promise<void> {
+    const ref = this.dialog.open<boolean, ResetMfaData>(ResetMfaDialog, {
+      data: { userId: admin.id, name: `${admin.firstName} ${admin.lastName}` },
+      ariaLabelledBy: RESET_MFA_TITLE_ID,
+      backdropClass: ['bg-slate-900/60'],
+    });
+    if ((await firstValueFrom(ref.closed)) === true) {
+      this.toasts.success(this.mfa.done);
+      await this.list.load();
+    }
   }
 
   protected async create(): Promise<void> {

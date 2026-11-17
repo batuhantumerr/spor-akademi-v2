@@ -12,11 +12,20 @@ import {
 } from '@lucide/angular';
 
 import { toProblem, problemMessage } from '../../core/api/problem';
-import { AuthService } from '../../core/auth/auth.service';
+import { Observable, map, tap } from 'rxjs';
+
+import {
+  AuthService,
+  CurrentUser,
+  MfaChallenge,
+  MfaEnrollmentStart,
+  isMfaChallenge,
+} from '../../core/auth/auth.service';
 import { errorMessages, ui } from '../../core/i18n/tr';
 import { ThemeService } from '../../core/theme/theme.service';
 import { focusFirstInvalid } from '../../shared/forms/focus-first-invalid';
 import { LanguageSwitcherComponent } from '../../shared/ui/language-switcher.component';
+import { MfaSetupComponent } from './mfa-setup.component';
 
 @Component({
   selector: 'app-login-page',
@@ -32,6 +41,7 @@ import { LanguageSwitcherComponent } from '../../shared/ui/language-switcher.com
     LucideSun,
     LucideTrophy,
     LanguageSwitcherComponent,
+    MfaSetupComponent,
   ],
   template: `
     <main class="grid min-h-dvh lg:grid-cols-2">
@@ -92,10 +102,24 @@ import { LanguageSwitcherComponent } from '../../shared/ui/language-switcher.com
             </div>
             <span class="text-lg font-bold">{{ text.appName }}</span>
           </div>
-          <h1 class="text-2xl font-bold tracking-tight">{{ text.login.title }}</h1>
-          <p class="mt-1 text-sm text-muted-foreground">{{ text.login.subtitle }}</p>
+          @switch (step()) {
+            @case ('code') {
+              <h1 class="text-2xl font-bold tracking-tight">{{ mfa.codeTitle }}</h1>
+              <p class="mt-1 text-sm text-muted-foreground">
+                {{ useRecovery() ? mfa.recoverySubtitle : mfa.codeSubtitle }}
+              </p>
+            }
+            @case ('enroll') {
+              <h1 class="text-2xl font-bold tracking-tight">{{ mfa.enrollTitle }}</h1>
+              <p class="mt-1 text-sm text-muted-foreground">{{ mfa.enrollRequired }}</p>
+            }
+            @default {
+              <h1 class="text-2xl font-bold tracking-tight">{{ text.login.title }}</h1>
+              <p class="mt-1 text-sm text-muted-foreground">{{ text.login.subtitle }}</p>
+            }
+          }
 
-          @if (error()) {
+          @if (error() && step() !== 'enroll') {
             <div
               role="alert"
               class="mt-6 flex items-start gap-2 rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive"
@@ -105,72 +129,129 @@ import { LanguageSwitcherComponent } from '../../shared/ui/language-switcher.com
             </div>
           }
 
-          <form class="mt-6 space-y-4" [formGroup]="form" (ngSubmit)="submit()" novalidate>
-            <div>
-              <label class="field-label" for="email">{{ text.login.email }}</label>
-              <input
-                id="email"
-                type="email"
-                class="input"
-                formControlName="email"
-                autocomplete="username"
-                [attr.aria-invalid]="showError('email')"
-                [attr.aria-describedby]="showError('email') ? 'email-error' : null"
-              />
-              @if (showError('email')) {
-                <p id="email-error" class="field-error">
-                  {{
-                    form.controls.email.hasError('required')
-                      ? messages['Field.Required']
-                      : messages['Email.Invalid']
-                  }}
-                </p>
-              }
-            </div>
-            <div>
-              <div class="flex items-baseline justify-between gap-2">
-                <label class="field-label" for="password">{{ text.login.password }}</label>
-                <a
-                  routerLink="/forgot-password"
-                  class="text-sm font-medium text-primary hover:underline"
-                  >{{ text.login.forgotPassword }}</a
-                >
-              </div>
-              <div class="relative">
+          @if (step() === 'code') {
+            <form class="mt-6 space-y-4" [formGroup]="codeForm" (ngSubmit)="verify()" novalidate>
+              <div>
+                <label class="field-label" for="mfa-code">{{
+                  useRecovery() ? mfa.recoveryCode : mfa.code
+                }}</label>
                 <input
-                  id="password"
-                  class="input pr-11"
-                  formControlName="password"
-                  autocomplete="current-password"
-                  [type]="showPassword() ? 'text' : 'password'"
-                  [attr.aria-invalid]="showError('password')"
-                  [attr.aria-describedby]="showError('password') ? 'password-error' : null"
+                  id="mfa-code"
+                  class="input font-mono text-lg tracking-widest"
+                  formControlName="code"
+                  autocomplete="one-time-code"
+                  maxlength="32"
+                  [attr.inputmode]="useRecovery() ? 'text' : 'numeric'"
+                  [attr.aria-invalid]="codeRequired()"
+                  [attr.aria-describedby]="codeRequired() ? 'mfa-code-error' : null"
                 />
-                <!-- Toggle button: a fixed label plus aria-pressed announces the state. -->
+                @if (codeRequired()) {
+                  <p id="mfa-code-error" class="field-error">{{ messages['Field.Required'] }}</p>
+                }
+              </div>
+              <button type="submit" class="btn btn-primary w-full" [disabled]="submitting()">
+                {{ submitting() ? mfa.submitting : mfa.submit }}
+              </button>
+              <div class="flex flex-wrap items-center justify-between gap-2 text-sm">
                 <button
                   type="button"
-                  class="absolute inset-y-0 right-0 grid w-10 place-items-center text-muted-foreground hover:text-foreground"
-                  aria-controls="password"
-                  [attr.aria-label]="text.login.showPassword"
-                  [attr.aria-pressed]="showPassword()"
-                  [attr.title]="showPassword() ? text.login.hidePassword : text.login.showPassword"
-                  (click)="showPassword.set(!showPassword())"
+                  class="font-medium text-primary hover:underline"
+                  (click)="toggleRecovery()"
                 >
-                  @if (showPassword()) {
-                    <svg lucideEyeOff class="size-4"></svg>
-                  } @else {
-                    <svg lucideEye class="size-4"></svg>
-                  }
+                  {{ useRecovery() ? mfa.useApp : mfa.useRecovery }}
+                </button>
+                <button
+                  type="button"
+                  class="text-muted-foreground hover:text-foreground hover:underline"
+                  (click)="backToCredentials()"
+                >
+                  {{ mfa.back }}
                 </button>
               </div>
-              @if (showError('password')) {
-                <p id="password-error" class="field-error">{{ messages['Field.Required'] }}</p>
-              }
+            </form>
+          }
+
+          @if (step() === 'enroll' && challenge(); as pending) {
+            <div class="mt-6">
+              <app-mfa-setup
+                [begin]="beginEnrollment(pending)"
+                [confirm]="confirmEnrollment(pending)"
+                (failed)="enrollmentFailed($event.code)"
+                (finished)="finishEnrollment()"
+              />
             </div>
-            <button type="submit" class="btn btn-primary w-full" [disabled]="submitting()">
-              {{ submitting() ? text.login.submitting : text.login.submit }}
-            </button>
-          </form>
+          }
+
+          @if (step() === 'credentials') {
+            <form class="mt-6 space-y-4" [formGroup]="form" (ngSubmit)="submit()" novalidate>
+              <div>
+                <label class="field-label" for="email">{{ text.login.email }}</label>
+                <input
+                  id="email"
+                  type="email"
+                  class="input"
+                  formControlName="email"
+                  autocomplete="username"
+                  [attr.aria-invalid]="showError('email')"
+                  [attr.aria-describedby]="showError('email') ? 'email-error' : null"
+                />
+                @if (showError('email')) {
+                  <p id="email-error" class="field-error">
+                    {{
+                      form.controls.email.hasError('required')
+                        ? messages['Field.Required']
+                        : messages['Email.Invalid']
+                    }}
+                  </p>
+                }
+              </div>
+              <div>
+                <div class="flex items-baseline justify-between gap-2">
+                  <label class="field-label" for="password">{{ text.login.password }}</label>
+                  <a
+                    routerLink="/forgot-password"
+                    class="text-sm font-medium text-primary hover:underline"
+                    >{{ text.login.forgotPassword }}</a
+                  >
+                </div>
+                <div class="relative">
+                  <input
+                    id="password"
+                    class="input pr-11"
+                    formControlName="password"
+                    autocomplete="current-password"
+                    [type]="showPassword() ? 'text' : 'password'"
+                    [attr.aria-invalid]="showError('password')"
+                    [attr.aria-describedby]="showError('password') ? 'password-error' : null"
+                  />
+                  <!-- Toggle button: a fixed label plus aria-pressed announces the state. -->
+                  <button
+                    type="button"
+                    class="absolute inset-y-0 right-0 grid w-10 place-items-center text-muted-foreground hover:text-foreground"
+                    aria-controls="password"
+                    [attr.aria-label]="text.login.showPassword"
+                    [attr.aria-pressed]="showPassword()"
+                    [attr.title]="
+                      showPassword() ? text.login.hidePassword : text.login.showPassword
+                    "
+                    (click)="showPassword.set(!showPassword())"
+                  >
+                    @if (showPassword()) {
+                      <svg lucideEyeOff class="size-4"></svg>
+                    } @else {
+                      <svg lucideEye class="size-4"></svg>
+                    }
+                  </button>
+                </div>
+                @if (showError('password')) {
+                  <p id="password-error" class="field-error">{{ messages['Field.Required'] }}</p>
+                }
+              </div>
+              <button type="submit" class="btn btn-primary w-full" [disabled]="submitting()">
+                {{ submitting() ? text.login.submitting : text.login.submit }}
+              </button>
+            </form>
+          }
           <!-- P4-06 (DEC-543): the privacy notice (KVKK md. 10), a static page served next to the app. -->
           <p class="mt-8 text-center text-xs">
             <a
@@ -192,6 +273,7 @@ export class LoginPage {
   protected readonly theme = inject(ThemeService);
 
   protected readonly text = ui;
+  protected readonly mfa = ui.mfa.login;
   protected readonly messages = errorMessages;
   protected readonly year = new Date().getFullYear();
   protected readonly submitting = signal(false);
@@ -200,10 +282,26 @@ export class LoginPage {
     this.route.snapshot.queryParamMap.has('expired') ? errorMessages['Auth.SessionExpired'] : null,
   );
 
-  protected readonly form = inject(FormBuilder).nonNullable.group({
+  /** P5-01: the password first, then (when the account needs it) a code, or the enrolment of a role that must have MFA. */
+  protected readonly step = signal<'credentials' | 'code' | 'enroll'>('credentials');
+  protected readonly challenge = signal<MfaChallenge | null>(null);
+  protected readonly useRecovery = signal(false);
+
+  private readonly formBuilder = inject(FormBuilder);
+  protected readonly form = this.formBuilder.nonNullable.group({
     email: ['', [Validators.required, Validators.email]],
     password: ['', Validators.required],
   });
+  protected readonly codeForm = this.formBuilder.nonNullable.group({
+    code: ['', Validators.required],
+  });
+  /** Set once the first enrolment completed the login; the page waits behind the recovery codes. */
+  private enrolled: CurrentUser | null = null;
+
+  protected codeRequired(): boolean {
+    const c = this.codeForm.controls.code;
+    return c.invalid && (c.touched || c.dirty);
+  }
 
   protected showError(control: 'email' | 'password'): boolean {
     const c = this.form.controls[control];
@@ -223,14 +321,17 @@ export class LoginPage {
     this.error.set(null);
     const { email, password } = this.form.getRawValue();
     this.auth.login(email, password).subscribe({
-      next: (user) => {
-        const returnUrl = this.route.snapshot.queryParamMap.get('returnUrl');
-        const target = user.mustChangePassword
-          ? '/change-password'
-          : returnUrl?.startsWith('/') && !returnUrl.startsWith('//')
-            ? returnUrl
-            : this.auth.homeFor(user.role);
-        void this.router.navigateByUrl(target);
+      next: (result) => {
+        if (isMfaChallenge(result)) {
+          this.submitting.set(false);
+          this.challenge.set(result);
+          this.codeForm.reset({ code: '' });
+          this.useRecovery.set(false);
+          this.step.set(result.purpose === 'Enroll' ? 'enroll' : 'code');
+          this.focusCode();
+          return;
+        }
+        this.enter(result);
       },
       error: (err: unknown) => {
         this.submitting.set(false);
@@ -238,4 +339,86 @@ export class LoginPage {
       },
     });
   }
+
+  protected verify(): void {
+    const pending = this.challenge();
+    if (this.codeForm.invalid || !pending) {
+      this.codeForm.markAllAsTouched();
+      return;
+    }
+    this.submitting.set(true);
+    this.error.set(null);
+    this.auth.verifyMfa(pending.mfaToken, this.codeForm.getRawValue().code).subscribe({
+      next: (user) => this.enter(user),
+      error: (err: unknown) => {
+        this.submitting.set(false);
+        const problem = toProblem(err);
+        if (endsSecondStep(problem.code)) {
+          this.backToCredentials(problemMessage(problem));
+        } else {
+          this.error.set(problemMessage(problem));
+          this.codeForm.reset({ code: '' });
+        }
+      },
+    });
+  }
+
+  protected toggleRecovery(): void {
+    this.useRecovery.set(!this.useRecovery());
+    this.codeForm.reset({ code: '' });
+    this.error.set(null);
+    this.focusCode();
+  }
+
+  /** The code field replaces the password form: move focus to it once it is rendered, so keyboard and screen reader users land on it. */
+  private focusCode(): void {
+    setTimeout(() => this.host.nativeElement.querySelector<HTMLInputElement>('#mfa-code')?.focus());
+  }
+
+  protected backToCredentials(message: string | null = null): void {
+    this.challenge.set(null);
+    this.form.controls.password.reset('');
+    this.error.set(message);
+    this.step.set('credentials');
+  }
+
+  protected beginEnrollment(pending: MfaChallenge): () => Observable<MfaEnrollmentStart> {
+    return () => this.auth.startMfaEnrollment(pending.mfaToken);
+  }
+
+  /** Completes the login behind the recovery codes: the session exists, but the page waits until they are saved. */
+  protected confirmEnrollment(pending: MfaChallenge): (code: string) => Observable<string[]> {
+    return (code) =>
+      this.auth.completeMfaEnrollment(pending.mfaToken, code).pipe(
+        tap((result) => (this.enrolled = result.user)),
+        map((result) => result.recoveryCodes),
+      );
+  }
+
+  protected enrollmentFailed(code: string): void {
+    if (endsSecondStep(code)) {
+      this.backToCredentials(errorMessages[code] ?? null);
+    }
+  }
+
+  protected finishEnrollment(): void {
+    if (this.enrolled) {
+      this.enter(this.enrolled);
+    }
+  }
+
+  private enter(user: CurrentUser): void {
+    const returnUrl = this.route.snapshot.queryParamMap.get('returnUrl');
+    const target = user.mustChangePassword
+      ? '/change-password'
+      : returnUrl?.startsWith('/') && !returnUrl.startsWith('//')
+        ? returnUrl
+        : this.auth.homeFor(user.role);
+    void this.router.navigateByUrl(target);
+  }
+}
+
+/** The sign-in step cannot go on: the token is gone, or the account is locked. The user starts over. */
+function endsSecondStep(code: string): boolean {
+  return code === 'Mfa.ChallengeInvalid' || code === 'Auth.AccountLocked';
 }
