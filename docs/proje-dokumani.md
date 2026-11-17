@@ -221,7 +221,7 @@ Paylaşımlı DB + `TenantId`; tenant JWT'deki `tenant_id` claim'inden. Beş sav
 4. Okul bazında benzersiz index'ler.
 5. Tenant izolasyon test paketi ve mimari testleri.
 
-Ek: başka okulun kaydı → `404`; `IgnoreQueryFilters()` sadece `Tenancy`'de; ham SQL tenant koşulunu açıkça içerir; arka plan işleri ve cache tenant'ı açıkça taşır; faz 4'te Row Level Security.
+Ek: başka okulun kaydı → `404`; `IgnoreQueryFilters()` sadece `Tenancy`'de; ham SQL tenant koşulunu açıkça içerir; arka plan işleri ve cache tenant'ı açıkça taşır; altıncı katman olarak Row Level Security (Faz 4, bölüm 5.9).
 
 ### 5.5 Eşzamanlılık (ADR-0005)
 
@@ -306,6 +306,8 @@ Planlanan production yapısı (sunucu alındığında): tek VPS, Caddy (TLS, yö
 
 Her ADR'ın bağlamı, seçenekleri, kararı ve sonuçları Ek F'de özetlenmiştir.
 
+Mimarinin geriye dönük değerlendirmesi (modül sınırları, kararların sonucu, açık teknik borç): [v1-mimari-inceleme.md](v1-mimari-inceleme.md).
+
 | ADR | Konu | Durum |
 | --- | --- | --- |
 | 0001 | Clean Architecture katmanlarıyla modüler monolit | Accepted |
@@ -317,11 +319,14 @@ Her ADR'ın bağlamı, seçenekleri, kararı ve sonuçları Ek F'de özetlenmiş
 | 0007 | Result pattern ve ProblemDetails | Accepted |
 | 0008 | Test stratejisi | Accepted |
 | 0009 | Modüller arası iletişim, transaction içi domain event'leri | Accepted |
-| 0010 | UI kütüphanesi seçimi | Yazılacak (P1-13) |
+| 0010 | UI kütüphanesi seçimi ([docs/adr](adr/0010-ui-kutuphanesi.md)) | Accepted |
 | 0011 | Production migration stratejisi (bundle + SQL incelemesi) | Accepted |
 | 0012 | Veli uygulaması teknoloji yığını ([docs/adr](adr/0012-veli-uygulamasi-teknoloji-yigini.md)) | Accepted |
 | 0013 | Okul başına alt alan adı: şimdi yapılmaz ([docs/adr](adr/0013-okul-alt-alan-adi.md)) | Accepted |
+| 0014 | Gerçek verinin barındırma konumu ([docs/adr](adr/0014-veri-konumu.md)) | Proposed |
+| 0015 | Altyapı kodu aracı: OpenTofu ([docs/adr](adr/0015-altyapi-kodu-araci.md)) | Proposed |
 | 0016 | Entegrasyon event'leri için RabbitMQ ([docs/adr](adr/0016-entegrasyon-event-leri-rabbitmq.md)) | Proposed |
+| 0017 | Bildirim worker'ı: e-posta tüketicilerinin ayrı süreçte çalışması ([docs/adr](adr/0017-bildirim-worker.md)) | Proposed |
 
 ---
 

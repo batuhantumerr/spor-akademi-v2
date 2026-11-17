@@ -248,7 +248,7 @@ Migration ekleyen işler (MFA → oturum süresi) art arda yapılır; RabbitMQ v
   - Yönetilen kimlik ve Key Vault'tan yapılandırma, health probe'ları, migration'ın job olarak çalışması; taşıma runbook'u.
 
 ### 5.4 Kapanış (P5-F5)
-- [ ] P5-07 **Son mimari inceleme ve `v1.0.0` retrospektifi.** Modül sınırları, kararların geriye dönük değerlendirmesi, "neyi farklı yapardık", açık teknik borç listesi. (DEC-660 – DEC-669)
+- [x] P5-07 **Son mimari inceleme ve `v1.0.0` retrospektifi.** Modül sınırları, kararların geriye dönük değerlendirmesi, "neyi farklı yapardık", açık teknik borç listesi. (DEC-660 – DEC-669; DEC-660 – DEC-663 kullanıldı; [v1-mimari-inceleme.md](v1-mimari-inceleme.md))
 
 ### Sürüm hazırlığı
 - [ ] P5-R1 **Çıkış kriterlerinin doğrulanması.**
