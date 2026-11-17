@@ -154,7 +154,12 @@ describe('RealtimeService', () => {
       providers: [
         {
           provide: AuthService,
-          useValue: { user: currentUser, token: () => token, refresh, recentlyActive: () => active },
+          useValue: {
+            user: currentUser,
+            token: () => token,
+            refresh,
+            recentlyActive: () => active,
+          },
         },
         { provide: ToastService, useValue: toast },
         { provide: SIGNALR_LOADER, useValue: () => Promise.resolve(fakeSignalR) },
