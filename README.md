@@ -149,6 +149,10 @@ bash scripts/seed-demo.sh   # migration'lardan sonra, API çalışmıyorken de o
 
 İlk girişte şifreyi değiştirdikten sonra `PLATFORM_ADMIN_PASSWORD` satırını `.env`'den silin.
 
+**İki adımlı doğrulama (P5-01, DEC-600 – DEC-609).** Platform Admin için zorunludur: doğru şifreden sonra giriş ekranı bir kimlik doğrulayıcı uygulama (Google Authenticator, Aegis…) kurmanızı ister; QR kodunu okutur, kodu girer ve 10 kurtarma kodunu güvenli bir yere kaydedersiniz. Sonraki girişlerde şifreden sonra uygulamadaki altı haneli kod istenir; telefon kaybında kurtarma kodu kullanılır, kod da yoksa başka bir Platform Admin sıfırlar (kimse yoksa [güvenlik kontrol listesi 4.6](docs/guvenlik-kontrol-listesi.md)'daki kurtarma betiği). Okul Admini "Güvenlik" sayfasından isteğe bağlı açar.
+
+**Yerelde** (`Development` ortamı) `appsettings.Development.json` `Mfa:RequirePlatformAdmin`'i `false` yapar, yani Platform Admin yalnız şifreyle girer; kapatmak isterseniz ayarı silin. `Production`'da ve Development/Testing dışındaki her ortamda `false` verilirse API **açılmaz**. TOTP sırlarını şifreleyen anahtar `Mfa:EncryptionKey` (32 bayt hex, `openssl rand -hex 32`); verilmezse `Jwt:SigningKey`'den türetilir (JWT anahtarını döndürmek o zaman MFA sırlarını da geçersiz kılar, Deploy bloğunda ayrı verin).
+
 ## Testler
 
 ```bash

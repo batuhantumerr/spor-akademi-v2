@@ -4,6 +4,11 @@ Bu dosya [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) biçimini ve [
 
 ## [Unreleased]
 
+### Added
+
+#### Faz 5 — Ölçek ve mimari
+- **Yöneticiler için iki adımlı doğrulama, TOTP (P5-01):** Platform Admin için zorunlu, Okul Admini için isteğe bağlı. Giriş iki adımlı oldu: doğru şifre `202` ile 5 dakikalık, tek kullanımlık, en çok 5 denemelik bir `mfaToken` döner; `POST /auth/mfa/verify` kodu (RFC 6238, tekrar korumalı) ya da tek kullanımlık kurtarma kodunu kabul edip oturumu açar. MFA'sı olmayan Platform Admin önce kurulumu bitirir (QR kodu ve metin anahtar, 10 kurtarma kodu bir kez); yanlış kodlar hesap kilit sayacına yazılır. TOTP anahtarı AES-256-GCM ile şifreli saklanır, kurtarma kodları hash'li. MFA açılınca, kapanınca, sıfırlanınca ve kurtarma kodu kullanılınca hesaba e-posta gider; Platform Admin telefonu kaybeden birinin MFA'sını nedenle (denetim kaydına) sıfırlayabilir. Yönetici panelinde giriş ikinci adımı, Güvenlik sayfası ve sıfırlama eylemi eklendi (TR/EN). Yerelde (`Development`) zorunluluk `Mfa:RequirePlatformAdmin=false` ile kapalıdır; başka ortamda kapatılırsa API açılmaz. Yeni paket: `qrcode-generator` 2.0.4 (MIT) (DEC-600 – DEC-609).
+
 ## [0.4.0] - 2026-11-16
 
 ### Added

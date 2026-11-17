@@ -571,3 +571,21 @@ Sonuç: **yüksek bulgu yok.** Ayrıntı ve kanıt `guvenlik-kontrol-listesi.md`
 5. **Deploy bloğu için yeni maddeler (DEC-516, DEC-518).** `AllowedHosts` alan adlarıyla verilmeli; Caddy erişim günlüğünde sorgu dizesi (arama terimi) atılmalı; JWT anahtarı için döndürme runbook'u; yeni alarmlar (`RefreshFailureSpike`, `AuthorizationFailureSpike`) için bildirim kanalı mevcut alarmlarla birlikte.
 6. **Başka okulun e-postası sızıntısı (DEC-516, O5).** Okul Admini bir antrenör eklerken adres başka bir okulda kayıtlıysa `409` alır; yani adresin sistemde olduğunu öğrenir. Kapatmak ürün değişikliği (okul başına e-posta ya da giriş formunda okul seçimi). Öneri: şimdilik kabul.
 7. **Trivy/gitleaks checksum (DEC-515).** Zaten sabitti; resmi dosyalarla doğrulandı, ek iş yok. CI'da `persist-credentials: false` ve bağlam değerlerinin ortam değişkeniyle verilmesi eklendi; `ci.yml` değiştiği için bu PR code-owner incelemesine girer.
+
+## 12. Faz 5 (2026-11-17)
+
+### P5-01 Yöneticiler için MFA, TOTP (DEC-600 – DEC-609)
+
+Sonuç: Platform Admin artık yalnız şifreyle giriş yapamaz; Okul Admini isteğe bağlı açar. Telefon kaybı için kurtarma kodu, Platform Admin sıfırlaması ve (kimse kalmazsa) veritabanı betiği var.
+
+1. **Zorunluluk ve yerel geliştirme (DEC-604, DEC-606, DEC-608).** Platform Admin her girişte şifreden sonra kod girer; ilk girişte kurulum şarttır. Yerelde (`Development`) zorunluluk kapalıdır, başka ortamda kapatılırsa API açılmaz.
+   - *Yönetici:* tüm okulları gören hesap artık şifre sızsa da açılmaz; bedeli, yönetici başına bir telefon ve girişte bir adım. Önceden açılmış oturumlar ilk yenilemede (en çok 15 dk) düşer.
+   - *Yazılımcı:* demo/e2e için sabit bir TOTP sırrı tohumlamadım (repoya ve gitleaks'e girerdi); e2e gerçek akışı yapar. Onay ya da "başka türlü olsun" kararı.
+2. **Antrenör ve veli MFA dışı (DEC-604).** Antrenörün kodunu kaybetmesi halinde onu sıfırlayacak bir akış yazılmadı; kurtarılamayan hesap bırakmamak için antrenöre MFA açılmadı. *Yönetici:* antrenör hesabı hâlâ yalnız şifreyle korunuyor; erişimi tek grupla sınırlı. Okul Admini'nin antrenör MFA'sını sıfırlaması istenirse küçük bir ek iş.
+3. **Anahtar yönetimi (DEC-602).** TOTP sırları AES-256-GCM ile şifreli; anahtar `Mfa:EncryptionKey`, verilmezse JWT anahtarından türetilir. *Yönetici/Deploy:* Production'a ayrı bir `Mfa:EncryptionKey` verilmeli; türetilen anahtarla JWT anahtarını döndürmek bütün MFA sırlarını geçersiz kılar (herkes yeniden kurar). Anahtar döndürme (eskiyle çöz, yeniyle şifrele) yapılmadı.
+   - *Yazılımcı:* ASP.NET Core Data Protection seçilmedi (anahtar halkasının kalıcılığı ve yedeği gerekirdi). Onay ya da "Data Protection olsun" kararı.
+4. **Sıfırlama denetimi (DEC-605).** Platform Admin bir hesabın MFA'sını sabit bir nedenle (`Telefon kayboldu`, `Hesap ele geçirilmiş olabilir`, `Diğer`) sıfırlar; Okul Admini hedefinde okulun denetim kaydına düşer, e-posta gider. *Sınır:* hedef başka bir Platform Admin ise okulu olmadığı için denetim kaydı girdisi olmaz (yalnız e-posta ve komut günlüğü). Platform Admin kendi MFA'sını sıfırlayamaz. Platform Admin için ayrı bir denetim kaydı Faz 5'te istenebilir.
+5. **Son Platform Admin her şeyini kaybederse (DEC-605).** API'de yol yok; `guvenlik-kontrol-listesi.md` 4.6'daki SQL betiği veritabanı sahibi rolüyle çalışır. *Yönetici:* bu işlem bir değişiklik talebine bağlanmalı. Bilinçli olarak uygulamaya bir "kurtarma anahtarı" eklenmedi.
+6. **Bilinen eksikler.** Kurtarma kodlarını yenileme uç noktası yok (kodlar bitince MFA kapatılıp açılır ya da sıfırlama istenir); MFA'lı hesap için "güvenilir cihaz" yok; Platform Admin için listede sıfırlama düğmesi yok (API var; okul listesindeki ilk Okul Admini için düğme var).
+
+**Yeni paket (DEC-609):** `qrcode-generator` 2.0.4, npm (`web/admin`), MIT, yayın 2025-08-07 (7 günlük beklemeyi geçti), bağımlılığı yok. QR'ı admin panelinde SVG olarak çizer; alternatif: sunucuda QRCoder (MIT). Yeni NuGet paketi yok (TOTP `HMACSHA1` ile kendi kodumuz).
