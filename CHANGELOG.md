@@ -9,6 +9,7 @@ Bu dosya [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) biçimini ve [
 #### Faz 5 — Ölçek ve mimari
 - Faz 4 geçişi sahip tarafından onaylandı (2026-11-16); Faz 5 planı roadmap'e yazıldı.
 - Bulut çalıştırmaya hazırlık (P5-06): `Storage:Provider` ile seçilen Azure Blob adaptörü (yönetilen kimlik, kullanıcı delegasyonlu SAS, Azurite testleri; S3 varsayılan), `ForwardedHeaders:ForwardLimit` ayarı, migrator'ın `ConnectionStrings__Migrator` ile çalışması, S3 → Blob kopya betiği ve `docs/bulut-tasima-runbook.md` (DEC-650 – DEC-657).
+- **Azure için infrastructure as code (P5-05):** `infra/` altında OpenTofu (Terraform dili, ADR-0015) ile staging ve production: Container Apps (API, admin, veli, Caddy gateway, migration job, RabbitMQ ve bildirim servisi için yer), PostgreSQL Flexible Server, Key Vault (sırlar yönetilen kimlikle), Log Analytics, belge depolama. `repo-checks` `fmt`, `validate` ve Trivy config taraması çalıştırır; `apply` yok, gerçek kaynaklar sahipte. Maliyet tahmini (~89 USD/ay, 20 USD hedefinin üstünde) ve Türkiye bölgesi olmamasının ADR-0014 ile ilişkisi `docs/bulut-altyapisi.md`'de (DEC-640 – DEC-649).
 
 ## [0.4.0] - 2026-11-16
 

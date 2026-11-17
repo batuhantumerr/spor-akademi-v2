@@ -238,7 +238,7 @@ Migration ekleyen işler (MFA → oturum süresi) art arda yapılır; RabbitMQ v
   - Ödünleşimler ADR olarak: ağ ve operasyon maliyeti, eventual consistency, hata ayıklama, "neden yalnız bu modül".
 
 ### 5.3 Bulut ve IaC (P5-F3, P5-F4)
-- [ ] P5-05 **Azure için infrastructure as code (Terraform dili, HCL).** (DEC-640 – DEC-649)
+- [x] P5-05 **Azure için infrastructure as code (Terraform dili, HCL).** (DEC-640 – DEC-649; ADR-0015; `infra/`, `docs/bulut-altyapisi.md`)
   - Container Apps (API, bildirim servisi, admin ve veli imajları), PostgreSQL Flexible Server, Key Vault, Log Analytics, depolama; staging ve production ortamları değişkenle.
   - Kapsam "Terraform ile" der; kod Terraform dilinde (HCL) yazılır. Çalıştıran araç ADR ile seçilir: Terraform CLI BSL-1.1 lisanslıdır, birebir uyumlu OpenTofu MPL-2.0'dır (sahip Terraform CLI'yi seçerse kod değişmeden çalışır). CI'da `fmt`, `validate` ve statik denetim; `apply` yok, gerçek kaynak sahipte.
   - Maliyet tahmini (NFR-CST-01) ve ADR-0014 veri konumu kararıyla ilişkisi belgelenir.
