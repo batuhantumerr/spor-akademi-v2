@@ -31,6 +31,7 @@ internal sealed class LoginHandler(
     IAccessTokenIssuer accessTokens,
     ITenancyModule tenancy,
     IMfaPolicy mfaPolicy,
+    ISessionPolicies sessionPolicies,
     TimeProvider timeProvider) : ICommandHandler<LoginCommand, LoginOutcome>
 {
     public async Task<Result<LoginOutcome>> Handle(LoginCommand command, CancellationToken cancellationToken)
@@ -87,7 +88,7 @@ internal sealed class LoginHandler(
         }
 
         var refreshToken = refreshTokens.Create();
-        var stored = user.CompleteLogin(refreshToken.Hash, now);
+        var stored = user.CompleteLogin(refreshToken.Hash, now, sessionPolicies.ForRole(user.Role));
         return stored.IsSuccess
             ? Result.Success(LoginOutcome.Authenticated(AuthSessions.Create(accessTokens, user, refreshToken, stored.Value, now)))
             : Result.Failure<LoginOutcome>(stored.Error);

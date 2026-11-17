@@ -244,6 +244,7 @@ internal sealed class VerifyMfaHandler(
     MfaCodeVerifier verifier,
     IRefreshTokenFactory refreshTokens,
     IAccessTokenIssuer accessTokens,
+    ISessionPolicies sessionPolicies,
     TimeProvider timeProvider) : ICommandHandler<VerifyMfaCommand, AuthSession>
 {
     public async Task<Result<AuthSession>> Handle(VerifyMfaCommand command, CancellationToken cancellationToken)
@@ -264,7 +265,7 @@ internal sealed class VerifyMfaHandler(
 
         user.CompleteMfaChallenge(challenge);
         var refreshToken = refreshTokens.Create();
-        var stored = user.CompleteLogin(refreshToken.Hash, now);
+        var stored = user.CompleteLogin(refreshToken.Hash, now, sessionPolicies.ForRole(user.Role));
         return stored.IsSuccess
             ? Result.Success(AuthSessions.Create(accessTokens, user, refreshToken, stored.Value, now))
             : Result.Failure<AuthSession>(stored.Error);
@@ -311,6 +312,7 @@ internal sealed class CompleteMfaEnrollmentWithChallengeHandler(
     MfaEnrollment enrollment,
     IRefreshTokenFactory refreshTokens,
     IAccessTokenIssuer accessTokens,
+    ISessionPolicies sessionPolicies,
     TimeProvider timeProvider) : ICommandHandler<CompleteMfaEnrollmentWithChallengeCommand, MfaEnrollmentCompleted>
 {
     public async Task<Result<MfaEnrollmentCompleted>> Handle(CompleteMfaEnrollmentWithChallengeCommand command, CancellationToken cancellationToken)
@@ -331,7 +333,7 @@ internal sealed class CompleteMfaEnrollmentWithChallengeHandler(
 
         user.CompleteMfaChallenge(challenge);
         var refreshToken = refreshTokens.Create();
-        var stored = user.CompleteLogin(refreshToken.Hash, now);
+        var stored = user.CompleteLogin(refreshToken.Hash, now, sessionPolicies.ForRole(user.Role));
         return stored.IsSuccess
             ? Result.Success(new MfaEnrollmentCompleted(AuthSessions.Create(accessTokens, user, refreshToken, stored.Value, now), confirmed.Value))
             : Result.Failure<MfaEnrollmentCompleted>(stored.Error);

@@ -53,9 +53,9 @@ public sealed partial class User : AggregateRoot<UserId>
     public static readonly TimeSpan LockoutDuration = TimeSpan.FromMinutes(15);
     public const int MaxFailedLogins = 5;
 
-    /// <summary>NFR-SEC-05 / DEC-032: refresh tokens live 7 days; a session at most 30 days from login.</summary>
-    public static readonly TimeSpan RefreshTokenLifetime = TimeSpan.FromDays(7);
-    public static readonly TimeSpan SessionLifetime = TimeSpan.FromDays(30);
+    /// <summary>NFR-SEC-05 / DEC-032: refresh tokens live 7 days; a session at most 30 days from login. P5-02: per role, see <see cref="SessionPolicy"/>.</summary>
+    public static readonly TimeSpan RefreshTokenLifetime = SessionPolicy.Standard.Sliding;
+    public static readonly TimeSpan SessionLifetime = SessionPolicy.Standard.Absolute;
 
     /// <summary>
     /// DEC-446: a rotated refresh token presented again within this time after its own rotation, while its successor is
@@ -346,7 +346,7 @@ public sealed partial class User : AggregateRoot<UserId>
     }
 
     /// <summary>The password was verified: clears failures and starts a new session (token family).</summary>
-    public Result<RefreshToken> CompleteLogin(string refreshTokenHash, DateTimeOffset now)
+    public Result<RefreshToken> CompleteLogin(string refreshTokenHash, DateTimeOffset now, SessionPolicy? policy = null)
     {
         if (Status != UserStatus.Active)
         {
@@ -355,7 +355,7 @@ public sealed partial class User : AggregateRoot<UserId>
 
         ClearFailedLogins();
         LockoutEndsAt = null;
-        return Result.Success(StartSession(refreshTokenHash, now));
+        return Result.Success(StartSession(refreshTokenHash, now, policy ?? SessionPolicy.Standard));
     }
 
     /// <summary>
@@ -363,8 +363,9 @@ public sealed partial class User : AggregateRoot<UserId>
     /// that was already rotated is treated as theft: every token of the user is revoked (US-04, DEC-114), except for a
     /// lost response retried within <see cref="RefreshTokenReuseGraceWindow"/> (DEC-446, <see cref="UnusedHeadWithinGrace"/>).
     /// </summary>
-    public Result<RefreshToken> RotateRefreshToken(string presentedHash, string newHash, DateTimeOffset now)
+    public Result<RefreshToken> RotateRefreshToken(string presentedHash, string newHash, DateTimeOffset now, SessionPolicy? policy = null)
     {
+        policy ??= SessionPolicy.Standard;
         var current = FindToken(presentedHash);
         if (current is null || Status != UserStatus.Active)
         {
@@ -375,19 +376,25 @@ public sealed partial class User : AggregateRoot<UserId>
         {
             if (UnusedHeadWithinGrace(current, now) is { } head)
             {
-                return Result.Success(ReissueAfterLostResponse(current, head, newHash, now));
+                // A retry never outlives the session: the lifetime of the role applies here too (P5-02).
+                return now >= SessionEnd(head, policy)
+                    ? Result.Failure<RefreshToken>(AuthErrors.SessionExpired)
+                    : Result.Success(ReissueAfterLostResponse(current, head, newHash, now, policy));
             }
 
             RevokeAllRefreshTokens(now);
             return Result.Failure<RefreshToken>(AuthErrors.SessionExpired);
         }
 
-        if (!current.IsActive(now))
+        // P5-02 (DEC-610): the role's policy applies at the refresh, also to sessions that began under an older one:
+        // idle means the last refresh (this token's issue) is too old, absolute means the login is too old.
+        // Neither is a reuse, so no other session is touched.
+        if (!current.IsActive(now) || now - current.IssuedAt >= policy.Sliding || now >= SessionEnd(current, policy))
         {
             return Result.Failure<RefreshToken>(AuthErrors.SessionExpired);
         }
 
-        var successor = RefreshToken.Issue(Id, newHash, current.FamilyId, now, current.FamilyExpiresAt);
+        var successor = RefreshToken.Issue(Id, newHash, current.FamilyId, now, policy.Sliding, current.FamilyStartedAt, SessionEnd(current, policy));
         current.ReplaceWith(successor, now);
         _refreshTokens.Add(successor);
         return Result.Success(successor);
@@ -415,7 +422,7 @@ public sealed partial class User : AggregateRoot<UserId>
     /// Sets the user's own password (US-05): the temporary-password flag clears, every existing session
     /// ends and a new session starts for the caller, so they stay signed in on this device only.
     /// </summary>
-    public Result<RefreshToken> ChangePassword(string newPasswordHash, string refreshTokenHash, DateTimeOffset now)
+    public Result<RefreshToken> ChangePassword(string newPasswordHash, string refreshTokenHash, DateTimeOffset now, SessionPolicy? policy = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(newPasswordHash);
         if (Status != UserStatus.Active)
@@ -430,7 +437,7 @@ public sealed partial class User : AggregateRoot<UserId>
         RevokeAllRefreshTokens(now);
         _passwordTokens.Clear();
         Raise(new PasswordChanged(Id, first));
-        return Result.Success(StartSession(refreshTokenHash, now));
+        return Result.Success(StartSession(refreshTokenHash, now, policy ?? SessionPolicy.Standard));
     }
 
     /// <summary>
@@ -525,12 +532,18 @@ public sealed partial class User : AggregateRoot<UserId>
         return Result.Success();
     }
 
-    private RefreshToken StartSession(string refreshTokenHash, DateTimeOffset now)
+    private static DateTimeOffset SessionEnd(RefreshToken token, SessionPolicy policy)
+    {
+        var byPolicy = token.FamilyStartedAt + policy.Absolute;
+        return byPolicy < token.FamilyExpiresAt ? byPolicy : token.FamilyExpiresAt;
+    }
+
+    private RefreshToken StartSession(string refreshTokenHash, DateTimeOffset now, SessionPolicy policy)
     {
         // Tokens of finished sessions can neither be used nor reused any more; drop them.
         _refreshTokens.RemoveAll(t => t.FamilyExpiresAt <= now);
 
-        var token = RefreshToken.Issue(Id, refreshTokenHash, Guid.CreateVersion7(), now, now + SessionLifetime);
+        var token = RefreshToken.Issue(Id, refreshTokenHash, Guid.CreateVersion7(), now, policy.Sliding, now, now + policy.Absolute);
         _refreshTokens.Add(token);
         return token;
     }
@@ -561,9 +574,9 @@ public sealed partial class User : AggregateRoot<UserId>
     /// head itself cannot be handed out again. The presented token is re-pointed at the new head, so a second lost
     /// response inside its (unchanged) window is still a retry rather than a reuse.
     /// </summary>
-    private RefreshToken ReissueAfterLostResponse(RefreshToken presented, RefreshToken head, string newHash, DateTimeOffset now)
+    private RefreshToken ReissueAfterLostResponse(RefreshToken presented, RefreshToken head, string newHash, DateTimeOffset now, SessionPolicy policy)
     {
-        var successor = RefreshToken.Issue(Id, newHash, head.FamilyId, now, head.FamilyExpiresAt);
+        var successor = RefreshToken.Issue(Id, newHash, head.FamilyId, now, policy.Sliding, head.FamilyStartedAt, SessionEnd(head, policy));
         head.ReplaceWith(successor, now);
         presented.RepointTo(successor);
         _refreshTokens.Add(successor);

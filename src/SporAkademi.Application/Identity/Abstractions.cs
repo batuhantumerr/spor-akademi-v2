@@ -56,6 +56,12 @@ public interface IPasswordTokenFactory
     string Hash(string token);
 }
 
+/// <summary>How long a session of a role lasts: idle timeout and absolute lifetime (P5-02, DEC-610, DEC-611).</summary>
+public interface ISessionPolicies
+{
+    SessionPolicy ForRole(UserRole role);
+}
+
 /// <summary>Loads users with their refresh tokens. Users are not tenant-filtered (DEC-105).</summary>
 public interface IUserRepository
 {

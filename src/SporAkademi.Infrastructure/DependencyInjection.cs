@@ -107,6 +107,7 @@ public static class DependencyInjection
             .ValidateOnStart();
         services.AddScoped<ICoachDirectory, CoachDirectory>();
         services.AddMfa();
+        services.AddSessionPolicies();
         services.AddSingleton<PlatformAdminSeed>();
         services.AddHostedService(provider => provider.GetRequiredService<PlatformAdminSeed>());
         services.AddScoped<ISportRepository, SportRepository>();

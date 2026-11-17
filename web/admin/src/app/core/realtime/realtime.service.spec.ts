@@ -129,6 +129,7 @@ const announcementPublished = {
 describe('RealtimeService', () => {
   let currentUser: ReturnType<typeof signal<CurrentUser | null>>;
   let token: string | null;
+  let active: boolean;
   let refresh: ReturnType<typeof vi.fn<() => Observable<string | null>>>;
   let toast: { info: ReturnType<typeof vi.fn> };
   let service: RealtimeService;
@@ -146,13 +147,14 @@ describe('RealtimeService', () => {
     startResults = [];
     currentUser = signal<CurrentUser | null>(null);
     token = jwt(900);
+    active = true;
     refresh = vi.fn(() => of<string | null>(jwt(900)));
     toast = { info: vi.fn() };
     TestBed.configureTestingModule({
       providers: [
         {
           provide: AuthService,
-          useValue: { user: currentUser, token: () => token, refresh },
+          useValue: { user: currentUser, token: () => token, refresh, recentlyActive: () => active },
         },
         { provide: ToastService, useValue: toast },
         { provide: SIGNALR_LOADER, useValue: () => Promise.resolve(fakeSignalR) },
@@ -286,6 +288,21 @@ describe('RealtimeService', () => {
     setVisibility('visible');
     await settle();
     expect(refresh).not.toHaveBeenCalled();
+  });
+
+  it('does not renew the session in the background while the user is idle (P5-02)', async () => {
+    currentUser.set(user('Coach'));
+    await settle();
+    token = jwt(10);
+    active = false;
+
+    await expect(built[0].accessTokenFactory()).rejects.toThrow('Idle');
+    expect(refresh).not.toHaveBeenCalled();
+
+    // The user comes back: the next attempt renews as before.
+    active = true;
+    await expect(built[0].accessTokenFactory()).resolves.toBeDefined();
+    expect(refresh).toHaveBeenCalledTimes(1);
   });
 
   it('fails the token request when the refresh says the session is over', async () => {

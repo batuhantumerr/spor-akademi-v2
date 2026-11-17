@@ -15,6 +15,7 @@ internal sealed class RefreshSessionHandler(
     IAccessTokenIssuer accessTokens,
     ITenancyModule tenancy,
     IMfaPolicy mfaPolicy,
+    ISessionPolicies sessionPolicies,
     TimeProvider timeProvider) : ICommandHandler<RefreshSessionCommand, AuthSession>
 {
     public async Task<Result<AuthSession>> Handle(RefreshSessionCommand command, CancellationToken cancellationToken)
@@ -44,7 +45,7 @@ internal sealed class RefreshSessionHandler(
         }
 
         var next = refreshTokens.Create();
-        var rotated = user.RotateRefreshToken(presentedHash, next.Hash, now);
+        var rotated = user.RotateRefreshToken(presentedHash, next.Hash, now, sessionPolicies.ForRole(user.Role));
         return rotated.IsSuccess
             ? Result.Success(AuthSessions.Create(accessTokens, user, next, rotated.Value, now))
             : Result.Failure<AuthSession>(rotated.Error);

@@ -590,6 +590,17 @@ Sonuç: Platform Admin artık yalnız şifreyle giriş yapamaz; Okul Admini iste
 
 **Yeni paket (DEC-609):** `qrcode-generator` 2.0.4, npm (`web/admin`), MIT, yayın 2025-08-07 (7 günlük beklemeyi geçti), bağımlılığı yok. QR'ı admin panelinde SVG olarak çizer; alternatif: sunucuda QRCoder (MIT). Yeni NuGet paketi yok (TOTP `HMACSHA1` ile kendi kodumuz).
 
+### P5-02 Rol bazlı oturum süresi (DEC-610 – DEC-614)
+
+Sonuç: Platform Admin, Okul Admini ve Antrenör oturumları girişten 12 saat sonra ve 30 dakikalık hareketsizlikte biter; veli oturumu aynı (7 gün kayan / 30 gün mutlak). ASVS 3.3.2 sapması yönetici rolleri için kapandı.
+
+1. **Antrenör de kısa oturumda (DEC-610, DEC-614).** Görev yalnız "yönetici" demiyordu; antrenör panelde ve okul sahasında ortak cihaz kullanabildiği için panel politikasına koydum. *Yönetici:* antrenör gün içinde en çok 12 saatte bir, ara verirse 15-30 dakikada yeniden şifre girer; sporun yoğun saatinde sık giriş şikâyeti olabilir. Gevşetmek yapılandırma değeri (`Sessions:Panel:*`), kod değişikliği değil.
+2. **Hareketsizlik sunucuda ölçülemiyor, yenilemeden ölçülüyor (DEC-611).** Erişim token'ı 15 dakika, istemci yalnız 401'de yenilediği için sınır "son yenilemeden 30 dakika": fiilen hareketsizlik 15-30 dakika arasında bir yerde ölçülür (hiçbir zaman 30'u geçmez). *Yazılımcı:* kesin ölçüm her istekte `last_activity_at` yazmak demek (sıcak satır güncellemesi); bedeline göre yapmadım. Onay ya da "kesin ölçülsün" kararı.
+3. **Mevcut oturumlar (DEC-611).** Yeni sürüm yayımlanınca açık yönetici oturumları bir sonraki yenilemede (en çok 15 dk) yeni kurala bakılır; çoğu hemen düşer. Migration `family_started_at` ekler; eski satırlar 30 günlük oturum varsayımıyla doldurulur.
+4. **Boşta sekme oturumu uzatmaz (DEC-612).** Gerçek zamanlı bağlantının arka planda yeniden bağlanması son 10 dakikada kullanıcı etkinliği yoksa token yenilemez. Admin istemcisinde zamanlayıcıyla yenileme zaten yok.
+5. **Süre dolunca ileti (DEC-613).** Açık sekmede giriş sayfasında "oturum süresi doldu" görünür; diğer cihazlara ve alarma (`RefreshFailureSpike`) dokunmaz. *Sınır:* 30 dakika sonra çerez tarayıcıdan düştüğü için sayfayı yenileyen kullanıcı iletisiz giriş sayfasına düşer. İstenirse küçük bir ek iş.
+6. **Veli uygulaması (DEC-610).** Bilinçli olarak değişmedi (mobil, sık giriş kabul edilmedi). Parent için de kısaltma istenirse yalnız `Sessions:Parent:*` değerleri.
+
 ### P5-06 Bulut çalıştırmaya hazırlık (DEC-650 – DEC-657)
 
 Bulut hesabı yok: her şey yerelde ve CI'da kanıtlandı, Azure'da hiçbir şey çalıştırılmadı. Adım adım taşıma: [docs/bulut-tasima-runbook.md](bulut-tasima-runbook.md).
