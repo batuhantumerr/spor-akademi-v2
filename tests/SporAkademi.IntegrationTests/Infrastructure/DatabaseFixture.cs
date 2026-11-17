@@ -110,6 +110,9 @@ public sealed partial class DatabaseFixture : IAsyncLifetime
 
     [GeneratedRegex(@"^\s*image:\s*(?<image>chrislusf/seaweedfs:\S+)\s*$", RegexOptions.Multiline)]
     private static partial Regex StorageImage();
+
+    [GeneratedRegex(@"^\s*image:\s*(?<image>mcr\.microsoft\.com/azure-storage/azurite:\S+)\s*$", RegexOptions.Multiline)]
+    internal static partial Regex AzuriteImage();
 }
 
 [CollectionDefinition(Name)]

@@ -75,6 +75,9 @@ module "apps" {
   parent_host           = var.parent_host
   allowed_hosts         = var.allowed_hosts
   storage_public_origin = trimsuffix(module.data.documents_blob_endpoint, "/")
+  storage_account_name  = module.data.documents_account_name
+  storage_container     = module.data.documents_container
+  identity_client_id    = module.foundation.identity_client_id
   otlp_endpoint         = var.otlp_endpoint
   extra_env             = var.extra_env
   extra_secret_env      = var.extra_secret_env

@@ -250,8 +250,10 @@ jobs:
             -v "$PWD/docker/postgres/initdb:/docker-entrypoint-initdb.d:ro" "$pg_image"
           for i in $(seq 1 60); do docker exec pg pg_isready -U postgres -d spor_akademi >/dev/null 2>&1 && break; sleep 1; done
           sleep 2
+          # As a container platform runs it (P5-06, DEC-653): the connection comes from ConnectionStrings__Migrator, not an argument.
           docker run --rm --network smoke \
-            spor-akademi-migrator:ci --connection "Host=pg;Database=spor_akademi;Username=spor_akademi_migrator;Password=smokemigrator"
+            -e ConnectionStrings__Migrator="Host=pg;Database=spor_akademi;Username=spor_akademi_migrator;Password=smokemigrator" \
+            spor-akademi-migrator:ci
           # The app role must not reach the migrations history (ADR-0011).
           denied=$(docker exec pg psql -U postgres -d spor_akademi -At -c "select has_schema_privilege('spor_akademi_app','public','usage')")
           test "$denied" = "f"

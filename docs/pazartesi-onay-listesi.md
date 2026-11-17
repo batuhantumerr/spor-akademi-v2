@@ -574,6 +574,18 @@ Sonuç: **yüksek bulgu yok.** Ayrıntı ve kanıt `guvenlik-kontrol-listesi.md`
 
 ## 12. Faz 5 (2026-11-17)
 
+### P5-06 Bulut çalıştırmaya hazırlık (DEC-650 – DEC-657)
+
+Bulut hesabı yok: her şey yerelde ve CI'da kanıtlandı, Azure'da hiçbir şey çalıştırılmadı. Adım adım taşıma: [docs/bulut-tasima-runbook.md](bulut-tasima-runbook.md).
+
+1. **Yeni paketler ve imaj (DEC-650).** `Azure.Storage.Blobs` 12.30.1 (MIT), `Azure.Identity` 1.21.0 (MIT), test için `Testcontainers.Azurite` 4.16.0 (MIT) ve Azurite imajı 3.36.0 (MIT, digest ile `compose.yaml`'da). Ticari ya da copyleft paket yok. Öneri: kabul.
+2. **Belge deposu Azure'da anahtarsız (DEC-650).** API yönetilen kimlikle Blob'a yazar, indirme bağlantısı kısa ömürlü kullanıcı delegasyonlu SAS'tır; hesap anahtarı hiçbir yerde yok. S3 varsayılan kalır ve değişmedi. *Yönetici:* bir okulun belgesi yalnız kısa süreli bağlantıyla açılır, bağlantı kendiliğinden ölür. *Yazılımcı:* Azurite bu imza türünü desteklemediği için testte yalnız test projesindeki paylaşılan anahtarlı imzalayıcı kullanıldı; gerçek doğrulama ilk staging'dir. Öneri: kabul.
+3. **İstemci IP'si açığı kapandı (DEC-651, DEC-652).** `ForwardedHeaders:ForwardLimit` ayarı (varsayılan 1, Azure'da 2 önerilir). Alt ağ güveni korunuyor, "herkese güven" yok. *Yazılımcı:* `2` Azure giriş zincirine dair bir varsayım; runbook bölüm 8'deki iki ağdan deneme staging'de yapılmalı, yanlışsa yalnız ayar değişir. Gerçek veriden önce şart. Öneri: kabul ve staging doğrulaması.
+4. **Migrator hatası bulundu ve düzeltildi (DEC-653).** Belge `ConnectionStrings__Migrator` diyordu ama imaj bunu okumuyordu (yalnız `--connection`); Container Apps işi için işe yaramazdı. Düzeltildi, CI duman testi artık bu değişkenle çalışıyor, yerelde de denendi. Öneri: kabul.
+5. **Sağlık sondaları (DEC-654).** Hazırlık yalnız veritabanı için `503`; depo, RabbitMQ gibi isteğe bağlı bağımlılıklar `Degraded` (HTTP 200). P5-03/P5-04 yeni denetim eklerse `Degraded` olmalı. Öneri: kabul.
+6. **JWT anahtarı hex olmalı (DEC-655).** P5-05 belgesi "32 bayt rastgele" diyordu (düzeltildi); uygulama 64 karakterlik hex ister (`openssl rand -hex 32`). Yanlış biçim API'yi başlatmaz. *Yönetici:* ilk kurulumda sır yazarken bu biçime dikkat. Öneri: kabul.
+7. **Veri taşıma (DEC-656).** Yönetilen PostgreSQL'de yönetici süper kullanıcı değil, bu yüzden `restore-logical.sh` çalışmaz; yerine migrator rolüyle `pg_restore` önerilir (yerelde denendi, Flexible Server'da denenmedi). Belge dosyaları için `scripts/copy-documents-to-blob.sh`. *Yönetici:* taşıma sırasında API'yi durdurmak (bakım penceresi) gerekir. Öneri: kabul; staging'de provası şart.
+8. **`infra/` güncellendi (DEC-657).** P5-05 birleştiği için `Storage__*`, `ForwardLimit` ve kimliğin istemci kimliği modüle eklendi. `tofu validate` yerelde çalıştırılamadı, CI doğrular; ilk gerçek doğrulama staging `plan`'ıdır. Öneri: kabul.
 ### P5-03 Entegrasyon event'leri için RabbitMQ (DEC-620 – DEC-629, ADR-0016)
 
 1. **Yeni paket ve lisansları.** `RabbitMQ.Client` 7.2.1 (Apache-2.0 / MPL-2.0 ikili lisans), test için `Testcontainers.RabbitMq` 4.16.0 (MIT); broker imajı `rabbitmq:4.4.0-management-alpine` (MPL-2.0). MassTransit bilerek yok: v9+ ticari lisanslı (DEC-620, ADR-0016).
