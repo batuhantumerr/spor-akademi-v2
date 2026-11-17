@@ -216,3 +216,42 @@ Migration ekleyen işler (RLS → audit log → KVKK başvuruları) art arda yap
   - Kişisel veri erişimi audit log'da; ilgili kişinin verisi dışa aktarılıp silinebiliyor.
   - Trace ve metrikler dashboard'da görünüyor; yük testi bütçe içinde ve iki API örneğiyle çalışıyor; geri yükleme tatbikatı süresiyle belgeli; bir özellik okul bazında bayrakla açılıp kapanıyor.
 - [x] P4-R2 Faz 4 geçişi (sahip onayı 2026-11-16) ve `v0.4.0` etiketi (sahip talimatıyla bu PR'ın merge commit'inde, Faz 4)
+
+## Faz 5 — Ölçek ve mimari (`v1.0.0`)
+
+Ayrıntılar Faz 4 geçişinde (2026-11-17) yazıldı. Amaç: dağıtık sistem tekniklerini (mesaj kuyruğu, ayrı servis, bulut, IaC) mantıklı oldukları yerde ve bedelleriyle uygulamak. Önce gerçek veriden önce kapatılması önerilen güvenlik borcu gelir: P5-01 ve P5-02 proje dokümanı bölüm 8 kapsamında değildir, Faz 4 incelemesinin önerisi (DEC-517, onay listesi P4-03 madde 1–2) sahibin 2026-11-17 talimatıyla ("önerilere göre karar verebilirsin") Faz 5'e alındı. Bulut hesabı, gerçek kaynak oluşturma (`apply`), alan adı, maliyet onayı ve `v1.0.0` etiketi sahipte kalır; buradaki işler yerelde ve CI'da kanıtlanır. Yeni kararlar DEC-600'den başlar.
+
+Migration ekleyen işler (MFA → oturum süresi) art arda yapılır; RabbitMQ ve IaC bunlara paralel ilerler, bildirim servisi RabbitMQ'dan sonra gelir.
+
+### 5.1 Gerçek veriden önce güvenlik (DEC-517)
+- [ ] P5-01 **Yöneticiler için MFA (TOTP).** (DEC-600 – DEC-609)
+  - Platform Admin için zorunlu, Okul Admini için açılabilir (okul ayarı ya da kişisel tercih); RFC 6238 TOTP, QR ile kurulum, tek kullanımlık kurtarma kodları.
+  - Giriş iki adımlı olur; ikinci adım rate limit'li, gizli anahtar veritabanında şifreli; "telefon kayboldu" akışı (kurtarma kodu ya da Platform Admin'in sıfırlaması, audit'li).
+- [ ] P5-02 **Rol bazlı oturum süresi.** Yönetici ve antrenör oturumları için kısa mutlak süre ve hareketsizlik sınırı (ASVS L2: 12 saat ya da 30 dk hareketsizlik; hareketsizlik kuralının refresh ile nasıl uygulanacağı DEC olarak yazılır), veli için mevcut 7 gün kayan / 30 gün mutlak. (DEC-610 – DEC-614)
+
+### 5.2 Mesajlaşma ve servis sınırları (P5-F1, P5-F2)
+- [ ] P5-03 **Entegrasyon event'leri için RabbitMQ.** (DEC-620 – DEC-629)
+  - Outbox mesajları yapılandırılmışsa RabbitMQ'ya yayımlanır (en az bir kez teslim, idempotent tüketici, dead-letter, yeniden deneme); yapılandırılmamışsa bugünkü süreç içi teslim aynen çalışır.
+  - Compose profili, Testcontainers ile entegrasyon testleri, mesaj sözleşmelerinin sürümlenmesi ve metrikleri.
+- [ ] P5-04 **Bildirim modülünün ayrı servise çıkarılması.** (DEC-630 – DEC-639)
+  - E-posta (ve uygun olursa anlık bildirim yayını) RabbitMQ'dan tüketen ayrı bir worker servisine taşınır; kendi imajı, health check'i ve telemetrisi.
+  - Ödünleşimler ADR olarak: ağ ve operasyon maliyeti, eventual consistency, hata ayıklama, "neden yalnız bu modül".
+
+### 5.3 Bulut ve IaC (P5-F3, P5-F4)
+- [ ] P5-05 **Azure için infrastructure as code (Terraform dili, HCL).** (DEC-640 – DEC-649)
+  - Container Apps (API, bildirim servisi, admin ve veli imajları), PostgreSQL Flexible Server, Key Vault, Log Analytics, depolama; staging ve production ortamları değişkenle.
+  - Kapsam "Terraform ile" der; kod Terraform dilinde (HCL) yazılır. Çalıştıran araç ADR ile seçilir: Terraform CLI BSL-1.1 lisanslıdır, birebir uyumlu OpenTofu MPL-2.0'dır (sahip Terraform CLI'yi seçerse kod değişmeden çalışır). CI'da `fmt`, `validate` ve statik denetim; `apply` yok, gerçek kaynak sahipte.
+  - Maliyet tahmini (NFR-CST-01) ve ADR-0014 veri konumu kararıyla ilişkisi belgelenir.
+- [ ] P5-06 **Bulut çalıştırmaya hazırlık.** (DEC-650 – DEC-659)
+  - Belge depolama için Azure Blob adaptörü (S3 uyumlu adaptör korunur, yapılandırmayla seçilir).
+  - Yönetilen kimlik ve Key Vault'tan yapılandırma, health probe'ları, migration'ın job olarak çalışması; taşıma runbook'u.
+
+### 5.4 Kapanış (P5-F5)
+- [ ] P5-07 **Son mimari inceleme ve `v1.0.0` retrospektifi.** Modül sınırları, kararların geriye dönük değerlendirmesi, "neyi farklı yapardık", açık teknik borç listesi. (DEC-660 – DEC-669)
+
+### Sürüm hazırlığı
+- [ ] P5-R1 **Çıkış kriterlerinin doğrulanması.**
+  - Yöneticiler MFA ile giriyor; yönetici oturumları kısa süreli.
+  - Modüller arası entegrasyon event'leri RabbitMQ üzerinden, kuyruk yokken de doğru çalışıyor; bildirim servisi ayrı süreçte e-posta gönderiyor.
+  - Altyapı kod olarak tanımlı ve CI'da doğrulanıyor; taşıma runbook'u ve maliyet tahmini hazır.
+- [ ] P5-R2 Faz 5 geçişi ve `v1.0.0` etiketi (sahip)

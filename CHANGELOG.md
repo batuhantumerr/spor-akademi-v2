@@ -4,6 +4,11 @@ Bu dosya [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) biçimini ve [
 
 ## [Unreleased]
 
+### Added
+
+#### Faz 5 — Ölçek ve mimari
+- Faz 4 geçişi sahip tarafından onaylandı (2026-11-16); Faz 5 planı roadmap'e yazıldı.
+
 ## [0.4.0] - 2026-11-16
 
 ### Added
