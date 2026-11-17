@@ -3,6 +3,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\SporAkademi.Api\SporAkademi.Api.csproj" />
     <ProjectReference Include="..\..\src\SporAkademi.DemoSeed\SporAkademi.DemoSeed.csproj" />
+    <ProjectReference Include="..\..\src\SporAkademi.Notifications\SporAkademi.Notifications.csproj" />
   </ItemGroup>
 
   <ItemGroup>

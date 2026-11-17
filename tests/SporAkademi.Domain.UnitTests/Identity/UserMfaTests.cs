@@ -80,13 +80,13 @@ public sealed class UserMfaTests
     public void Turning_mfa_on_or_off_ends_every_session()
     {
         var user = NewAdmin();
-        user.CompleteLogin("stolen-session", Now);
+        user.CompleteLogin("stolen-session", Now, SessionPolicy.Standard);
         user.BeginMfaEnrollment("cipher", Now);
 
         user.ConfirmMfaEnrollment(100, Hashes(), Now.AddMinutes(1)).IsSuccess.ShouldBeTrue();
         user.RefreshTokens.ShouldAllBe(t => t.RevokedAt != null);
 
-        user.CompleteLogin("second-session", Now.AddMinutes(2));
+        user.CompleteLogin("second-session", Now.AddMinutes(2), SessionPolicy.Standard);
         user.DisableMfa(Now.AddMinutes(3)).IsSuccess.ShouldBeTrue();
         user.RefreshTokens.ShouldAllBe(t => t.RevokedAt != null);
     }
@@ -136,7 +136,7 @@ public sealed class UserMfaTests
     public void A_reset_removes_everything_ends_the_sessions_and_raises_a_notice()
     {
         var user = Enrolled();
-        user.CompleteLogin("session-hash", Now);
+        user.CompleteLogin("session-hash", Now, SessionPolicy.Standard);
 
         user.ResetMfa(Now.AddMinutes(1)).IsSuccess.ShouldBeTrue();
 
@@ -184,7 +184,7 @@ public sealed class UserMfaTests
         var user = Enrolled();
         user.IssueMfaChallenge("token", MfaChallengePurpose.Verify, Now);
 
-        user.ChangePassword("new-hash", "session-hash", Now);
+        user.ChangePassword("new-hash", "session-hash", Now, SessionPolicy.Standard);
 
         user.MfaChallenges.ShouldBeEmpty();
     }

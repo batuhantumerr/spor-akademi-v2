@@ -590,6 +590,17 @@ Sonuç: Platform Admin artık yalnız şifreyle giriş yapamaz; Okul Admini iste
 
 **Yeni paket (DEC-609):** `qrcode-generator` 2.0.4, npm (`web/admin`), MIT, yayın 2025-08-07 (7 günlük beklemeyi geçti), bağımlılığı yok. QR'ı admin panelinde SVG olarak çizer; alternatif: sunucuda QRCoder (MIT). Yeni NuGet paketi yok (TOTP `HMACSHA1` ile kendi kodumuz).
 
+### P5-02 Rol bazlı oturum süresi (DEC-610 – DEC-614)
+
+Sonuç: Platform Admin, Okul Admini ve Antrenör oturumları girişten 12 saat sonra ve 30 dakikalık hareketsizlikte biter; veli oturumu aynı (7 gün kayan / 30 gün mutlak). ASVS 3.3.2 sapması yönetici rolleri için kapandı.
+
+1. **Antrenör de kısa oturumda (DEC-610, DEC-614).** Görev yalnız "yönetici" demiyordu; antrenör panelde ve okul sahasında ortak cihaz kullanabildiği için panel politikasına koydum. *Yönetici:* antrenör gün içinde en çok 12 saatte bir, ara verirse 15-30 dakikada yeniden şifre girer; sporun yoğun saatinde sık giriş şikâyeti olabilir. Gevşetmek yapılandırma değeri (`Sessions:Panel:*`), kod değişikliği değil.
+2. **Hareketsizlik sunucuda ölçülemiyor, yenilemeden ölçülüyor (DEC-611).** Erişim token'ı 15 dakika, istemci yalnız 401'de yenilediği için sınır "son yenilemeden 30 dakika": fiilen hareketsizlik 15-30 dakika arasında bir yerde ölçülür (hiçbir zaman 30'u geçmez). *Yazılımcı:* kesin ölçüm her istekte `last_activity_at` yazmak demek (sıcak satır güncellemesi); bedeline göre yapmadım. Onay ya da "kesin ölçülsün" kararı.
+3. **Mevcut oturumlar (DEC-611).** Yeni sürüm yayımlanınca açık yönetici oturumları bir sonraki yenilemede (en çok 15 dk) yeni kurala bakılır; çoğu hemen düşer. Migration `family_started_at` ekler; eski satırlar 30 günlük oturum varsayımıyla doldurulur.
+4. **Boşta sekme oturumu uzatmaz (DEC-612).** Gerçek zamanlı bağlantının arka planda yeniden bağlanması son 10 dakikada kullanıcı etkinliği yoksa token yenilemez. Admin istemcisinde zamanlayıcıyla yenileme zaten yok.
+5. **Süre dolunca ileti (DEC-613).** Açık sekmede giriş sayfasında "oturum süresi doldu" görünür; diğer cihazlara ve alarma (`RefreshFailureSpike`) dokunmaz. *Sınır:* 30 dakika sonra çerez tarayıcıdan düştüğü için sayfayı yenileyen kullanıcı iletisiz giriş sayfasına düşer. İstenirse küçük bir ek iş.
+6. **Veli uygulaması (DEC-610).** Bilinçli olarak değişmedi (mobil, sık giriş kabul edilmedi). Parent için de kısaltma istenirse yalnız `Sessions:Parent:*` değerleri.
+
 ### P5-06 Bulut çalıştırmaya hazırlık (DEC-650 – DEC-657)
 
 Bulut hesabı yok: her şey yerelde ve CI'da kanıtlandı, Azure'da hiçbir şey çalıştırılmadı. Adım adım taşıma: [docs/bulut-tasima-runbook.md](bulut-tasima-runbook.md).
@@ -613,6 +624,15 @@ Bulut hesabı yok: her şey yerelde ve CI'da kanıtlandı, Azure'da hiçbir şey
 5. **Sıra garantisi yok (DEC-629).** Mesajlar yalnız ID taşıdığı için bugünkü handler'lar için sorun değil; sıra gerektiren bir tüketici eklenirse yeniden tasarlanır.
 6. **Ölü mektup kuyruğu elle işlenir (DEC-621, DEC-627).** Alarm var; mesajı geri yükleme yönetim arayüzünden (shovel) yapılır. Otomatik yeniden oynatma aracı yok. *Yönetici:* gerekirse küçük bir yönetim komutu eklenebilir.
 7. **Bilinen eksik (DEC-625).** İz, mesajı üreten istekten değil teslim işinden başlıyor; üretici isteğin iz bağlamını outbox satırına yazmak migration ister.
+### P5-04 Bildirim modülünün ayrı servise çıkarılması (DEC-630 – DEC-639, ADR-0017)
+
+1. **Yalnız e-posta ayrıldı, yeni paket yok.** Yedi e-posta handler'ı `notifications` grubunda; worker (`src/SporAkademi.Notifications`) yalnız onları RabbitMQ'dan tüketir. Gerçek zamanlı push'lar API'de (hub orada, DEC-637). *Yönetici:* kullanıcıya görünen bir değişiklik yok; kazanç hata yalıtımı (yavaş ya da çöken SMTP API'yi tutmaz) ve e-postayı ayrı ölçeklemek, bedel ek bir sürekli açık konteyner ve ek işletme yükü. *Yazılımcı:* ADR-0017, "ne zaman bölünmez" bölümüyle birlikte; bu ölçekte (tek ekip, düşük hacim) bölmek bir öğrenme ve sınır çizme yatırımıdır, zorunluluk değil. Öneri: kabul, ama production'da worker'ı gerçek e-posta hacmi görülene kadar kapalı tutmak da makul (`enable_notifications_worker=false` iken her şey API'de çalışır).
+2. **`ExcludeGroups` ile API'de dışlama (DEC-630, DEC-631).** Roadmap `Modules` ile dışlamayı öngörüyordu; modül süzgeci e-posta handler'larını (identity ve billing'e dağılmış) push ve belge silmeden ayıramadığı için tüketici grubu eklendi. Yeni bir e-posta handler'ı etiketi unutursa mimari test kırılır. Öneri: kabul.
+3. **Dışlama unutulursa çift e-posta olmaz (DEC-631).** İki süreç aynı kuyruğu bölüşür, mesaj yine tek kez işlenir; yalnız e-postanın hangi süreçten çıktığı belirsizleşir. *Yönetici:* yanlış yapılandırma veri kaybı ya da çift e-posta doğurmaz.
+4. **P5-03'te bir hata bulundu ve düzeltildi (DEC-636).** Tüketici kataloğu handler'ları oluşturuyordu; belge deposu ayarsız bir worker'da düşüyordu. Artık kayıtları okuyor. API davranışı aynı.
+5. **Gizlilik süzgeçleri paylaşılıyor (DEC-634).** Telemetri ve Sentry süzgeçleri Infrastructure'a taşındı; API ve worker aynı sınıfı kullanır (ilk sürümdeki daha zayıf kopya incelemede yakalandı ve kaldırıldı). Host kurulumu (OTLP, günlük) iki yerde; worker'da API'nin sağlık gauge'ları yok. Öneri: kabul; kurulum için ortak proje P5-07 retrospektifine.
+6. **SMTP zorunlu (DEC-635).** Worker `Email:Smtp:Host` olmadan Development dışında başlamaz ve `infra/` planı e-posta ana bilgisayarı olmadan reddedilir: aksi halde e-postalar sessizce kaybolurdu. Hazırlık probe'u bilerek yok (girişsiz kopya; broker kesintisi revizyonu oynatmasın). *Sahip:* production'da SMTP sağlayıcısı seçimi.
+7. **Altyapı (DEC-635, DEC-639).** `enable_notifications_worker` yalnız `enable_rabbitmq` ile birlikte kabul edilir ve API'ye dışlamayı verir; yeni Key Vault sırrı `conn-rabbitmq` (broker URI'si), e-posta ayarları `email_env`/`email_secret_env` ile. `tofu fmt` ve `validate` yerelde temiz, `plan`/`apply` yok (bulut hesabı yok). *Sahip:* production'da broker ve worker açma kararı (yaklaşık +9 USD/ay broker, DEC-645, ve worker kopyası) ve SMTP sağlayıcısı seçimi. Öneri: staging'de birlikte aç, production'ı gerçek veriye kadar kapalı bırak.
 ### P5-05 Azure için altyapı kodu (DEC-640 – DEC-649, ADR-0015)
 
 Bulut hesabı yok: kod ve belge hazır, hiçbir kaynak oluşturulmadı, `plan`/`apply` çalıştırılmadı. Ayrıntı: [docs/bulut-altyapisi.md](bulut-altyapisi.md).

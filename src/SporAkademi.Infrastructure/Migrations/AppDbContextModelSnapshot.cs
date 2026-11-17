@@ -1766,6 +1766,10 @@ namespace SporAkademi.Infrastructure.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("family_id");
 
+                    b.Property<DateTimeOffset>("FamilyStartedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("family_started_at");
+
                     b.Property<DateTimeOffset>("IssuedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("issued_at");

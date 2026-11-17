@@ -227,15 +227,16 @@ Migration ekleyen işler (MFA → oturum süresi) art arda yapılır; RabbitMQ v
 - [x] P5-01 **Yöneticiler için MFA (TOTP).** (DEC-600 – DEC-609) Platform Admin için zorunlu, Okul Admini için isteğe bağlı; kurtarma kodları, Platform Admin sıfırlaması ve e-posta bildirimleri dahil. Kalan: kurtarma kodu yenileme, anahtar döndürme, antrenör MFA'sı (onay listesi 12).
   - Platform Admin için zorunlu, Okul Admini için açılabilir (okul ayarı ya da kişisel tercih); RFC 6238 TOTP, QR ile kurulum, tek kullanımlık kurtarma kodları.
   - Giriş iki adımlı olur; ikinci adım rate limit'li, gizli anahtar veritabanında şifreli; "telefon kayboldu" akışı (kurtarma kodu ya da Platform Admin'in sıfırlaması, audit'li).
-- [ ] P5-02 **Rol bazlı oturum süresi.** Yönetici ve antrenör oturumları için kısa mutlak süre ve hareketsizlik sınırı (ASVS L2: 12 saat ya da 30 dk hareketsizlik; hareketsizlik kuralının refresh ile nasıl uygulanacağı DEC olarak yazılır), veli için mevcut 7 gün kayan / 30 gün mutlak. (DEC-610 – DEC-614)
+- [x] P5-02 **Rol bazlı oturum süresi.** Yönetici ve antrenör oturumları için kısa mutlak süre ve hareketsizlik sınırı (ASVS L2: 12 saat ya da 30 dk hareketsizlik; hareketsizlik kuralının refresh ile nasıl uygulanacağı DEC olarak yazılır), veli için mevcut 7 gün kayan / 30 gün mutlak. (DEC-610 – DEC-614)
 
 ### 5.2 Mesajlaşma ve servis sınırları (P5-F1, P5-F2)
 - [x] P5-03 **Entegrasyon event'leri için RabbitMQ.** (DEC-620 – DEC-629; ADR-0016)
   - Outbox mesajları yapılandırılmışsa RabbitMQ'ya yayımlanır (en az bir kez teslim, idempotent tüketici, dead-letter, yeniden deneme); yapılandırılmamışsa bugünkü süreç içi teslim aynen çalışır.
   - Compose profili, Testcontainers ile entegrasyon testleri, mesaj sözleşmelerinin sürümlenmesi ve metrikleri.
-- [ ] P5-04 **Bildirim modülünün ayrı servise çıkarılması.** (DEC-630 – DEC-639)
+- [x] P5-04 **Bildirim modülünün ayrı servise çıkarılması.** (DEC-630 – DEC-639; ADR-0017; `src/SporAkademi.Notifications`, `docker/notifications`)
   - E-posta (ve uygun olursa anlık bildirim yayını) RabbitMQ'dan tüketen ayrı bir worker servisine taşınır; kendi imajı, health check'i ve telemetrisi.
   - Ödünleşimler ADR olarak: ağ ve operasyon maliyeti, eventual consistency, hata ayıklama, "neden yalnız bu modül".
+  - Yapıldı: yalnız e-posta tüketicileri (`notifications` tüketici grubu) ayrı worker'da; gerçek zamanlı push'lar API'de kalır (hub orada). API'de dışlama `RabbitMq:Consumers:ExcludeGroups` ile, süreç içi mod değişmedi.
 
 ### 5.3 Bulut ve IaC (P5-F3, P5-F4)
 - [x] P5-05 **Azure için infrastructure as code (Terraform dili, HCL).** (DEC-640 – DEC-649; ADR-0015; `infra/`, `docs/bulut-altyapisi.md`)

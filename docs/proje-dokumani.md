@@ -186,6 +186,7 @@ src/
   SporAkademi.Application/     kullanım senaryoları, arayüzler, <Modül>/Contracts
   SporAkademi.Infrastructure/  EF Core, PostgreSQL, kimlik doğrulama
   SporAkademi.Api/             endpoint'ler, DI (composition root)
+  SporAkademi.Notifications/   bildirim worker'ı (Faz 5, ADR-0017): yalnız e-posta tüketicileri
 tests/
   Domain.UnitTests, Application.UnitTests, IntegrationTests, ArchitectureTests
 web/admin/                     Angular
@@ -277,6 +278,12 @@ Planlanan production yapısı (sunucu alındığında): tek VPS, Caddy (TLS, yö
 - Topic exchange (`spor-akademi.events`), yönlendirme anahtarı mesaj türü; her `IOutboxMessageHandler` için ayrı quorum kuyruğu, TTL'li yeniden deneme kuyruğu ve tek dead-letter kuyruğu.
 - At-least-once: outbox satırı publisher confirm'den sonra işlenmiş sayılır, broker kesintisi deneme tüketmez; tüketici `outbox.inbox` ile idempotent.
 - Tüketici mesajın okul bağlamında (`tenant-id` başlığı) çalışır; W3C trace context başlıkta taşınır. Tüketiciler modül başına seçilebilir (`RabbitMq:Consumers`).
+
+### 5.12 Bildirim worker'ı (ADR-0017, P5-04)
+
+- E-posta gönderen outbox handler'ları `notifications` tüketici grubundadır (`[OutboxConsumerGroup]`); `src/SporAkademi.Notifications` ayrı bir host olarak yalnız bu grubu RabbitMQ'dan tüketir (`/health/live`, `/health/ready`, kendi imajı). Application ve Infrastructure aynı DI ile kullanılır; worker API'ye ve DemoSeed'e bağlanmaz (mimari test).
+- API, worker yayındayken `RabbitMq:Consumers:ExcludeGroups` ile e-posta kuyruklarını tüketmez; `ConnectionStrings:RabbitMq` yoksa e-posta bugünkü gibi API sürecinde gider.
+- Gerçek zamanlı (SignalR) push'lar API'de kalır: hub ve bağlantılar orada. Veritabanı ve mesaj sözleşmeleri ortaktır; ayrı olan yalnız süreçtir (ödünleşimler ve ne zaman bölünmeyeceği ADR-0017'de).
 
 ---
 
@@ -1221,7 +1228,7 @@ Aşağıdaki hedefler, faz 3 sonundaki şu yüke göre belirlenmiştir:
 | NFR-SEC-02 | İletişim güvenliği | Sadece HTTPS; HTTP istekleri HTTPS'e yönlendirilir; HSTS açık; TLS 1.2 ve üzeri | Deploy sonrası otomatik kontrol | Faz 0 |
 | NFR-SEC-03 | Şifre saklama | ASP.NET Core `PasswordHasher` (PBKDF2) ile tuzlanmış (salted), yavaş hash; düz metin şifre asla saklanmaz ve loglanmaz | Kod incelemesi, birim testi | Faz 1 |
 | NFR-SEC-04 | Şifre politikası | En az 12 karakter (DEC-369); zorunlu karakter türü kuralı yok; yaygın şifreler listesine karşı kontrol edilir | Birim testi | Faz 1 |
-| NFR-SEC-05 | Token süreleri | Access token 15 dakika; refresh token 7 gün ve her kullanımda yenilenir (rotation); oturumun mutlak üst sınırı 30 gün | Entegrasyon testi | Faz 1 |
+| NFR-SEC-05 | Token süreleri | Access token 15 dakika; refresh token 7 gün ve her kullanımda yenilenir (rotation); oturumun mutlak üst sınırı 30 gün. P5-02: Platform Admin, Okul Admini ve Antrenör için refresh token 30 dakika (hareketsizlik sınırı) ve mutlak sınır 12 saat, yapılandırılır (DEC-610 – DEC-614) | Entegrasyon testi | Faz 1 |
 | NFR-SEC-06 | Tarayıcıda token saklama | Refresh token hiçbir zaman JavaScript tarafından okunamaz. Access token sadece bellekte tutulur. Kesin yöntem ADR-0006'da belirlenecek | Kod incelemesi, e2e test | Faz 1 |
 | NFR-SEC-07 | Varsayılan olarak yetki | Açıkça "public" işaretlenmedikçe her endpoint kimlik doğrulama ister (deny by default) | Mimari testi | Faz 1 |
 | NFR-SEC-08 | Tenant izolasyonu | Hiçbir istek başka bir okulun verisini okuyamaz veya değiştiremez | Tenant izolasyon test paketi (P1-35) | Faz 1 |

@@ -46,9 +46,22 @@ using SporAkademi.Infrastructure.Tenancy;
 
 namespace SporAkademi.Infrastructure;
 
+/// <summary>Which pieces of the infrastructure a host needs.</summary>
+public enum InfrastructureProfile
+{
+    /// <summary>The API and tools that act like it (the demo seeder): everything, including the MFA key.</summary>
+    Full,
+
+    /// <summary>A background worker that signs nobody in (the notifications worker, P5-04): no MFA key or policy.</summary>
+    Worker,
+}
+
 public static class DependencyInjection
 {
-    public static IServiceCollection AddInfrastructure(this IServiceCollection services, IConfiguration configuration)
+    public static IServiceCollection AddInfrastructure(
+        this IServiceCollection services,
+        IConfiguration configuration,
+        InfrastructureProfile profile = InfrastructureProfile.Full)
     {
         ArgumentNullException.ThrowIfNull(configuration);
 
@@ -106,7 +119,19 @@ public static class DependencyInjection
             .Validate(o => o.IsValid(), "Features:Defaults must name known feature flags with true or false.")
             .ValidateOnStart();
         services.AddScoped<ICoachDirectory, CoachDirectory>();
-        services.AddMfa();
+        // P5-04: a host that never signs anyone in (the notifications worker) neither needs nor validates the MFA key.
+        if (profile == InfrastructureProfile.Worker)
+        {
+            services.AddMfaUnavailable();
+        }
+        else
+        {
+            services.AddMfa();
+        }
+
+        // P5-02: defaults apply when unset; registered for every host so session-starting handlers resolve.
+        services.AddSessionPolicies();
+
         services.AddSingleton<PlatformAdminSeed>();
         services.AddHostedService(provider => provider.GetRequiredService<PlatformAdminSeed>());
         services.AddScoped<ISportRepository, SportRepository>();
@@ -244,7 +269,9 @@ internal static class OutboxRegistration
             .PostConfigure<IConfiguration>((options, root) => options.ConnectionString = root.GetConnectionString(RabbitMqOptions.ConnectionStringName))
             .Validate(o => o.IsValid(), "The RabbitMq configuration section or ConnectionStrings:RabbitMq has an invalid value.")
             .ValidateOnStart();
-        services.AddSingleton<ConsumerCatalog>();
+        // Reads the registrations (the collection stays valid after the container is built); see ConsumerCatalog.
+        services.AddSingleton(provider => new ConsumerCatalog(
+            provider.GetRequiredService<OutboxMessageTypes>(), provider.GetRequiredService<IServiceScopeFactory>(), services));
         services.AddSingleton<ConsumerState>();
         services.AddSingleton<RabbitMqBroker>();
 
