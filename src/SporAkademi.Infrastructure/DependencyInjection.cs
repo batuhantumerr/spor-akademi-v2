@@ -105,6 +105,7 @@ public static class DependencyInjection
             .Validate(o => o.IsValid(), "Features:Defaults must name known feature flags with true or false.")
             .ValidateOnStart();
         services.AddScoped<ICoachDirectory, CoachDirectory>();
+        services.AddMfa();
         services.AddSingleton<PlatformAdminSeed>();
         services.AddHostedService(provider => provider.GetRequiredService<PlatformAdminSeed>());
         services.AddScoped<ISportRepository, SportRepository>();

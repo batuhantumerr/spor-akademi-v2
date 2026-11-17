@@ -12,7 +12,14 @@ namespace SporAkademi.Infrastructure.Identity;
 /// <summary>Users are not tenant-filtered (DEC-105): every school-bound query states its school explicitly.</summary>
 internal sealed class UserRepository(AppDbContext dbContext) : IUserRepository
 {
-    private IQueryable<User> UsersWithTokens => dbContext.Set<User>().Include(u => u.RefreshTokens).Include(u => u.PasswordTokens);
+    // Split, so that a user with many sessions and ten recovery codes is not a cross product (P5-01).
+    private IQueryable<User> UsersWithTokens => dbContext.Set<User>()
+        .Include(u => u.RefreshTokens)
+        .Include(u => u.PasswordTokens)
+        .Include(u => u.MfaCredential)
+        .Include(u => u.RecoveryCodes)
+        .Include(u => u.MfaChallenges)
+        .AsSplitQuery();
 
     public Task<User?> GetByIdAsync(UserId id, CancellationToken cancellationToken) =>
         UsersWithTokens.SingleOrDefaultAsync(u => u.Id == id, cancellationToken);
@@ -22,6 +29,9 @@ internal sealed class UserRepository(AppDbContext dbContext) : IUserRepository
 
     public Task<User?> GetByRefreshTokenHashAsync(string tokenHash, CancellationToken cancellationToken) =>
         UsersWithTokens.SingleOrDefaultAsync(u => u.RefreshTokens.Any(t => t.TokenHash == tokenHash), cancellationToken);
+
+    public Task<User?> GetByMfaChallengeHashAsync(string tokenHash, CancellationToken cancellationToken) =>
+        UsersWithTokens.SingleOrDefaultAsync(u => u.MfaChallenges.Any(c => c.TokenHash == tokenHash), cancellationToken);
 
     public Task<User?> GetByPasswordTokenHashAsync(string tokenHash, CancellationToken cancellationToken) =>
         UsersWithTokens.SingleOrDefaultAsync(u => u.PasswordTokens.Any(t => t.TokenHash == tokenHash), cancellationToken);
@@ -78,7 +88,7 @@ internal sealed class UserRepository(AppDbContext dbContext) : IUserRepository
                 g =>
                 {
                     var first = g.MinBy(u => u.Id.Value)!;
-                    return new SchoolAdminSummary(first.Id.Value, first.FirstName, first.LastName, first.Email.Value, first.Status);
+                    return new SchoolAdminSummary(first.Id.Value, first.FirstName, first.LastName, first.Email.Value, first.Status, first.MfaEnabled);
                 });
     }
 

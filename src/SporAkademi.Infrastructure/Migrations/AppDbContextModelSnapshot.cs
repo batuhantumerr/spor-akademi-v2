@@ -1490,6 +1490,187 @@ namespace SporAkademi.Infrastructure.Migrations
                         });
                 });
 
+            modelBuilder.Entity("SporAkademi.Domain.Identity.MfaChallenge", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid?>("CreatedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("created_by");
+
+                    b.Property<DateTimeOffset>("ExpiresAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("expires_at");
+
+                    b.Property<int>("FailedAttempts")
+                        .HasColumnType("integer")
+                        .HasColumnName("failed_attempts");
+
+                    b.Property<DateTimeOffset>("IssuedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("issued_at");
+
+                    b.Property<string>("Purpose")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .HasColumnName("purpose");
+
+                    b.Property<string>("TokenHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character(64)")
+                        .HasColumnName("token_hash")
+                        .IsFixedLength();
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<Guid?>("UpdatedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("updated_by");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("user_id");
+
+                    b.Property<uint>("Version")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
+
+                    b.HasKey("Id")
+                        .HasName("pk_mfa_challenges");
+
+                    b.HasIndex("ExpiresAt")
+                        .HasDatabaseName("ix_mfa_challenges_expires_at");
+
+                    b.HasIndex("TokenHash")
+                        .IsUnique()
+                        .HasDatabaseName("ix_mfa_challenges_token_hash");
+
+                    b.HasIndex("UserId")
+                        .HasDatabaseName("ix_mfa_challenges_user_id");
+
+                    b.ToTable("mfa_challenges", "identity");
+                });
+
+            modelBuilder.Entity("SporAkademi.Domain.Identity.MfaCredential", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTimeOffset?>("ConfirmedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("confirmed_at");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid?>("CreatedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("created_by");
+
+                    b.Property<long?>("LastUsedStep")
+                        .HasColumnType("bigint")
+                        .HasColumnName("last_used_step");
+
+                    b.Property<string>("SecretCiphertext")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)")
+                        .HasColumnName("secret_ciphertext");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<Guid?>("UpdatedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("updated_by");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("user_id");
+
+                    b.Property<uint>("Version")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
+
+                    b.HasKey("Id")
+                        .HasName("pk_mfa_credentials");
+
+                    b.HasIndex("UserId")
+                        .IsUnique()
+                        .HasDatabaseName("ix_mfa_credentials_user_id");
+
+                    b.ToTable("mfa_credentials", "identity");
+                });
+
+            modelBuilder.Entity("SporAkademi.Domain.Identity.MfaRecoveryCode", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("CodeHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character(64)")
+                        .HasColumnName("code_hash")
+                        .IsFixedLength();
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid?>("CreatedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("created_by");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<Guid?>("UpdatedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("updated_by");
+
+                    b.Property<DateTimeOffset?>("UsedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("used_at");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("user_id");
+
+                    b.Property<uint>("Version")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
+
+                    b.HasKey("Id")
+                        .HasName("pk_mfa_recovery_codes");
+
+                    b.HasIndex("UserId")
+                        .HasDatabaseName("ix_mfa_recovery_codes_user_id");
+
+                    b.ToTable("mfa_recovery_codes", "identity");
+                });
+
             modelBuilder.Entity("SporAkademi.Domain.Identity.PasswordToken", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1690,6 +1871,12 @@ namespace SporAkademi.Infrastructure.Migrations
                     b.Property<DateTimeOffset?>("LockoutEndsAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("lockout_ends_at");
+
+                    b.Property<bool>("MfaEnabled")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false)
+                        .HasColumnName("mfa_enabled");
 
                     b.Property<bool>("MustChangePassword")
                         .HasColumnType("boolean")
@@ -2907,6 +3094,36 @@ namespace SporAkademi.Infrastructure.Migrations
                         .HasConstraintName("fk_group_fees_groups_group_id");
                 });
 
+            modelBuilder.Entity("SporAkademi.Domain.Identity.MfaChallenge", b =>
+                {
+                    b.HasOne("SporAkademi.Domain.Identity.User", null)
+                        .WithMany("MfaChallenges")
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_mfa_challenges_user_user_id");
+                });
+
+            modelBuilder.Entity("SporAkademi.Domain.Identity.MfaCredential", b =>
+                {
+                    b.HasOne("SporAkademi.Domain.Identity.User", null)
+                        .WithOne("MfaCredential")
+                        .HasForeignKey("SporAkademi.Domain.Identity.MfaCredential", "UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_mfa_credentials_users_user_id");
+                });
+
+            modelBuilder.Entity("SporAkademi.Domain.Identity.MfaRecoveryCode", b =>
+                {
+                    b.HasOne("SporAkademi.Domain.Identity.User", null)
+                        .WithMany("RecoveryCodes")
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_mfa_recovery_codes_user_user_id");
+                });
+
             modelBuilder.Entity("SporAkademi.Domain.Identity.PasswordToken", b =>
                 {
                     b.HasOne("SporAkademi.Domain.Identity.User", null)
@@ -3057,7 +3274,13 @@ namespace SporAkademi.Infrastructure.Migrations
 
             modelBuilder.Entity("SporAkademi.Domain.Identity.User", b =>
                 {
+                    b.Navigation("MfaChallenges");
+
+                    b.Navigation("MfaCredential");
+
                     b.Navigation("PasswordTokens");
+
+                    b.Navigation("RecoveryCodes");
 
                     b.Navigation("RefreshTokens");
                 });

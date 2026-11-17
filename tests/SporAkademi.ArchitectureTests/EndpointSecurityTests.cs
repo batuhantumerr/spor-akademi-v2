@@ -26,6 +26,10 @@ public sealed class EndpointSecurityTests : IDisposable
         "/api/v1/sandbox-checkout/complete",
         "/api/v1/auth/password-reset/request", // P2-F4: always 202, rate limited (DEC-353)
         "/api/v1/auth/password-reset/confirm", // P2-F4: needs a set-password token
+        // P5-01 (DEC-601): the second step of a login; the single-use challenge token is the credential, rate limited.
+        "/api/v1/auth/mfa/verify",
+        "/api/v1/auth/mfa/enrollment/start",
+        "/api/v1/auth/mfa/enrollment/confirm",
     ];
 
     /// <summary>

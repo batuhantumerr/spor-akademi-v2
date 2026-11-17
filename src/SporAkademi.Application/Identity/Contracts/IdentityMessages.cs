@@ -29,3 +29,11 @@ public sealed record ParentInvitedMessage(Guid UserId) : IOutboxMessage;
 /// </summary>
 [OutboxMessage("identity.password-changed.v1")]
 public sealed record PasswordChangedMessage(Guid UserId) : IOutboxMessage;
+
+/// <summary>
+/// The second factor of an account changed (P5-01, DEC-607): it was turned on or off, a Platform Admin reset it, or a recovery
+/// code was used. The owner is told by e-mail. Ids and a notice name only; no code, secret or link.
+/// </summary>
+/// <param name="Notice">A <c>MfaNotice</c> name.</param>
+[OutboxMessage("identity.mfa-notice.v1")]
+public sealed record MfaNoticeMessage(Guid UserId, string Notice) : IOutboxMessage;

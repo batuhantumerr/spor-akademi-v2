@@ -31,6 +31,9 @@ public sealed class RowLevelSecurityTests(DatabaseFixture database) : IdentityTe
     private static readonly Dictionary<string, string> OwnedTables = new(StringComparer.Ordinal)
     {
         ["groups.group_fees"] = "groups.groups",
+        ["identity.mfa_challenges"] = "identity.users",
+        ["identity.mfa_credentials"] = "identity.users",
+        ["identity.mfa_recovery_codes"] = "identity.users",
         ["identity.password_tokens"] = "identity.users",
         ["identity.refresh_tokens"] = "identity.users",
     };

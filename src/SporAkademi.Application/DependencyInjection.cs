@@ -16,6 +16,9 @@ public static class DependencyInjection
     public static IServiceCollection AddApplication(this IServiceCollection services)
     {
         services.AddScoped<AccountOpening>();
+        services.AddScoped<Identity.Mfa.MfaEnrollment>();
+        services.AddScoped<Identity.Mfa.MfaCodeVerifier>();
+        services.AddScoped<Identity.Mfa.MfaChallengeLookup>();
         services.AddScoped<Identity.Passwords.PasswordLinkMailer>();
         services.AddScoped<Billing.DueCharges>();
         services.AddScoped<Billing.OutstandingDues>();

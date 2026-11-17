@@ -1,4 +1,5 @@
 using SporAkademi.Application.Abstractions.Messaging;
+using SporAkademi.Application.Identity.Mfa;
 using SporAkademi.Application.Tenancy.Contracts;
 using SporAkademi.Domain.Identity;
 using SporAkademi.Domain.SharedKernel;
@@ -13,6 +14,7 @@ internal sealed class RefreshSessionHandler(
     IRefreshTokenFactory refreshTokens,
     IAccessTokenIssuer accessTokens,
     ITenancyModule tenancy,
+    IMfaPolicy mfaPolicy,
     TimeProvider timeProvider) : ICommandHandler<RefreshSessionCommand, AuthSession>
 {
     public async Task<Result<AuthSession>> Handle(RefreshSessionCommand command, CancellationToken cancellationToken)
@@ -33,6 +35,12 @@ internal sealed class RefreshSessionHandler(
         if (user.TenantId is { } school && !await tenancy.IsSchoolActiveAsync(school, cancellationToken))
         {
             return Result.Failure<AuthSession>(AuthErrors.AccountInactive);
+        }
+
+        // P5-01 (DEC-606): a session that predates the MFA rule of its role cannot go on; the next login enrols.
+        if (user.Status == UserStatus.Active && mfaPolicy.IsRequired(user.Role) && !user.MfaEnabled)
+        {
+            return Result.Failure<AuthSession>(AuthErrors.SessionExpired);
         }
 
         var next = refreshTokens.Create();
