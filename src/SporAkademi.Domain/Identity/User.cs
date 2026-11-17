@@ -43,7 +43,7 @@ public sealed record ParentInvited(UserId UserId, SchoolId TenantId) : IDomainEv
 /// An account. Not tenant-scoped (DEC-105): the Platform Admin has no school and login looks users up
 /// by e-mail across schools. Every other role belongs to exactly one school.
 /// </summary>
-public sealed class User : AggregateRoot<UserId>
+public sealed partial class User : AggregateRoot<UserId>
 {
     public const int NameMaxLength = 100;
     public const int PasswordHashMaxLength = 256;
@@ -576,6 +576,9 @@ public sealed class User : AggregateRoot<UserId>
         {
             token.Revoke(now);
         }
+
+        // Whatever ends the sessions (password change, reset, deactivation) also ends a half-finished login (P5-01).
+        _mfaChallenges.Clear();
     }
 
     private RefreshToken? FindToken(string tokenHash) =>
