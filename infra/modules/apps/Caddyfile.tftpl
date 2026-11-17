@@ -1,0 +1,45 @@
+# The one public entry point (docs/bulut-altyapisi.md). The SPAs call /api and /hubs on their own host, so these paths
+# must reach the API (docker/admin/nginx.conf answers them with 404 on purpose). The admin, parent and API container
+# apps have internal ingress only. Rendered by OpenTofu into the CADDYFILE environment variable.
+{
+	admin off
+	auto_https off
+	servers {
+		# TLS ends at the Container Apps ingress in front of this container; trust its X-Forwarded-* headers.
+		trusted_proxies static ${trusted_cidr}
+	}
+}
+
+:8080 {
+	handle /healthz {
+		respond "ok" 200
+	}
+
+	# Health endpoints stay internal (probes talk to the API directly).
+	handle /health/* {
+		respond "not found" 404
+	}
+
+	@api path /api/* /hubs/*
+	handle @api {
+		reverse_proxy https://${api_fqdn} {
+			header_up Host {upstream_hostport}
+			flush_interval -1
+		}
+	}
+%{ if parent_host != "" ~}
+
+	@parent host ${parent_host}
+	handle @parent {
+		reverse_proxy https://${parent_fqdn} {
+			header_up Host {upstream_hostport}
+		}
+	}
+%{ endif ~}
+
+	handle {
+		reverse_proxy https://${admin_fqdn} {
+			header_up Host {upstream_hostport}
+		}
+	}
+}

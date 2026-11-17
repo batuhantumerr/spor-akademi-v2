@@ -186,6 +186,10 @@ bash scripts/e2e.sh --project=chromium --project=mobile-chromium   # sadece Chro
 - Git worktree'den çalıştırırken `.env` ana checkout'taysa: `SPOR_AKADEMI_ENV_FILE=/yol/.env bash scripts/e2e.sh`.
 - CI'da `e2e` işi aynı betiği geçici bir `.env` ile çalıştırır; zorunlu check değildir (DEC-240).
 
+## Bulut altyapısı (Faz 5)
+
+`infra/` Azure için OpenTofu kodudur (Container Apps, PostgreSQL Flexible Server, Key Vault, Blob; [ADR-0015](docs/adr/0015-altyapi-kodu-araci.md)). Henüz hiçbir kaynak oluşturulmadı; mimari, maliyet tahmini, KVKK notu ve ilk `apply` kontrol listesi [docs/bulut-altyapisi.md](docs/bulut-altyapisi.md)'de. CI'da `tofu fmt`, `validate` ve Trivy `config` taraması çalışır; yerelde aynısı için OpenTofu ≥ 1.11: `tofu fmt -check -recursive infra`, ardından `cd infra/envs/staging && tofu init -backend=false && tofu validate`.
+
 ## Lisans
 
 Lisans yoktur. Tüm hakları saklıdır.

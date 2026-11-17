@@ -1,0 +1,11 @@
+# OpenTofu working files; the provider lock files (.terraform.lock.hcl) ARE committed.
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+crash.log
+override.tf
+override.tf.json
+*_override.tf
+*.auto.tfvars
+secrets.tfvars
