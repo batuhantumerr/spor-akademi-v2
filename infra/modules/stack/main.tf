@@ -72,7 +72,6 @@ module "apps" {
   static_min_replicas = var.static_min_replicas
   redis_enabled       = var.enable_redis
 
-  admin_host            = var.admin_host
   parent_host           = var.parent_host
   allowed_hosts         = var.allowed_hosts
   storage_public_origin = trimsuffix(module.data.documents_blob_endpoint, "/")

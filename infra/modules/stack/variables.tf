@@ -114,11 +114,6 @@ variable "static_min_replicas" {
   default = 1
 }
 
-variable "admin_host" {
-  type    = string
-  default = ""
-}
-
 variable "parent_host" {
   type    = string
   default = ""

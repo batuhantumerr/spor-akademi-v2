@@ -171,16 +171,19 @@ resource "azurerm_storage_share" "rabbitmq" {
 
 # --- Cache (optional) ----------------------------------------------------------------------------------------
 resource "azurerm_redis_cache" "this" {
-  count                         = var.enable_redis ? 1 : 0
-  name                          = "redis-${var.name}-${var.suffix}"
-  location                      = var.location
-  resource_group_name           = var.resource_group_name
-  capacity                      = 0
-  family                        = "C"
-  sku_name                      = "Basic"
-  non_ssl_port_enabled          = false
-  minimum_tls_version           = "1.2"
-  public_network_access_enabled = true # Basic cannot join a virtual network; password + TLS only
+  count                = var.enable_redis ? 1 : 0
+  name                 = "redis-${var.name}-${var.suffix}"
+  location             = var.location
+  resource_group_name  = var.resource_group_name
+  capacity             = 0
+  family               = "C"
+  sku_name             = "Basic"
+  non_ssl_port_enabled = false
+  minimum_tls_version  = "1.2"
+  # Basic cannot join a virtual network, so the endpoint is public: access needs the access key, TLS 1.2 only, no
+  # plain port. It holds only short-lived cache copies and SignalR messages (DEC-641). Premium/Managed Redis with a
+  # private endpoint is the hardening step.
+  public_network_access_enabled = true
   tags                          = var.tags
 
   redis_configuration {

@@ -84,7 +84,9 @@ flowchart LR
 İmajlar CI'ın GHCR'ye bastığı `ghcr.io/<sahip>/spor-akademi-v2-{api,migrator,admin,parent}:<commit SHA>` adreslerinden gelir;
 `latest` kullanılmaz (`image_tag` zorunlu). Paketler özelse `registry_username` verilir ve `ghcr-pull-token` sırrı gerekir.
 
-### Sırlar (hepsi Key Vault'ta, kodda ve state'te yok)
+### Sırlar (Key Vault'ta; kodda yok, state'te yalnız bir istisna)
+
+İstisna: RabbitMQ'nun Azure Files anahtarı (`azurerm_container_app_environment_storage.access_key`) Container Apps bağlaması için gerekir ve **state'e yazılır**; state özel ve şifreli olmalıdır (bölüm 8). Öteki sırlar state'e girmez.
 
 | Sır | Kim yazar | İçerik |
 | --- | --- | --- |
@@ -238,7 +240,7 @@ Batı Avrupa (`westeurope`, Hollanda) ve Almanya Batı-Orta (`germanywestcentral
 3. `Microsoft.App`, `Microsoft.DBforPostgreSQL`, `Microsoft.OperationalInsights`, `Microsoft.KeyVault`, `Microsoft.Storage`,
    `Microsoft.Network` kaynak sağlayıcılarının kayıtlı olduğunu doğrula; bölgede PostgreSQL 18 ve B1ms kotası.
 4. Uzak state: özel Storage hesabı + `tfstate` konteyneri (elle), `backend.tf` yorumunu aç, `tofu init`.
-5. `GHCR` paketlerinin görünürlüğü: public ya da `registry_username` + `ghcr-pull-token`.
+5. `GHCR` paketlerinin görünürlüğü: public ya da `registry_username` + `ghcr-pull-token`. RabbitMQ açılacaksa `rabbitmq_image`'ı `deploy_apps=true`'dan önce digest ile sabitle (varsayılan `rabbitmq:4-alpine` etikettir).
 6. **Aşama 1:** `deploy_apps=false` ile `tofu plan` → incele → `tofu apply` (kimlik, Key Vault, ağ, PostgreSQL, depolama, Container Apps
    ortamı). Sunucu bir kez yeniden başlar (`pg_stat_statements`).
 7. PostgreSQL'e VNet içinden bağlan (örn. geçici bir kapsayıcı ya da Azure Cloud Shell VNet entegrasyonu), `postgres-admin-password`
@@ -247,7 +249,7 @@ Batı Avrupa (`westeurope`, Hollanda) ve Almanya Batı-Orta (`germanywestcentral
    `ghcr-pull-token`). Yazan kullanıcıya `Key Vault Secrets Officer` gerekir (apply eden kullanıcıya otomatik verilir).
 9. **Aşama 2:** `deploy_apps=true` ile `plan` / `apply`. Ardından `az containerapp job start -n migrator -g rg-spor-<ortam>` ile
    migration'ları çalıştır; `api` hazır olunca `gateway_fqdn` çıktısına bak.
-10. Alan adı: `admin_host`/`parent_host` için DNS `CNAME` → `gateway_fqdn`, `asuid` TXT → `custom_domain_verification_id`, Container
+10. Alan adı: `parent_host` için (admin, öteki bütün host'ların varsayılan rotasıdır) DNS DNS `CNAME` → `gateway_fqdn`, `asuid` TXT → `custom_domain_verification_id`, Container
     Apps'te yönetilen sertifikalı özel alan adı (bu PR'da kodda yok; yalnız `gateway`'e eklenir). `allowed_hosts`'u gerçek host adlarına
     ayarla (DEC-516). `Email:AppBaseUrl` ve ödeme `CallbackUrl` ayarlarını bu adreslerle ver.
 11. Production'da koruma: kaynak grubu kilidi (`CanNotDelete`), `purge protection` (açık), PITR geri yükleme tatbikatı bu

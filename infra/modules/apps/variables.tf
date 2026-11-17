@@ -49,7 +49,7 @@ variable "image_registry" {
 }
 
 variable "image_tag" {
-  description = "The commit SHA CI pushed (no latest). Pin by digest by passing sha256:... through image_digests when you can."
+  description = "The commit SHA CI pushed (no latest). A digest-only pin is not supported yet: the tag is the commit SHA, which CI builds once."
   type        = string
 }
 
@@ -106,12 +106,6 @@ variable "redis_enabled" {
 }
 
 # --- Application settings ------------------------------------------------------------------------------------
-variable "admin_host" {
-  description = "Host name the admin app answers on (the gateway's default route). Empty: every host goes to admin."
-  type        = string
-  default     = ""
-}
-
 variable "parent_host" {
   description = "Host name of the parent (guardian) app. Empty: no host routes to it."
   type        = string
