@@ -52,6 +52,16 @@ internal sealed class OutboxMessage
         LastError = null;
     }
 
+    /// <summary>
+    /// The broker was unreachable (P5-03): the message is retried later and the attempt does not count, so an outage never
+    /// dead-letters messages; the health check reports them as overdue meanwhile.
+    /// </summary>
+    public void Postpone(string error, DateTimeOffset now, TimeSpan retryDelay)
+    {
+        LastError = error.Length <= LastErrorMaxLength ? error : error[..LastErrorMaxLength];
+        NextAttemptAt = now + retryDelay;
+    }
+
     /// <summary>Counts a failed attempt; after <paramref name="maxAttempts"/> the message is dead-lettered and no longer retried.</summary>
     public void RecordFailure(string error, DateTimeOffset now, int maxAttempts, TimeSpan retryDelay)
     {

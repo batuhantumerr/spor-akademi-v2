@@ -82,6 +82,8 @@ public sealed partial class User
         }
 
         _mfaCredential.Confirm(step, now);
+        // A session stolen earlier with the password alone must not outlive the moment MFA is turned on.
+        RevokeAllRefreshTokens(now);
         _recoveryCodes.Clear();
         _recoveryCodes.AddRange(recoveryCodeHashes.Select(hash => new MfaRecoveryCode(Id, hash)));
         MfaEnabled = true;
@@ -115,7 +117,7 @@ public sealed partial class User
     }
 
     /// <summary>The user turned MFA off (the caller checked a current code and that the role may do without it).</summary>
-    public Result DisableMfa()
+    public Result DisableMfa(DateTimeOffset now)
     {
         if (!MfaEnabled)
         {
@@ -123,6 +125,8 @@ public sealed partial class User
         }
 
         RemoveMfa();
+        // Turning a protection off ends every session: the owner signs in again, someone who only had a session does not stay.
+        RevokeAllRefreshTokens(now);
         Raise(new MfaNoticeRaised(Id, MfaNotice.Disabled));
         return Result.Success();
     }
@@ -135,7 +139,14 @@ public sealed partial class User
     {
         if (!MfaEnabled)
         {
-            return Result.Failure(MfaErrors.NotEnabled);
+            // An enrolment that was never confirmed is cleared quietly; with nothing at all there is nothing to reset.
+            if (_mfaCredential is null)
+            {
+                return Result.Failure(MfaErrors.NotEnabled);
+            }
+
+            RemoveMfa();
+            return Result.Success();
         }
 
         RemoveMfa();

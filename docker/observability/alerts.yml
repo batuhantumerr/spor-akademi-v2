@@ -122,6 +122,26 @@ groups:
         annotations:
           summary: More than 60 requests per minute are rejected by rate limiting for 10 minutes.
 
+  # P5-03 (DEC-627): integration events through RabbitMQ. Counters by operation (published, consumed, duplicate, failed,
+  # dead_lettered, broker_unavailable) and message type; nothing in them is personal data.
+  - name: spor-akademi-messaging
+    rules:
+      - alert: MessagingDeadLetters
+        expr: sum by (message_type) (increase(spor_akademi_messaging_messages_total{job="spor-akademi-api", operation="dead_lettered"}[15m])) > 0
+        labels:
+          severity: warning
+        annotations:
+          summary: A message was dead-lettered by its consumer after the maximum number of attempts.
+          description: The message waits in the dead-letter queue (RabbitMQ management UI) with its last error type in the x-error header; fix the cause, then move it back to the exchange (runbook in docs/gozlemlenebilirlik.md).
+
+      - alert: MessageBrokerUnavailable
+        expr: sum(increase(spor_akademi_messaging_messages_total{job="spor-akademi-api", operation="broker_unavailable"}[10m])) >= 3
+        labels:
+          severity: warning
+        annotations:
+          summary: The outbox could not publish to RabbitMQ at least 3 times in 10 minutes.
+          description: Messages stay in the outbox and are retried; nothing is lost, but notifications are late until the broker is back. Check the rabbitmq readiness check and the broker.
+
   - name: spor-akademi-payments
     rules:
       - alert: PaymentProviderUnavailable

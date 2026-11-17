@@ -435,10 +435,78 @@ public sealed class MfaTests(DatabaseFixture database) : IdentityTest(database)
     }
 
     [Fact]
-    public async Task Where_the_rule_is_switched_off_a_platform_admin_signs_in_with_the_password_alone()
+    public void Production_refuses_to_start_without_an_encryption_key_for_the_secrets()
+    {
+        // DEC-602: outside Development and Testing the JWT key does not stand in; a missing or malformed key stops the start.
+        foreach (var key in new[] { string.Empty, "not-a-key" })
+        {
+            using var api = Api.WithWebHostBuilder(builder =>
+            {
+                ApiFactory.UseProductionRateLimits(builder);
+                builder.UseEnvironment("Production");
+                builder.ConfigureAppConfiguration((_, config) => config.AddInMemoryCollection(
+                    new Dictionary<string, string?> { ["Mfa:EncryptionKey"] = key }));
+            });
+
+            Should.Throw<Exception>(() => api.CreateClient()).ToString().ShouldContain("Mfa:EncryptionKey");
+        }
+    }
+
+    [Fact]
+    public async Task A_secret_that_cannot_be_decrypted_is_a_stable_error_not_a_500_and_not_a_failed_attempt()
+    {
+        var school = await SeedSchoolAsync();
+        var admin = await SeedUserAsync("admin@example.com", UserRole.SchoolAdmin, school);
+        var (secret, _) = await EnrolSchoolAdminAsync("admin@example.com");
+        var token = await ChallengeAsync("admin@example.com", "Verify");
+        // As after a changed key: the stored ciphertext is no longer ours.
+        await ExecuteSqlAsync("UPDATE identity.mfa_credentials SET secret_ciphertext = 'v1.' || repeat('A', 64)");
+        Api.Clock.Advance(TimeSpan.FromSeconds(30));
+
+        var response = await PostAnonymousAsync("/api/v1/auth/mfa/verify", new { mfaToken = token, code = CodeFor(secret) });
+
+        response.StatusCode.ShouldBe(HttpStatusCode.UnprocessableEntity);
+        (await ErrorCodeAsync(response)).ShouldBe("Mfa.SecretUnreadable");
+        (await LoadUserAsync(admin.Id)).FailedLoginCount.ShouldBe(0);
+    }
+
+    [Fact]
+    public async Task Turning_mfa_on_ends_the_sessions_that_existed_before()
+    {
+        var school = await SeedSchoolAsync();
+        await SeedUserAsync("admin@example.com", UserRole.SchoolAdmin, school);
+        var stolen = await LoginOkAsync("admin@example.com");
+        var own = await LoginOkAsync("admin@example.com");
+        var started = await SendAsync(HttpMethod.Post, "/api/v1/me/mfa/enrollment", own.AccessToken);
+        var secret = (await BodyAsync(started)).GetProperty("secret").GetString()!;
+
+        (await SendAsync(HttpMethod.Post, "/api/v1/me/mfa/enrollment/confirm", own.AccessToken, new { code = CodeFor(secret) })).StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        (await RefreshAsync(stolen.RefreshToken)).StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
+        (await RefreshAsync(own.RefreshToken)).StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
+    }
+
+    [Fact]
+    public async Task A_reset_clears_an_enrolment_that_was_started_but_never_confirmed()
+    {
+        var school = await SeedSchoolAsync();
+        var admin = await SeedUserAsync("admin@example.com", UserRole.SchoolAdmin, school);
+        await SeedUserAsync("platform@example.com", UserRole.PlatformAdmin, null);
+        var session = await LoginOkAsync("admin@example.com");
+        (await SendAsync(HttpMethod.Post, "/api/v1/me/mfa/enrollment", session.AccessToken)).StatusCode.ShouldBe(HttpStatusCode.OK);
+        var (platform, _, _) = await EnrolPlatformAdminAsync("platform@example.com");
+
+        var reset = await SendAsync(HttpMethod.Post, $"/api/v1/platform/users/{admin.Id.Value}/mfa/reset", platform.AccessToken, new { reason = "Other" });
+
+        reset.StatusCode.ShouldBe(HttpStatusCode.NoContent);
+        (await LoadMfaAsync(admin.Id)).Ciphertext.ShouldBeNull();
+    }
+
+    [Fact]
+    public async Task Where_the_rule_is_switched_off_in_development_a_platform_admin_signs_in_with_the_password_alone()
     {
         await SeedUserAsync("platform@example.com", UserRole.PlatformAdmin, null);
-        using var api = Api.WithWebHostBuilder(builder => builder.ConfigureAppConfiguration((_, config) => config.AddInMemoryCollection(
+        using var api = Api.WithWebHostBuilder(builder => builder.UseEnvironment("Development").ConfigureAppConfiguration((_, config) => config.AddInMemoryCollection(
             new Dictionary<string, string?> { ["Mfa:RequirePlatformAdmin"] = "false" })));
         using var http = api.CreateClient(new WebApplicationFactoryClientOptions { HandleCookies = false });
 

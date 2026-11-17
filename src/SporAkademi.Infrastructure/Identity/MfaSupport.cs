@@ -4,7 +4,6 @@ using System.Text;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
-using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using SporAkademi.Application.Identity.Mfa;
 using SporAkademi.Domain.Identity;
@@ -21,7 +20,7 @@ internal sealed class MfaOptions
 
     public bool RequirePlatformAdmin { get; set; } = true;
 
-    /// <summary>Optional: without it the key is derived from <c>Jwt:SigningKey</c> (DEC-602).</summary>
+    /// <summary>Required outside Development and Testing, where it is otherwise derived from <c>Jwt:SigningKey</c> (DEC-602).</summary>
     public string? EncryptionKey { get; set; }
 
     public static bool IsValidKey(string? key) =>
@@ -31,7 +30,13 @@ internal sealed class MfaOptions
     /// The mandatory MFA of the Platform Admin may be switched off only where nothing real is protected: a production
     /// host refuses to start with it off.
     /// </summary>
-    public static bool MayBeSwitchedOff(IHostEnvironment environment) =>
+    public static bool MayBeSwitchedOff(IHostEnvironment environment) => environment.IsDevelopment();
+
+    /// <summary>
+    /// Only a developer's machine and the test host may stand in for the encryption key with one derived from the JWT key;
+    /// everywhere else <c>Mfa:EncryptionKey</c> is required (DEC-602).
+    /// </summary>
+    public static bool MayDeriveKey(IHostEnvironment environment) =>
         environment.IsDevelopment() || environment.IsEnvironment("Testing");
 }
 
@@ -46,7 +51,7 @@ internal sealed class MfaPolicy(IOptions<MfaOptions> options) : IMfaPolicy
 /// text is <c>v1.</c> and base64url of nonce, tag and ciphertext; the user's id is authenticated with it, so a ciphertext
 /// moved to another user's row does not decrypt.
 /// </summary>
-internal sealed partial class MfaSecretProtector : IMfaSecretProtector
+internal sealed class MfaSecretProtector : IMfaSecretProtector
 {
     private const string Version = "v1.";
     private const int NonceBytes = 12;
@@ -55,17 +60,21 @@ internal sealed partial class MfaSecretProtector : IMfaSecretProtector
 
     private readonly byte[] _key;
 
-    public MfaSecretProtector(IOptions<MfaOptions> options, IConfiguration configuration, IHostEnvironment environment, ILogger<MfaSecretProtector> logger)
+    public MfaSecretProtector(IOptions<MfaOptions> options, IConfiguration configuration, IHostEnvironment environment)
     {
         ArgumentNullException.ThrowIfNull(options);
         ArgumentNullException.ThrowIfNull(configuration);
         ArgumentNullException.ThrowIfNull(environment);
-        ArgumentNullException.ThrowIfNull(logger);
         var configured = options.Value.EncryptionKey;
         if (MfaOptions.IsValidKey(configured))
         {
             _key = Convert.FromHexString(configured!);
             return;
+        }
+
+        if (!MfaOptions.MayDeriveKey(environment))
+        {
+            throw new InvalidOperationException("Mfa:EncryptionKey must be set (32 bytes of hex) outside Development and Testing.");
         }
 
         var signingKey = configuration["Jwt:SigningKey"];
@@ -75,10 +84,6 @@ internal sealed partial class MfaSecretProtector : IMfaSecretProtector
         }
 
         _key = HKDF.DeriveKey(HashAlgorithmName.SHA256, Convert.FromHexString(signingKey), 32, salt: [], info: Encoding.ASCII.GetBytes(DerivationLabel));
-        if (!environment.IsDevelopment() && !environment.IsEnvironment("Testing"))
-        {
-            LogDerivedKey(logger, MfaOptions.Section + ":EncryptionKey");
-        }
     }
 
     public string Protect(Guid userId, ReadOnlySpan<byte> secret)
@@ -122,9 +127,6 @@ internal sealed partial class MfaSecretProtector : IMfaSecretProtector
 
     private static byte[] AssociatedData(Guid userId) =>
         Encoding.ASCII.GetBytes($"mfa-secret/v1:{userId:N}");
-
-    [LoggerMessage(Level = LogLevel.Warning, Message = "{Setting} is not set: the MFA secrets are encrypted with a key derived from the JWT signing key, so rotating that key would lock out every enrolled user")]
-    private static partial void LogDerivedKey(ILogger logger, string setting);
 }
 
 internal static class MfaRegistration
@@ -135,11 +137,28 @@ internal static class MfaRegistration
             .BindConfiguration(MfaOptions.Section)
             .Validate(o => string.IsNullOrEmpty(o.EncryptionKey) || MfaOptions.IsValidKey(o.EncryptionKey), "Mfa:EncryptionKey must be 32 bytes of hex (64 characters).")
             .Validate<IHostEnvironment>(
+                (o, environment) => MfaOptions.IsValidKey(o.EncryptionKey) || MfaOptions.MayDeriveKey(environment),
+                "Mfa:EncryptionKey is required outside Development and Testing (32 bytes of hex).")
+            .Validate<IHostEnvironment>(
                 (o, environment) => o.RequirePlatformAdmin || MfaOptions.MayBeSwitchedOff(environment),
                 "Mfa:RequirePlatformAdmin can be switched off in Development only; the Platform Admin must have MFA elsewhere.")
             .ValidateOnStart();
         services.AddSingleton<IMfaPolicy, MfaPolicy>();
         services.AddSingleton<IMfaSecretProtector, MfaSecretProtector>();
+        // Built at start, so a key that cannot be used stops the host here and not at the first administrator's login.
+        services.AddHostedService<MfaKeyCheck>();
         return services;
     }
+}
+
+/// <summary>Resolves the secret protector while the host starts (DEC-602).</summary>
+internal sealed class MfaKeyCheck(IMfaSecretProtector protector) : IHostedService
+{
+    public Task StartAsync(CancellationToken cancellationToken)
+    {
+        _ = protector;
+        return Task.CompletedTask;
+    }
+
+    public Task StopAsync(CancellationToken cancellationToken) => Task.CompletedTask;
 }

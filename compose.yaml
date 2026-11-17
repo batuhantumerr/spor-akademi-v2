@@ -52,6 +52,33 @@ services:
       timeout: 3s
       retries: 20
 
+  # Message broker for integration events (P5-03, DEC-620 – DEC-629): RabbitMQ (MPL-2.0), management UI included.
+  # Optional: only started with `docker compose --profile messaging up -d --wait`; scripts/run-api.sh then sets
+  # ConnectionStrings__RabbitMq and the outbox publishes through the broker instead of delivering in process. The user is
+  # a dedicated one (no guest) and the password is not a required compose variable (interpolation reads every service),
+  # so a .env without RABBITMQ_PASSWORD still works for everything else; the broker itself refuses to start without it.
+  # Both ports listen on 127.0.0.1 only. Testcontainers reads this image reference too.
+  rabbitmq:
+    image: rabbitmq:4.4.0-management-alpine@sha256:4841f6384ef8313c3594cd3f2e9f40c10805f8a61c45f08a9a5d9ddea8199267
+    profiles: ["messaging"]
+    environment:
+      RABBITMQ_DEFAULT_USER: spor_akademi
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:-}
+    command:
+      - sh
+      - -c
+      - >-
+        if [ -z "$$RABBITMQ_DEFAULT_PASS" ]; then echo "RABBITMQ_PASSWORD is not set in .env (bash scripts/setup-env.sh adds it)" >&2; exit 1; fi;
+        exec docker-entrypoint.sh rabbitmq-server
+    ports:
+      - "127.0.0.1:${RABBITMQ_HOST_PORT:-55672}:5672"
+      - "127.0.0.1:${RABBITMQ_UI_HOST_PORT:-55673}:15672"
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "check_running"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
   # Local e-mail catcher (P2-F4, DEC-357): Mailpit, MIT licensed. Optional: only started with
   # `docker compose --profile mail up -d --wait`; scripts/run-api.sh then points the API's SMTP at it. It never relays
   # mail anywhere: every message stays in Mailpit and is read in its web UI. Both ports listen on 127.0.0.1 only and
@@ -182,6 +209,8 @@ services:
       ConnectionStrings__App: Host=postgres;Port=5432;Database=spor_akademi_perf;Username=spor_akademi_app;Password=${SPOR_AKADEMI_APP_PASSWORD:-};Maximum Pool Size=${PERF_DB_POOL_SIZE:-40}
       ConnectionStrings__Cache: valkey:6379,password=${VALKEY_PASSWORD:-}
       Jwt__SigningKey: ${JWT_SIGNING_KEY:-}
+      # P5-01 (DEC-602): required outside Development; the load test has no real secrets, so the JWT key stands in.
+      Mfa__EncryptionKey: ${MFA_ENCRYPTION_KEY:-${JWT_SIGNING_KEY:-}}
       ForwardedHeaders__KnownProxies__0: 172.30.208.10
       # scripts/perf/run-k6.sh --checks sets the production values (DEC-504, DEC-388) to observe the limits themselves.
       RateLimiting__UserPermitsPerMinute: ${PERF_USER_PERMITS:-1000000}

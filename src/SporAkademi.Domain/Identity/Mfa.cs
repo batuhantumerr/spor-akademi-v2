@@ -186,6 +186,9 @@ public static class MfaErrors
     /// <summary>A wrong, malformed or already used code (a recovery code that was used counts as wrong).</summary>
     public static readonly Error CodeInvalid = Error.BusinessRule("Mfa.CodeInvalid", "The verification code is wrong.");
 
+    /// <summary>The stored secret cannot be decrypted (the encryption key changed): a configuration fault, not a wrong code.</summary>
+    public static readonly Error SecretUnreadable = Error.BusinessRule("Mfa.SecretUnreadable", "The two-step verification secret cannot be read; ask a Platform Admin to reset it.");
+
     public static readonly Error AlreadyEnabled = Error.Conflict("Mfa.AlreadyEnabled", "Two-step verification is already on.");
     public static readonly Error NotEnabled = Error.BusinessRule("Mfa.NotEnabled", "Two-step verification is not on.");
     public static readonly Error EnrollmentNotStarted = Error.BusinessRule("Mfa.EnrollmentNotStarted", "Start the setup first.");

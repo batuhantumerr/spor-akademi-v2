@@ -77,6 +77,35 @@ public sealed class UserMfaTests
     }
 
     [Fact]
+    public void Turning_mfa_on_or_off_ends_every_session()
+    {
+        var user = NewAdmin();
+        user.CompleteLogin("stolen-session", Now);
+        user.BeginMfaEnrollment("cipher", Now);
+
+        user.ConfirmMfaEnrollment(100, Hashes(), Now.AddMinutes(1)).IsSuccess.ShouldBeTrue();
+        user.RefreshTokens.ShouldAllBe(t => t.RevokedAt != null);
+
+        user.CompleteLogin("second-session", Now.AddMinutes(2));
+        user.DisableMfa(Now.AddMinutes(3)).IsSuccess.ShouldBeTrue();
+        user.RefreshTokens.ShouldAllBe(t => t.RevokedAt != null);
+    }
+
+    [Fact]
+    public void A_reset_clears_an_enrolment_that_was_never_confirmed()
+    {
+        var user = NewAdmin();
+        user.BeginMfaEnrollment("cipher", Now);
+        user.ClearDomainEvents();
+
+        user.ResetMfa(Now).IsSuccess.ShouldBeTrue();
+
+        user.MfaCredential.ShouldBeNull();
+        user.DomainEvents.ShouldBeEmpty(); // nothing was on, so nobody is told
+        user.ResetMfa(Now).Error.ShouldBe(MfaErrors.NotEnabled);
+    }
+
+    [Fact]
     public void A_recovery_code_works_once()
     {
         var user = Enrolled();
@@ -94,13 +123,13 @@ public sealed class UserMfaTests
     {
         var user = Enrolled();
 
-        user.DisableMfa().IsSuccess.ShouldBeTrue();
+        user.DisableMfa(Now).IsSuccess.ShouldBeTrue();
 
         user.MfaEnabled.ShouldBeFalse();
         user.MfaCredential.ShouldBeNull();
         user.RecoveryCodes.ShouldBeEmpty();
         user.DomainEvents.ShouldContain(new MfaNoticeRaised(user.Id, MfaNotice.Disabled));
-        user.DisableMfa().Error.ShouldBe(MfaErrors.NotEnabled);
+        user.DisableMfa(Now).Error.ShouldBe(MfaErrors.NotEnabled);
     }
 
     [Fact]

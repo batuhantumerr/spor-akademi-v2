@@ -73,6 +73,22 @@ internal static class MfaCodes
         Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes($"{userId.Value:N}:{normalized}")));
 }
 
+internal static class MfaSecrets
+{
+    /// <summary>The secret in clear, or <c>null</c> when it cannot be decrypted (a changed key): reported as a stable error, never a 500.</summary>
+    public static byte[]? TryUnprotect(IMfaSecretProtector protector, UserId userId, string ciphertext)
+    {
+        try
+        {
+            return protector.Unprotect(userId.Value, ciphertext);
+        }
+        catch (CryptographicException)
+        {
+            return null;
+        }
+    }
+}
+
 /// <summary>Starting and confirming an enrolment; shared by the signed-in and the login-challenge routes.</summary>
 internal sealed class MfaEnrollment(IMfaSecretProtector protector)
 {
@@ -104,8 +120,18 @@ internal sealed class MfaEnrollment(IMfaSecretProtector protector)
         }
 
         var normalized = MfaCodes.Normalize(code);
-        if (!MfaCodes.LooksLikeTotp(normalized)
-            || !Totp.TryMatch(protector.Unprotect(user.Id.Value, credential.SecretCiphertext), normalized, now, out var step))
+        if (!MfaCodes.LooksLikeTotp(normalized))
+        {
+            return Result.Failure<MfaRecoveryCodes>(MfaErrors.CodeInvalid);
+        }
+
+        var secret = MfaSecrets.TryUnprotect(protector, user.Id, credential.SecretCiphertext);
+        if (secret is null)
+        {
+            return Result.Failure<MfaRecoveryCodes>(MfaErrors.SecretUnreadable);
+        }
+
+        if (!Totp.TryMatch(secret, normalized, now, out var step))
         {
             return Result.Failure<MfaRecoveryCodes>(MfaErrors.CodeInvalid);
         }
@@ -135,7 +161,13 @@ internal sealed class MfaCodeVerifier(IMfaSecretProtector protector)
             return user.UseRecoveryCode(MfaCodes.HashRecoveryCode(user.Id, normalized), now);
         }
 
-        return Totp.TryMatch(protector.Unprotect(user.Id.Value, credential.SecretCiphertext), normalized, now, out var step)
+        var secret = MfaSecrets.TryUnprotect(protector, user.Id, credential.SecretCiphertext);
+        if (secret is null)
+        {
+            return Result.Failure(MfaErrors.SecretUnreadable);
+        }
+
+        return Totp.TryMatch(secret, normalized, now, out var step)
             ? user.AcceptMfaStep(step)
             : Result.Failure(MfaErrors.CodeInvalid);
     }

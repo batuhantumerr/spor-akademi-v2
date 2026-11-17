@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Creates .env with fresh random secrets. Never overwrites an existing .env: it only appends keys added
 # since it was created (the optional Valkey cache, DEC-316, document storage, DEC-326, Mailpit ports, DEC-357, and the
-# observability ports, DEC-554);
+# observability ports, DEC-554, and the optional RabbitMQ broker, DEC-628);
 # existing values are neither changed nor printed.
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -24,6 +24,9 @@ if [[ -e "$ROOT/.env" ]]; then
   append_missing STORAGE_BUCKET spor-akademi-documents
   append_missing MAILPIT_SMTP_HOST_PORT 51025
   append_missing MAILPIT_UI_HOST_PORT 58025
+  append_missing RABBITMQ_PASSWORD "$(openssl rand -hex 24)"
+  append_missing RABBITMQ_HOST_PORT 55672
+  append_missing RABBITMQ_UI_HOST_PORT 55673
   append_missing OTLP_GRPC_HOST_PORT 54317
   append_missing OTLP_HTTP_HOST_PORT 54318
   append_missing JAEGER_UI_HOST_PORT 56686
@@ -32,7 +35,7 @@ if [[ -e "$ROOT/.env" ]]; then
   if [[ $added -eq 0 ]]; then
     echo ".env already exists and has every key; nothing changed (remove it first if you want new secrets)."
   else
-    echo ".env already exists; appended $added missing key(s) (Valkey cache, document storage, Mailpit and observability ports). Existing values are unchanged."
+    echo ".env already exists; appended $added missing key(s) (Valkey cache, RabbitMQ, document storage, Mailpit and observability ports). Existing values are unchanged."
   fi
   exit 0
 fi
@@ -44,6 +47,9 @@ platform_admin_password="$(openssl rand -hex 16)"
   echo "JWT_SIGNING_KEY=$(openssl rand -hex 32)"
   echo "VALKEY_PASSWORD=$(openssl rand -hex 24)"
   echo "VALKEY_HOST_PORT=56379"
+  echo "RABBITMQ_PASSWORD=$(openssl rand -hex 24)"
+  echo "RABBITMQ_HOST_PORT=55672"
+  echo "RABBITMQ_UI_HOST_PORT=55673"
   echo "MAILPIT_SMTP_HOST_PORT=51025"
   echo "MAILPIT_UI_HOST_PORT=58025"
   echo "POSTGRES_HOST_PORT=55432"

@@ -2735,6 +2735,34 @@ namespace SporAkademi.Infrastructure.Migrations
                     b.ToTable("audit_entries", "audit");
                 });
 
+            modelBuilder.Entity("SporAkademi.Infrastructure.Messaging.InboxMessage", b =>
+                {
+                    b.Property<string>("Consumer")
+                        .HasMaxLength(300)
+                        .HasColumnType("character varying(300)")
+                        .HasColumnName("consumer");
+
+                    b.Property<Guid>("MessageId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("message_id");
+
+                    b.Property<DateTimeOffset>("ProcessedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("processed_at");
+
+                    b.Property<Guid?>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("tenant_id");
+
+                    b.HasKey("Consumer", "MessageId")
+                        .HasName("pk_inbox");
+
+                    b.HasIndex("ProcessedAt")
+                        .HasDatabaseName("ix_inbox_processed_at");
+
+                    b.ToTable("inbox", "outbox");
+                });
+
             modelBuilder.Entity("SporAkademi.Infrastructure.Outbox.OutboxMessage", b =>
                 {
                     b.Property<Guid>("Id")

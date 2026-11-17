@@ -590,6 +590,17 @@ Sonuç: Platform Admin artık yalnız şifreyle giriş yapamaz; Okul Admini iste
 
 **Yeni paket (DEC-609):** `qrcode-generator` 2.0.4, npm (`web/admin`), MIT, yayın 2025-08-07 (7 günlük beklemeyi geçti), bağımlılığı yok. QR'ı admin panelinde SVG olarak çizer; alternatif: sunucuda QRCoder (MIT). Yeni NuGet paketi yok (TOTP `HMACSHA1` ile kendi kodumuz).
 
+### P5-03 Entegrasyon event'leri için RabbitMQ (DEC-620 – DEC-629, ADR-0016)
+
+1. **Yeni paket ve lisansları.** `RabbitMQ.Client` 7.2.1 (Apache-2.0 / MPL-2.0 ikili lisans), test için `Testcontainers.RabbitMq` 4.16.0 (MIT); broker imajı `rabbitmq:4.4.0-management-alpine` (MPL-2.0). MassTransit bilerek yok: v9+ ticari lisanslı (DEC-620, ADR-0016).
+   - *Yönetici:* lisans maliyeti sıfır, ama topolojiyi ve hata yollarını kendimiz yazıyoruz; kod küçük ve gerçek broker'lı testlerle korunuyor.
+2. **Broker isteğe bağlı, varsayılan süreç içi teslim (DEC-620, DEC-628).** Bağlantı dizesi yoksa hiçbir şey değişmez; yerelde `docker compose --profile messaging up -d --wait`. Production'da RabbitMQ'yu kimin, nerede çalıştıracağı (kendi VM'imiz, yönetilen servis, ya da Azure'da Service Bus'a geçiş) Deploy bloğu ve P5-F3 kararı.
+   - *Yazılımcı:* taşıyıcıyı değiştirmek yalnız yayım çağrısı ve tüketici hizmeti; outbox, inbox ve mesaj sözleşmesi aynı kalır.
+3. **At-least-once, exactly-once yok (DEC-622, DEC-623).** Broker kapalıyken mesajlar outbox'ta bekler ve deneme hakkı tüketmez; çökme anında bir mesaj iki kez gidebilir. Veritabanı içi etkiler `outbox.inbox` ile tam bir kez olur; e-posta gibi dış etkiler için handler'lardaki `MessageId` korumasına güveniyoruz. *Yönetici:* nadir bir "çift e-posta" ihtimali kalır; kabul mü, yoksa e-posta için ayrı bir gönderim kaydı mı?
+4. **Yeni tablo `outbox.inbox` (migration `AddInbox`, DEC-623).** Tüketici adı, mesaj ve okul ID'si, zaman; kişisel veri yok; RLS'li platform tablosu; 14 gün saklanır (`RabbitMq:InboxRetention`).
+5. **Sıra garantisi yok (DEC-629).** Mesajlar yalnız ID taşıdığı için bugünkü handler'lar için sorun değil; sıra gerektiren bir tüketici eklenirse yeniden tasarlanır.
+6. **Ölü mektup kuyruğu elle işlenir (DEC-621, DEC-627).** Alarm var; mesajı geri yükleme yönetim arayüzünden (shovel) yapılır. Otomatik yeniden oynatma aracı yok. *Yönetici:* gerekirse küçük bir yönetim komutu eklenebilir.
+7. **Bilinen eksik (DEC-625).** İz, mesajı üreten istekten değil teslim işinden başlıyor; üretici isteğin iz bağlamını outbox satırına yazmak migration ister.
 ### P5-05 Azure için altyapı kodu (DEC-640 – DEC-649, ADR-0015)
 
 Bulut hesabı yok: kod ve belge hazır, hiçbir kaynak oluşturulmadı, `plan`/`apply` çalıştırılmadı. Ayrıntı: [docs/bulut-altyapisi.md](bulut-altyapisi.md).
@@ -600,4 +611,4 @@ Bulut hesabı yok: kod ve belge hazır, hiçbir kaynak oluşturulmadı, `plan`/`
 4. **RabbitMQ barındırma (DEC-645).** Azure Files'lı tek kopya container app (varsayılan kapalı; +~9 USD/ay). SMB üstünde kırılgan olabilir; Azure Service Bus AMQP 1.0 konuştuğu için RabbitMQ istemcisiyle uyuşmaz. *Yazılımcı:* P5-04 aracı seçince karar yeniden açılır. Öneri: P5-04'ün çıktısına göre karar; şimdilik kapalı.
 5. **Gerçek veriden önce kapatılacak açık (DEC-644).** Gateway iki vekil zinciri yaratıyor, `ForwardLimit = 1` sabit olduğundan API istemci IP'sini yanlış görür (oran sınırı ve kilitlenme bozulur). Çözüm küçük bir kod işi (`ForwardedHeaders:ForwardLimit` ayarı); ayrı issue olarak açılmalı. Öneri: P5-06 ile birlikte yap.
 6. **Güvenlik tarayıcısı bulguları (DEC-641).** Key Vault ağ ACL'i ve belge deposunun genel uç noktası, gerekçeleriyle kabul edildi (RBAC/Entra, anahtarsız, kısa ömürlü SAS); özel uç nokta (~7 USD/ay) sonraki adım. Öneri: kabul.
-7. **Sahibin ilk `apply` işleri:** abonelik ve kullanıcı yetkisi, uzak state hesabı (`backend.tf` yorumunu doldurmak), Key Vault sırları (`conn-app`, `conn-migrator`, `jwt-signing-key`), rol kurulumu ve alan adı. Sıralı kontrol listesi docs/bulut-altyapisi.md bölüm 10'da.
+7. **Sahibin ilk `apply` işleri:** abonelik ve kullanıcı yetkisi, uzak state hesabı (`backend.tf` yorumunu doldurmak), Key Vault sırları (`conn-app`, `conn-migrator`, `mfa-encryption-key`, `jwt-signing-key`), rol kurulumu ve alan adı. Sıralı kontrol listesi docs/bulut-altyapisi.md bölüm 10'da.

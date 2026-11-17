@@ -230,7 +230,7 @@ Migration ekleyen işler (MFA → oturum süresi) art arda yapılır; RabbitMQ v
 - [ ] P5-02 **Rol bazlı oturum süresi.** Yönetici ve antrenör oturumları için kısa mutlak süre ve hareketsizlik sınırı (ASVS L2: 12 saat ya da 30 dk hareketsizlik; hareketsizlik kuralının refresh ile nasıl uygulanacağı DEC olarak yazılır), veli için mevcut 7 gün kayan / 30 gün mutlak. (DEC-610 – DEC-614)
 
 ### 5.2 Mesajlaşma ve servis sınırları (P5-F1, P5-F2)
-- [ ] P5-03 **Entegrasyon event'leri için RabbitMQ.** (DEC-620 – DEC-629)
+- [x] P5-03 **Entegrasyon event'leri için RabbitMQ.** (DEC-620 – DEC-629; ADR-0016)
   - Outbox mesajları yapılandırılmışsa RabbitMQ'ya yayımlanır (en az bir kez teslim, idempotent tüketici, dead-letter, yeniden deneme); yapılandırılmamışsa bugünkü süreç içi teslim aynen çalışır.
   - Compose profili, Testcontainers ile entegrasyon testleri, mesaj sözleşmelerinin sürümlenmesi ve metrikleri.
 - [ ] P5-04 **Bildirim modülünün ayrı servise çıkarılması.** (DEC-630 – DEC-639)

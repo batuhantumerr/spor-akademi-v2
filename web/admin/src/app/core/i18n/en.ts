@@ -50,6 +50,8 @@ export const enErrorMessages: ErrorMessageText = {
   'Mfa.NotAvailableForRole': 'Two-step verification isn’t available for this role.',
   'Mfa.RequiredForRole':
     'Two-step verification is mandatory for this role and can’t be turned off.',
+  'Mfa.SecretUnreadable':
+    'The two-step verification key can’t be read. Ask a Platform Admin to reset it.',
   'Mfa.CannotResetOwn': 'You can’t reset your own two-step verification.',
   'User.EmailTaken': 'This email address is already in use.',
   'User.NotFound': 'User not found.',

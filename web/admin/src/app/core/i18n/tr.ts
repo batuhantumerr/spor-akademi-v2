@@ -49,6 +49,8 @@ const trErrorMessages = {
   'Mfa.EnrollmentNotStarted': 'Önce kurulumu başlatın.',
   'Mfa.NotAvailableForRole': 'İki adımlı doğrulama bu rol için kullanılamaz.',
   'Mfa.RequiredForRole': 'Bu rol için iki adımlı doğrulama zorunludur, kapatılamaz.',
+  'Mfa.SecretUnreadable':
+    'İki adımlı doğrulama anahtarı okunamıyor. Bir platform yöneticisinden sıfırlamasını isteyin.',
   'Mfa.CannotResetOwn': 'Kendi iki adımlı doğrulamanızı sıfırlayamazsınız.',
   'User.EmailTaken': 'Bu e-posta adresi zaten kullanılıyor.',
   'User.NotFound': 'Kullanıcı bulunamadı.',

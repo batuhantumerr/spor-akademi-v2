@@ -125,12 +125,13 @@ internal sealed class DisableMfaHandler(IUserRepository users, IMfaPolicy policy
             return Result.Failure<Unit>(notLocked.Error);
         }
 
-        if (verifier.Verify(user, command.Code, now).IsFailure)
+        var checkedCode = verifier.Verify(user, command.Code, now);
+        if (checkedCode.IsFailure)
         {
-            return Result.Failure<Unit>(user.RecordMfaFailure(null, now));
+            return Result.Failure<Unit>(checkedCode.Error == MfaErrors.SecretUnreadable ? checkedCode.Error : user.RecordMfaFailure(null, now));
         }
 
-        var disabled = user.DisableMfa();
+        var disabled = user.DisableMfa(now);
         return disabled.IsSuccess ? Result.Success(Unit.Value) : Result.Failure<Unit>(disabled.Error);
     }
 }
@@ -255,9 +256,10 @@ internal sealed class VerifyMfaHandler(
 
         var (user, challenge) = found.Value;
         var now = timeProvider.GetUtcNow();
-        if (verifier.Verify(user, command.Code, now).IsFailure)
+        var checkedCode = verifier.Verify(user, command.Code, now);
+        if (checkedCode.IsFailure)
         {
-            return Result.Failure<AuthSession>(user.RecordMfaFailure(challenge, now));
+            return Result.Failure<AuthSession>(checkedCode.Error == MfaErrors.SecretUnreadable ? checkedCode.Error : user.RecordMfaFailure(challenge, now));
         }
 
         user.CompleteMfaChallenge(challenge);
