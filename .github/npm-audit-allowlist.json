@@ -1,0 +1,10 @@
+{
+  "entries": [
+    {
+      "id": "GHSA-fc5q-39xc-vjpf",
+      "reason": "dev-only tooling, no patched release, ReDoS needs attacker-controlled glob patterns which the build does not take",
+      "expires": "2026-12-17",
+      "apps": ["admin", "parent"]
+    }
+  ]
+}
