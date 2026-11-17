@@ -624,3 +624,21 @@ Bulut hesabı yok: kod ve belge hazır, hiçbir kaynak oluşturulmadı, `plan`/`
 5. **Gerçek veriden önce kapatılacak açık (DEC-644).** Gateway iki vekil zinciri yaratıyor, `ForwardLimit = 1` sabit olduğundan API istemci IP'sini yanlış görür (oran sınırı ve kilitlenme bozulur). Çözüm küçük bir kod işi (`ForwardedHeaders:ForwardLimit` ayarı); ayrı issue olarak açılmalı. Öneri: P5-06 ile birlikte yap.
 6. **Güvenlik tarayıcısı bulguları (DEC-641).** Key Vault ağ ACL'i ve belge deposunun genel uç noktası, gerekçeleriyle kabul edildi (RBAC/Entra, anahtarsız, kısa ömürlü SAS); özel uç nokta (~7 USD/ay) sonraki adım. Öneri: kabul.
 7. **Sahibin ilk `apply` işleri:** abonelik ve kullanıcı yetkisi, uzak state hesabı (`backend.tf` yorumunu doldurmak), Key Vault sırları (`conn-app`, `conn-migrator`, `mfa-encryption-key`, `jwt-signing-key`), rol kurulumu ve alan adı. Sıralı kontrol listesi docs/bulut-altyapisi.md bölüm 10'da.
+
+### P5-07 Son mimari inceleme ve `v1.0.0` retrospektifi (DEC-660 – DEC-663)
+
+Yalnız doküman; kod değişmedi. Belge: [v1-mimari-inceleme.md](v1-mimari-inceleme.md) (durum, modül sınırları, kararların geriye dönük değerlendirmesi, "neyi farklı yapardık", borç listesi, metrikler). Sahibin `v1.0.0` için vereceği kararlar:
+
+1. **Veri konumu (ADR-0014) ve Azure bölgesi (DEC-649).** Azure'da Türkiye bölgesi yok; Azure demek AB'de barındırma. *Yönetici:* "verileriniz Türkiye'de" cümlesi kurulamaz, çocuk ve sağlık verisi için sözleşme ve Kurul bildirimi yükü doğar. Karar verilmeden gerçek veri girilmemeli. Öneri: hukuki teyitten sonra karar; teyit gelene kadar gerçek veri yok.
+2. **Hukuki inceleme.** Aydınlatma metni (DEC-543), saklama süreleri (DEC-360) ve veri işleme sözleşmeleri sahipte; gerçek veriden önce şart.
+3. **Bütçe (DEC-648).** ~89 USD/ay (staging ~27 + production ~62) hedef olan 20 USD'nin üstünde. *Yönetici:* kabul, ya da tek VPS'e dönüş. Öneri: Faz 5 için bütçeyi onayla ya da bilinçli olarak Azure'dan vazgeç; `infra/` ikinci durumda da kayıp değil.
+4. **Deploy bloğu ve staging doğrulamaları.** Hesap/abonelik, alan adı, uzak state, Key Vault sırları, SMTP, Caddy `/hubs`, canlı iyzico ve günlük yedek zamanlayıcısı sahipte; hiçbiri gerçek ortamda denenmedi. İlk iş: staging'de `ForwardLimit` iki ağdan doğrulaması (DEC-651) ve migration bundle'ın job olarak çalışması.
+5. **Yönetilen PostgreSQL'de `BYPASSRLS`'li yedek rolü (DEC-571).** Verilemiyorsa yedek stratejisi yeniden tasarlanır. *Yazılımcı:* ilk staging'de denenmeli.
+6. **MFA anahtar döndürme ve kurtarma kodu yenileme (DEC-602, DEC-604).** İkisi de yok; production'a ayrı `Mfa:EncryptionKey` verilmeli. Öneri: anahtar döndürme gerçek veriden önce, kod yenileme ilk ayda.
+7. **`npm audit` istisnası (picomatch, #177) 2026-12-17'de bitiyor.** O güne kadar yamalı sürüme geçilmeli ya da süre bilinçli uzatılmalı; yoksa CI kırılır.
+8. **`v1.0.0` etiketinin kapsamı (DEC-662).** Öneri: sürüm notu "kod ve altyapı kodu tamam, gerçek veri ve production yok" desin. Etiket ve zamanı sahibin (P5-R2).
+9. **Paylaşılan dokümanlarda parça dosya düzeni (DEC-661).** Faz 6'da denensin mi? Öneri: evet.
+10. **Mimari test boşlukları (DEC-660).** Modül sınırı testi Domain ve Infrastructure'ı kapsamıyor; ayrı issue olarak yapılsın mı? Öneri: evet, Faz 6'nın ilk işi.
+11. **Tek istemci yığını sorusu (belge bölüm 3, madde 10).** Veli uygulaması React, admin Angular: öğrenme için tutuldu, ürün için iki yığın pahalı. Öneri: şimdilik dokunma; Faz 6'da gerçek kullanımla yeniden bak.
+
+Yeni paket yok.

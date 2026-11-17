@@ -6,6 +6,7 @@ Spor okulları için çok kiracılı (multi-tenant) yönetim platformu: okullar,
 - Admin arayüzü: Angular 22, Tailwind CSS, Apache ECharts
 - Veli uygulaması (Faz 3): React 19, Vite, TanStack Query, Tailwind CSS ([ADR-0012](docs/adr/0012-veli-uygulamasi-teknoloji-yigini.md))
 - Mimari: Clean Architecture katmanlarıyla modüler monolit ([proje dokümanı](docs/proje-dokumani.md))
+- Son mimari inceleme ve `v1.0.0` retrospektifi: [docs/v1-mimari-inceleme.md](docs/v1-mimari-inceleme.md)
 
 ## Gereksinimler
 
