@@ -155,7 +155,8 @@ public sealed class JobsDashboardTests(DatabaseFixture database) : IdentityTest(
         {
         }
 
-        var token = CapturingEmailSender.TokenIn(Api.Emails.Sent.ShouldHaveSingleItem());
+        // The platform admin's own first login also sent the "two-step verification is on" notice (P5-01): pick the reset e-mail.
+        var token = CapturingEmailSender.TokenIn(Api.Emails.Sent.Single(m => m.Template == "identity.password-reset"));
         (await Http.PostAsJsonAsync("/api/v1/auth/password-reset/confirm", new { token, newPassword = "Yepyeni-Sifre-2027" }, Ct))
             .StatusCode.ShouldBe(HttpStatusCode.NoContent);
 
