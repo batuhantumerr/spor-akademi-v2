@@ -66,7 +66,12 @@ internal sealed class OutboxMessageType
     private static readonly MethodInfo InvokeMethod =
         typeof(OutboxMessageType).GetMethod(nameof(InvokeHandlersAsync), BindingFlags.NonPublic | BindingFlags.Static)!;
 
+    private static readonly MethodInfo InvokeOneMethod =
+        typeof(OutboxMessageType).GetMethods(BindingFlags.NonPublic | BindingFlags.Static)
+            .Single(m => m is { Name: nameof(InvokeHandlerAsync), IsGenericMethodDefinition: true });
+
     private readonly Func<IServiceProvider, object, OutboxMessageContext, CancellationToken, Task<int>> _invoke;
+    private readonly Func<IServiceProvider, Type, object, OutboxMessageContext, CancellationToken, Task> _invokeOne;
 
     private OutboxMessageType(string name, Type clrType)
     {
@@ -74,6 +79,8 @@ internal sealed class OutboxMessageType
         ClrType = clrType;
         _invoke = InvokeMethod.MakeGenericMethod(clrType)
             .CreateDelegate<Func<IServiceProvider, object, OutboxMessageContext, CancellationToken, Task<int>>>();
+        _invokeOne = InvokeOneMethod.MakeGenericMethod(clrType)
+            .CreateDelegate<Func<IServiceProvider, Type, object, OutboxMessageContext, CancellationToken, Task>>();
     }
 
     public string Name { get; }
@@ -107,6 +114,22 @@ internal sealed class OutboxMessageType
     /// <returns>How many handlers ran; 0 means none is registered.</returns>
     public Task<int> InvokeAsync(IServiceProvider services, object message, OutboxMessageContext context, CancellationToken cancellationToken) =>
         _invoke(services, message, context, cancellationToken);
+
+    /// <summary>Runs one handler (by its class) of the message: what a broker consumer does for its own queue.</summary>
+    public Task InvokeHandlerAsync(IServiceProvider services, Type handlerType, object message, OutboxMessageContext context, CancellationToken cancellationToken) =>
+        _invokeOne(services, handlerType, message, context, cancellationToken);
+
+    private static async Task InvokeHandlerAsync<TMessage>(
+        IServiceProvider services,
+        Type handlerType,
+        object message,
+        OutboxMessageContext context,
+        CancellationToken cancellationToken)
+        where TMessage : IOutboxMessage
+    {
+        var handler = services.GetServices<IOutboxMessageHandler<TMessage>>().First(h => h.GetType() == handlerType);
+        await handler.Handle((TMessage)message, context, cancellationToken);
+    }
 
     private static async Task<int> InvokeHandlersAsync<TMessage>(
         IServiceProvider services,

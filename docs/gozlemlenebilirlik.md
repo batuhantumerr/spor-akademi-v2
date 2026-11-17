@@ -73,6 +73,8 @@ Kurallar `docker/observability/alerts.yml`'dedir, eşiklerin gerekçesi DEC-555'
 | `RefreshFailureSpike` | refresh `401` > 30/dk, 5 dk (süresi dolan oturum ya da tekrar kullanılan token; P4-03, DEC-513) | warning |
 | `AuthorizationFailureSpike` | `/api` `403` > 30/dk, 5 dk (rolün erişemediği yola deneme; P4-03, DEC-513) | warning |
 | `RateLimitRejections` | rate limit reddi > 60/dk, 10 dk | warning |
+| `MessagingDeadLetters` | tüketici bir mesajı ölü mektup kuyruğuna taşıdı, 15 dk (P5-03, DEC-627) | warning |
+| `MessageBrokerUnavailable` | outbox 10 dk'da ≥ 3 kez RabbitMQ'ya yayımlayamadı (P5-03, DEC-627) | warning |
 | `PaymentProviderUnavailable` | 15 dk'da ≥ 3 bildirim sağlayıcıya sorulamadı | warning |
 
 **Dead-letter olunca:** `outbox.messages`'ta `dead_lettered_at` dolu satırın `type` ve `last_error`'ına bakın (yük kişisel veri içerebilir, dışarı kopyalamayın). Nedeni giderin, sonra satırı yeniden kuyruğa alın (`dead_lettered_at = NULL, attempts = 0, next_attempt_at = now()`). Bunun için bir yönetim aracı henüz yok.

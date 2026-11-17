@@ -6,6 +6,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using SporAkademi.Application.Abstractions.Observability;
 using SporAkademi.Application.Abstractions.Outbox;
+using SporAkademi.Infrastructure.Messaging;
 using SporAkademi.Infrastructure.Persistence;
 
 namespace SporAkademi.Infrastructure.Outbox;
@@ -15,12 +16,16 @@ namespace SporAkademi.Infrastructure.Outbox;
 /// transaction, so concurrent processors (API instances, the polling worker, a P2-F2 job) never take the same
 /// message; each message is handled in its own DI scope under its school, then marked processed, rescheduled with
 /// backoff or dead-lettered, and the transaction commits. A crash before commit releases the claim and the batch is
-/// delivered again: delivery is at least once.
+/// delivered again: delivery is at least once. With a broker configured (<c>ConnectionStrings:RabbitMq</c>, P5-03) delivery
+/// means publishing: the message is marked processed only after the broker's publisher confirm, and a broker outage
+/// postpones it without counting an attempt; consumers then run the handlers (<see cref="RabbitMqConsumerService"/>).
 /// </summary>
 internal sealed partial class OutboxProcessor(
     IServiceScopeFactory scopeFactory,
     OutboxMessageTypes types,
     IOptions<OutboxOptions> options,
+    RabbitMqBroker broker,
+    IOptions<RabbitMqOptions> brokerOptions,
     TimeProvider clock,
     ILogger<OutboxProcessor> logger)
 {
@@ -28,6 +33,7 @@ internal sealed partial class OutboxProcessor(
     public const string InvalidPayloadError = "InvalidPayload";
     public const string TimeoutError = "HandlerTimeout";
     public const string NoHandlerError = "NoHandler";
+    public const string BrokerUnavailableError = "BrokerUnavailable";
 
     private OutboxOptions Options => options.Value;
 
@@ -58,7 +64,11 @@ internal sealed partial class OutboxProcessor(
                 break;
             }
 
-            await DeliverAsync(message, cancellationToken);
+            if (!await DeliverAsync(message, cancellationToken))
+            {
+                // The broker is down: the other messages would fail the same way; they stay pending and untouched.
+                break;
+            }
         }
 
         await db.SaveChangesAsync(CancellationToken.None);
@@ -76,6 +86,10 @@ internal sealed partial class OutboxProcessor(
         var deleted = await db.Set<OutboxMessage>()
             .Where(m => m.ProcessedAt != null && m.ProcessedAt < cutoff)
             .ExecuteDeleteAsync(cancellationToken);
+        var inboxCutoff = clock.GetUtcNow() - brokerOptions.Value.InboxRetention;
+        await db.Set<InboxMessage>()
+            .Where(m => m.ProcessedAt < inboxCutoff)
+            .ExecuteDeleteAsync(cancellationToken);
         if (deleted > 0)
         {
             LogCleanedUp(logger, deleted);
@@ -88,7 +102,8 @@ internal sealed partial class OutboxProcessor(
     /// One span per delivery (P4-07, DEC-551): the handler's database and HTTP calls are its children, so a slow or failing
     /// delivery can be followed end to end; its attributes are the message type and the attempt, never the payload.
     /// </summary>
-    private async Task DeliverAsync(OutboxMessage message, CancellationToken cancellationToken)
+    /// <returns><c>false</c> when the batch should stop (the broker is unreachable).</returns>
+    private async Task<bool> DeliverAsync(OutboxMessage message, CancellationToken cancellationToken)
     {
         using var activity = AppTelemetry.StartActivity("outbox.deliver");
         activity?.SetTag("spor_akademi.outbox.message_type", MessageTypeLabel(message));
@@ -98,7 +113,7 @@ internal sealed partial class OutboxProcessor(
         {
             // E.g. written by a newer version during a rolling deploy: retried, then dead-lettered.
             Fail(message, UnknownTypeError);
-            return;
+            return true;
         }
 
         object payload;
@@ -109,7 +124,12 @@ internal sealed partial class OutboxProcessor(
         catch (JsonException)
         {
             Fail(message, InvalidPayloadError);
-            return;
+            return true;
+        }
+
+        if (broker.IsConfigured)
+        {
+            return await PublishAsync(message, type, cancellationToken);
         }
 
         var context = new OutboxMessageContext(message.Id, message.TenantId, message.OccurredAt, message.Attempts + 1);
@@ -130,7 +150,7 @@ internal sealed partial class OutboxProcessor(
             {
                 // Nothing would ever deliver it: a registration is missing (e.g. a handler removed while messages were pending).
                 Fail(message, NoHandlerError);
-                return;
+                return true;
             }
 
             message.MarkProcessed(clock.GetUtcNow());
@@ -155,6 +175,47 @@ internal sealed partial class OutboxProcessor(
 #pragma warning restore CA1031
         {
             Fail(message, exception.GetType().FullName ?? exception.GetType().Name);
+        }
+
+        return true;
+    }
+
+    /// <summary>
+    /// Hands the message to the broker and waits for its confirm (DEC-622). Unreachable broker: postponed, attempts untouched.
+    /// No queue bound for the type: the same failure as a missing in-process handler.
+    /// </summary>
+    private async Task<bool> PublishAsync(OutboxMessage message, OutboxMessageType type, CancellationToken cancellationToken)
+    {
+        using var activity = AppTelemetry.StartActivity("outbox.publish", ActivityKind.Producer);
+        activity?.SetTag("spor_akademi.messaging.message_type", type.Name);
+        try
+        {
+            await broker.PublishAsync(
+                new OutboxEnvelope(message.Id, message.Type, message.Payload, message.TenantId, message.OccurredAt),
+                cancellationToken);
+            message.MarkProcessed(clock.GetUtcNow());
+            AppTelemetry.OutboxMessages.Add(1, new("result", "delivered"), new("message_type", type.Name));
+            AppTelemetry.MessagingMessages.Add(1, new("operation", "published"), new("message_type", type.Name));
+            LogPublished(logger, message.Id, message.Type);
+            return true;
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            return true;
+        }
+        catch (NoRouteException)
+        {
+            Fail(message, NoHandlerError);
+            return true;
+        }
+        catch (BrokerUnavailableException exception)
+        {
+            var delay = OutboxRetryPolicy.Delay(1, Options.BaseRetryDelay, Options.MaxRetryDelay, Random.Shared.NextDouble());
+            message.Postpone(BrokerUnavailableError, clock.GetUtcNow(), delay);
+            AppTelemetry.MessagingMessages.Add(1, new("operation", "broker_unavailable"), new("message_type", type.Name));
+            activity?.SetStatus(ActivityStatusCode.Error, BrokerUnavailableError);
+            LogBrokerUnavailable(logger, message.Id, message.Type, exception.Message, message.NextAttemptAt);
+            return false;
         }
     }
 
@@ -192,6 +253,12 @@ internal sealed partial class OutboxProcessor(
 
     [LoggerMessage(Level = LogLevel.Debug, Message = "Outbox message {MessageId} ({MessageType}) delivered on attempt {Attempt}")]
     private static partial void LogDelivered(ILogger logger, Guid messageId, string messageType, int attempt);
+
+    [LoggerMessage(Level = LogLevel.Debug, Message = "Outbox message {MessageId} ({MessageType}) published to the broker")]
+    private static partial void LogPublished(ILogger logger, Guid messageId, string messageType);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Broker unavailable ({Error}); outbox message {MessageId} ({MessageType}) stays pending, next attempt at {NextAttemptAt}")]
+    private static partial void LogBrokerUnavailable(ILogger logger, Guid messageId, string messageType, string error, DateTimeOffset nextAttemptAt);
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "Outbox message {MessageId} ({MessageType}) failed attempt {Attempt} with {Error}; next attempt at {NextAttemptAt}")]
     private static partial void LogRetryScheduled(ILogger logger, Guid messageId, string messageType, int attempt, string error, DateTimeOffset nextAttemptAt);
