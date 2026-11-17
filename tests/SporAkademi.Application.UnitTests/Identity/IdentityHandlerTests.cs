@@ -32,7 +32,7 @@ public sealed class IdentityHandlerTests
         _hasher.Verify(Arg.Any<string>(), Arg.Any<string>())
             .Returns(c => c.ArgAt<string>(0) == "hash:" + c.ArgAt<string>(1) ? PasswordVerification.Success : PasswordVerification.Failed);
         _refreshTokens.Create().Returns(new NewRefreshToken("token", "token-hash"));
-        _accessTokens.Issue(Arg.Any<User>(), Arg.Any<DateTimeOffset>()).Returns(new AccessToken("jwt", _clock.GetUtcNow().AddMinutes(15)));
+        _accessTokens.Issue(Arg.Any<User>(), Arg.Any<DateTimeOffset>(), Arg.Any<DateTimeOffset>()).Returns(new AccessToken("jwt", _clock.GetUtcNow().AddMinutes(15)));
         _tenancy.IsSchoolActiveAsync(Arg.Any<SchoolId>(), Arg.Any<CancellationToken>()).Returns(true);
         _sessionPolicies.ForRole(Arg.Any<UserRole>()).Returns(SessionPolicy.Standard);
     }

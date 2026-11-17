@@ -34,5 +34,5 @@ public sealed record AuthSession(
 internal static class AuthSessions
 {
     public static AuthSession Create(IAccessTokenIssuer issuer, User user, NewRefreshToken refreshToken, RefreshToken stored, DateTimeOffset now) =>
-        new(issuer.Issue(user, now), refreshToken.Token, stored.ExpiresAt, UserSummary.From(user));
+        new(issuer.Issue(user, now, stored.FamilyExpiresAt), refreshToken.Token, stored.ExpiresAt, UserSummary.From(user));
 }

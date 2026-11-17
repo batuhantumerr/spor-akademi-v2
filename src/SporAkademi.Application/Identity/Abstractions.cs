@@ -31,7 +31,7 @@ public sealed record AccessToken(string Value, DateTimeOffset ExpiresAt);
 /// <summary>Issues the short-lived access token (ADR-0006): claims carry ids and flags only, no personal data.</summary>
 public interface IAccessTokenIssuer
 {
-    AccessToken Issue(User user, DateTimeOffset now);
+    AccessToken Issue(User user, DateTimeOffset now, DateTimeOffset sessionEnd);
 }
 
 /// <summary>A new opaque refresh token: <see cref="Token"/> goes to the client once, only <see cref="Hash"/> is stored.</summary>

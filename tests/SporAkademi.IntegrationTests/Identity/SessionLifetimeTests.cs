@@ -92,6 +92,22 @@ public sealed class SessionLifetimeTests(DatabaseFixture database) : IdentityTes
     }
 
     [Fact]
+    public async Task The_access_token_never_outlives_the_session()
+    {
+        var session = await SessionOfAsync(UserRole.SchoolAdmin);
+        // Ten minutes of the twelve hours remain after this refresh, less than the access token's fifteen.
+        await ExecuteSqlAsync("UPDATE identity.refresh_tokens SET family_started_at = family_started_at - interval '11 hours 40 minutes', family_expires_at = family_expires_at - interval '11 hours 40 minutes'");
+        Api.Clock.Advance(TimeSpan.FromMinutes(10));
+
+        var response = await RefreshAsync(session.RefreshToken);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var renewed = await SessionFromAsync(response);
+        Decode(renewed.AccessToken).ValidTo.ShouldBe(Api.Clock.GetUtcNow().AddMinutes(10).UtcDateTime);
+        RefreshCookieOf(response)!.Attributes["max-age"].ShouldBe(Seconds(TimeSpan.FromMinutes(10)));
+    }
+
+    [Fact]
     public async Task An_expired_panel_session_is_not_a_reuse_and_other_devices_stay_signed_in()
     {
         var session = await SessionOfAsync(UserRole.SchoolAdmin);

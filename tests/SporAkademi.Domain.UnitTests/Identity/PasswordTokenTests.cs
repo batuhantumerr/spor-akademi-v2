@@ -29,8 +29,8 @@ public sealed class PasswordTokenTests
     public void Setting_the_password_with_a_link_uses_it_up_ends_every_session_and_lifts_the_lock()
     {
         var user = UserTests.NewCoach();
-        var first = user.CompleteLogin("r1", Now).Value;
-        var second = user.CompleteLogin("r2", Now).Value;
+        var first = user.CompleteLogin("r1", Now, SessionPolicy.Standard).Value;
+        var second = user.CompleteLogin("r2", Now, SessionPolicy.Standard).Value;
         for (var i = 0; i < User.MaxFailedLogins; i++)
         {
             user.RecordFailedLogin(Now);
@@ -82,7 +82,7 @@ public sealed class PasswordTokenTests
     {
         var changed = UserTests.NewCoach();
         changed.IssuePasswordToken("a", PasswordTokenPurpose.Welcome, Now);
-        changed.ChangePassword("own", "r", Now);
+        changed.ChangePassword("own", "r", Now, SessionPolicy.Standard);
         changed.PasswordTokens.ShouldBeEmpty();
 
         var reset = UserTests.NewCoach();

@@ -346,7 +346,7 @@ public sealed partial class User : AggregateRoot<UserId>
     }
 
     /// <summary>The password was verified: clears failures and starts a new session (token family).</summary>
-    public Result<RefreshToken> CompleteLogin(string refreshTokenHash, DateTimeOffset now, SessionPolicy? policy = null)
+    public Result<RefreshToken> CompleteLogin(string refreshTokenHash, DateTimeOffset now, SessionPolicy policy)
     {
         if (Status != UserStatus.Active)
         {
@@ -355,7 +355,7 @@ public sealed partial class User : AggregateRoot<UserId>
 
         ClearFailedLogins();
         LockoutEndsAt = null;
-        return Result.Success(StartSession(refreshTokenHash, now, policy ?? SessionPolicy.Standard));
+        return Result.Success(StartSession(refreshTokenHash, now, policy));
     }
 
     /// <summary>
@@ -363,9 +363,8 @@ public sealed partial class User : AggregateRoot<UserId>
     /// that was already rotated is treated as theft: every token of the user is revoked (US-04, DEC-114), except for a
     /// lost response retried within <see cref="RefreshTokenReuseGraceWindow"/> (DEC-446, <see cref="UnusedHeadWithinGrace"/>).
     /// </summary>
-    public Result<RefreshToken> RotateRefreshToken(string presentedHash, string newHash, DateTimeOffset now, SessionPolicy? policy = null)
+    public Result<RefreshToken> RotateRefreshToken(string presentedHash, string newHash, DateTimeOffset now, SessionPolicy policy)
     {
-        policy ??= SessionPolicy.Standard;
         var current = FindToken(presentedHash);
         if (current is null || Status != UserStatus.Active)
         {
@@ -422,7 +421,7 @@ public sealed partial class User : AggregateRoot<UserId>
     /// Sets the user's own password (US-05): the temporary-password flag clears, every existing session
     /// ends and a new session starts for the caller, so they stay signed in on this device only.
     /// </summary>
-    public Result<RefreshToken> ChangePassword(string newPasswordHash, string refreshTokenHash, DateTimeOffset now, SessionPolicy? policy = null)
+    public Result<RefreshToken> ChangePassword(string newPasswordHash, string refreshTokenHash, DateTimeOffset now, SessionPolicy policy)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(newPasswordHash);
         if (Status != UserStatus.Active)
@@ -437,7 +436,7 @@ public sealed partial class User : AggregateRoot<UserId>
         RevokeAllRefreshTokens(now);
         _passwordTokens.Clear();
         Raise(new PasswordChanged(Id, first));
-        return Result.Success(StartSession(refreshTokenHash, now, policy ?? SessionPolicy.Standard));
+        return Result.Success(StartSession(refreshTokenHash, now, policy));
     }
 
     /// <summary>

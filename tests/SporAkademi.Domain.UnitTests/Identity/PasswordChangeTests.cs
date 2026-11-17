@@ -11,11 +11,11 @@ public sealed class PasswordChangeTests
     public void Changing_the_password_clears_the_flag_revokes_all_tokens_and_raises_an_event()
     {
         var user = UserTests.NewCoach();
-        var first = user.CompleteLogin("h1", Now).Value;
-        var second = user.CompleteLogin("h2", Now).Value;
+        var first = user.CompleteLogin("h1", Now, SessionPolicy.Standard).Value;
+        var second = user.CompleteLogin("h2", Now, SessionPolicy.Standard).Value;
         user.RecordFailedLogin(Now);
 
-        var session = user.ChangePassword("new-hash", "h3", Now.AddMinutes(1)).Value;
+        var session = user.ChangePassword("new-hash", "h3", Now.AddMinutes(1), SessionPolicy.Standard).Value;
 
         session.IsActive(Now.AddMinutes(1)).ShouldBeTrue();
         user.PasswordHash.ShouldBe("new-hash");
@@ -30,8 +30,8 @@ public sealed class PasswordChangeTests
     public void Admin_reset_sets_a_temporary_password_and_revokes_all_tokens()
     {
         var user = UserTests.NewCoach();
-        user.ChangePassword("own", "h0", Now);
-        var token = user.CompleteLogin("h1", Now).Value;
+        user.ChangePassword("own", "h0", Now, SessionPolicy.Standard);
+        var token = user.CompleteLogin("h1", Now, SessionPolicy.Standard).Value;
         for (var i = 0; i < 5; i++)
         {
             user.RecordFailedLogin(Now);
@@ -50,7 +50,7 @@ public sealed class PasswordChangeTests
     public void Deactivation_revokes_all_tokens_and_raises_an_event_once()
     {
         var user = UserTests.NewCoach();
-        var token = user.CompleteLogin("h1", Now).Value;
+        var token = user.CompleteLogin("h1", Now, SessionPolicy.Standard).Value;
 
         user.Deactivate(Now).IsSuccess.ShouldBeTrue();
         user.Deactivate(Now).Error.ShouldBe(UserErrors.AlreadyInactive);
@@ -66,7 +66,7 @@ public sealed class PasswordChangeTests
         var user = UserTests.NewCoach();
         user.Deactivate(Now);
 
-        user.ChangePassword("new-hash", "h1", Now).Error.ShouldBe(AuthErrors.AccountInactive);
+        user.ChangePassword("new-hash", "h1", Now, SessionPolicy.Standard).Error.ShouldBe(AuthErrors.AccountInactive);
         user.RefreshTokens.ShouldBeEmpty();
     }
 }
