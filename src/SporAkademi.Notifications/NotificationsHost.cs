@@ -69,7 +69,7 @@ internal static class NotificationsHost
         // issued by the API only (a handler of this process never signs anyone in).
         builder.Services.AddSingleton<IAccessTokenIssuer, NoAccessTokens>();
         builder.Services.AddApplication();
-        builder.Services.AddInfrastructure(builder.Configuration);
+        builder.Services.AddInfrastructure(builder.Configuration, InfrastructureProfile.Worker);
         // Options are post-configured: a list setting (Modules, Groups) cannot be cleared from a configuration source.
         builder.Services.RestrictConsumersToGroup(OutboxConsumerGroups.Notifications);
         configureServices?.Invoke(builder.Services);

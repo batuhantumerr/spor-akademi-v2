@@ -75,7 +75,7 @@ Yönetim arayüzü `http://127.0.0.1:55673` (kullanıcı `spor_akademi`, parola 
 
 ### Bildirim worker'ı (P5-04)
 
-E-posta gönderen tüketiciler (`notifications` grubu: karşılama, davet, şifre sıfırlama/değişti, aidat hatırlatması, iade e-postası) ayrı bir süreçte, `src/SporAkademi.Notifications` host'unda çalışabilir (DEC-630 – DEC-639, ADR-0017). Worker yalnız bu tüketicileri RabbitMQ'dan çalıştırır; gerçek zamanlı (SignalR) bildirimler API'de kalır. Worker'ın ayarları kodda sabittir: başka bir tüketici grubunu, Hangfire sunucusunu ya da outbox yayımını yapılandırmayla açamazsınız.
+E-posta gönderen tüketiciler (`notifications` grubu: karşılama, davet, şifre sıfırlama/değişti, MFA bildirimi, aidat hatırlatması, iade e-postası) ayrı bir süreçte, `src/SporAkademi.Notifications` host'unda çalışabilir (DEC-630 – DEC-639, ADR-0017). Worker yalnız bu tüketicileri RabbitMQ'dan çalıştırır; gerçek zamanlı (SignalR) bildirimler API'de kalır. Worker'ın ayarları kodda sabittir: başka bir tüketici grubunu, Hangfire sunucusunu ya da outbox yayımını yapılandırmayla açamazsınız.
 
 ```bash
 docker compose --profile messaging --profile mail up -d --wait    # PostgreSQL, RabbitMQ, Mailpit

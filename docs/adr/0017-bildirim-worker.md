@@ -13,7 +13,7 @@ e-posta zaten outbox ile istekten ayrılmıştı ve tek süreçte doğru çalı�
 ## Karar
 
 `src/SporAkademi.Notifications`: Application ve Infrastructure katmanlarını aynı DI ile kullanan, yalnız `/health/live` ve
-`/health/ready` sunan küçük bir web host. Yalnız **e-posta** gönderen tüketicileri (altı handler, `notifications` tüketici grubu)
+`/health/ready` sunan küçük bir web host. Yalnız **e-posta** gönderen tüketicileri (yedi handler, `notifications` tüketici grubu)
 RabbitMQ'dan çalıştırır. Kendi imajı (`docker/notifications`), kendi Container App'i (`infra/`), OTLP ve Sentry'si vardır.
 
 ```

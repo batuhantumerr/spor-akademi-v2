@@ -26,6 +26,7 @@ internal sealed class PublishMfaNotice(IOutbox outbox, IUserRepository users) : 
 }
 
 /// <summary>P5-01 (DEC-607): tells the owner that MFA of their account changed. Says what happened, never a code or a link.</summary>
+[OutboxConsumerGroup(OutboxConsumerGroups.Notifications)]
 internal sealed partial class SendMfaNoticeEmail(
     IUserRepository users,
     IEmailSender emailSender,

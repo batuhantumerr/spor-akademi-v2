@@ -249,6 +249,29 @@ public sealed class ConsumerSelectionTests
     }
 
     [Fact]
+    public async Task The_worker_starts_in_production_without_any_mfa_or_signing_key()
+    {
+        // The image smoke test's situation: Production, only the database, the broker and an SMTP host configured (P5-04).
+        var settings = new Dictionary<string, string?>
+        {
+            ["ConnectionStrings:App"] = "Host=localhost;Database=x;Username=u;Password=p",
+            ["ConnectionStrings:RabbitMq"] = "amqp://u:p@127.0.0.1:1/",
+            ["RabbitMq:ConnectTimeout"] = "00:00:01",
+            ["Email:Smtp:Host"] = "mail.example.test",
+            ["Email:AppBaseUrl"] = "https://app.example.test/",
+            ["Serilog:MinimumLevel:Default"] = "Fatal",
+            ["Urls"] = "http://127.0.0.1:0",
+        };
+        await using var app = NotificationsHost.Create([], settings, environment: "Production");
+
+        await app.StartAsync(TestContext.Current.CancellationToken);
+
+        using var client = new HttpClient { BaseAddress = new Uri(app.Urls.First()) };
+        (await client.GetAsync(new Uri("/health/live", UriKind.Relative), TestContext.Current.CancellationToken)).StatusCode.ShouldBe(HttpStatusCode.OK);
+        await app.StopAsync(TestContext.Current.CancellationToken);
+    }
+
+    [Fact]
     public void The_worker_refuses_to_start_in_production_without_an_smtp_host_because_it_would_lose_e_mails()
     {
         var settings = new Dictionary<string, string?>
