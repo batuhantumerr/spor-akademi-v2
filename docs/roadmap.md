@@ -219,7 +219,7 @@ Migration ekleyen işler (RLS → audit log → KVKK başvuruları) art arda yap
 
 ## Faz 5 — Ölçek ve mimari (`v1.0.0`)
 
-Ayrıntılar Faz 4 geçişinde (2026-11-17) yazıldı. Amaç: dağıtık sistem tekniklerini (mesaj kuyruğu, ayrı servis, bulut, IaC) mantıklı oldukları yerde ve bedelleriyle uygulamak. Önce gerçek veriden önce kapatılması önerilen güvenlik borcu (DEC-517) gelir. Bulut hesabı, gerçek kaynak oluşturma (`apply`), alan adı, maliyet onayı ve `v1.0.0` etiketi sahipte kalır; buradaki işler yerelde ve CI'da kanıtlanır. Yeni kararlar DEC-600'den başlar.
+Ayrıntılar Faz 4 geçişinde (2026-11-17) yazıldı. Amaç: dağıtık sistem tekniklerini (mesaj kuyruğu, ayrı servis, bulut, IaC) mantıklı oldukları yerde ve bedelleriyle uygulamak. Önce gerçek veriden önce kapatılması önerilen güvenlik borcu gelir: P5-01 ve P5-02 proje dokümanı bölüm 8 kapsamında değildir, Faz 4 incelemesinin önerisi (DEC-517, onay listesi P4-03 madde 1–2) sahibin 2026-11-17 talimatıyla ("önerilere göre karar verebilirsin") Faz 5'e alındı. Bulut hesabı, gerçek kaynak oluşturma (`apply`), alan adı, maliyet onayı ve `v1.0.0` etiketi sahipte kalır; buradaki işler yerelde ve CI'da kanıtlanır. Yeni kararlar DEC-600'den başlar.
 
 Migration ekleyen işler (MFA → oturum süresi) art arda yapılır; RabbitMQ ve IaC bunlara paralel ilerler, bildirim servisi RabbitMQ'dan sonra gelir.
 
@@ -227,7 +227,7 @@ Migration ekleyen işler (MFA → oturum süresi) art arda yapılır; RabbitMQ v
 - [ ] P5-01 **Yöneticiler için MFA (TOTP).** (DEC-600 – DEC-609)
   - Platform Admin için zorunlu, Okul Admini için açılabilir (okul ayarı ya da kişisel tercih); RFC 6238 TOTP, QR ile kurulum, tek kullanımlık kurtarma kodları.
   - Giriş iki adımlı olur; ikinci adım rate limit'li, gizli anahtar veritabanında şifreli; "telefon kayboldu" akışı (kurtarma kodu ya da Platform Admin'in sıfırlaması, audit'li).
-- [ ] P5-02 **Rol bazlı oturum süresi.** Yönetici ve antrenör oturumları için kısa mutlak süre (ASVS L2: 12 saat), veli için mevcut 7 gün kayan / 30 gün mutlak. (DEC-610 – DEC-614)
+- [ ] P5-02 **Rol bazlı oturum süresi.** Yönetici ve antrenör oturumları için kısa mutlak süre ve hareketsizlik sınırı (ASVS L2: 12 saat ya da 30 dk hareketsizlik; hareketsizlik kuralının refresh ile nasıl uygulanacağı DEC olarak yazılır), veli için mevcut 7 gün kayan / 30 gün mutlak. (DEC-610 – DEC-614)
 
 ### 5.2 Mesajlaşma ve servis sınırları (P5-F1, P5-F2)
 - [ ] P5-03 **Entegrasyon event'leri için RabbitMQ.** (DEC-620 – DEC-629)
@@ -238,9 +238,9 @@ Migration ekleyen işler (MFA → oturum süresi) art arda yapılır; RabbitMQ v
   - Ödünleşimler ADR olarak: ağ ve operasyon maliyeti, eventual consistency, hata ayıklama, "neden yalnız bu modül".
 
 ### 5.3 Bulut ve IaC (P5-F3, P5-F4)
-- [ ] P5-05 **Azure için infrastructure as code.** (DEC-640 – DEC-649)
+- [ ] P5-05 **Azure için infrastructure as code (Terraform dili, HCL).** (DEC-640 – DEC-649)
   - Container Apps (API, bildirim servisi, admin ve veli imajları), PostgreSQL Flexible Server, Key Vault, Log Analytics, depolama; staging ve production ortamları değişkenle.
-  - Araç ve lisans kararı ADR olarak (Terraform BSL'dir; OpenTofu MPL-2.0 adayı). CI'da `fmt`, `validate` ve statik denetim; `apply` yok, gerçek kaynak sahipte.
+  - Kapsam "Terraform ile" der; kod Terraform dilinde (HCL) yazılır. Çalıştıran araç ADR ile seçilir: Terraform CLI BSL-1.1 lisanslıdır, birebir uyumlu OpenTofu MPL-2.0'dır (sahip Terraform CLI'yi seçerse kod değişmeden çalışır). CI'da `fmt`, `validate` ve statik denetim; `apply` yok, gerçek kaynak sahipte.
   - Maliyet tahmini (NFR-CST-01) ve ADR-0014 veri konumu kararıyla ilişkisi belgelenir.
 - [ ] P5-06 **Bulut çalıştırmaya hazırlık.** (DEC-650 – DEC-659)
   - Belge depolama için Azure Blob adaptörü (S3 uyumlu adaptör korunur, yapılandırmayla seçilir).
