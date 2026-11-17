@@ -1,7 +1,7 @@
 // DEC-670: decision logic of scripts/npm-audit.mjs. Run by repo-checks: node --test scripts/npm-audit.test.mjs
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { collectAdvisories, evaluate } from './npm-audit.mjs';
+import { collectAdvisories, evaluate, reportProblem } from './npm-audit.mjs';
 
 const ID = 'GHSA-fc5q-39xc-vjpf';
 const advisory = { id: ID, severity: 'high', title: 't', url: `https://github.com/advisories/${ID}`, packages: ['picomatch'] };
@@ -62,4 +62,13 @@ test('collectAdvisories reads via objects, ignores strings and moderate severity
   const found = collectAdvisories(report);
   assert.equal(found.length, 1);
   assert.equal(found[0].id, ID);
+});
+
+test('reportProblem fails closed on reports without vulnerabilities', () => {
+  assert.ok(reportProblem({}));
+  assert.ok(reportProblem(null));
+  assert.ok(reportProblem([]));
+  assert.ok(reportProblem({ vulnerabilities: [] }));
+  assert.match(reportProblem({ error: { summary: 'boom' } }), /boom/);
+  assert.equal(reportProblem({ vulnerabilities: {} }), null);
 });

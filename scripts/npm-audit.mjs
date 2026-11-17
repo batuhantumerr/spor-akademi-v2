@@ -34,6 +34,16 @@ function normalizeId(value) {
   return `GHSA${value.slice(4).toLowerCase()}`;
 }
 
+/** Why an `npm audit --json` result cannot be trusted, or null. A report without `vulnerabilities` must never count as clean. */
+export function reportProblem(report) {
+  if (report === null || typeof report !== 'object' || Array.isArray(report)) return 'npm audit returned an unexpected JSON value.';
+  if (report.error) return `npm audit failed: ${report.error.summary ?? JSON.stringify(report.error)}`;
+  if (report.vulnerabilities === null || typeof report.vulnerabilities !== 'object' || Array.isArray(report.vulnerabilities)) {
+    return 'npm audit JSON has no "vulnerabilities" object; refusing to treat it as clean.';
+  }
+  return null;
+}
+
 function validDate(value) {
   if (typeof value !== 'string' || !DATE.test(value)) return false;
   const parsed = new Date(`${value}T00:00:00Z`);
@@ -98,15 +108,21 @@ function main() {
   }
 
   const run = spawnSync('npm', ['audit', '--json'], { cwd: dir, encoding: 'utf8', shell: process.platform === 'win32', maxBuffer: 64 * 1024 * 1024 });
+  if (run.error || typeof run.stdout !== 'string') {
+    console.error(`Could not run npm audit: ${run.error?.message ?? 'no output'}`);
+    process.exit(1);
+  }
   let report;
   try {
     report = JSON.parse(run.stdout);
   } catch {
-    console.error(`npm audit did not return JSON (exit ${run.status}).\n${run.stderr ?? ''}`);
+    console.error(`npm audit did not return JSON (exit ${run.status}).
+${run.stderr ?? ''}`);
     process.exit(1);
   }
-  if (report.error) {
-    console.error(`npm audit failed: ${report.error.summary ?? JSON.stringify(report.error)}`);
+  const problem = reportProblem(report);
+  if (problem) {
+    console.error(problem);
     process.exit(1);
   }
 
