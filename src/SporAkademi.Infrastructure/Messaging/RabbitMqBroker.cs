@@ -37,6 +37,9 @@ internal sealed partial class RabbitMqBroker(
     ConsumerCatalog catalog,
     ILogger<RabbitMqBroker> logger) : IOutboxPublisher, IAsyncDisposable
 {
+    /// <summary>Requeues of one delivery (settling failed) before the broker dead-letters it.</summary>
+    public const int SettleFailureLimit = 5;
+
     public const string TenantHeader = "tenant-id";
     public const string AttemptHeader = "x-attempt";
     public const string ErrorHeader = "x-error";
@@ -48,9 +51,15 @@ internal sealed partial class RabbitMqBroker(
     private IConnection? _connection;
     private IChannel? _publishChannel;
 
+    // Real time: since when the connection is known to be closed (0 = not).
+    private const long ReconnectAfterMilliseconds = 60_000;
+    private long _closedSince;
+
     private RabbitMqOptions Options => options.Value;
 
     public bool IsConfigured => Options.IsConfigured;
+
+    public bool IsConnectionOpen => _connection is { IsOpen: true };
 
     public string DeadLetterExchange => Options.Exchange + ".dlx";
 
@@ -133,6 +142,16 @@ internal sealed partial class RabbitMqBroker(
         await _gate.WaitAsync(cancellationToken);
         try
         {
+            if (_connection is { IsOpen: false } && _closedSince != 0 && Environment.TickCount64 - _closedSince > ReconnectAfterMilliseconds)
+            {
+                // The client's recovery gave up or the server closed it for good: start over with a new connection.
+                _connection.Dispose();
+                _connection = null;
+                _publishChannel?.Dispose();
+                _publishChannel = null;
+                _closedSince = 0;
+            }
+
             if (_connection is null)
             {
                 var factory = new ConnectionFactory
@@ -154,8 +173,17 @@ internal sealed partial class RabbitMqBroker(
                 }
             }
 
-            if (!_connection.IsOpen)
+            if (_connection.IsOpen)
             {
+                _closedSince = 0;
+            }
+            else
+            {
+                if (_closedSince == 0)
+                {
+                    _closedSince = Environment.TickCount64;
+                }
+
                 // Connection lost: the client keeps reconnecting by itself; this call just reports the outage.
                 throw new BrokerUnavailableException("ConnectionClosed");
             }
@@ -251,6 +279,15 @@ internal sealed partial class RabbitMqBroker(
     {
         var quorum = new Dictionary<string, object?> { ["x-queue-type"] = "quorum" };
 
+        // Bounds a delivery that keeps being requeued because it cannot be settled (e.g. the retry copy cannot be published):
+        // after the limit the broker itself moves it to the dead-letter queue instead of looping forever.
+        var consumed = new Dictionary<string, object?>
+        {
+            ["x-queue-type"] = "quorum",
+            ["x-dead-letter-exchange"] = DeadLetterExchange,
+            ["x-delivery-limit"] = SettleFailureLimit,
+        };
+
         await channel.ExchangeDeclareAsync(Options.Exchange, ExchangeType.Topic, durable: true, autoDelete: false, cancellationToken: cancellationToken);
         await channel.ExchangeDeclareAsync(DeadLetterExchange, ExchangeType.Fanout, durable: true, autoDelete: false, cancellationToken: cancellationToken);
         await channel.QueueDeclareAsync(DeadLetterQueue, durable: true, exclusive: false, autoDelete: false, arguments: quorum, cancellationToken: cancellationToken);
@@ -258,7 +295,7 @@ internal sealed partial class RabbitMqBroker(
 
         foreach (var consumer in catalog.All)
         {
-            await channel.QueueDeclareAsync(consumer.Queue, durable: true, exclusive: false, autoDelete: false, arguments: quorum, cancellationToken: cancellationToken);
+            await channel.QueueDeclareAsync(consumer.Queue, durable: true, exclusive: false, autoDelete: false, arguments: consumed, cancellationToken: cancellationToken);
             await channel.QueueBindAsync(consumer.Queue, Options.Exchange, consumer.Type.Name, cancellationToken: cancellationToken);
 
             // A failed message waits here (its own expiration is the retry delay) and then returns to the consumer's queue

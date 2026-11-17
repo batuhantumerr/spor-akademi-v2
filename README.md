@@ -63,7 +63,7 @@ Tarayıcının geliştirici araçlarında Application → Service workers / Cach
 
 ### Mesaj broker'ı (P5-03)
 
-Entegrasyon event'leri (e-posta, bildirim, belge silme) outbox'tan varsayılan olarak aynı süreçte teslim edilir. RabbitMQ isteğe bağlıdır ve compose'un `messaging` profilindedir; çalışırken API outbox mesajlarını broker'a yayımlar, tüketiciler handler'ları kendi kuyruklarından çalıştırır (DEC-620 – DEC-629, ADR-0015):
+Entegrasyon event'leri (e-posta, bildirim, belge silme) outbox'tan varsayılan olarak aynı süreçte teslim edilir. RabbitMQ isteğe bağlıdır ve compose'un `messaging` profilindedir; çalışırken API outbox mesajlarını broker'a yayımlar, tüketiciler handler'ları kendi kuyruklarından çalıştırır (DEC-620 – DEC-629, ADR-0016):
 
 ```bash
 bash scripts/setup-env.sh                          # eski bir .env'e sadece eksik RABBITMQ_* anahtarlarını ekler

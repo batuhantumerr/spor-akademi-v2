@@ -1,4 +1,4 @@
-# ADR-0015 — Entegrasyon event'leri için RabbitMQ
+# ADR-0016 — Entegrasyon event'leri için RabbitMQ
 
 - **Durum:** Proposed (agent, 2026-11-17). Sahip onayı Pazartesi onay listesinde (§12, P5-03).
 - **İlgili:** P5-03, P5-04 (bildirim tüketicilerinin ayrı worker'a taşınması), DEC-300 – DEC-303 (outbox), DEC-620 – DEC-629,
@@ -51,9 +51,10 @@ bunun için).
 - **Idempotent tüketici:** `outbox.inbox` `(consumer, message_id)` satırı, handler'ın kendi transaction'ında yazılır
   (DEC-623). Veritabanı içi etkiler tam bir kez olur. Dış etkiler (e-posta) transaction'a katılamaz; handler'lar `MessageId`
   ile korunur (DEC-302).
+- **Yayım zaman aşımı:** confirm gelmeden `PublishTimeout` dolarsa mesaj yayımlanmış olabilir ama outbox satırı işlenmemiş kalır; sonraki denemede yeniden yayımlanır. Bu çift yayımı tüketicideki inbox ayıklar.
 - **Kayıp yok:** kuyruklar kalıcı ve quorum, mesajlar persistent, yayımcı confirm bekler ve `mandatory` kullanır; broker
   kapalıyken mesaj outbox'ta kalır ve deneme hakkı tüketmeden tekrar denenir (DEC-622).
-- **Zehirli mesaj:** `MaxDeliveryAttempts` sonra dead-letter kuyruğuna gider; alarm ve runbook vardır (DEC-627).
+- **Zehirli mesaj:** `MaxDeliveryAttempts` sonra dead-letter kuyruğuna gider; okunamayan payload ya da geçersiz `tenant-id` başlığı hiç denenmeden gider (okul bağlamı bozuk mesaj platform kapsamında çalışmaz). Teslim kendi hatasıyla (ör. yeniden deneme kopyası yazılamadı) tekrar tekrar kuyruğa dönerse quorum kuyruğunun `x-delivery-limit` sınırı (5) mesajı dead-letter kuyruğuna taşır; alarm ve runbook vardır (DEC-627).
 
 ## Sıralama
 

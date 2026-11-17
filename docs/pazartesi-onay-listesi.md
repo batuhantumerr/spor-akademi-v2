@@ -574,9 +574,9 @@ Sonuç: **yüksek bulgu yok.** Ayrıntı ve kanıt `guvenlik-kontrol-listesi.md`
 
 ## 12. Faz 5 (2026-11-17)
 
-### P5-03 Entegrasyon event'leri için RabbitMQ (DEC-620 – DEC-629, ADR-0015)
+### P5-03 Entegrasyon event'leri için RabbitMQ (DEC-620 – DEC-629, ADR-0016)
 
-1. **Yeni paket ve lisansları.** `RabbitMQ.Client` 7.2.1 (Apache-2.0 / MPL-2.0 ikili lisans), test için `Testcontainers.RabbitMq` 4.16.0 (MIT); broker imajı `rabbitmq:4.4.0-management-alpine` (MPL-2.0). MassTransit bilerek yok: v9+ ticari lisanslı (DEC-620, ADR-0015).
+1. **Yeni paket ve lisansları.** `RabbitMQ.Client` 7.2.1 (Apache-2.0 / MPL-2.0 ikili lisans), test için `Testcontainers.RabbitMq` 4.16.0 (MIT); broker imajı `rabbitmq:4.4.0-management-alpine` (MPL-2.0). MassTransit bilerek yok: v9+ ticari lisanslı (DEC-620, ADR-0016).
    - *Yönetici:* lisans maliyeti sıfır, ama topolojiyi ve hata yollarını kendimiz yazıyoruz; kod küçük ve gerçek broker'lı testlerle korunuyor.
 2. **Broker isteğe bağlı, varsayılan süreç içi teslim (DEC-620, DEC-628).** Bağlantı dizesi yoksa hiçbir şey değişmez; yerelde `docker compose --profile messaging up -d --wait`. Production'da RabbitMQ'yu kimin, nerede çalıştıracağı (kendi VM'imiz, yönetilen servis, ya da Azure'da Service Bus'a geçiş) Deploy bloğu ve P5-F3 kararı.
    - *Yazılımcı:* taşıyıcıyı değiştirmek yalnız yayım çağrısı ve tüketici hizmeti; outbox, inbox ve mesaj sözleşmesi aynı kalır.

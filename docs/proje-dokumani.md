@@ -271,7 +271,7 @@ Ek: başka okulun kaydı → `404`; `IgnoreQueryFilters()` sadece `Tenancy`'de; 
 
 Planlanan production yapısı (sunucu alındığında): tek VPS, Caddy (TLS, yönlendirme, HSTS) → nginx (statik admin) ve API; ortam başına ayrı PostgreSQL; Seq sadece SSH tüneliyle; `app.` ve `staging.` alt alan adları.
 
-### 5.11 Entegrasyon event'leri ve RabbitMQ (ADR-0015, P5-03)
+### 5.11 Entegrasyon event'leri ve RabbitMQ (ADR-0016, P5-03)
 
 - Outbox kalır; `ConnectionStrings:RabbitMq` varsa teslim yolu broker olur, yoksa süreç içi teslim (varsayılan) aynen çalışır.
 - Topic exchange (`spor-akademi.events`), yönlendirme anahtarı mesaj türü; her `IOutboxMessageHandler` için ayrı quorum kuyruğu, TTL'li yeniden deneme kuyruğu ve tek dead-letter kuyruğu.
@@ -314,7 +314,7 @@ Her ADR'ın bağlamı, seçenekleri, kararı ve sonuçları Ek F'de özetlenmiş
 | 0011 | Production migration stratejisi (bundle + SQL incelemesi) | Accepted |
 | 0012 | Veli uygulaması teknoloji yığını ([docs/adr](adr/0012-veli-uygulamasi-teknoloji-yigini.md)) | Accepted |
 | 0013 | Okul başına alt alan adı: şimdi yapılmaz ([docs/adr](adr/0013-okul-alt-alan-adi.md)) | Accepted |
-| 0015 | Entegrasyon event'leri için RabbitMQ ([docs/adr](adr/0015-entegrasyon-event-leri-rabbitmq.md)) | Proposed |
+| 0016 | Entegrasyon event'leri için RabbitMQ ([docs/adr](adr/0016-entegrasyon-event-leri-rabbitmq.md)) | Proposed |
 
 ---
 

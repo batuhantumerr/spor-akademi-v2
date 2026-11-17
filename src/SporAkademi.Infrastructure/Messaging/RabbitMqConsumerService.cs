@@ -28,6 +28,7 @@ namespace SporAkademi.Infrastructure.Messaging;
 /// </summary>
 internal sealed partial class RabbitMqConsumerService(
     RabbitMqBroker broker,
+    ConsumerState state,
     ConsumerCatalog catalog,
     IServiceScopeFactory scopeFactory,
     IOptions<RabbitMqOptions> options,
@@ -36,6 +37,9 @@ internal sealed partial class RabbitMqConsumerService(
     ILogger<RabbitMqConsumerService> logger) : BackgroundService
 {
     // Pacing of reconnects and redeliveries is real time, whatever the (testable) business clock says.
+    public const string InvalidTenantError = "InvalidTenantId";
+    public const string SettleFailedError = "SettleFailed";
+
     private static readonly TimeSpan ConnectRetry = TimeSpan.FromSeconds(5);
     private readonly List<IChannel> _channels = [];
 
@@ -49,23 +53,37 @@ internal sealed partial class RabbitMqConsumerService(
         }
 
         var selected = catalog.All.Where(c => Options.Consumers.Includes(c.Module)).ToList();
+        state.Expected = selected.Count;
         while (!stoppingToken.IsCancellationRequested)
         {
             try
             {
-                foreach (var registration in selected)
+                if (OpenChannelCount() == 0 && selected.Count > 0)
                 {
-                    await StartConsumerAsync(registration, stoppingToken);
+                    foreach (var registration in selected)
+                    {
+                        await StartConsumerAsync(registration, stoppingToken);
+                    }
+
+                    LogStarted(logger, selected.Count);
+                    state.Running = OpenChannelCount();
                 }
 
-                LogStarted(logger, selected.Count);
-                break;
+                await Task.Delay(ConnectRetry, stoppingToken);
+
+                // A channel the server closed (consumer_timeout, a channel exception) is not recovered by the client while
+                // the connection is up: restart every consumer. While the connection itself is down the client recovers them.
+                if (broker.IsConnectionOpen && AnyChannelClosed())
+                {
+                    LogConsumersRestarting(logger);
+                    await CloseChannelsAsync();
+                }
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
             {
-                return;
+                break;
             }
-#pragma warning disable CA1031 // The broker may be down at start; consumers start when it is back.
+#pragma warning disable CA1031 // The broker may be down; consumers start when it is back.
             catch (Exception exception)
 #pragma warning restore CA1031
             {
@@ -77,18 +95,29 @@ internal sealed partial class RabbitMqConsumerService(
                 }
                 catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
                 {
-                    return;
+                    break;
                 }
             }
+
+            state.Running = OpenChannelCount();
         }
 
-        try
+        state.Running = 0;
+    }
+
+    private int OpenChannelCount()
+    {
+        lock (_channels)
         {
-            await Task.Delay(Timeout.InfiniteTimeSpan, stoppingToken);
+            return _channels.Count(c => c.IsOpen);
         }
-        catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+    }
+
+    private bool AnyChannelClosed()
+    {
+        lock (_channels)
         {
-            // Stopping.
+            return _channels.Any(c => !c.IsOpen);
         }
     }
 
@@ -156,6 +185,28 @@ internal sealed partial class RabbitMqConsumerService(
 #pragma warning restore CA1031
         {
             LogDeliveryFailed(logger, registration.Queue, exception.GetType().Name);
+            AppTelemetry.MessagingMessages.Add(1, new("operation", "settle_failed"), new("message_type", registration.Type.Name));
+
+            // Bound the loop: the broker counts redeliveries of this message (quorum queues write x-acquired-count, x-delivery-count on older brokers). Past the
+            // limit it goes to the dead-letter queue; if even that publish fails, the queue's own dead-letter settings take it.
+            var redeliveries = int.TryParse((RabbitMqBroker.HeaderString(delivery.BasicProperties.Headers, "x-acquired-count") ?? RabbitMqBroker.HeaderString(delivery.BasicProperties.Headers, "x-delivery-count")), NumberStyles.None, CultureInfo.InvariantCulture, out var count) ? count : 0;
+            if (redeliveries >= RabbitMqBroker.SettleFailureLimit)
+            {
+                try
+                {
+                    await DeadLetterAsync(registration, delivery, 0, SettleFailedError, CancellationToken.None);
+                    await channel.BasicAckAsync(delivery.DeliveryTag, multiple: false, CancellationToken.None);
+                    return;
+                }
+#pragma warning disable CA1031 // Falls back to the queue's dead-letter settings below.
+                catch (Exception)
+#pragma warning restore CA1031
+                {
+                    await channel.BasicNackAsync(delivery.DeliveryTag, multiple: false, requeue: false, CancellationToken.None);
+                    return;
+                }
+            }
+
             await NackAsync(channel, delivery);
             try
             {
@@ -188,7 +239,9 @@ internal sealed partial class RabbitMqConsumerService(
         var properties = delivery.BasicProperties;
         var headers = properties.Headers;
         var attempt = int.TryParse(RabbitMqBroker.HeaderString(headers, RabbitMqBroker.AttemptHeader), NumberStyles.None, CultureInfo.InvariantCulture, out var n) ? n : 1;
-        var tenantId = Guid.TryParse(RabbitMqBroker.HeaderString(headers, RabbitMqBroker.TenantHeader), out var tenant) ? tenant : (Guid?)null;
+        var tenantHeader = RabbitMqBroker.HeaderString(headers, RabbitMqBroker.TenantHeader);
+        var tenantValid = Guid.TryParse(tenantHeader, out var tenant);
+        var tenantId = tenantValid ? tenant : (Guid?)null;
         var hasId = Guid.TryParse(properties.MessageId, out var messageId);
         var occurredAt = properties.Timestamp.UnixTime > 0 ? DateTimeOffset.FromUnixTimeSeconds(properties.Timestamp.UnixTime) : clock.GetUtcNow();
 
@@ -201,10 +254,19 @@ internal sealed partial class RabbitMqConsumerService(
         {
             payload = registration.Type.Deserialize(Encoding.UTF8.GetString(delivery.Body.Span));
         }
-        catch (JsonException)
+#pragma warning disable CA1031 // Any failure to read the payload (JsonException, NotSupportedException, ...) is a poison message.
+        catch (Exception exception) when (exception is not OperationCanceledException)
+#pragma warning restore CA1031
         {
             // Retrying cannot fix a payload that does not match the contract.
             await DeadLetterAsync(registration, delivery, attempt, OutboxProcessor.InvalidPayloadError, stoppingToken);
+            return;
+        }
+
+        if (tenantHeader is not null && !tenantValid)
+        {
+            // A school's message must never fall back to platform scope because its header is damaged.
+            await DeadLetterAsync(registration, delivery, attempt, InvalidTenantError, stoppingToken);
             return;
         }
 
@@ -334,13 +396,16 @@ internal sealed partial class RabbitMqConsumerService(
             : AppTelemetry.Source.StartActivity("messaging.consume", ActivityKind.Consumer, parentContext: default);
     }
 
+    [LoggerMessage(Level = LogLevel.Warning, Message = "A RabbitMQ consumer channel was closed by the server; restarting the consumers")]
+    private static partial void LogConsumersRestarting(ILogger logger);
+
     [LoggerMessage(Level = LogLevel.Information, Message = "RabbitMQ consumers started: {Count}")]
     private static partial void LogStarted(ILogger logger, int count);
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "Starting the RabbitMQ consumers failed with {Error}; retrying")]
     private static partial void LogStartFailed(ILogger logger, string error);
 
-    [LoggerMessage(Level = LogLevel.Warning, Message = "A delivery on {Queue} could not be settled ({Error}); it stays on its queue")]
+    [LoggerMessage(Level = LogLevel.Warning, Message = "A delivery on {Queue} could not be settled ({Error}); it stays on its queue (the queue's delivery limit dead-letters it if this repeats)")]
     private static partial void LogDeliveryFailed(ILogger logger, string queue, string error);
 
     [LoggerMessage(Level = LogLevel.Debug, Message = "Message {MessageId} consumed by {Queue} on attempt {Attempt} (handler ran: {Handled})")]
@@ -351,4 +416,15 @@ internal sealed partial class RabbitMqConsumerService(
 
     [LoggerMessage(Level = LogLevel.Error, Message = "Message {MessageId} dead-lettered from {Queue} after {Attempt} attempts; last error {Error}")]
     private static partial void LogDeadLettered(ILogger logger, string? messageId, string queue, int attempt, string error);
+}
+
+/// <summary>What the consumers of this process are doing, for the health check.</summary>
+internal sealed class ConsumerState
+{
+    private int _expected;
+    private int _running;
+
+    public int Expected { get => Volatile.Read(ref _expected); set => Volatile.Write(ref _expected, value); }
+
+    public int Running { get => Volatile.Read(ref _running); set => Volatile.Write(ref _running, value); }
 }

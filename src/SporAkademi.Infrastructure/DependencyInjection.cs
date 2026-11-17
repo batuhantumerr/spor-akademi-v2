@@ -239,6 +239,7 @@ internal static class OutboxRegistration
             .Validate(o => o.IsValid(), "The RabbitMq configuration section or ConnectionStrings:RabbitMq has an invalid value.")
             .ValidateOnStart();
         services.AddSingleton<ConsumerCatalog>();
+        services.AddSingleton<ConsumerState>();
         services.AddSingleton<RabbitMqBroker>();
 
         // Selectable by host: a process without consumers (Consumers:Enabled=false) or with some modules only (P5-04).

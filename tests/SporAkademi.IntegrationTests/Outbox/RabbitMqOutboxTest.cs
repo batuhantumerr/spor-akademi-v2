@@ -4,6 +4,7 @@ using System.Net;
 using System.Net.Sockets;
 using System.Text.RegularExpressions;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 using RabbitMQ.Client;
 using SporAkademi.Application.Abstractions.Observability;
 using SporAkademi.Infrastructure.Messaging;
@@ -53,7 +54,7 @@ public abstract partial class RabbitMqOutboxTest(DatabaseFixture database) : Out
         {
             InstrumentPublished = (instrument, listener) =>
             {
-                if (ReferenceEquals(instrument, AppTelemetry.MessagingMessages))
+                if (instrument.Meter.Name == AppTelemetry.Name && instrument.Name == "spor_akademi.messaging.messages")
                 {
                     listener.EnableMeasurementEvents(instrument);
                 }
@@ -140,6 +141,31 @@ public abstract partial class RabbitMqOutboxTest(DatabaseFixture database) : Out
         await using var connection = await factory.CreateConnectionAsync(Ct);
         await using var channel = await connection.CreateChannelAsync(cancellationToken: Ct);
         return await channel.BasicGetAsync(queue, autoAck: true, Ct);
+    }
+
+    /// <summary>Waits until every consumer of this host runs (each one declares the whole topology when it starts).</summary>
+    protected async Task WaitForTopologyAsync()
+    {
+        var state = Host.Services.GetRequiredService<ConsumerState>(); // also starts the host and its consumers
+        await EventuallyAsync(() => state.Expected > 0 && state.Running == state.Expected, "the consumers to be running");
+    }
+
+    /// <summary>Publishes a hand-made message to the exchange, the way a broken or foreign publisher might.</summary>
+    protected async Task PublishRawAsync(string body, Dictionary<string, object?> headers, string? messageId = null)
+    {
+        var factory = new ConnectionFactory { Uri = new Uri(_broker.GetConnectionString()) };
+        await using var connection = await factory.CreateConnectionAsync(Ct);
+        await using var channel = await connection.CreateChannelAsync(cancellationToken: Ct);
+        var properties = new BasicProperties { Persistent = true, MessageId = messageId ?? Guid.CreateVersion7().ToString(), Headers = headers };
+        await channel.BasicPublishAsync("spor-akademi.events", "tests.probe.v1", mandatory: false, properties, System.Text.Encoding.UTF8.GetBytes(body), Ct);
+    }
+
+    protected async Task DeleteQueueAsync(string queue)
+    {
+        var factory = new ConnectionFactory { Uri = new Uri(_broker.GetConnectionString()) };
+        await using var connection = await factory.CreateConnectionAsync(Ct);
+        await using var channel = await connection.CreateChannelAsync(cancellationToken: Ct);
+        await channel.QueueDeleteAsync(queue, cancellationToken: Ct);
     }
 
     protected async Task<int> InboxRowsAsync() =>

@@ -191,8 +191,57 @@ public sealed class RabbitMqDeliveryTests(DatabaseFixture database) : RabbitMqOu
     }
 
     [Fact]
+    public async Task A_message_with_an_unreadable_payload_is_dead_lettered_without_retries()
+    {
+        await WaitForTopologyAsync();
+
+        await PublishRawAsync("{\"unexpected\": true}", new() { [RabbitMqBroker.AttemptHeader] = 1 });
+
+        await EventuallyAsync(async () => await QueueDepthAsync(DeadLetterQueue) == 1, "the poison message in the dead-letter queue");
+        var dead = (await TakeAsync(DeadLetterQueue)).ShouldNotBeNull();
+        RabbitMqBroker.HeaderString(dead.BasicProperties.Headers, RabbitMqBroker.ErrorHeader).ShouldBe(OutboxProcessor.InvalidPayloadError);
+        Probe.Deliveries.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task A_message_with_an_unparsable_tenant_header_is_dead_lettered_not_run_in_platform_scope()
+    {
+        await WaitForTopologyAsync();
+        var payload = System.Text.Json.JsonSerializer.Serialize(new ProbeMessage(Guid.CreateVersion7(), "x"));
+
+        await PublishRawAsync(payload, new() { [RabbitMqBroker.AttemptHeader] = 1, [RabbitMqBroker.TenantHeader] = "not-a-guid" });
+
+        await EventuallyAsync(async () => await QueueDepthAsync(DeadLetterQueue) == 1, "the message in the dead-letter queue");
+        var dead = (await TakeAsync(DeadLetterQueue)).ShouldNotBeNull();
+        RabbitMqBroker.HeaderString(dead.BasicProperties.Headers, RabbitMqBroker.ErrorHeader).ShouldBe(RabbitMqConsumerService.InvalidTenantError);
+        Probe.Deliveries.ShouldBeEmpty();
+        (await InboxRowsAsync()).ShouldBe(0);
+    }
+
+    [Fact]
+    public async Task A_delivery_that_cannot_be_settled_is_dead_lettered_by_the_broker_instead_of_looping()
+    {
+        await WaitForTopologyAsync();
+        // The publisher declares the topology when it first publishes: let that happen before the queue is deleted.
+        await EnqueueAsync();
+        await ProcessAsync();
+        await EventuallyAsync(() => Probe.Deliveries.Count == 1, "the warm-up delivery");
+        // The handler fails and the retry copy has nowhere to go: the delivery is requeued again and again.
+        await DeleteQueueAsync(ProbeQueue + ".retry");
+        Probe.AlwaysFail = true;
+        await EnqueueAsync();
+
+        await ProcessAsync();
+
+        await EventuallyAsync(async () => await QueueDepthAsync(DeadLetterQueue) == 1, "the delivery limit to dead-letter it");
+        await EventuallyAsync(() => Count("settle_failed") > 0, "the settle_failed metric");
+        (await QueueDepthAsync(ProbeQueue)).ShouldBe(0u);
+    }
+
+    [Fact]
     public async Task Readiness_is_degraded_while_the_broker_is_unreachable()
     {
+        await WaitForTopologyAsync();
         var check = Host.Services.GetRequiredService<Microsoft.Extensions.Diagnostics.HealthChecks.HealthCheckService>();
         var up = await check.CheckHealthAsync(r => r.Name == "rabbitmq", Ct);
         up.Status.ShouldBe(Microsoft.Extensions.Diagnostics.HealthChecks.HealthStatus.Healthy);

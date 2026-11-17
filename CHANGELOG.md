@@ -7,7 +7,8 @@ Bu dosya [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) biçimini ve [
 ### Added
 
 #### Faz 5 — Ölçek ve mimari
-- **Entegrasyon event'leri için RabbitMQ (P5-03):** `ConnectionStrings:RabbitMq` varsa outbox mesajları `RabbitMQ.Client` 7 ile kalıcı topic exchange'e yayımlanır (publisher confirm sonrası işlenmiş sayılır, broker kesintisi deneme tüketmez); her handler kendi quorum kuyruğundan tüketir, yeniden deneme TTL kuyruğuyla, zehirli mesaj dead-letter kuyruğuyla. Tüketiciler `outbox.inbox` ile idempotent ve mesajın okul bağlamında çalışır; W3C trace context başlıkta, yeni mesajlaşma metrikleri ve iki alarm, `rabbitmq` hazırlık kontrolü, compose `messaging` profili. Yapılandırma yoksa süreç içi teslim aynen çalışır (DEC-620 – DEC-629, ADR-0015).
+- **Entegrasyon event'leri için RabbitMQ (P5-03):** `ConnectionStrings:RabbitMq` varsa outbox mesajları `RabbitMQ.Client` 7 ile kalıcı topic exchange'e yayımlanır (publisher confirm sonrası işlenmiş sayılır, broker kesintisi deneme tüketmez); her handler kendi quorum kuyruğundan tüketir, yeniden deneme TTL kuyruğuyla, zehirli mesaj dead-letter kuyruğuyla. Tüketiciler `outbox.inbox` ile idempotent ve mesajın okul bağlamında çalışır; W3C trace context başlıkta, yeni mesajlaşma metrikleri ve iki alarm, `rabbitmq` hazırlık kontrolü, compose `messaging` profili. Yapılandırma yoksa süreç içi teslim aynen çalışır (DEC-620 – DEC-629, ADR-0016).
+- Faz 4 geçişi sahip tarafından onaylandı (2026-11-16); Faz 5 planı roadmap'e yazıldı.
 
 ## [0.4.0] - 2026-11-16
 
