@@ -16,6 +16,7 @@ namespace SporAkademi.Application.Billing;
 /// reminder recipients (guardians with an e-mail, or the adult student; DEC-356), read when the message runs. The
 /// school's reason is never sent. Delivery is at least once: a failure for one recipient retries the message.
 /// </summary>
+[OutboxConsumerGroup(OutboxConsumerGroups.Notifications)]
 internal sealed partial class SendPaymentRefundedEmail(
     IPaymentRepository payments,
     IStudentReminderContacts contacts,

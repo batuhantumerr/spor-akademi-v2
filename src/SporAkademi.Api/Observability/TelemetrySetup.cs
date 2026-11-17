@@ -8,6 +8,7 @@ using OpenTelemetry.Metrics;
 using OpenTelemetry.Resources;
 using OpenTelemetry.Trace;
 using SporAkademi.Application.Abstractions.Observability;
+using SporAkademi.Infrastructure.Observability;
 
 namespace SporAkademi.Api.Observability;
 

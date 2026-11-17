@@ -151,6 +151,32 @@ internal static class MfaRegistration
     }
 }
 
+/// <summary>
+/// For a host that issues no sessions (P5-04): the MFA services exist so the container validates, but nothing can use them.
+/// No key is read, validated or derived, so the worker needs neither <c>Mfa:EncryptionKey</c> nor <c>Jwt:SigningKey</c>.
+/// </summary>
+internal sealed class UnavailableMfa : IMfaPolicy, IMfaSecretProtector
+{
+    public bool IsRequired(UserRole role) => false;
+
+    public string Protect(Guid userId, ReadOnlySpan<byte> secret) => throw Unsupported();
+
+    public byte[] Unprotect(Guid userId, string ciphertext) => throw Unsupported();
+
+    private static NotSupportedException Unsupported() => new("This host does not handle MFA secrets.");
+}
+
+internal static class MfaUnavailableRegistration
+{
+    public static IServiceCollection AddMfaUnavailable(this IServiceCollection services)
+    {
+        services.AddSingleton<UnavailableMfa>();
+        services.AddSingleton<IMfaPolicy>(provider => provider.GetRequiredService<UnavailableMfa>());
+        services.AddSingleton<IMfaSecretProtector>(provider => provider.GetRequiredService<UnavailableMfa>());
+        return services;
+    }
+}
+
 /// <summary>Resolves the secret protector while the host starts (DEC-602).</summary>
 internal sealed class MfaKeyCheck(IMfaSecretProtector protector) : IHostedService
 {

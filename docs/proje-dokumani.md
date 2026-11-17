@@ -186,6 +186,7 @@ src/
   SporAkademi.Application/     kullanım senaryoları, arayüzler, <Modül>/Contracts
   SporAkademi.Infrastructure/  EF Core, PostgreSQL, kimlik doğrulama
   SporAkademi.Api/             endpoint'ler, DI (composition root)
+  SporAkademi.Notifications/   bildirim worker'ı (Faz 5, ADR-0017): yalnız e-posta tüketicileri
 tests/
   Domain.UnitTests, Application.UnitTests, IntegrationTests, ArchitectureTests
 web/admin/                     Angular
@@ -277,6 +278,12 @@ Planlanan production yapısı (sunucu alındığında): tek VPS, Caddy (TLS, yö
 - Topic exchange (`spor-akademi.events`), yönlendirme anahtarı mesaj türü; her `IOutboxMessageHandler` için ayrı quorum kuyruğu, TTL'li yeniden deneme kuyruğu ve tek dead-letter kuyruğu.
 - At-least-once: outbox satırı publisher confirm'den sonra işlenmiş sayılır, broker kesintisi deneme tüketmez; tüketici `outbox.inbox` ile idempotent.
 - Tüketici mesajın okul bağlamında (`tenant-id` başlığı) çalışır; W3C trace context başlıkta taşınır. Tüketiciler modül başına seçilebilir (`RabbitMq:Consumers`).
+
+### 5.12 Bildirim worker'ı (ADR-0017, P5-04)
+
+- E-posta gönderen outbox handler'ları `notifications` tüketici grubundadır (`[OutboxConsumerGroup]`); `src/SporAkademi.Notifications` ayrı bir host olarak yalnız bu grubu RabbitMQ'dan tüketir (`/health/live`, `/health/ready`, kendi imajı). Application ve Infrastructure aynı DI ile kullanılır; worker API'ye ve DemoSeed'e bağlanmaz (mimari test).
+- API, worker yayındayken `RabbitMq:Consumers:ExcludeGroups` ile e-posta kuyruklarını tüketmez; `ConnectionStrings:RabbitMq` yoksa e-posta bugünkü gibi API sürecinde gider.
+- Gerçek zamanlı (SignalR) push'lar API'de kalır: hub ve bağlantılar orada. Veritabanı ve mesaj sözleşmeleri ortaktır; ayrı olan yalnız süreçtir (ödünleşimler ve ne zaman bölünmeyeceği ADR-0017'de).
 
 ---
 

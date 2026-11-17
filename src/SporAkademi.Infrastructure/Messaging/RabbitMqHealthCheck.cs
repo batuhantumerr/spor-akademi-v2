@@ -7,7 +7,7 @@ namespace SporAkademi.Infrastructure.Messaging;
 /// Degraded (still ready: the outbox keeps messages while the broker is away) when a configured broker cannot be reached;
 /// Healthy when it is reachable or not configured (in-process delivery).
 /// </summary>
-internal sealed class RabbitMqHealthCheck(RabbitMqBroker broker, ConsumerState consumers, IOptions<RabbitMqOptions> options) : IHealthCheck
+internal sealed class RabbitMqHealthCheck(RabbitMqBroker broker, ConsumerState consumers, ConsumerCatalog catalog, IOptions<RabbitMqOptions> options) : IHealthCheck
 {
     public async Task<HealthCheckResult> CheckHealthAsync(HealthCheckContext context, CancellationToken cancellationToken = default)
     {
@@ -21,11 +21,14 @@ internal sealed class RabbitMqHealthCheck(RabbitMqBroker broker, ConsumerState c
             return HealthCheckResult.Degraded("RabbitMQ is unreachable; outbox messages wait.");
         }
 
-        // Reachable, but this process's consumers are not all running (a channel the server closed, or still starting).
-        return consumers.Running < consumers.Expected
+        // Reachable, but this process's consumers are not all running (a channel the server closed, or still starting). The
+        // expected count comes from the catalog and the selection, not from the consumer service, so a probe that arrives
+        // before the service has started (P5-04) already sees them missing.
+        var expected = options.Value.Consumers.Enabled ? catalog.All.Count(c => options.Value.Consumers.Includes(c.Module, c.Group)) : 0;
+        return consumers.Running < expected
             ? HealthCheckResult.Degraded("RabbitMQ is reachable but not all consumers are running.", data: new Dictionary<string, object>
             {
-                ["expectedConsumers"] = consumers.Expected,
+                ["expectedConsumers"] = expected,
                 ["runningConsumers"] = consumers.Running,
             })
             : HealthCheckResult.Healthy("RabbitMQ is reachable.");

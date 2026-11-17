@@ -146,6 +146,7 @@ internal sealed class SendDuesRemindersHandler(
 /// its own message, so a failure for one never re-sends to the others; for the same recipient delivery is at least
 /// once (SMTP accepted, recording failed: the retry sends again).
 /// </summary>
+[OutboxConsumerGroup(OutboxConsumerGroups.Notifications)]
 internal sealed partial class SendDuesReminderEmail(
     IUnitOfWork unitOfWork,
     IDuesReminderRepository reminders,

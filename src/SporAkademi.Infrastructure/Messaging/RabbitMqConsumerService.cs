@@ -52,7 +52,7 @@ internal sealed partial class RabbitMqConsumerService(
             return;
         }
 
-        var selected = catalog.All.Where(c => Options.Consumers.Includes(c.Module)).ToList();
+        var selected = catalog.All.Where(c => Options.Consumers.Includes(c.Module, c.Group)).ToList();
         state.Expected = selected.Count;
         while (!stoppingToken.IsCancellationRequested)
         {
