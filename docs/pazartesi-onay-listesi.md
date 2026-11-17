@@ -655,7 +655,7 @@ Yalnız doküman; kod değişmedi. Belge: [v1-mimari-inceleme.md](v1-mimari-ince
 4. **Deploy bloğu ve staging doğrulamaları.** Hesap/abonelik, alan adı, uzak state, Key Vault sırları, SMTP, Caddy `/hubs`, canlı iyzico ve günlük yedek zamanlayıcısı sahipte; hiçbiri gerçek ortamda denenmedi. İlk iş: staging'de `ForwardLimit` iki ağdan doğrulaması (DEC-651) ve migration bundle'ın job olarak çalışması.
 5. **Yönetilen PostgreSQL'de `BYPASSRLS`'li yedek rolü (DEC-571).** Verilemiyorsa yedek stratejisi yeniden tasarlanır. *Yazılımcı:* ilk staging'de denenmeli.
 6. **MFA anahtar döndürme ve kurtarma kodu yenileme (DEC-602, DEC-604).** İkisi de yok; production'a ayrı `Mfa:EncryptionKey` verilmeli. Öneri: anahtar döndürme gerçek veriden önce, kod yenileme ilk ayda.
-7. **`npm audit` istisnası (picomatch, #177) 2026-12-17'de bitiyor.** O güne kadar yamalı sürüme geçilmeli ya da süre bilinçli uzatılmalı; yoksa CI kırılır.
+7. **`npm audit` istisnası (picomatch) 2026-12-17'de bitiyor.** Ayrıntı ve karar: aşağıdaki "CI: npm audit istisnası (DEC-670, DEC-671)" bölümü; burada yalnız takvim hatırlatması.
 8. **`v1.0.0` etiketinin kapsamı (DEC-662).** Öneri: sürüm notu "kod ve altyapı kodu tamam, gerçek veri ve production yok" desin. Etiket ve zamanı sahibin (P5-R2).
 9. **Paylaşılan dokümanlarda parça dosya düzeni (DEC-661).** Faz 6'da denensin mi? Öneri: evet.
 10. **Mimari test boşlukları (DEC-660).** Modül sınırı testi Domain ve Infrastructure'ı kapsamıyor; ayrı issue olarak yapılsın mı? Öneri: evet, Faz 6'nın ilk işi.

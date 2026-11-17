@@ -326,6 +326,7 @@ Mimarinin geriye dönük değerlendirmesi (modül sınırları, kararların sonu
 | 0014 | Gerçek verinin barındırma konumu ([docs/adr](adr/0014-veri-konumu.md)) | Proposed |
 | 0015 | Altyapı kodu aracı: OpenTofu ([docs/adr](adr/0015-altyapi-kodu-araci.md)) | Proposed |
 | 0016 | Entegrasyon event'leri için RabbitMQ ([docs/adr](adr/0016-entegrasyon-event-leri-rabbitmq.md)) | Proposed |
+| 0017 | Bildirim worker'ı: e-posta tüketicilerinin ayrı süreçte çalışması ([docs/adr](adr/0017-bildirim-worker.md)) | Proposed |
 
 ---
 
