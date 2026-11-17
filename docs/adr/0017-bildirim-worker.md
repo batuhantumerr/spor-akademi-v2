@@ -60,7 +60,7 @@ istemcinin bağlı olduğu süreçten ayrı bir süreçte push üretmenin kazanc
 | **Bağımsız ölçekleme** | Kuyruklar rakip tüketicilerle bölüşülür; kopya sayısı değişkendir | Gerçek ölçekleme sinyali (kuyruk derinliği ile KEDA kuralı) bu PR'da yok; varsayılan 1 kopya |
 | **Hata yalıtımı** | Worker çökerse API sürer; API çökerse e-postalar gider | Worker çalışmıyor diye uyarı yoksa e-postalar sessizce birikir (broker alarmı ve `rabbitmq` kontrolü bunu görünür kılar) |
 | **Maliyet** | — | Sürekli açık ek bir kopya (0,25 vCPU, 0,5 GiB); sayı DEC-648'in yöntemiyle çıkarılabilir, bu PR'da hesaplanmadı |
-| **Telemetri kodu** | — | API'nin telemetri ve Sentry kurulumunun küçük bir kopyası worker'da (DEC-634); gizlilik süzgeci iki yerde bakım ister |
+| **Telemetri kodu** | Gizlilik süzgeçleri (`TelemetryScrubber`, `AccessTokenRedaction`, `SentryPrivacy`) Infrastructure'da tek yerde, iki host aynı sınıfı kullanır | Host kurulumu (OTLP ve günlük ayarları) iki yerde; worker'da API'nin sağlık gauge'ları yok (DEC-634) |
 
 ## Bu işte bulunan sorun
 
@@ -74,8 +74,9 @@ bağımlılıkları burada yok" sınıfı hataları ortaya çıkarır; bu da ayr
 - **Etiket yerine ayrı mesaj türü ya da modül:** e-posta handler'larını kendi `notifications` modülüne taşımak sınırı daha temiz
   yapardı, ama mesaj adları saklı ve kuyruklarda yaşayan bir sözleşme (ADR-0016) ve modüller arası iletişim yeniden
   tasarlanırdı. Etiket ucuz ve geri alınabilir.
-- **Paylaşılan bir `Hosting` projesi:** telemetri ve günlük kurulumu API ile worker arasında tek yerde dursaydı kopya olmazdı.
-  Üçüncü bir süreç geldiğinde (ya da gizlilik süzgeci iki yerde sapınca) çıkarılmalı.
+- **Telemetri kurulumunu da paylaşmak:** gizlilik süzgeçleri paylaşılıyor ama OTLP ve günlük kurulumu iki hostta ayrı yazıldı; ilk
+  sürümde süzgecin de kopyası vardı ve daha zayıftı (inceleme yakaladı). Süzgeçler Infrastructure'a taşındı; üçüncü bir süreç gelirse
+  kurulum için de ortak bir `Hosting` projesi çıkarılmalı.
 - **Compose servisi:** yerelde worker yalnız betikle çalışır; compose'a eklemek `docker compose up` ile tam kurulumu kolaylaştırırdı
   ama imaj derlemesini yerel döngüye sokardı.
 - **Kuyruk derinliğine göre ölçekleme** (KEDA) baştan yazılabilirdi; hacim bilinmediği için ertelendi.
