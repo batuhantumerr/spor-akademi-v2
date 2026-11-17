@@ -8,7 +8,7 @@ public sealed class DemoSeedIsolationTests
     private const string DemoSeed = "SporAkademi.DemoSeed";
 
     public static TheoryData<string> DeployableAssemblies() =>
-        [Assemblies.Api.GetName().Name!, Assemblies.Application.GetName().Name!, Assemblies.Domain.GetName().Name!, Assemblies.Infrastructure.GetName().Name!];
+        [Assemblies.Api.GetName().Name!, Assemblies.Application.GetName().Name!, Assemblies.Domain.GetName().Name!, Assemblies.Infrastructure.GetName().Name!, Assemblies.Notifications.GetName().Name!];
 
     [Theory]
     [MemberData(nameof(DeployableAssemblies))]
@@ -25,6 +25,16 @@ public sealed class DemoSeedIsolationTests
         // The API's own dependency closure (what dotnet publish copies) must not contain the seeder.
         var apiDirectory = Path.GetDirectoryName(Assemblies.Api.Location)!;
         var deps = File.ReadAllText(Path.Combine(apiDirectory, "SporAkademi.Api.deps.json"));
+
+        deps.ShouldNotContain(DemoSeed);
+    }
+
+    [Fact]
+    public void The_notifications_worker_build_output_has_no_demo_seeder()
+    {
+        // P5-04: the worker is deployable too.
+        var directory = Path.GetDirectoryName(Assemblies.Notifications.Location)!;
+        var deps = File.ReadAllText(Path.Combine(directory, "SporAkademi.Notifications.deps.json"));
 
         deps.ShouldNotContain(DemoSeed);
     }

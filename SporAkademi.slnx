@@ -5,6 +5,7 @@
     <Project Path="src/SporAkademi.DemoSeed/SporAkademi.DemoSeed.csproj" />
     <Project Path="src/SporAkademi.Domain/SporAkademi.Domain.csproj" />
     <Project Path="src/SporAkademi.Infrastructure/SporAkademi.Infrastructure.csproj" />
+    <Project Path="src/SporAkademi.Notifications/SporAkademi.Notifications.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/SporAkademi.Application.UnitTests/SporAkademi.Application.UnitTests.csproj" />
