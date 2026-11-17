@@ -124,6 +124,24 @@ variable "storage_public_origin" {
   default     = ""
 }
 
+variable "storage_account_name" {
+  description = "Document storage account. With storage_container it switches the API to Azure Blob (Storage__Provider, P5-06)."
+  type        = string
+  default     = ""
+}
+
+variable "storage_container" {
+  description = "Document container in storage_account_name."
+  type        = string
+  default     = ""
+}
+
+variable "identity_client_id" {
+  description = "Client id of the user-assigned identity; the API needs it to pick that identity for Blob (Storage__ManagedIdentityClientId)."
+  type        = string
+  default     = ""
+}
+
 variable "otlp_endpoint" {
   description = "OTLP collector the API sends traces and metrics to. Empty: telemetry stays off (docs/gozlemlenebilirlik.md)."
   type        = string

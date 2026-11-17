@@ -243,7 +243,7 @@ Migration ekleyen işler (MFA → oturum süresi) art arda yapılır; RabbitMQ v
   - Container Apps (API, bildirim servisi, admin ve veli imajları), PostgreSQL Flexible Server, Key Vault, Log Analytics, depolama; staging ve production ortamları değişkenle.
   - Kapsam "Terraform ile" der; kod Terraform dilinde (HCL) yazılır. Çalıştıran araç ADR ile seçilir: Terraform CLI BSL-1.1 lisanslıdır, birebir uyumlu OpenTofu MPL-2.0'dır (sahip Terraform CLI'yi seçerse kod değişmeden çalışır). CI'da `fmt`, `validate` ve statik denetim; `apply` yok, gerçek kaynak sahipte.
   - Maliyet tahmini (NFR-CST-01) ve ADR-0014 veri konumu kararıyla ilişkisi belgelenir.
-- [ ] P5-06 **Bulut çalıştırmaya hazırlık.** (DEC-650 – DEC-659)
+- [x] P5-06 **Bulut çalıştırmaya hazırlık.** (DEC-650 – DEC-657, #168; taşıma runbook'u: [bulut-tasima-runbook.md](bulut-tasima-runbook.md))
   - Belge depolama için Azure Blob adaptörü (S3 uyumlu adaptör korunur, yapılandırmayla seçilir).
   - Yönetilen kimlik ve Key Vault'tan yapılandırma, health probe'ları, migration'ın job olarak çalışması; taşıma runbook'u.
 

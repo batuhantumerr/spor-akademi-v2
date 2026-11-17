@@ -22,7 +22,17 @@ locals {
       AllowedHosts           = var.allowed_hosts
       # Container Apps' ingress is the proxy the API sees: trust its subnet and nothing else (DEC-507).
       ForwardedHeaders__KnownNetworks__0 = var.apps_subnet_cidr
+      # Two proxies in front of the API: the gateway's ingress and Caddy, then the API's own ingress (DEC-651).
+      # Verify on the first staging (docs/bulut-tasima-runbook.md, section 8); a longer chain only changes this number.
+      ForwardedHeaders__ForwardLimit = "2"
     },
+    var.storage_account_name != "" ? {
+      # Azure Blob with the managed identity, no account key (shared keys are off); links are user delegation SAS (DEC-650).
+      Storage__Provider                = "AzureBlob"
+      Storage__AccountName             = var.storage_account_name
+      Storage__Container               = var.storage_container
+      Storage__ManagedIdentityClientId = var.identity_client_id
+    } : {},
     var.otlp_endpoint != "" ? { OpenTelemetry__Otlp__Endpoint = var.otlp_endpoint } : {},
     # P5-04 (DEC-635): while the worker runs, the API leaves the e-mail consumers (group "notifications") to it.
     # Without the worker (or without the broker) the API handles e-mail itself, as before.

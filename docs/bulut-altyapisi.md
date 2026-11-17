@@ -93,7 +93,7 @@ flowchart LR
 | `postgres-admin-password` | `tofu` (geçici kaynak + write-only; state'e girmez) | `sa_admin` parolası; yalnız rol kurulumu ve acil durum |
 | `conn-app` | sahip | `Host=<postgres_fqdn>;Database=spor_akademi;Username=spor_akademi_app;Password=...;SSL Mode=Require` |
 | `conn-migrator` | sahip | Aynı, `spor_akademi_migrator` rolüyle |
-| `jwt-signing-key` | sahip | En az 32 bayt rastgele (JWT anahtarı döndürme runbook'u: DEC-518) |
+| `jwt-signing-key` | sahip | **64 karakter onaltılık (hex)**, 32 bayt rastgele: `openssl rand -hex 32` (JWT anahtarı döndürme runbook'u: DEC-518) |
 | `conn-cache` | sahip | Yalnız Redis açıksa: `<host>:6380,password=...,ssl=True` |
 | `rabbitmq-password` | sahip | Yalnız RabbitMQ açıksa |
 | `conn-rabbitmq` | sahip | Yalnız RabbitMQ açıksa: `amqp://spor_akademi:<rabbitmq-password>@rabbitmq:5672/` (API ve bildirim worker'ı bunu `ConnectionStrings__RabbitMq` olarak okur) |
