@@ -78,7 +78,7 @@ jobs:
       - run: npm test
       - run: npm run build
       - name: Audit (high and critical fail the build, DEC-080)
-        run: npm audit --audit-level=high
+        run: node ../../scripts/npm-audit.mjs
 
   # P3-04: parent app (React + Vite). Not a required check yet: adding it to the ruleset is the owner's call.
   parent:
@@ -104,7 +104,7 @@ jobs:
       - run: npm test
       - run: npm run build
       - name: Audit (high and critical fail the build, DEC-080)
-        run: npm audit --audit-level=high
+        run: node ../../scripts/npm-audit.mjs
 
   # P1-36, DEC-240: Playwright end-to-end suite against the real API and PostgreSQL: the user flows in every browser
   # project. The WCAG audit runs in the a11y job (P4-11, DEC-591).
@@ -191,6 +191,8 @@ jobs:
         run: node scripts/check-contrast.mjs
       - name: UI text only in the dictionaries (P3-10, DEC-429)
         run: node scripts/check-i18n.mjs
+      - name: npm audit allowlist decision logic (DEC-670)
+        run: node --test scripts/npm-audit.test.mjs
       - name: Privacy notice pages match docs/aydinlatma-metni.md (P4-06, DEC-543)
         run: node scripts/privacy-notice.mjs --check
       - name: Infrastructure as code (OpenTofu fmt, validate; Trivy config; pinned binaries + checksums, P5-05, DEC-642)

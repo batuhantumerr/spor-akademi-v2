@@ -642,3 +642,9 @@ Yalnız doküman; kod değişmedi. Belge: [v1-mimari-inceleme.md](v1-mimari-ince
 11. **Tek istemci yığını sorusu (belge bölüm 3, madde 10).** Veli uygulaması React, admin Angular: öğrenme için tutuldu, ürün için iki yığın pahalı. Öneri: şimdilik dokunma; Faz 6'da gerçek kullanımla yeniden bak.
 
 Yeni paket yok.
+
+### CI: npm audit istisnası (DEC-670, DEC-671)
+
+1. **Süreli istisna listesi (DEC-670).** `picomatch` ReDoS (GHSA-fc5q-39xc-vjpf, high) için yamalı sürüm yok; `frontend` ve `parent` audit adımları main'i kırmızı yaptı. Eşiği düşürmek ya da adımı kapatmak yerine `.github/npm-audit-allowlist.json` eklendi: kayıt gerekçe, bitiş tarihi ve uygulama taşır; süresi geçen, bozuk ya da bayat kayıt build'i kırar. *Yazılımcı:* `scripts/npm-audit.mjs` düz Node, yeni paket yok; karar mantığı `repo-checks`'te test edilir. *Yönetici:* risk "geliştirme aracında, saldırgan desen vermeden istismar edilemeyen açık"; üretim imajına girmez. Öneri: kabul. Her yeni kayıt sahibin gözünden geçmeli (CODEOWNERS).
+2. **Bitiş tarihi 2026-12-17 (DEC-671).** O güne kadar yamalı `picomatch` çıkarsa yükseltilip kayıt silinmeli (kayıt kullanılmayınca zaten kırmızı olur); çıkmazsa sahip süreyi yeniler. Aksi halde 2026-12-18'de CI kırılır, bu bilinçli bir hatırlatmadır.
+3. **`ci.yml` değişti:** iki audit adımının adı aynı, komutu betik. Zorunlu check adları değişmedi; `repo-checks`'e `node --test` adımı eklendi. Dosya CODEOWNERS kapsamında olduğundan kod sahibi incelemesi gerekir.
