@@ -2,7 +2,7 @@ using System.Text.RegularExpressions;
 using Serilog.Core;
 using Serilog.Events;
 
-namespace SporAkademi.Api.Observability;
+namespace SporAkademi.Infrastructure.Observability;
 
 /// <summary>
 /// P3-08 (DEC-399): the hub's WebSocket carries the access token in the query (<c>access_token=…</c>) and the hub's URLs
@@ -12,7 +12,7 @@ namespace SporAkademi.Api.Observability;
 /// every message rendered from properties), whichever logger wrote it. Limits: an enricher cannot change an exception's
 /// own text or a message template's literal text; the framework's request logs put URLs only in properties.
 /// </summary>
-internal sealed partial class AccessTokenRedaction : ILogEventEnricher
+public sealed partial class AccessTokenRedaction : ILogEventEnricher
 {
     public const string Redacted = "[REDACTED]";
 

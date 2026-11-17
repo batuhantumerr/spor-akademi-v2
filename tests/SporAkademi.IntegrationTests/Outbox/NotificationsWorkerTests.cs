@@ -247,4 +247,25 @@ public sealed class ConsumerSelectionTests
 
         exception.Message.ShouldContain("ConnectionStrings:RabbitMq");
     }
+
+    [Fact]
+    public void The_worker_refuses_to_start_in_production_without_an_smtp_host_because_it_would_lose_e_mails()
+    {
+        var settings = new Dictionary<string, string?>
+        {
+            ["ConnectionStrings:App"] = "Host=localhost;Database=x",
+            ["ConnectionStrings:RabbitMq"] = "amqp://u:p@localhost:5672/",
+        };
+
+        var exception = Should.Throw<InvalidOperationException>(() => NotificationsHost.Create([], settings, environment: "Production"));
+        exception.Message.ShouldContain("Email:Smtp:Host");
+
+        // With a host (and public https links, DEC-350) it builds; Development and Testing may run without one.
+        settings["Email:Smtp:Host"] = "mail.example.test";
+        settings["Email:AppBaseUrl"] = "https://app.example.test/";
+        using var app = NotificationsHost.Create([], settings, environment: "Production");
+        app.ShouldNotBeNull();
+        using var development = NotificationsHost.Create([], new Dictionary<string, string?>(settings) { ["Email:Smtp:Host"] = null }, environment: "Development");
+        development.ShouldNotBeNull();
+    }
 }

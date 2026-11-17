@@ -47,6 +47,14 @@ internal static class NotificationsHost
             throw new InvalidOperationException("ConnectionStrings:RabbitMq is required: the notifications worker consumes from the broker.");
         }
 
+        // Without an SMTP host the e-mail sender only logs the template name and reports success: the message would be
+        // acknowledged and the e-mail lost. Only Development and Testing may run like that.
+        if (!builder.Environment.IsDevelopment() && !builder.Environment.IsEnvironment("Testing")
+            && string.IsNullOrWhiteSpace(builder.Configuration["Email:Smtp:Host"]))
+        {
+            throw new InvalidOperationException("Email:Smtp:Host is required outside Development: without it the worker would acknowledge e-mails it never sends.");
+        }
+
         builder.Host.UseDefaultServiceProvider(options =>
         {
             options.ValidateOnBuild = true;

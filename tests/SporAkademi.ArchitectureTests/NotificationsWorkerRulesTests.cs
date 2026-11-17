@@ -43,6 +43,25 @@ public sealed class NotificationsWorkerRulesTests
     }
 
     /// <summary>
+    /// DEC-634: the worker never keeps its own copy of what leaves the process for OTLP or Sentry; the scrubbers live in
+    /// Infrastructure and both hosts use those classes, so the worker cannot be weaker than the API.
+    /// </summary>
+    [Fact]
+    public void The_worker_has_no_scrubbing_of_its_own()
+    {
+        var own = Assemblies.Notifications.GetTypes()
+            .Where(t => t.Name.Contains("Scrub", StringComparison.Ordinal) || t.Name.Contains("Redact", StringComparison.Ordinal)
+                || typeof(OpenTelemetry.BaseProcessor<System.Diagnostics.Activity>).IsAssignableFrom(t))
+            .Select(t => t.FullName)
+            .ToList();
+        own.ShouldBeEmpty();
+
+        var shared = Assemblies.Infrastructure.GetType("SporAkademi.Infrastructure.Observability.TelemetryScrubber");
+        shared.ShouldNotBeNull();
+        Assemblies.Api.GetTypes().Where(t => t.Name == "TelemetryScrubber").ShouldBeEmpty();
+    }
+
+    /// <summary>
     /// A handler that sends e-mail must be in the <c>notifications</c> group, otherwise the API would keep consuming it while the
     /// worker runs (two hosts, two e-mails). Real-time and other handlers must not be, otherwise the worker would swallow them.
     /// </summary>

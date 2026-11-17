@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using System.Globalization;
 using System.Reflection;
 using OpenTelemetry;
@@ -7,6 +6,7 @@ using OpenTelemetry.Metrics;
 using OpenTelemetry.Resources;
 using OpenTelemetry.Trace;
 using SporAkademi.Application.Abstractions.Observability;
+using SporAkademi.Infrastructure.Observability;
 
 namespace SporAkademi.Notifications.Observability;
 
@@ -40,8 +40,8 @@ internal static class WorkerTelemetry
                 .SetSampler(enabled ? new ParentBasedSampler(new TraceIdRatioBasedSampler(ratio)) : new AlwaysOffSampler())
                 .AddSource(AppTelemetry.Name)
                 .AddSource("Npgsql")
-                // Before any exporter: what leaves the process has been scrubbed.
-                .AddProcessor(new WorkerTelemetryScrubber()))
+                // Before any exporter: what leaves the process has been scrubbed (the API's scrubber, shared from Infrastructure).
+                .AddProcessor(new TelemetryScrubber()))
             .WithMetrics(metrics => metrics.AddMeter(AppTelemetry.Name).AddMeter("System.Runtime"));
 
         if (endpoint is not null)
@@ -53,34 +53,4 @@ internal static class WorkerTelemetry
     }
 
     private static string? FirstNonEmpty(params string?[] values) => values.FirstOrDefault(v => !string.IsNullOrWhiteSpace(v));
-}
-
-/// <summary>Removes SQL parameters, query strings, addresses and framework exception text from every finished span.</summary>
-internal sealed class WorkerTelemetryScrubber : BaseProcessor<Activity>
-{
-    private static readonly string[] DroppedKeys =
-    [
-        "url.query", "http.query", "client.address", "client.port", "network.peer.address", "network.peer.port",
-        "enduser.id", "enduser.role", "db.user",
-    ];
-
-    private static readonly string[] DroppedPrefixes = ["db.query.parameter.", "db.statement.parameter"];
-
-    public override void OnEnd(Activity data)
-    {
-        ArgumentNullException.ThrowIfNull(data);
-        foreach (var (key, _) in data.TagObjects.ToList())
-        {
-            if (DroppedKeys.Contains(key, StringComparer.Ordinal) || DroppedPrefixes.Any(p => key.StartsWith(p, StringComparison.Ordinal)))
-            {
-                data.SetTag(key, null);
-            }
-        }
-
-        // A status description from a driver or the framework may be an exception message, which may quote personal data.
-        if (data.Status == ActivityStatusCode.Error && !string.IsNullOrEmpty(data.StatusDescription))
-        {
-            data.SetStatus(ActivityStatusCode.Error);
-        }
-    }
 }

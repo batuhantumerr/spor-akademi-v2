@@ -602,8 +602,10 @@ resource "azurerm_container_app" "notifications" {
         }
       }
 
-      # /health/live has no dependency checks; /health/ready needs the database and the broker with the consumers running
-      # (src/SporAkademi.Notifications/NotificationsHost.cs). A failing liveness probe restarts the replica, so it stays shallow.
+      # /health/live has no dependency checks, so a database or broker outage never restarts the replica. There is no
+      # readiness probe on purpose: without ingress it routes nothing, and a broker blip would only flap the revision's
+      # health. /health/ready (database, broker, consumers running; src/SporAkademi.Notifications/NotificationsHost.cs)
+      # is for the CI smoke test and for operators. The startup probe holds the revision until the process answers.
       startup_probe {
         transport               = "HTTP"
         port                    = 8080
@@ -620,13 +622,6 @@ resource "azurerm_container_app" "notifications" {
         failure_count_threshold = 3
       }
 
-      readiness_probe {
-        transport               = "HTTP"
-        port                    = 8080
-        path                    = "/health/ready"
-        interval_seconds        = 10
-        failure_count_threshold = 3
-      }
     }
   }
 
@@ -634,6 +629,11 @@ resource "azurerm_container_app" "notifications" {
     precondition {
       condition     = var.rabbitmq_enabled
       error_message = "The notifications worker consumes from the broker: turn on rabbitmq_enabled (enable_rabbitmq) with it."
+    }
+    # Without an SMTP host the worker only logs e-mails and acknowledges them: they would be lost (the worker refuses to start too).
+    precondition {
+      condition     = contains(keys(merge(var.email_env, var.notifications_extra_env)), "Email__Smtp__Host")
+      error_message = "The notifications worker needs Email__Smtp__Host in email_env (or notifications_extra_env); otherwise e-mails are acknowledged and never sent."
     }
   }
 }

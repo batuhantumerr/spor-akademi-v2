@@ -19,6 +19,9 @@
     <PackageReference Include="Hangfire.PostgreSql" />
     <PackageReference Include="MailKit" />
     <PackageReference Include="RabbitMQ.Client" />
+    <PackageReference Include="OpenTelemetry" />
+    <PackageReference Include="Sentry" />
+    <PackageReference Include="Serilog" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Design">
       <PrivateAssets>all</PrivateAssets>
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>

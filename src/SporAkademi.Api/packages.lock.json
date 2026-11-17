@@ -234,14 +234,6 @@
         "resolved": "10.0.3",
         "contentHash": "7nb5YzXuvWWJxB0J8DiyL3we+X4FOctZrt0fIBnucOIaIevFEEwGQVZKtiu9olXdlNAK1eNgqSral6r/jlhI4w=="
       },
-      "OpenTelemetry": {
-        "type": "Transitive",
-        "resolved": "1.20.1",
-        "contentHash": "+XDw3fYbiv1a40aFnDJSQleeuUJciXuhoIA19XmcGhT47Hy/xZRqk8NCjHUDKrg72Ixjthicecp8ygBDNeH/Jw==",
-        "dependencies": {
-          "OpenTelemetry.Api.ProviderBuilderExtensions": "1.20.1"
-        }
-      },
       "OpenTelemetry.Api": {
         "type": "Transitive",
         "resolved": "1.20.1",
@@ -260,11 +252,6 @@
         "resolved": "2.2.16",
         "contentHash": "nonu9l0YrZH6krVYbskBjE7uG0VMAnvOQ9PU+RmzUsy+++vHkqzzCkHRoP877OiA3iRTxJyNDLfpcU8hrJ3/YQ=="
       },
-      "Sentry": {
-        "type": "Transitive",
-        "resolved": "6.12.1",
-        "contentHash": "yCHz3cLGZ3TVik3rLV6rp6SaqJ0Ai7PyIi2KdoHNGpZYWEkcX7kx13IV46mufAzPW7pqZZoKNoru0w0RpmkmrA=="
-      },
       "Sentry.Extensions.Logging": {
         "type": "Transitive",
         "resolved": "6.12.1",
@@ -272,11 +259,6 @@
         "dependencies": {
           "Sentry": "6.12.1"
         }
-      },
-      "Serilog": {
-        "type": "Transitive",
-        "resolved": "4.3.1",
-        "contentHash": "savYe7h5yRlkqBVOwP8cIRDOdqKiPmYCU4W87JH38sBmcKD5EBoXvQIw6bNEvZ/pTe1gsiye3VFCzBsoppGkXQ=="
       },
       "Serilog.Extensions.Hosting": {
         "type": "Transitive",
@@ -373,7 +355,10 @@
           "Microsoft.Extensions.Caching.StackExchangeRedis": "[10.0.14, )",
           "Microsoft.Extensions.Diagnostics.HealthChecks.EntityFrameworkCore": "[10.0.14, )",
           "Npgsql.EntityFrameworkCore.PostgreSQL": "[10.0.3, )",
+          "OpenTelemetry": "[1.20.1, )",
           "RabbitMQ.Client": "[7.2.1, )",
+          "Sentry": "[6.12.1, )",
+          "Serilog": "[4.3.1, )",
           "SporAkademi.Application": "[1.0.0, )",
           "StackExchange.Redis": "[2.13.23, )"
         }
@@ -520,6 +505,15 @@
           "Npgsql": "10.0.3"
         }
       },
+      "OpenTelemetry": {
+        "type": "CentralTransitive",
+        "requested": "[1.20.1, )",
+        "resolved": "1.20.1",
+        "contentHash": "+XDw3fYbiv1a40aFnDJSQleeuUJciXuhoIA19XmcGhT47Hy/xZRqk8NCjHUDKrg72Ixjthicecp8ygBDNeH/Jw==",
+        "dependencies": {
+          "OpenTelemetry.Api.ProviderBuilderExtensions": "1.20.1"
+        }
+      },
       "RabbitMQ.Client": {
         "type": "CentralTransitive",
         "requested": "[7.2.1, )",
@@ -534,6 +528,18 @@
         "dependencies": {
           "Microsoft.Extensions.DependencyModel": "10.0.0"
         }
+      },
+      "Sentry": {
+        "type": "CentralTransitive",
+        "requested": "[6.12.1, )",
+        "resolved": "6.12.1",
+        "contentHash": "yCHz3cLGZ3TVik3rLV6rp6SaqJ0Ai7PyIi2KdoHNGpZYWEkcX7kx13IV46mufAzPW7pqZZoKNoru0w0RpmkmrA=="
+      },
+      "Serilog": {
+        "type": "CentralTransitive",
+        "requested": "[4.3.1, )",
+        "resolved": "4.3.1",
+        "contentHash": "savYe7h5yRlkqBVOwP8cIRDOdqKiPmYCU4W87JH38sBmcKD5EBoXvQIw6bNEvZ/pTe1gsiye3VFCzBsoppGkXQ=="
       },
       "StackExchange.Redis": {
         "type": "CentralTransitive",

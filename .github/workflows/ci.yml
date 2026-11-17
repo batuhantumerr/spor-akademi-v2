@@ -274,16 +274,19 @@ jobs:
           rabbit_image=$(grep -oP '^\s*image:\s*\Krabbitmq:\S+' compose.yaml)
           docker run -d --name rabbit --network smoke \
             -e RABBITMQ_DEFAULT_USER=spor_akademi -e RABBITMQ_DEFAULT_PASS=smokerabbit "$rabbit_image"
-          for i in $(seq 1 60); do docker exec rabbit rabbitmq-diagnostics -q check_running >/dev/null 2>&1 && break; sleep 2; done
-          docker exec rabbit rabbitmq-diagnostics -q check_running
+          # As the rabbitmq user: a probe run as root would create /var/lib/rabbitmq/.erlang.cookie owned by root, and the
+          # broker (running as rabbitmq) then dies with "eacces" while reading it.
+          for i in $(seq 1 60); do docker exec -u rabbitmq rabbit rabbitmq-diagnostics -q ping >/dev/null 2>&1 && break; sleep 2; done
+          docker exec -u rabbitmq rabbit rabbitmq-diagnostics -q check_running || { docker logs rabbit | tail -40; exit 1; }
           docker run -d --name notifications --network smoke -p 127.0.0.1:8083:8080 \
             -e ConnectionStrings__App="Host=pg;Database=spor_akademi;Username=spor_akademi_app;Password=smokeapp" \
             -e ConnectionStrings__RabbitMq="amqp://spor_akademi:smokerabbit@rabbit:5672/" \
+            -e Email__Smtp__Host=mail.example.test -e Email__AppBaseUrl=https://app.example.test/ \
             spor-akademi-notifications:ci
           for i in $(seq 1 30); do curl -fsS http://127.0.0.1:8083/health/live >/dev/null 2>&1 && break; sleep 1; done
-          curl -fsS --max-time 10 http://127.0.0.1:8083/health/live
+          curl -fsS --max-time 10 http://127.0.0.1:8083/health/live || { docker logs notifications | tail -40; exit 1; }
           for i in $(seq 1 30); do curl -fsS http://127.0.0.1:8083/health/ready >/dev/null 2>&1 && break; sleep 2; done
-          curl -fsS --max-time 10 http://127.0.0.1:8083/health/ready
+          curl -fsS --max-time 10 http://127.0.0.1:8083/health/ready || { docker logs notifications | tail -40; docker logs rabbit | tail -20; exit 1; }
           # The worker starts nothing but its consumers: no API surface.
           test "$(curl -s -o /dev/null -w '%{http_code}' --max-time 10 http://127.0.0.1:8083/api/v1/students)" = "404"
           docker logs notifications | tail -20
