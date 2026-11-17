@@ -181,15 +181,19 @@ internal static class DocumentStorageRegistration
     public static IServiceCollection AddDocumentStorage(this IServiceCollection services, IConfiguration configuration)
     {
         services.AddOptions<DocumentStorageOptions>()
-            .Bind(configuration.GetSection(DocumentStorageOptions.Section))
-            .Validate(o => DocumentStorageOptions.IsAbsoluteHttpUrl(o.ServiceUrl), "Storage:ServiceUrl must be an http(s) URL.")
-            .Validate(o => o.PublicUrl is null || DocumentStorageOptions.IsAbsoluteHttpUrl(o.PublicUrl), "Storage:PublicUrl must be an http(s) URL.")
-            .Validate(o => !string.IsNullOrWhiteSpace(o.AccessKey) && !string.IsNullOrWhiteSpace(o.SecretKey), "Storage:AccessKey and Storage:SecretKey are required.")
-            .Validate(o => !string.IsNullOrWhiteSpace(o.Bucket), "Storage:Bucket is required.")
-            .Validate(o => o.DownloadLinkLifetime >= TimeSpan.FromSeconds(1) && o.DownloadLinkLifetime <= TimeSpan.FromMinutes(15), "Storage:DownloadLinkLifetime must be between 1 second and 15 minutes.");
+            .Bind(configuration.GetSection(DocumentStorageOptions.Section));
+        services.AddSingleton<Microsoft.Extensions.Options.IValidateOptions<DocumentStorageOptions>, DocumentStorageOptionsValidator>();
         services.AddSingleton(new StorageClock(TimeProvider.System));
         services.AddSingleton<S3Clients>();
-        services.AddSingleton<IDocumentStorage, S3DocumentStorage>();
+        services.AddSingleton<S3DocumentStorage>();
+        services.AddSingleton(provider => AzureBlobClients.Create(
+            provider.GetRequiredService<Microsoft.Extensions.Options.IOptions<DocumentStorageOptions>>(), provider.GetRequiredService<StorageClock>()));
+        services.AddSingleton<AzureBlobDocumentStorage>();
+        // P5-06 (DEC-650): the provider is read when a store is first needed, so tests and hosts can still change it by configuration.
+        services.AddSingleton<IDocumentStorage>(provider =>
+            provider.GetRequiredService<Microsoft.Extensions.Options.IOptions<DocumentStorageOptions>>().Value.Provider == DocumentStorageProvider.AzureBlob
+                ? provider.GetRequiredService<AzureBlobDocumentStorage>()
+                : provider.GetRequiredService<S3DocumentStorage>());
         // P4-06 (DEC-548): resolved only when a link is needed, so work without documents runs without a configured store.
         services.AddTransient(provider => new Lazy<IDocumentStorage>(provider.GetRequiredService<IDocumentStorage>));
         return services;

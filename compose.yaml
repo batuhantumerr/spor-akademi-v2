@@ -112,6 +112,17 @@ services:
       timeout: 3s
       retries: 30
 
+  # Azure Blob emulator (P5-06, DEC-650), MIT: only for tests (Testcontainers reads this image reference, so Dependabot keeps it
+  # current) and for trying the Azure Blob adapter locally with `docker compose --profile azure-storage up -d --wait`.
+  # Azurite cannot sign user delegation links for a managed identity, so locally it is reached with its well-known development
+  # account (see `azurite --help`); production never uses an account key (shared keys are off on the real storage account).
+  azurite:
+    image: mcr.microsoft.com/azure-storage/azurite:3.36.0@sha256:76b8127d608fab8287a14a4bfeb9a5502cdcffb4bf1e86f09f324ebb0e70edba
+    profiles: ["azure-storage"]
+    command: ["azurite-blob", "--blobHost", "0.0.0.0", "--skipApiVersionCheck", "--disableProductStyleUrl"]
+    ports:
+      - "127.0.0.1:${AZURITE_HOST_PORT:-10000}:10000"
+
   # Local observability (P4-07, DEC-554): optional, only started with `docker compose --profile observability up -d --wait`;
   # scripts/run-api.sh then sends the API's traces and metrics there over OTLP. All Apache-2.0 (no AGPL image, as with
   # DEC-320): Jaeger v2 receives OTLP, keeps traces in memory and passes metrics to Prometheus, which evaluates the alert

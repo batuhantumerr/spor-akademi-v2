@@ -3,19 +3,76 @@ using System.Text;
 using Amazon.Runtime;
 using Amazon.S3;
 using Amazon.S3.Model;
+using Azure;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Options;
 using SporAkademi.Application.Abstractions.Storage;
 
 namespace SporAkademi.Infrastructure.Storage;
 
+/// <summary>Which store holds the documents (P5-06, DEC-650). S3 is the default and stays the local development store.</summary>
+public enum DocumentStorageProvider
+{
+    S3,
+    AzureBlob,
+}
+
 /// <summary>
-/// Settings of the S3-compatible document store (section <c>Storage</c>, DEC-320). Read and validated on first use,
-/// so the API starts without them; the <c>storage</c> readiness check then reports "Degraded" (DEC-326).
+/// Settings of the document store (section <c>Storage</c>, DEC-320, DEC-650). <see cref="Provider"/> picks the S3-compatible
+/// store or Azure Blob Storage; each has its own keys. Read and validated on first use, so the API starts without them;
+/// the <c>storage</c> readiness check then reports "Degraded" (DEC-326).
 /// </summary>
 public sealed class DocumentStorageOptions
 {
     public const string Section = "Storage";
+
+    public DocumentStorageProvider Provider { get; set; } = DocumentStorageProvider.S3;
+
+    /// <summary>Azure Blob: the storage account, e.g. <c>stsporproddocs</c>. The endpoint is <c>https://{AccountName}.blob.core.windows.net</c>.</summary>
+    public string? AccountName { get; set; }
+
+    /// <summary>Azure Blob: the endpoint when it is not the public cloud's (a sovereign cloud, or the Azurite emulator).</summary>
+    public string? BlobServiceUrl { get; set; }
+
+    /// <summary>Azure Blob: the container holding the documents (private).</summary>
+    public string? Container { get; set; }
+
+    /// <summary>
+    /// Azure Blob: client id of the user-assigned managed identity. Empty uses <c>DefaultAzureCredential</c> (the system-assigned
+    /// identity, a developer's <c>az login</c>); set, only <c>ManagedIdentityCredential</c> is tried. No account key is ever read.
+    /// </summary>
+    public string? ManagedIdentityClientId { get; set; }
+
+    internal Uri AzureEndpoint => Uri.TryCreate(BlobServiceUrl, UriKind.Absolute, out var url)
+        ? url
+        : new Uri($"https://{AccountName}.blob.core.windows.net");
+
+    internal bool IsValidForProvider(out string error)
+    {
+        error = "";
+        if (DownloadLinkLifetime < TimeSpan.FromSeconds(1) || DownloadLinkLifetime > TimeSpan.FromMinutes(15))
+        {
+            error = "Storage:DownloadLinkLifetime must be between 1 second and 15 minutes.";
+        }
+        else if (Provider == DocumentStorageProvider.S3)
+        {
+            error = !IsAbsoluteHttpUrl(ServiceUrl) ? "Storage:ServiceUrl must be an http(s) URL."
+                : PublicUrl is not null && !IsAbsoluteHttpUrl(PublicUrl) ? "Storage:PublicUrl must be an http(s) URL."
+                : string.IsNullOrWhiteSpace(AccessKey) || string.IsNullOrWhiteSpace(SecretKey) ? "Storage:AccessKey and Storage:SecretKey are required."
+                : string.IsNullOrWhiteSpace(Bucket) ? "Storage:Bucket is required."
+                : "";
+        }
+        else
+        {
+            error = BlobServiceUrl is not null && !IsAbsoluteHttpUrl(BlobServiceUrl) ? "Storage:BlobServiceUrl must be an http(s) URL."
+                : string.IsNullOrWhiteSpace(BlobServiceUrl) && string.IsNullOrWhiteSpace(AccountName) ? "Storage:AccountName (or Storage:BlobServiceUrl) is required."
+                : string.IsNullOrWhiteSpace(Container) ? "Storage:Container is required."
+                : "";
+        }
+
+        return error.Length == 0;
+    }
 
     /// <summary>The endpoint the API talks to, e.g. <c>http://127.0.0.1:58333</c>.</summary>
     public string? ServiceUrl { get; set; }
@@ -39,6 +96,13 @@ public sealed class DocumentStorageOptions
 
     internal static bool IsAbsoluteHttpUrl(string? value) =>
         Uri.TryCreate(value, UriKind.Absolute, out var uri) && (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps);
+}
+
+/// <summary>Names the wrong setting in the error the first use of the store throws (and the readiness check reports).</summary>
+internal sealed class DocumentStorageOptionsValidator : IValidateOptions<DocumentStorageOptions>
+{
+    public ValidateOptionsResult Validate(string? name, DocumentStorageOptions options) =>
+        options.IsValidForProvider(out var error) ? ValidateOptionsResult.Success : ValidateOptionsResult.Fail(error);
 }
 
 /// <summary>The real clock used for link expiry: signatures are checked by the store against real time, not the app's clock.</summary>
@@ -128,27 +192,14 @@ internal sealed class S3DocumentStorage(S3Clients clients, StorageClock clock) :
             Protocol = clients.PublicIsHttp ? Protocol.HTTP : Protocol.HTTPS,
         };
         request.ResponseHeaderOverrides.ContentType = disposition.ContentType;
-        request.ResponseHeaderOverrides.ContentDisposition = ContentDisposition(disposition);
-        request.ResponseHeaderOverrides.CacheControl = "private, no-store";
+        request.ResponseHeaderOverrides.ContentDisposition = DownloadHeaders.ContentDisposition(disposition);
+        request.ResponseHeaderOverrides.CacheControl = DownloadHeaders.CacheControl;
         return new DownloadLink(new Uri(clients.Signing.GetPreSignedURL(request)), expiresAt);
-    }
-
-    /// <summary>RFC 6266: an ASCII fallback name plus the UTF-8 name, so Turkish file names survive.</summary>
-    internal static string ContentDisposition(DownloadDisposition disposition)
-    {
-        var ascii = new StringBuilder(disposition.FileName.Length);
-        foreach (var c in disposition.FileName)
-        {
-            ascii.Append(c is >= ' ' and <= '~' and not '"' and not '\\' and not ';' and not '%' ? c : '_');
-        }
-
-        var kind = disposition.Inline ? "inline" : "attachment";
-        return $"{kind}; filename=\"{ascii}\"; filename*=UTF-8''{Uri.EscapeDataString(disposition.FileName)}";
     }
 }
 
 /// <summary>
-/// Readiness of the document store (DEC-326): the bucket must be reachable with the configured credentials. A
+/// Readiness of the document store (DEC-326): the bucket (or Azure container) must be reachable with the configured credentials. A
 /// failure is "Degraded", not "Unhealthy": everything but documents still works, so the API stays in rotation.
 /// </summary>
 internal sealed class DocumentStorageHealthCheck(IServiceProvider services) : IHealthCheck
@@ -157,9 +208,17 @@ internal sealed class DocumentStorageHealthCheck(IServiceProvider services) : IH
     {
         try
         {
-            var clients = (S3Clients)services.GetService(typeof(S3Clients))!;
             using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
             timeout.CancelAfter(TimeSpan.FromSeconds(5));
+            var provider = services.GetRequiredService<IOptions<DocumentStorageOptions>>().Value.Provider;
+            if (provider == DocumentStorageProvider.AzureBlob)
+            {
+                var azure = services.GetRequiredService<AzureBlobClients>();
+                await azure.Container.GetBlobsAsync(cancellationToken: timeout.Token).AsPages(pageSizeHint: 1).GetAsyncEnumerator(timeout.Token).MoveNextAsync();
+                return HealthCheckResult.Healthy();
+            }
+
+            var clients = services.GetRequiredService<S3Clients>();
             var response = await clients.Requests.ListObjectsV2Async(
                 new ListObjectsV2Request { BucketName = clients.Options.Bucket, MaxKeys = 1 }, timeout.Token);
             return response.HttpStatusCode == HttpStatusCode.OK
