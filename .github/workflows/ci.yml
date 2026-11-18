@@ -31,8 +31,10 @@ jobs:
     # The integration suite (~740 Testcontainers tests, one API host each, run serially) took 8–13.5 minutes on
     # hosted runners on 2026-11-10, about two minutes after restore and build; 15 minutes cancelled main (6a47840)
     # with the suite already passed. By 2026-11-12 the job took ~18 minutes and runner variance pushed some runs
-    # past 25, so 35 leaves headroom without hiding a real hang for long.
-    timeout-minutes: 35
+    # past 25, so 35 leaves headroom without hiding a real hang for long. On 2026-11-17 the suite had grown to
+    # 1800 tests and took ~27 minutes alone (job ~30), and runner variance cancelled PR #180 at 35 (#181).
+    # 50 is a stopgap until the integration suite is sharded.
+    timeout-minutes: 50
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
