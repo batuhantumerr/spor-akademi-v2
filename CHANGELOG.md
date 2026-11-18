@@ -1,12 +1,15 @@
 # Changelog
 
-Bu dosya [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) biçimini ve [SemVer](https://semver.org/) sürümlemesini izler. Sürüm etiketleri ve faz geçişleri sahibe aittir; maddeler etiketlenene kadar `Unreleased` altında durur. Etiketler 2026-11-13'te geriye dönük atıldı: `v0.1.0` Faz 0 – Faz 1'i (ae38efd, #56), `v0.2.0` Faz 2'yi (6eb0f17, #81), `v0.3.0` Faz 3'ü (5260643) kapsar. `v0.4.0` (2026-11-16) Faz 4'ü kapsar.
+Bu dosya [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) biçimini ve [SemVer](https://semver.org/) sürümlemesini izler. Sürüm etiketleri ve faz geçişleri sahibe aittir; maddeler etiketlenene kadar `Unreleased` altında durur. Etiketler 2026-11-13'te geriye dönük atıldı: `v0.1.0` Faz 0 – Faz 1'i (ae38efd, #56), `v0.2.0` Faz 2'yi (6eb0f17, #81), `v0.3.0` Faz 3'ü (5260643) kapsar. `v0.4.0` (2026-11-16) Faz 4'ü, `v1.0.0` (2026-11-18) Faz 5'i kapsar.
 
 ## [Unreleased]
+
+## [1.0.0] - 2026-11-18
 
 ### Added
 
 #### Faz 5 — Ölçek ve mimari
+- Faz 5 geçişi sahip tarafından onaylandı (2026-11-18); `v1.0.0` etiketi bu sürüm notlarının merge commit'inde.
 - **Faz 5 çıkış kriterlerinin doğrulanması (P5-R1):** `docs/faz-5-cikis-kriterleri.md`: MFA ve oturum süresi, RabbitMQ ve bildirim worker'ı, altyapı kodu ve taşıma hazırlığı kriterleri test sınıfları, CI adımı ve DEC'lerle eşlendi; ilgili sınıflar yerelde koşturuldu (195 test geçti). Azure'da hiçbir şey çalıştırılmadığı; gerçek SAS, `ForwardLimit=2`, PostgreSQL 18 ve `BYPASSRLS`, maliyet (~89 USD/ay), ADR-0014 bölgesi, MFA anahtar döndürme ve 2026-12-17'de biten `picomatch` istisnasının sahipte kaldığı açıkça listelendi. Kod değişikliği yok, etiket yok.
 - **Son mimari inceleme ve `v1.0.0` retrospektifi (P5-07):** `docs/v1-mimari-inceleme.md`: v1.0.0'ın durumu (mermaid şemasıyla), modül sınırı incelemesi (Application katmanı testle korunuyor; Domain ve Infrastructure katmanında koruyan test yok), 12 kararın geriye dönük değerlendirmesi, "neyi farklı yapardık", öncelikli ve sahipli teknik borç listesi ve metrikler. Kod değişikliği yok (DEC-660 – DEC-663, hepsi öneri).
 - **Entegrasyon event'leri için RabbitMQ (P5-03):** `ConnectionStrings:RabbitMq` varsa outbox mesajları `RabbitMQ.Client` 7 ile kalıcı topic exchange'e yayımlanır (publisher confirm sonrası işlenmiş sayılır, broker kesintisi deneme tüketmez); her handler kendi quorum kuyruğundan tüketir, yeniden deneme TTL kuyruğuyla, zehirli mesaj dead-letter kuyruğuyla. Tüketiciler `outbox.inbox` ile idempotent ve mesajın okul bağlamında çalışır; W3C trace context başlıkta, yeni mesajlaşma metrikleri ve iki alarm, `rabbitmq` hazırlık kontrolü, compose `messaging` profili. Yapılandırma yoksa süreç içi teslim aynen çalışır (DEC-620 – DEC-629, ADR-0016).
@@ -17,6 +20,9 @@ Bu dosya [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) biçimini ve [
 - **Azure için infrastructure as code (P5-05):** `infra/` altında OpenTofu (Terraform dili, ADR-0015) ile staging ve production: Container Apps (API, admin, veli, Caddy gateway, migration job, RabbitMQ ve bildirim servisi için yer), PostgreSQL Flexible Server, Key Vault (sırlar yönetilen kimlikle), Log Analytics, belge depolama. `repo-checks` `fmt`, `validate` ve Trivy config taraması çalıştırır; `apply` yok, gerçek kaynaklar sahipte. Maliyet tahmini (~89 USD/ay, 20 USD hedefinin üstünde) ve Türkiye bölgesi olmamasının ADR-0014 ile ilişkisi `docs/bulut-altyapisi.md`'de (DEC-640 – DEC-649).
 - **Bildirim worker'ı (P5-04):** e-posta gönderen yedi outbox handler'ı `notifications` tüketici grubunda (`[OutboxConsumerGroup]`); `src/SporAkademi.Notifications` ayrı bir host olarak yalnız bu tüketicileri RabbitMQ'dan çalıştırır (`/health/live`, `/health/ready`, OTLP ve Sentry, kendi `docker/notifications` imajı; CI'da derlenir, smoke test ve Trivy'den geçer, main'de GHCR'ye yayımlanır). API, worker yayındayken `RabbitMq:Consumers:ExcludeGroups=notifications` ile bu kuyruklara dokunmaz; RabbitMQ yokken e-posta bugünkü gibi API'den gider. SignalR push'ları API'de kalır. `ConsumerCatalog` handler'ları oluşturmak yerine kayıtlarını okur. `infra/` yer tutucusu bağlandı (`enable_notifications_worker`), `scripts/run-notifications.sh` eklendi. ADR-0017 ödünleşimleri ve ne zaman bölünmeyeceğini yazar (DEC-630 – DEC-639).
 - **Yöneticiler için iki adımlı doğrulama, TOTP (P5-01):** Platform Admin için zorunlu, Okul Admini için isteğe bağlı. Giriş iki adımlı oldu: doğru şifre `202` ile 5 dakikalık, tek kullanımlık, en çok 5 denemelik bir `mfaToken` döner; `POST /auth/mfa/verify` kodu (RFC 6238, tekrar korumalı) ya da tek kullanımlık kurtarma kodunu kabul edip oturumu açar. MFA'sı olmayan Platform Admin önce kurulumu bitirir (QR kodu ve metin anahtar, 10 kurtarma kodu bir kez); yanlış kodlar hesap kilit sayacına yazılır. TOTP anahtarı AES-256-GCM ile şifreli saklanır, kurtarma kodları hash'li. MFA açılınca, kapanınca, sıfırlanınca ve kurtarma kodu kullanılınca hesaba e-posta gider; Platform Admin telefonu kaybeden birinin MFA'sını nedenle (denetim kaydına) sıfırlayabilir. Yönetici panelinde giriş ikinci adımı, Güvenlik sayfası ve sıfırlama eylemi eklendi (TR/EN). Yerelde (`Development`) zorunluluk `Mfa:RequirePlatformAdmin=false` ile kapalıdır; başka ortamda kapatılırsa API açılmaz. Yeni paket: `qrcode-generator` 2.0.4 (MIT) (DEC-600 – DEC-609).
+
+### Changed
+- **CI:** `backend` işinin süre sınırı 35 dakikadan 50 dakikaya çıktı; integration testleri 1800 teste ulaşıp ~27 dakika sürüyor ve süre aşımı #180'in kontrolünü iptal etti. Kalıcı çözüm integration testlerini paralel parçalara bölmek (#181).
 
 ## [0.4.0] - 2026-11-16
 
@@ -102,7 +108,8 @@ Bu dosya [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) biçimini ve [
 ### Security
 - Admin imajında zlib ve musl güvenlik yükseltmeleri (DEC-104, DEC-202; base imaj düzelince kaldırılacak).
 
-[Unreleased]: https://github.com/batuhantumerr/spor-akademi-v2/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/batuhantumerr/spor-akademi-v2/compare/v1.0.0...HEAD
+[1.0.0]: https://github.com/batuhantumerr/spor-akademi-v2/compare/v0.4.0...v1.0.0
 [0.4.0]: https://github.com/batuhantumerr/spor-akademi-v2/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/batuhantumerr/spor-akademi-v2/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/batuhantumerr/spor-akademi-v2/compare/v0.1.0...v0.2.0
