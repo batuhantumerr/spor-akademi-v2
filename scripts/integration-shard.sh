@@ -9,8 +9,8 @@
 #
 # Shards 1..N-1 list their namespaces (sized by test count and the CI timings of each shard). The last shard runs
 # everything the others do not list, so a new namespace (or a test outside any listed one) is never skipped.
-# A listed namespace that no longer exists makes its shard run fewer tests; one that matches nothing fails the shard
-# (xUnit exit code 8, zero tests ran).
+# A listed namespace that no longer exists makes its shard run fewer tests (the filters of a shard are ORed); a shard
+# none of whose namespaces match anything fails (xUnit exit code 8, zero tests ran).
 set -euo pipefail
 
 shards=(

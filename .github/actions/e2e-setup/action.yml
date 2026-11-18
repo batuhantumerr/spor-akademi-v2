@@ -29,12 +29,19 @@ runs:
         path: ~/.cache/ms-playwright
         key: playwright-${{ runner.os }}-${{ inputs.browsers }}-${{ hashFiles('web/admin/package-lock.json') }}
     # The browsers' system packages (apt, ~125 MB for all three) are kept as .deb files: on 2026-11-18 the Ubuntu mirror
-    # served them at ~120 kB/s and the e2e job hit its timeout twice inside this action (#181). The prefix restore key
-    # reuses the previous archive when the lock file changes; apt only downloads what is missing.
-    - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+    # served them at ~120 kB/s and the e2e job hit its timeout twice inside this action (#181). The key changes every ISO
+    # week, so Ubuntu's package updates get into the cache; the prefix restore key reuses the previous archive and apt
+    # only downloads what is missing. apt may download as root here (its _apt user cannot reach the runner's
+    # directories) and says so in a notice; that is harmless.
+    - name: Apt archive cache key
+      id: apt-key
+      shell: bash
+      run: echo "week=$(date -u +%G-%V)" >> "$GITHUB_OUTPUT"
+    - uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      id: apt-cache
       with:
-        path: ~/apt-archives
-        key: playwright-apt-${{ runner.os }}-${{ inputs.browsers }}-${{ hashFiles('web/admin/package-lock.json') }}
+        path: ${{ runner.temp }}/apt-archives
+        key: playwright-apt-${{ runner.os }}-${{ inputs.browsers }}-${{ steps.apt-key.outputs.week }}
         restore-keys: playwright-apt-${{ runner.os }}-${{ inputs.browsers }}-
     - name: Throwaway .env (random values, never printed; the runner is discarded)
       shell: bash
@@ -64,7 +71,7 @@ runs:
         npm ci --no-fund
         npm --prefix ../parent ci --no-fund
         # apt (run by playwright install-deps) downloads into the cached archive directory and keeps the files there.
-        archives="$HOME/apt-archives"
+        archives="$RUNNER_TEMP/apt-archives"
         mkdir -p "$archives/partial"
         printf 'Dir::Cache::Archives "%s";\nAPT::Keep-Downloaded-Packages "true";\n' "$archives" \
           | sudo tee /etc/apt/apt.conf.d/99playwright-archives >/dev/null
@@ -75,3 +82,9 @@ runs:
         sudo apt-get autoclean -qq
         sudo chown -R "$(id -u):$(id -g)" "$archives"
         echo "Cached apt archives after install: $(find "$archives" -maxdepth 1 -name '*.deb' | wc -l) packages, $(du -sh "$archives" | cut -f1)"
+    # Saved right after the install, not at the end of the job, so a run whose tests fail still keeps the packages.
+    - uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      if: steps.apt-cache.outputs.cache-hit != 'true'
+      with:
+        path: ${{ runner.temp }}/apt-archives
+        key: ${{ steps.apt-cache.outputs.cache-primary-key }}
