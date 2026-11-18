@@ -255,4 +255,4 @@ Migration ekleyen işler (MFA → oturum süresi) art arda yapılır; RabbitMQ v
   - Yöneticiler MFA ile giriyor; yönetici oturumları kısa süreli.
   - Modüller arası entegrasyon event'leri RabbitMQ üzerinden, kuyruk yokken de doğru çalışıyor; bildirim servisi ayrı süreçte e-posta gönderiyor.
   - Altyapı kod olarak tanımlı ve CI'da doğrulanıyor; taşıma runbook'u ve maliyet tahmini hazır.
-- [ ] P5-R2 Faz 5 geçişi ve `v1.0.0` etiketi (sahip)
+- [x] P5-R2 Faz 5 geçişi (sahip onayı 2026-11-18) ve `v1.0.0` etiketi (sahip talimatıyla bu PR'ın merge commit'inde)
