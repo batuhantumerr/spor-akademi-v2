@@ -26,15 +26,12 @@ env:
   OPENTOFU_SHA256: b34b327cc1ef07178207b6f2cd1f5276537d3e5b7be316500f6dac50d4c0a857
 
 jobs:
-  backend:
+  # The required check `backend` (ruleset) is the aggregator job below: it passes only when backend-checks and every
+  # backend-integration shard passed, so the ruleset does not change when the shards do (#181).
+  backend-checks:
     runs-on: ubuntu-24.04
-    # The integration suite (~740 Testcontainers tests, one API host each, run serially) took 8–13.5 minutes on
-    # hosted runners on 2026-11-10, about two minutes after restore and build; 15 minutes cancelled main (6a47840)
-    # with the suite already passed. By 2026-11-12 the job took ~18 minutes and runner variance pushed some runs
-    # past 25, so 35 leaves headroom without hiding a real hang for long. On 2026-11-17 the suite had grown to
-    # 1800 tests and took ~27 minutes alone (job ~30), and runner variance cancelled PR #180 at 35 (#181).
-    # 50 is a stopgap until the integration suite is sharded.
-    timeout-minutes: 50
+    # Restore, build, format and the unit and architecture tests: ~3 minutes on hosted runners (2026-11-18).
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -54,10 +51,62 @@ jobs:
         run: dotnet build SporAkademi.slnx --no-restore -c Release
       - name: Format
         run: dotnet format SporAkademi.slnx --no-restore --verify-no-changes
-      - name: Test
-        run: dotnet test --solution SporAkademi.slnx --no-build -c Release
+      - name: Unit and architecture tests (every test project but the integration suite)
+        run: |
+          for project in tests/*/*.csproj; do
+            [[ "$project" == */SporAkademi.IntegrationTests.csproj ]] && continue
+            dotnet test --project "$project" --no-build -c Release
+          done
       - name: Model matches migrations
         run: dotnet tool run dotnet-ef migrations has-pending-model-changes --project src/SporAkademi.Infrastructure --startup-project src/SporAkademi.Infrastructure --no-build --configuration Release
+
+  # #181: the integration suite (1119 Testcontainers tests, one API host each, one xUnit collection, so serial) took
+  # ~27 minutes alone on hosted runners on 2026-11-17. It runs in namespace shards (scripts/integration-shard.sh), each
+  # in its own job with its own PostgreSQL container; the last shard takes every namespace the others do not list.
+  backend-integration:
+    name: backend-integration (${{ matrix.shard }}/4)
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
+    # A shard is ~7 minutes of tests plus ~1.5 minutes of restore and build; 20 leaves headroom for runner variance
+    # without hiding a hang for long.
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6.1.0
+        with:
+          global-json-file: global.json
+      # Restore only: backend-checks saves the package cache under the same key.
+      - uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.nuget/packages
+          key: nuget-${{ runner.os }}-${{ hashFiles('**/packages.lock.json', '.config/dotnet-tools.json') }}
+      - name: Restore
+        run: dotnet restore tests/SporAkademi.IntegrationTests --locked-mode
+      - name: Build
+        run: dotnet build tests/SporAkademi.IntegrationTests --no-restore -c Release
+      - name: Integration tests (shard ${{ matrix.shard }} of 4)
+        run: bash scripts/integration-shard.sh "${{ matrix.shard }}/4" --no-build -c Release
+
+  backend:
+    if: always()
+    needs: [backend-checks, backend-integration]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      # always(), not !cancelled(): a skipped required check counts as passed, so this job must run and fail instead.
+      - name: backend-checks and every integration shard passed
+        env:
+          CHECKS: ${{ needs.backend-checks.result }}
+          INTEGRATION: ${{ needs.backend-integration.result }}
+        run: |
+          echo "backend-checks: $CHECKS, backend-integration: $INTEGRATION"
+          test "$CHECKS" = success
+          test "$INTEGRATION" = success
 
   frontend:
     runs-on: ubuntu-24.04

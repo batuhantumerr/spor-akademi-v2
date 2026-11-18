@@ -28,6 +28,21 @@ runs:
       with:
         path: ~/.cache/ms-playwright
         key: playwright-${{ runner.os }}-${{ inputs.browsers }}-${{ hashFiles('web/admin/package-lock.json') }}
+    # The browsers' system packages (apt, ~125 MB for all three) are kept as .deb files: on 2026-11-18 the Ubuntu mirror
+    # served them at ~120 kB/s and the e2e job hit its timeout twice inside this action (#181). The key changes every ISO
+    # week, so Ubuntu's package updates get into the cache; the prefix restore key reuses the previous archive and apt
+    # only downloads what is missing. apt may download as root here (its _apt user cannot reach the runner's
+    # directories) and says so in a notice; that is harmless.
+    - name: Apt archive cache key
+      id: apt-key
+      shell: bash
+      run: echo "week=$(date -u +%G-%V)" >> "$GITHUB_OUTPUT"
+    - uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      id: apt-cache
+      with:
+        path: ${{ runner.temp }}/apt-archives
+        key: playwright-apt-${{ runner.os }}-${{ inputs.browsers }}-${{ steps.apt-key.outputs.week }}
+        restore-keys: playwright-apt-${{ runner.os }}-${{ inputs.browsers }}-
     - name: Throwaway .env (random values, never printed; the runner is discarded)
       shell: bash
       run: |
@@ -55,5 +70,21 @@ runs:
       run: |
         npm ci --no-fund
         npm --prefix ../parent ci --no-fund
+        # apt (run by playwright install-deps) downloads into the cached archive directory and keeps the files there.
+        archives="$RUNNER_TEMP/apt-archives"
+        mkdir -p "$archives/partial"
+        printf 'Dir::Cache::Archives "%s";\nAPT::Keep-Downloaded-Packages "true";\n' "$archives" \
+          | sudo tee /etc/apt/apt.conf.d/99playwright-archives >/dev/null
+        echo "Cached apt archives: $(find "$archives" -maxdepth 1 -name '*.deb' | wc -l) packages"
         # Word splitting on purpose: one argument per browser.
         npx playwright install --with-deps $BROWSERS
+        # Drop packages the mirror no longer has, and hand the files to the runner user so the cache can be saved.
+        sudo apt-get autoclean -qq
+        sudo chown -R "$(id -u):$(id -g)" "$archives"
+        echo "Cached apt archives after install: $(find "$archives" -maxdepth 1 -name '*.deb' | wc -l) packages, $(du -sh "$archives" | cut -f1)"
+    # Saved right after the install, not at the end of the job, so a run whose tests fail still keeps the packages.
+    - uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      if: steps.apt-cache.outputs.cache-hit != 'true'
+      with:
+        path: ${{ runner.temp }}/apt-archives
+        key: ${{ steps.apt-cache.outputs.cache-primary-key }}
