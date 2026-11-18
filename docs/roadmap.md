@@ -251,7 +251,7 @@ Migration ekleyen işler (MFA → oturum süresi) art arda yapılır; RabbitMQ v
 - [x] P5-07 **Son mimari inceleme ve `v1.0.0` retrospektifi.** Modül sınırları, kararların geriye dönük değerlendirmesi, "neyi farklı yapardık", açık teknik borç listesi. (DEC-660 – DEC-669; DEC-660 – DEC-663 kullanıldı; [v1-mimari-inceleme.md](v1-mimari-inceleme.md))
 
 ### Sürüm hazırlığı
-- [ ] P5-R1 **Çıkış kriterlerinin doğrulanması.**
+- [x] P5-R1 **Çıkış kriterlerinin doğrulanması.** ([faz-5-cikis-kriterleri.md](faz-5-cikis-kriterleri.md))
   - Yöneticiler MFA ile giriyor; yönetici oturumları kısa süreli.
   - Modüller arası entegrasyon event'leri RabbitMQ üzerinden, kuyruk yokken de doğru çalışıyor; bildirim servisi ayrı süreçte e-posta gönderiyor.
   - Altyapı kod olarak tanımlı ve CI'da doğrulanıyor; taşıma runbook'u ve maliyet tahmini hazır.
