@@ -1,15 +1,15 @@
 <Project>
   <ItemGroup Label="EF Core and PostgreSQL">
-    <PackageVersion Include="Microsoft.EntityFrameworkCore" Version="10.0.14" />
-    <PackageVersion Include="Microsoft.EntityFrameworkCore.Relational" Version="10.0.14" />
-    <PackageVersion Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.14" />
+    <PackageVersion Include="Microsoft.EntityFrameworkCore" Version="10.0.15" />
+    <PackageVersion Include="Microsoft.EntityFrameworkCore.Relational" Version="10.0.15" />
+    <PackageVersion Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.15" />
     <PackageVersion Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.3" />
     <PackageVersion Include="EFCore.NamingConventions" Version="10.0.1" />
-    <PackageVersion Include="Microsoft.Extensions.Diagnostics.HealthChecks.EntityFrameworkCore" Version="10.0.14" />
+    <PackageVersion Include="Microsoft.Extensions.Diagnostics.HealthChecks.EntityFrameworkCore" Version="10.0.15" />
   </ItemGroup>
   <ItemGroup Label="ASP.NET Core">
-    <PackageVersion Include="Microsoft.AspNetCore.OpenApi" Version="10.0.14" />
-    <PackageVersion Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.0.14" />
+    <PackageVersion Include="Microsoft.AspNetCore.OpenApi" Version="10.0.15" />
+    <PackageVersion Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.0.15" />
     <!-- P3-08 (DEC-401): optional Valkey backplane for SignalR (MIT, StackExchange.Redis is already used by the cache). -->
     <PackageVersion Include="Microsoft.AspNetCore.SignalR.StackExchangeRedis" Version="10.0.15" />
   </ItemGroup>
@@ -17,7 +17,7 @@
     <PackageVersion Include="Hangfire.Core" Version="1.8.25" />
     <PackageVersion Include="Hangfire.NetCore" Version="1.8.25" />
     <PackageVersion Include="Hangfire.AspNetCore" Version="1.8.25" />
-    <PackageVersion Include="RabbitMQ.Client" Version="7.2.1" />
+    <PackageVersion Include="RabbitMQ.Client" Version="7.2.2" />
     <PackageVersion Include="Hangfire.PostgreSql" Version="1.21.1" />
     <!-- Transitive pins: Hangfire.Core asks for Newtonsoft.Json 11.0.1 (GHSA-5crp-9r3c-p9vr). -->
     <PackageVersion Include="Newtonsoft.Json" Version="13.0.4" />
@@ -34,12 +34,12 @@
   </ItemGroup>
   <ItemGroup Label="Caching">
     <PackageVersion Include="Microsoft.Extensions.Caching.Hybrid" Version="10.11.0" />
-    <PackageVersion Include="Microsoft.Extensions.Caching.StackExchangeRedis" Version="10.0.14" />
+    <PackageVersion Include="Microsoft.Extensions.Caching.StackExchangeRedis" Version="10.0.15" />
     <PackageVersion Include="StackExchange.Redis" Version="2.13.23" />
   </ItemGroup>
   <ItemGroup Label="Object storage">
     <!-- DEC-320: S3-compatible client (Apache-2.0); used only behind IDocumentStorage. -->
-    <PackageVersion Include="AWSSDK.S3" Version="4.0.104.11" />
+    <PackageVersion Include="AWSSDK.S3" Version="4.1.0" />
     <!-- P5-06 (DEC-650): Azure Blob Storage behind the same abstraction (MIT); Azure.Identity gives the managed identity credential (MIT). -->
     <PackageVersion Include="Azure.Storage.Blobs" Version="12.30.1" />
     <PackageVersion Include="Azure.Identity" Version="1.21.0" />
@@ -51,30 +51,30 @@
   </ItemGroup>
   <ItemGroup Label="Observability (P4-07, DEC-550)">
     <!-- OpenTelemetry .NET (Apache-2.0): traces and metrics over OTLP; Npgsql's own ActivitySource is used, no extra package. -->
-    <PackageVersion Include="OpenTelemetry.Extensions.Hosting" Version="1.20.1" />
-    <PackageVersion Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" Version="1.20.1" />
-    <PackageVersion Include="OpenTelemetry.Instrumentation.AspNetCore" Version="1.20.2" />
-    <PackageVersion Include="OpenTelemetry.Instrumentation.Http" Version="1.20.2" />
+    <PackageVersion Include="OpenTelemetry.Extensions.Hosting" Version="1.21.0" />
+    <PackageVersion Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" Version="1.21.0" />
+    <PackageVersion Include="OpenTelemetry.Instrumentation.AspNetCore" Version="1.21.0" />
+    <PackageVersion Include="OpenTelemetry.Instrumentation.Http" Version="1.21.0" />
     <!-- Error tracking (MIT); off without Sentry:Dsn (DEC-556). -->
-    <PackageVersion Include="Sentry.AspNetCore" Version="6.12.1" />
+    <PackageVersion Include="Sentry.AspNetCore" Version="6.13.0" />
     <!-- P5-04 (DEC-634): the telemetry and Sentry scrubbing both hosts share lives in Infrastructure; these were transitive already. -->
-    <PackageVersion Include="OpenTelemetry" Version="1.20.1" />
-    <PackageVersion Include="Sentry" Version="6.12.1" />
-    <PackageVersion Include="Serilog" Version="4.3.1" />
+    <PackageVersion Include="OpenTelemetry" Version="1.21.0" />
+    <PackageVersion Include="Sentry" Version="6.13.0" />
+    <PackageVersion Include="Serilog" Version="4.4.0" />
   </ItemGroup>
   <ItemGroup Label="Testing">
-    <PackageVersion Include="OpenTelemetry.Exporter.InMemory" Version="1.20.1" />
+    <PackageVersion Include="OpenTelemetry.Exporter.InMemory" Version="1.21.0" />
     <PackageVersion Include="xunit.v3.mtp-v2" Version="4.0.3" />
     <PackageVersion Include="Shouldly" Version="4.3.0" />
     <PackageVersion Include="NSubstitute" Version="6.2.0" />
-    <PackageVersion Include="coverlet.MTP" Version="10.1.0" />
+    <PackageVersion Include="coverlet.MTP" Version="10.1.1" />
     <PackageVersion Include="Testcontainers.PostgreSql" Version="4.16.0" />
     <PackageVersion Include="Testcontainers.Azurite" Version="4.16.0" />
     <PackageVersion Include="Testcontainers.RabbitMq" Version="4.16.0" />
     <PackageVersion Include="Respawn" Version="7.0.0" />
     <PackageVersion Include="Microsoft.Extensions.TimeProvider.Testing" Version="10.11.0" />
     <PackageVersion Include="NetArchTest.Rules" Version="1.3.2" />
-    <PackageVersion Include="Microsoft.AspNetCore.Mvc.Testing" Version="10.0.14" />
+    <PackageVersion Include="Microsoft.AspNetCore.Mvc.Testing" Version="10.0.15" />
     <PackageVersion Include="Microsoft.AspNetCore.SignalR.Client" Version="10.0.15" />
   </ItemGroup>
 </Project>
