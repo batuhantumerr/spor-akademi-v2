@@ -18,7 +18,7 @@ RUN dotnet tool run dotnet-ef migrations bundle --project src/SporAkademi.Infras
  && dotnet tool run dotnet-ef migrations script --idempotent --project src/SporAkademi.Infrastructure --startup-project src/SporAkademi.Infrastructure \
       --no-build -o /out/migrations.sql
 
-FROM mcr.microsoft.com/dotnet/runtime-deps:10.0.15-noble-chiseled@sha256:40eba5db69594d517c3a61e96bdacc2e3d6f8c99a44b52d55edee844d33518d0
+FROM mcr.microsoft.com/dotnet/runtime-deps:10.0.15-noble-chiseled@sha256:2bb1d484500b032aaafb75e876ffbea135b969d6259cacfcbf18a793e5d6e6ec
 WORKDIR /migrator
 COPY --from=build /out/ ./
 USER $APP_UID
