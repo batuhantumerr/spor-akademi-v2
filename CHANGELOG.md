@@ -6,6 +6,10 @@ Bu dosya [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) biçimini ve [
 
 ### Added
 - **MFA anahtar döndürme, kurtarma kodu yenileme ve e2e kapsamı (V1-03):** TOTP anahtarı döndürülebilir (`Mfa:EncryptionKeyId`, `Mfa:PreviousEncryptionKeys`; `v2.<kimlik>.` biçimi, eski `v1.` hâlâ okunur; başarılı doğrulamada tembel yeniden şifreleme ve günlük `identity-mfa-secret-rotation` işi, kalanı günlüğe yazar; `infra/` değişkenleri ve runbook). Oturumdaki yönetici güncel kodla kurtarma kodlarını yeniler (`POST /me/mfa/recovery-codes`, bildirim e-postası, Güvenlik sayfası). Platform yöneticileri sayfası (`/platform/admins`) başka bir Platform Admin'in MFA'sını sıfırlatır ve bu işlem okulsuz bir denetim girdisi bırakır (`audit.audit_entries.tenant_id` boş olabilir, migration). Sayfa yenilemede süresi dolmuş oturum iletisi gösterilir (ilk ziyarette değil). MFA yaşam döngüsü, Platform Admin sıfırlaması ve oturum süresi için Playwright akışları (DEC-685 – DEC-693).
+- V1-02: ADR-0011 migration ID tutarlılık kontrolü (`scripts/check-migration-ids.sh`, `images` işinde), PR şablonuna migration maddesi ve mimari testler (Audit/Realtime, Domain ve Infrastructure modül sınırları; `Guid.NewGuid`, MediatR/AutoMapper/FluentAssertions ve satır kilidi yasakları) (DEC-680 – DEC-684)
+
+### Changed
+- **Dokümanlar v1.0.0'a getirildi (V1-01, #201):** `docs/proje-dokumani.md` anlık görüntü, modül sayısı (9 iş modülü + Audit, Realtime, Dashboard, Reports), §5.10 (`infra/`, OpenTofu, `apply` yok), §8, §12, Ek F (ADR-0010 kabul, ADR-0012 – ADR-0017 özeti, ADR-0006 "Amended by" notu) ve Ek G (Faz kutuları kaldırıldı, tek kaynak roadmap) düzeltildi; `docs/bulut-altyapisi.md` bildirim worker'ı ve RabbitMQ tüketicisi artık var; Pazartesi onay listesi 143 DEC ve ADR-0014 – ADR-0017 `Proposed`; v1 inceleme #16 ve #20 işaretlendi. Kod değişikliği yok.
 
 ### Fixed
 - CI: `npm audit` picomatch kaydını (GHSA-fc5q-39xc-vjpf) artık raporlamadığı için süreli istisna listesindeki kayıt silindi; bayat kayıt kuralı (DEC-670) bütün PR'ları kırmızıya çeviriyordu. Dependabot `@playwright/test` 1.65.x'i atlar (1.65.1 de aynı reporter hatasını veriyor).

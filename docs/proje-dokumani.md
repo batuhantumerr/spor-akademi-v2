@@ -1,6 +1,6 @@
 # Spor Akademi — Proje Dokümanı (Tek ve Kendine Yeten)
 
-> **Anlık görüntü:** 2026-11-06 · Faz 1 (MVP) devam ediyor · Son sürüm etiketi `v0.0.1`
+> **Anlık görüntü:** 2026-11-27 · Faz 5 tamamlandı · Son sürüm etiketi `v1.0.0` · İlerlemenin tek kaynağı [roadmap.md](roadmap.md)
 >
 > Bu doküman, projeye ait tüm bilgileri tek başına içerir: ürün tanımı ve kullanıcı hikayeleri, domain modeli, gereksinimler, mimari ve mimari kararların gerekçeleri, API sözleşmesi ve hata kodları, karar günlüğünün tamamı, çalışma ve agent kuralları, altyapı, yol haritası ve açık konular. Okumak için başka hiçbir dosyaya ihtiyaç yoktur.
 
@@ -194,7 +194,7 @@ web/parent/                    React (veli uygulaması, Faz 3, ADR-0012)
 ```
 
 - Bağımlılık: `Api → Application, Infrastructure`; `Infrastructure → Application`; `Application → Domain`.
-- Dokuz modül katman projeleri içinde **klasördür**; sınırları mimari testleri korur.
+- Dokuz iş modülü (Tenancy, Identity, Organization, Groups, Students, Enrollments, Attendance, Billing, Announcements) ve bunları destekleyen dört klasör (Audit, Realtime, Dashboard, Reports) `Application` katmanında **klasördür**; toplam 13 klasör. Ayrıca modül olmayan `Abstractions` klasörü ortak altyapıyı (handler arayüzleri, decorator'lar, `Result`/`Error` kullanımı) taşır. Sınırlarını mimari testleri korur (Audit ve Realtime ile Domain/Infrastructure kapsamındaki boşluk için [v1-mimari-inceleme.md](v1-mimari-inceleme.md) bölüm 5, madde 10).
 - Tek `DbContext`, modül başına PostgreSQL şeması (`students.students` vb.).
 - Modüller birbirine sadece `Contracts` (okuma arayüzleri, istisnai senkron komutlar) ve domain event'leriyle erişir; döngüsel bağımlılık yok.
 
@@ -268,9 +268,11 @@ Ek: başka okulun kaydı → `404`; `IgnoreQueryFilters()` sadece `Tenancy`'de; 
 | --- | --- |
 | Yerel | Docker Compose: PostgreSQL 18.6 alpine, Seq; API `scripts/run-api.sh`, Angular `npm start`, veli uygulaması `npm run dev` |
 | CI | GitHub Actions, Linux; Testcontainers ile geçici PostgreSQL |
-| Staging / Production | **Deploy bloğunda, zamanlanmamış** (DEC-094) |
+| Staging / Production | **Deploy bloğunda, zamanlanmamış** (DEC-094). Hiçbir şey çalıştırılmadı; hazırlık `infra/` ve [bulut-altyapisi.md](bulut-altyapisi.md)'de |
 
 Planlanan production yapısı (sunucu alındığında): tek VPS, Caddy (TLS, yönlendirme, HSTS) → nginx (statik admin) ve API; ortam başına ayrı PostgreSQL; Seq sadece SSH tüneliyle; `app.` ve `staging.` alt alan adları.
+
+Faz 5'te bunun bir alternatifi olarak Azure hazırlığı yapıldı (P5-05, P5-06; ADR-0015): `infra/` altında OpenTofu (Terraform dili) modülleri ve `envs/` ile staging/production tanımı: Container Apps (API, admin, veli, Caddy gateway, migrator işi, isteğe bağlı RabbitMQ ve bildirim worker'ı), PostgreSQL Flexible Server, Key Vault, Log Analytics, belge depolama. **`tofu apply` hiç çalıştırılmadı**; bulut hesabı, bölge (ADR-0014), maliyet (~89 USD/ay tahmini) ve alan adı sahipte. Ayrıntı, maliyet ve taşıma: [bulut-altyapisi.md](bulut-altyapisi.md), [bulut-tasima-runbook.md](bulut-tasima-runbook.md). Bildirim worker'ı (`src/SporAkademi.Notifications`, bölüm 5.12) ve RabbitMQ (bölüm 5.11) varsayılan olarak kapalıdır; yerelde compose'un `messaging` profiliyle çalışır.
 
 ### 5.11 Entegrasyon event'leri ve RabbitMQ (ADR-0016, P5-03)
 
@@ -333,6 +335,8 @@ Mimarinin geriye dönük değerlendirmesi (modül sınırları, kararların sonu
 ## 8. Karar günlüğü
 
 Kurallar: kabul edilmiş karar düzenlenmez; değişiklik yeni kararla (`Superseded by`). Agent karar önerir, kabul eden sahiptir.
+
+> Bu tablo DEC-001 – DEC-096'yı içerir. Sonraki kararlar (DEC-099 ve üstü; Faz 5'te DEC-600 – DEC-671) [karar-gunlugu-v2.md](karar-gunlugu-v2.md)'dedir; sahip onayı bekleyenler [pazartesi-onay-listesi.md](pazartesi-onay-listesi.md)'nde toplanır. Faz 5'ten: RabbitMQ DEC-620 – DEC-629, bildirim worker'ı DEC-630 – DEC-639, Azure/OpenTofu DEC-640 – DEC-649.
 
 ### Ürün ve domain
 
@@ -594,16 +598,15 @@ Projede bir öğrenme günlüğü tutulur: her maddeden sonra kendi cümlelerinl
 | 1 — MVP | `v0.1.0` | **Tamamlandı** (P1-40 geçişi ve etiket sahipte) |
 | 2 — İş mantığı derinliği | `v0.2.0` | **Tamamlandı** (geçiş 2026-11-11): Online ödeme, Hangfire, outbox, e-posta, anonimleştirme, MinIO, Redis |
 | 3 — Veli deneyimi | `v0.3.0` | **Tamamlandı** (geçiş 2026-11-13): React PWA, SignalR, dashboard, i18n, WCAG |
-| 4 — Production sağlamlaştırma | `v0.4.0` | **Devam ediyor** (2026-11-13): OWASP, RLS, audit log, KVKK başvuruları, OpenTelemetry, k6, feature flag |
-| 5 — Ölçek ve mimari | `v1.0.0` | RabbitMQ, servis ayırma, Azure, Terraform |
+| 4 — Production sağlamlaştırma | `v0.4.0` | **Tamamlandı** (geçiş 2026-11-16): OWASP, RLS, audit log, KVKK başvuruları, OpenTelemetry, k6, feature flag |
+| 5 — Ölçek ve mimari | `v1.0.0` | **Tamamlandı** (geçiş 2026-11-18): MFA, rol bazlı oturum süresi, RabbitMQ, bildirim worker'ı, Azure için OpenTofu (`apply` yok), son mimari inceleme |
 | Deploy bloğu | — | Zamanlanmamış: sunucu, deploy workflow'u, geri alma provası, production compose + Caddy, şifreli yedek betiği, üçüncü taraf imaj taraması |
 
 ### Faz 1 iterasyonları
 
 1.1 Yapı taşları ve kimlik doğrulama (P1-01 – P1-14) · 1.2 Okul kurulumu ve gruplar (P1-15 – P1-21) · 1.3 Öğrenciler ve kayıt (P1-22 – P1-27) · 1.4 Yoklama (P1-28 – P1-30) · 1.5 Aidat ve duyuru (P1-31 – P1-34) · Sürüm (P1-35 – P1-40).
 
-- **P1-01** Domain yapı taşları: tamamlandı (#68).
-- **P1-02** Value object'ler: ilk PR (#70, `Email`, `PhoneNumber`, `Slug`) açık; `main` bir base imaj açığı (zlib) yüzünden kırmızı, düzeltme bekleniyor. İkinci PR: `Money`, `TimeRange`, `YearMonth`.
+Madde bazında ilerleme [roadmap.md](roadmap.md)'dedir; Faz 1'in bütün maddeleri tamamlandı.
 
 ### Roadmap'e düşülmüş önemli notlar
 
@@ -617,6 +620,8 @@ Projede bir öğrenme günlüğü tutulur: her maddeden sonra kendi cümlelerinl
 ---
 
 ## 13. Açık konular
+
+> Faz 0 dönemi anlık görüntüsüdür; kapananlar ve güncel açık işler için [roadmap.md](roadmap.md) ve GitHub issue'ları esastır.
 
 | Konu | Durum |
 | --- | --- |
@@ -1897,6 +1902,7 @@ Her ADR için: problem, değerlendirilen seçenekler, karar ve bedeli.
 - **Seçenekler (kim):** Harici IdP (sunucu/maliyet, model bölünür) · tam ASP.NET Core Identity (modeli dayatır) · **kendi modülümüz + standart bileşenler**. **(Tarayıcıda saklama):** localStorage (XSS ile çalınır) · **bellek + HttpOnly cookie** · ikisi de cookie (her istek CSRF'e açık) · BFF (ek sunucu).
 - **Karar:** HS256 JWT 15 dk bellekte; opak refresh token SHA-256 hash'iyle, `HttpOnly; Secure; SameSite=Strict`, rotation ve reuse detection; aynı origin; refresh/çıkış `POST` + özel başlık.
 - **Bedeli:** Güvenlik kritik kod bizde; pasif kullanıcı 15 dk erişebilir; faz 5'te asimetrik imzaya geçiş gerekebilir.
+- **Amended by:** DEC-446 (refresh token yeniden kullanımında 30 saniyelik tolerans penceresi; reuse detection bu pencerenin dışında tetiklenir) ve P5-02 (rol bazlı oturum süresi: yönetici rollerinde 12 saat mutlak, 30 dakika hareketsizlik; veli 7 gün kayan / 30 gün mutlak; DEC-610 – DEC-614). Karar metni korunmuştur; geçerli davranış için bu kararlara bakın.
 
 ### ADR-0007 — Result pattern ve ProblemDetails
 
@@ -1919,7 +1925,7 @@ Her ADR için: problem, değerlendirilen seçenekler, karar ve bedeli.
 
 ### ADR-0010 — UI kütüphanesi
 
-Henüz yazılmadı; P1-13'te seçilecek (mobil öncelikli antrenör ekranları).
+- **Karar:** Tailwind CSS v4 + Angular CDK + lucide; grafikler Apache ECharts. **Durum:** Accepted (sahip onayı 2026-11-10). Tam metin: [adr/0010-ui-kutuphanesi.md](adr/0010-ui-kutuphanesi.md).
 
 ### ADR-0011 — Production migration stratejisi
 
@@ -1927,13 +1933,28 @@ Henüz yazılmadı; P1-13'te seçilecek (mobil öncelikli antrenör ekranları).
 - **Karar:** SQL PR'da incelenir; aynı build'den üretilen self-contained bundle migrator imajında, ayrı bir adım olarak migrator kimliğiyle çalışır; sıra yedek → bundle → yeni API → sağlık kontrolü; production'da `Down` yok; her migration önceki API sürümüyle uyumlu (expand–contract).
 - **Bedeli:** İki çıktı (SQL ve bundle) üretilir; CI'da migration ID'leri karşılaştırılarak tutarlılık kontrol edilir.
 
+### ADR-0012 – ADR-0017 (Faz 3 – Faz 5)
+
+Tam metinler `docs/adr/` altındadır; bu tablo yalnız kararı ve durumu özetler. Güncel durum için ADR dosyasının başlığındaki "Durum" satırı esastır.
+
+| ADR | Karar | Durum |
+| --- | --- | --- |
+| [ADR-0012](adr/0012-veli-uygulamasi-teknoloji-yigini.md) | Veli uygulaması React PWA; admin Angular kalır | Accepted (2026-11-11) |
+| [ADR-0013](adr/0013-okul-alt-alan-adi.md) | Okul başına alt alan adı şimdi yapılmaz; tek alan adı, tenant token'dan | Accepted (2026-11-11) |
+| [ADR-0014](adr/0014-veri-konumu.md) | Gerçek verinin barındırma konumu (Türkiye / AB); karar sahipte, gerçek veriden önce verilmeli | Proposed (2026-11-13) |
+| [ADR-0015](adr/0015-altyapi-kodu-araci.md) | Altyapı kodu OpenTofu + `azurerm` (Terraform BSL lisansı nedeniyle değil) | Proposed (2026-11-17) |
+| [ADR-0016](adr/0016-entegrasyon-event-leri-rabbitmq.md) | Entegrasyon event'leri için RabbitMQ; outbox kalır, MassTransit yok | Proposed (2026-11-17) |
+| [ADR-0017](adr/0017-bildirim-worker.md) | E-posta tüketicileri ayrı bir worker'da; SignalR API'de kalır | Proposed (2026-11-17) |
+
 ---
 
 ## Ek G — Yol haritasının maddeleri
 
+> **Not:** Aşağıdaki Faz 0 – Faz 5 listeleri planlama anının kapsamıdır ve ilerleme göstermez; bütün fazlar tamamlandı. Madde bazında güncel durum ve sonradan eklenen maddeler (P4-xx, P5-xx, V1-xx) için tek kaynak [roadmap.md](roadmap.md)'dir. Bu yüzden Faz kutuları kaldırıldı; yalnız Deploy bloğunun kutuları gerçek açık işleri gösterir.
+
 ### Deploy bloğu (zamanlanmamış)
 
-Hiçbir faz geçişi bu bloğa bağlı değildir; sunucu alındığında buradan devam edilir (DEC-094).
+Bu blok hâlâ açıktır (kutular gerçek durumu gösterir). Hiçbir faz geçişi bu bloğa bağlı değildir; sunucu alındığında buradan devam edilir (DEC-094).
 
 - [ ] **P0-30** Sunucu: Hetzner CX33 (olmazsa OVH VPS-2), Cloudflare alan adı ("DNS only"), Caddy ile HTTPS, güvenlik duvarı, root olmayan deploy kullanıcısı, staging ve production; veritabanı rolleri ilk migration'dan önce oluşturulur; `ASPNETCORE_ENVIRONMENT` asla `Development` olmaz; pause senaryosunun Linux'ta yeniden ölçülmesi.
 - [ ] **P0-31** CD: tamamlanan kısımlar GHCR'ye imaj gönderme (#58) ve migrator imajı (#61). Kalan: deploy workflow'u (`main` → staging otomatik, production onayla; sıra yedek → bundle → yeni API → `curl --max-time 10` ile sağlık kontrolü); SQL ve bundle aynı CI job'ında aynı build'den.
@@ -1957,61 +1978,61 @@ Her kullanıcı hikayesi bir **dikey dilim (vertical slice)** olarak geliştiril
 
 #### 4.1 İterasyon 1.1 — Yapı taşları ve kimlik doğrulama
 
-- [x] **P1-01** Domain yapı taşları: `Entity`, `AggregateRoot`, güçlü tipli ID'ler (UUID v7), domain event'leri, `Result` / `Error`
-- [ ] **P1-02** Value object'ler: birim testleriyle `Email`, `PhoneNumber`, `Money`, `TimeRange`, `YearMonth`, `Slug`
-- [ ] **P1-03** Application pipeline'ı: command/query handler arayüzleri; loglama, doğrulama (FluentValidation) ve transaction decorator'ları; Scrutor ile kayıt. Not: loglama eklenince Seq, production compose'a sadece `127.0.0.1`'e bağlı olarak eklenir (Deploy bloğu)
-- [ ] **P1-04** Kalıcılık (persistence) temeli: `DbContext`, entity yapılandırmaları, denetim interceptor'ı, `xmin` eşzamanlılık token'ları, commit sonrası domain event yayını. Not: migrator duman testindeki tablo erişim kontrolünün ilk modül tablosuyla gerçekten çalıştığı kırmızı demoyla gösterilir
-- [ ] **P1-05** Tenancy: JWT'den tenant bağlamı, global query filter'lar, yazma işlemlerinde koruma, `ITenantScoped`
-- [ ] **P1-06** Hata yönetimi: global exception handler, ProblemDetails, doğrulama hatası formatı
-- [ ] **P1-07** Mimari testleri: katman ve modül bağımlılıkları, tenant'a bağlı entity'lerde `TenantId` bulunması (US-02), `IgnoreQueryFilters()` kısıtı, `AllowAnonymous` endpoint listesi (`/health/live` ve `/health/ready` bu listede)
-- [ ] **P1-08** Entegrasyon test altyapısı: `WebApplicationFactory`, Testcontainers PostgreSQL, test verisi builder'ları, iki tenant'lı fixture. Testcontainers yerel ortamla aynı PostgreSQL imajını `compose.yaml`'dan okur; roller migration'lardan önce, init script'iyle oluşturulur; ilk test: `/health/ready` veritabanı varken 200, yokken 503
-- [ ] **P1-09** US-03 Giriş yapma, hesap kilitleme dahil
-- [ ] **P1-10** US-04 Refresh token rotation, tekrar kullanım tespiti, çıkış
-- [ ] **P1-11** US-05 İlk giriş ve şifre değiştirme; admin tarafından şifre sıfırlama
-- [ ] **P1-12** US-01 Platform Admin'in okul ve ilk admin oluşturması; ilk Platform Admin için seed
-- [ ] **P1-13** Angular: uygulama kabuğu, giriş sayfası, token yenilemeli auth interceptor, rol bazlı route guard'lar, role göre layout, `/api` için dev server proxy'si (aynı origin), UI kütüphanesi seçimi (ADR-0010)
-- [ ] **P1-14** OpenAPI dokümanı ve build içinde üretilen Angular API client'ı
+- **P1-01** Domain yapı taşları: `Entity`, `AggregateRoot`, güçlü tipli ID'ler (UUID v7), domain event'leri, `Result` / `Error`
+- **P1-02** Value object'ler: birim testleriyle `Email`, `PhoneNumber`, `Money`, `TimeRange`, `YearMonth`, `Slug`
+- **P1-03** Application pipeline'ı: command/query handler arayüzleri; loglama, doğrulama (FluentValidation) ve transaction decorator'ları; Scrutor ile kayıt. Not: loglama eklenince Seq, production compose'a sadece `127.0.0.1`'e bağlı olarak eklenir (Deploy bloğu)
+- **P1-04** Kalıcılık (persistence) temeli: `DbContext`, entity yapılandırmaları, denetim interceptor'ı, `xmin` eşzamanlılık token'ları, commit sonrası domain event yayını. Not: migrator duman testindeki tablo erişim kontrolünün ilk modül tablosuyla gerçekten çalıştığı kırmızı demoyla gösterilir
+- **P1-05** Tenancy: JWT'den tenant bağlamı, global query filter'lar, yazma işlemlerinde koruma, `ITenantScoped`
+- **P1-06** Hata yönetimi: global exception handler, ProblemDetails, doğrulama hatası formatı
+- **P1-07** Mimari testleri: katman ve modül bağımlılıkları, tenant'a bağlı entity'lerde `TenantId` bulunması (US-02), `IgnoreQueryFilters()` kısıtı, `AllowAnonymous` endpoint listesi (`/health/live` ve `/health/ready` bu listede)
+- **P1-08** Entegrasyon test altyapısı: `WebApplicationFactory`, Testcontainers PostgreSQL, test verisi builder'ları, iki tenant'lı fixture. Testcontainers yerel ortamla aynı PostgreSQL imajını `compose.yaml`'dan okur; roller migration'lardan önce, init script'iyle oluşturulur; ilk test: `/health/ready` veritabanı varken 200, yokken 503
+- **P1-09** US-03 Giriş yapma, hesap kilitleme dahil
+- **P1-10** US-04 Refresh token rotation, tekrar kullanım tespiti, çıkış
+- **P1-11** US-05 İlk giriş ve şifre değiştirme; admin tarafından şifre sıfırlama
+- **P1-12** US-01 Platform Admin'in okul ve ilk admin oluşturması; ilk Platform Admin için seed
+- **P1-13** Angular: uygulama kabuğu, giriş sayfası, token yenilemeli auth interceptor, rol bazlı route guard'lar, role göre layout, `/api` için dev server proxy'si (aynı origin), UI kütüphanesi seçimi (ADR-0010)
+- **P1-14** OpenAPI dokümanı ve build içinde üretilen Angular API client'ı
 
 #### 4.2 İterasyon 1.2 — Okul kurulumu ve gruplar
 
-- [ ] **P1-15** US-06 Branş yönetimi
-- [ ] **P1-16** US-07 Tesis yönetimi
-- [ ] **P1-17** US-08 Antrenör yönetimi (`UserDeactivated` event'i dahil)
-- [ ] **P1-18** US-09 Grup oluşturma
-- [ ] **P1-19** US-10 Çakışma kontrolleriyle haftalık program (`ScheduleConflictChecker`)
-- [ ] **P1-20** US-11 Grubu düzenleme ve arşivleme (`GroupArchived` event'i dahil)
-- [ ] **P1-21** US-12 Antrenör ana ekranı: kendi grupları ve bugünkü antrenmanlar (`SessionCalendar`)
+- **P1-15** US-06 Branş yönetimi
+- **P1-16** US-07 Tesis yönetimi
+- **P1-17** US-08 Antrenör yönetimi (`UserDeactivated` event'i dahil)
+- **P1-18** US-09 Grup oluşturma
+- **P1-19** US-10 Çakışma kontrolleriyle haftalık program (`ScheduleConflictChecker`)
+- **P1-20** US-11 Grubu düzenleme ve arşivleme (`GroupArchived` event'i dahil)
+- **P1-21** US-12 Antrenör ana ekranı: kendi grupları ve bugünkü antrenmanlar (`SessionCalendar`)
 
 #### 4.3 İterasyon 1.3 — Öğrenciler ve kayıt
 
-- [ ] **P1-22** US-13 Öğrenci kaydetme: çocuk ve yetişkin öğrenciler, acil durum kişisi, telefon üzerinden paylaşılan veliler
-- [ ] **P1-23** US-14 Sadece acil durum kişisini gösteren antrenör görünümü ve yanıt contract testi
-- [ ] **P1-24** US-15 Öğrenciyi ayrıldı olarak işaretleme (`StudentLeft` event'i dahil)
-- [ ] **P1-25** US-16 Öğrenci arama ve listeleme: Türkçe karakter duyarsız arama, filtreler, sayfalama
-- [ ] **P1-26** US-17 Öğrenci kaydı (`EnrollmentPolicy`, ADR-0005'e göre eşzamanlılık, eşzamanlılık testi)
-- [ ] **P1-27** US-18 Kaydı sonlandırma
+- **P1-22** US-13 Öğrenci kaydetme: çocuk ve yetişkin öğrenciler, acil durum kişisi, telefon üzerinden paylaşılan veliler
+- **P1-23** US-14 Sadece acil durum kişisini gösteren antrenör görünümü ve yanıt contract testi
+- **P1-24** US-15 Öğrenciyi ayrıldı olarak işaretleme (`StudentLeft` event'i dahil)
+- **P1-25** US-16 Öğrenci arama ve listeleme: Türkçe karakter duyarsız arama, filtreler, sayfalama
+- **P1-26** US-17 Öğrenci kaydı (`EnrollmentPolicy`, ADR-0005'e göre eşzamanlılık, eşzamanlılık testi)
+- **P1-27** US-18 Kaydı sonlandırma
 
 #### 4.4 İterasyon 1.4 — Yoklama
 
-- [ ] **P1-28** US-19 Yoklama alma (antrenmanın tembel oluşturulması, idempotent kaydetme)
-- [ ] **P1-29** US-20 48 saat kuralı ve değişiklik geçmişiyle yoklama düzeltme
-- [ ] **P1-30** US-21 Öğrenci ve grup bazında yoklama geçmişi
+- **P1-28** US-19 Yoklama alma (antrenmanın tembel oluşturulması, idempotent kaydetme)
+- **P1-29** US-20 48 saat kuralı ve değişiklik geçmişiyle yoklama düzeltme
+- **P1-30** US-21 Öğrenci ve grup bazında yoklama geçmişi
 
 #### 4.5 İterasyon 1.5 — Aidatlar (Should) ve duyurular (Could)
 
-- [ ] **P1-31** US-22 Grup başına aylık aidatlar
-- [ ] **P1-32** US-23 Ödeme kaydetme ve iptal etme
-- [ ] **P1-33** US-24 Ödenmemiş borçlar (`DueCalculator`)
-- [ ] **P1-34** US-25 Grup duyuruları (Could; faz geçişinde faz 2'ye taşınabilir)
+- **P1-31** US-22 Grup başına aylık aidatlar
+- **P1-32** US-23 Ödeme kaydetme ve iptal etme
+- **P1-33** US-24 Ödenmemiş borçlar (`DueCalculator`)
+- **P1-34** US-25 Grup duyuruları (Could; faz geçişinde faz 2'ye taşınabilir)
 
 #### 4.6 Sürüm çıkarma
 
-- [ ] **P1-35** Tenant izolasyon test paketi: her endpoint başka bir okulun kullanıcısı olarak çağrılır
-- [ ] **P1-36** Kritik akışlar için uçtan uca testler (Playwright): giriş, grup kurma, kayıt, yoklama alma
-- [ ] **P1-37** MVP güvenlik kontrol listesi: şifre hash'leme, token saklama, CORS, repoda gizli bilgi olmaması, bağımlılık güvenlik açığı taraması ("sadece HTTPS" kontrolü Deploy bloğuna taşındı)
-- [ ] **P1-38** İki okul için gerçekçi demo verisi üreten seed betiği
-- [ ] **P1-39** Sürüm notları ve `CHANGELOG.md`, `v0.1.0` etiketi (production deploy Deploy bloğuna taşındı)
-- [ ] **P1-40** Faz 1 geçişi (geçiş dokümanı), sahip tarafından onaylandı
+- **P1-35** Tenant izolasyon test paketi: her endpoint başka bir okulun kullanıcısı olarak çağrılır
+- **P1-36** Kritik akışlar için uçtan uca testler (Playwright): giriş, grup kurma, kayıt, yoklama alma
+- **P1-37** MVP güvenlik kontrol listesi: şifre hash'leme, token saklama, CORS, repoda gizli bilgi olmaması, bağımlılık güvenlik açığı taraması ("sadece HTTPS" kontrolü Deploy bloğuna taşındı)
+- **P1-38** İki okul için gerçekçi demo verisi üreten seed betiği
+- **P1-39** Sürüm notları ve `CHANGELOG.md`, `v0.1.0` etiketi (production deploy Deploy bloğuna taşındı)
+- **P1-40** Faz 1 geçişi (geçiş dokümanı), sahip tarafından onaylandı
 
 **Çıkış kriterleri**
 
@@ -2029,14 +2050,14 @@ Her kullanıcı hikayesi bir **dikey dilim (vertical slice)** olarak geliştiril
 
 **Kapsam**
 
-- [ ] **P2-F1** Webhook'lar ve idempotency dahil, sandbox modunda bir ödeme sağlayıcısıyla (iyzico) online aidat ödemesi
-- [ ] **P2-F2** Hangfire ile arka plan işleri ve adminler için iş paneli
-- [ ] **P2-F3** Domain event'lerinin güvenilir işlenmesi için transactional outbox
-- [ ] **P2-F4** E-posta bildirimleri: aidat hatırlatmaları, hoş geldin e-postaları, kendi kendine şifre sıfırlama
-- [ ] **P2-F5** Her okulun saklama politikasına göre otomatik anonimleştirme işi
-- [ ] **P2-F6** Tür ve boyut doğrulaması ve süreli bağlantılarla S3 uyumlu depolamaya (MinIO) belge yükleme (sağlık raporu, fotoğraf)
-- [ ] **P2-F7** Okuma ağırlıklı sorgular için Redis ve `HybridCache` ile cache
-- [ ] **P2-F8** Aidat kuralları: kardeş indirimi ve dönem ortasında aidat değişikliği (geçişte detaylandırılacak)
+- **P2-F1** Webhook'lar ve idempotency dahil, sandbox modunda bir ödeme sağlayıcısıyla (iyzico) online aidat ödemesi
+- **P2-F2** Hangfire ile arka plan işleri ve adminler için iş paneli
+- **P2-F3** Domain event'lerinin güvenilir işlenmesi için transactional outbox
+- **P2-F4** E-posta bildirimleri: aidat hatırlatmaları, hoş geldin e-postaları, kendi kendine şifre sıfırlama
+- **P2-F5** Her okulun saklama politikasına göre otomatik anonimleştirme işi
+- **P2-F6** Tür ve boyut doğrulaması ve süreli bağlantılarla S3 uyumlu depolamaya (MinIO) belge yükleme (sağlık raporu, fotoğraf)
+- **P2-F7** Okuma ağırlıklı sorgular için Redis ve `HybridCache` ile cache
+- **P2-F8** Aidat kuralları: kardeş indirimi ve dönem ortasında aidat değişikliği (geçişte detaylandırılacak)
 
 **Çıkış kriterleri (taslak):** bir veli sandbox sağlayıcısı üzerinden bir aidatı uçtan uca ödeyebilir; başarısız bir webhook çift tahsilat olmadan yeniden denenir; anonimleştirme zamanında çalışır ve her çalışma loglanır.
 
@@ -2050,13 +2071,13 @@ Her kullanıcı hikayesi bir **dikey dilim (vertical slice)** olarak geliştiril
 
 **Kapsam**
 
-- [ ] **P3-F1** Davet akışıyla veli hesapları
-- [ ] **P3-F2** PWA olarak React veli uygulaması: çocuklar, programlar, yoklama, borçlar, online ödeme
-- [ ] **P3-F3** SignalR ile gerçek zamanlı duyurular ve yoklama güncellemeleri
-- [ ] **P3-F4** Admin dashboard'ları: devam oranları, doluluk, gelir
-- [ ] **P3-F5** Her iki istemcide çoklu dil (Türkçe ve İngilizce)
-- [ ] **P3-F6** Önemli ekranların erişilebilirlik denetimi (WCAG 2.2 AA)
-- [x] **P3-F7** Okul başına alt alan adının değerlendirilmesi (karar ADR olarak kaydedilir)
+- **P3-F1** Davet akışıyla veli hesapları
+- **P3-F2** PWA olarak React veli uygulaması: çocuklar, programlar, yoklama, borçlar, online ödeme
+- **P3-F3** SignalR ile gerçek zamanlı duyurular ve yoklama güncellemeleri
+- **P3-F4** Admin dashboard'ları: devam oranları, doluluk, gelir
+- **P3-F5** Her iki istemcide çoklu dil (Türkçe ve İngilizce)
+- **P3-F6** Önemli ekranların erişilebilirlik denetimi (WCAG 2.2 AA)
+- **P3-F7** Okul başına alt alan adının değerlendirilmesi (karar ADR olarak kaydedilir)
 
 ---
 
@@ -2068,14 +2089,14 @@ Her kullanıcı hikayesi bir **dikey dilim (vertical slice)** olarak geliştiril
 
 **Kapsam**
 
-- [ ] **P4-F1** OWASP Top 10'a göre güvenlik incelemesi; güvenlik başlıkları; rate limiting
-- [ ] **P4-F2** Tenant izolasyonunun ikinci katmanı olarak PostgreSQL Row Level Security
-- [ ] **P4-F3** Kişisel verilere erişim ve değişikliklerin audit log'u
-- [ ] **P4-F4** KVKK ilgili kişi başvuruları: bir kişinin verisini dışa aktarma ve silme
-- [ ] **P4-F5** OpenTelemetry ile gözlemlenebilirlik: trace, metrik, log, dashboard ve alarmlar; Sentry ile hata takibi
-- [ ] **P4-F6** k6 ile yük testi; N+1 sorgu ve eksik index düzeltmeleri; performans bütçesi
-- [ ] **P4-F7** Yedekten geri yükleme tatbikatı; belgelenmiş kurtarma süresi
-- [ ] **P4-F8** Kademeli yayın için feature flag'ler
+- **P4-F1** OWASP Top 10'a göre güvenlik incelemesi; güvenlik başlıkları; rate limiting
+- **P4-F2** Tenant izolasyonunun ikinci katmanı olarak PostgreSQL Row Level Security
+- **P4-F3** Kişisel verilere erişim ve değişikliklerin audit log'u
+- **P4-F4** KVKK ilgili kişi başvuruları: bir kişinin verisini dışa aktarma ve silme
+- **P4-F5** OpenTelemetry ile gözlemlenebilirlik: trace, metrik, log, dashboard ve alarmlar; Sentry ile hata takibi
+- **P4-F6** k6 ile yük testi; N+1 sorgu ve eksik index düzeltmeleri; performans bütçesi
+- **P4-F7** Yedekten geri yükleme tatbikatı; belgelenmiş kurtarma süresi
+- **P4-F8** Kademeli yayın için feature flag'ler
 
 ---
 
@@ -2087,10 +2108,10 @@ Her kullanıcı hikayesi bir **dikey dilim (vertical slice)** olarak geliştiril
 
 **Kapsam**
 
-- [ ] **P5-F1** Modüller arası entegrasyon event'leri için RabbitMQ
-- [ ] **P5-F2** Bildirim modülünün ayrı bir servise çıkarılması; ödünleşimlerin belgelenmesi
-- [ ] **P5-F3** Barındırmanın Azure'a taşınması (Container Apps, PostgreSQL Flexible Server)
-- [ ] **P5-F4** Terraform ile infrastructure as code
-- [ ] **P5-F5** Son mimari inceleme ve `v1.0.0` retrospektifi: neyi farklı yapardık
+- **P5-F1** Modüller arası entegrasyon event'leri için RabbitMQ
+- **P5-F2** Bildirim modülünün ayrı bir servise çıkarılması; ödünleşimlerin belgelenmesi
+- **P5-F3** Barındırmanın Azure'a taşınması (Container Apps, PostgreSQL Flexible Server)
+- **P5-F4** Terraform ile infrastructure as code
+- **P5-F5** Son mimari inceleme ve `v1.0.0` retrospektifi: neyi farklı yapardık
 
 ---
