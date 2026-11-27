@@ -10,6 +10,9 @@ locals {
       Jwt__SigningKey        = "jwt-signing-key"
       Mfa__EncryptionKey     = "mfa-encryption-key"
     },
+    # V1-03 (DEC-685): keys that were current once only decrypt, until no secret is stored under them (runbook in
+    # docs/bulut-altyapisi.md). Secret "mfa-encryption-key-<id>" is read as Mfa:PreviousEncryptionKeys:<id>.
+    { for id in var.mfa_previous_key_ids : "Mfa__PreviousEncryptionKeys__${id}" => "mfa-encryption-key-${id}" },
     var.redis_enabled ? { ConnectionStrings__Cache = "conn-cache" } : {},
     # P5-03/P5-04: with the broker, the outbox publishes through it (the API also consumes what the worker does not).
     var.rabbitmq_enabled ? { ConnectionStrings__RabbitMq = "conn-rabbitmq" } : {},
@@ -21,6 +24,8 @@ locals {
     {
       ASPNETCORE_ENVIRONMENT = "Production"
       AllowedHosts           = var.allowed_hosts
+      # V1-03 (DEC-685): names the current key in the stored ciphertext; change it together with mfa-encryption-key.
+      Mfa__EncryptionKeyId = var.mfa_key_id
       # Container Apps' ingress is the proxy the API sees: trust its subnet and nothing else (DEC-507).
       ForwardedHeaders__KnownNetworks__0 = var.apps_subnet_cidr
       # Two proxies in front of the API: the gateway's ingress and Caddy, then the API's own ingress (DEC-651).

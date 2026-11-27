@@ -37,14 +37,17 @@ public enum AuditEntityType
 
 /// <summary>
 /// One audit entry before it is stored. <paramref name="Fields"/> holds field (or query parameter) names, never values;
-/// <paramref name="Reason"/> is a fixed code (e.g. an erasure reason), never free text (DEC-533).
+/// <paramref name="Reason"/> is a fixed code (e.g. an erasure reason), never free text (DEC-533). <paramref name="PlatformLevel"/>
+/// stores the entry without a school, for a record that belongs to none (another Platform Admin, V1-03, DEC-689); without it,
+/// work that has no school records nothing.
 /// </summary>
 public sealed record AuditRecord(
     AuditAction Action,
     AuditEntityType EntityType,
     Guid? EntityId,
     IReadOnlyCollection<string> Fields,
-    string? Reason = null);
+    string? Reason = null,
+    bool PlatformLevel = false);
 
 /// <summary>
 /// Records access to personal data (P4-05). Who (user id and role), when (<see cref="TimeProvider"/>), the school and
