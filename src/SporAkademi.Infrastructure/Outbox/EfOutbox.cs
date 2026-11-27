@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using SporAkademi.Application.Abstractions.Authentication;
 using SporAkademi.Application.Abstractions.Outbox;
 using SporAkademi.Infrastructure.Persistence;
@@ -27,6 +28,17 @@ internal sealed class EfOutbox(AppDbContext dbContext, OutboxMessageTypes types,
         }
 
         var type = types.Get(message.GetType());
-        dbContext.Add(new OutboxMessage(Guid.CreateVersion7(), type.Name, type.Serialize(message), tenantId, clock.GetUtcNow()));
+
+        // V1-04 (DEC-695): the delivery, possibly minutes later in another process, continues the request's trace.
+        string? traceParent = null;
+        string? traceState = null;
+        if (Activity.Current is { IdFormat: ActivityIdFormat.W3C, Id: { Length: <= OutboxMessage.TraceParentMaxLength } id } span)
+        {
+            traceParent = id;
+            var state = span.TraceStateString;
+            traceState = string.IsNullOrEmpty(state) || state.Length > OutboxMessage.TraceStateMaxLength ? null : state;
+        }
+
+        dbContext.Add(new OutboxMessage(Guid.CreateVersion7(), type.Name, type.Serialize(message), tenantId, clock.GetUtcNow(), traceParent, traceState));
     }
 }

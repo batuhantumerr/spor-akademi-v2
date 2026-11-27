@@ -264,4 +264,4 @@ Migration ekleyen işler (MFA → oturum süresi) art arda yapılır; RabbitMQ v
 - [x] V1-01 **Dokümanların v1.0.0'a getirilmesi** (#201).
 - [x] V1-02 **ADR-0011 migration denetimi ve mimari test boşlukları** (#202). (DEC-680 – DEC-684)
 - [ ] V1-03 **MFA anahtar döndürme, kurtarma kodu yenileme ve e2e kapsamı** (#203). (DEC-685 – DEC-694)
-- [ ] V1-04 **Outbox üzerinden istek izinin taşınması** (#204). (DEC-695 – DEC-699)
+- [x] V1-04 **Outbox üzerinden istek izinin taşınması** (#204). (DEC-695 – DEC-699)
