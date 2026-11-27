@@ -1,4 +1,5 @@
 using System.Text.RegularExpressions;
+using DotNet.Testcontainers.Builders;
 using DotNet.Testcontainers.Configurations;
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
@@ -27,7 +28,7 @@ public sealed partial class DatabaseFixture : IAsyncLifetime
         .WithEnvironment("SPOR_AKADEMI_DB", Database)
         .WithEnvironment("SPOR_AKADEMI_MIGRATOR_PASSWORD", MigratorPassword)
         .WithEnvironment("SPOR_AKADEMI_APP_PASSWORD", AppPassword)
-        .WithResourceMapping(File.ReadAllBytes(Path.Combine(AppContext.BaseDirectory, "Infrastructure", "10-create-roles.sh")), "/docker-entrypoint-initdb.d/10-create-roles.sh", fileMode: Unix.FileMode755)
+        .WithResourceMapping(File.ReadAllBytes(Path.Combine(AppContext.BaseDirectory, "Infrastructure", "10-create-roles.sh")), FilePath.Of("/docker-entrypoint-initdb.d/10-create-roles.sh"), fileMode: Unix.FileMode755)
         .Build();
 
     private Respawner? _respawner;

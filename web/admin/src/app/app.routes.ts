@@ -62,6 +62,13 @@ export const routes: Routes = [
               import('./features/platform/school-detail.page').then((m) => m.SchoolDetailPage),
           },
           {
+            // V1-03 (DEC-688): resetting another Platform Admin's two-step verification.
+            path: 'admins',
+            title: () => ui.nav.platformAdmins,
+            loadComponent: () =>
+              import('./features/platform/platform-admins.page').then((m) => m.PlatformAdminsPage),
+          },
+          {
             path: 'jobs',
             title: () => ui.nav.jobs,
             loadComponent: () => import('./features/platform/jobs.page').then((m) => m.JobsPage),

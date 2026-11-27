@@ -92,6 +92,12 @@ internal sealed class UserRepository(AppDbContext dbContext) : IUserRepository
                 });
     }
 
+    public async Task<IReadOnlyList<User>> ListPlatformAdminsAsync(CancellationToken cancellationToken) =>
+        await dbContext.Set<User>().AsNoTracking()
+            .Where(u => u.Role == UserRole.PlatformAdmin && u.TenantId == null)
+            .OrderBy(u => u.LastName).ThenBy(u => u.FirstName).ThenBy(u => u.Id)
+            .ToListAsync(cancellationToken);
+
     public async Task<IReadOnlySet<Guid>> GetActiveCoachIdsAsync(SchoolId schoolId, IReadOnlyCollection<Guid> coachIds, CancellationToken cancellationToken)
     {
         var ids = coachIds.Select(UserId.From).ToList();

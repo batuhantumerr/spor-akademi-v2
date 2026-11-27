@@ -92,6 +92,13 @@ export const BACKGROUND_REFRESH_WINDOW_MS = 10 * 60 * 1000;
 /** User interactions that count as activity; no event is read, only its time. */
 const ACTIVITY_EVENTS = ['pointerdown', 'keydown', 'touchstart', 'wheel'] as const;
 
+/**
+ * V1-03 (DEC-690): set while this browser holds a session it did not end on purpose. The refresh cookie is HttpOnly and
+ * gone when it expires, so the server answers a first visit and an expired session alike (`Auth.SessionExpired`); only this
+ * flag tells them apart. It holds no personal data (just "1") and is removed at logout, expiry and once the notice is shown.
+ */
+export const SIGNED_IN_FLAG = 'sa-signed-in';
+
 /** Marks requests that must not get a bearer token or trigger a refresh retry. */
 export const SKIP_AUTH = new HttpContextToken<boolean>(() => false);
 
@@ -119,6 +126,17 @@ export class AuthService {
   private sessionEpoch = 0;
   /** Settles when the startup restore (and its refresh call) has finished; null when none is running. */
   private bootRestore: Promise<void> | null = null;
+
+  /** Why the startup refresh was refused (the problem code), or null while it was not (V1-03). */
+  private startupRejection: string | null = null;
+  private readonly expiredNoticePending = signal(false);
+
+  /**
+   * True after a reload found the session over because it ran out (idle or absolute limit), not on a plain first visit
+   * (V1-03, DEC-690). The sign-in page shows the "session expired" notice once and calls
+   * {@link acknowledgeExpiredNotice}.
+   */
+  readonly expiredNotice = this.expiredNoticePending.asReadonly();
 
   readonly user = this.currentUser.asReadonly();
   readonly isAuthenticated = computed(() => this.currentUser() !== null);
@@ -266,6 +284,8 @@ export class AuthService {
    */
   restoreAtBoot(waitMs: number): Promise<boolean> {
     return new Promise<boolean>((resolve) => {
+      const epoch = this.sessionEpoch;
+      this.startupRejection = null;
       let late = false;
       let settle!: () => void;
       const settled = new Promise<void>((done) => (settle = done));
@@ -290,6 +310,10 @@ export class AuthService {
           } else if (restored) {
             // restore() only reports true while its epoch is current, i.e. no login or logout happened since.
             this.leaveLoginPage();
+          }
+
+          if (!restored && epoch === this.sessionEpoch) {
+            this.noteStartupFailure();
           }
         });
     });
@@ -350,6 +374,7 @@ export class AuthService {
         }
         if (epoch === this.sessionEpoch) {
           this.clear();
+          this.startupRejection = problemCode(error);
         }
         return of(null);
       }),
@@ -381,6 +406,7 @@ export class AuthService {
     return defer(() => {
       // End the local session first so an in-flight refresh cannot bring it back.
       this.endSession();
+      setSignedInFlag(false);
       return this.http.post<void>('/api/v1/auth/logout', null, {
         headers: ajaxHeaders(),
         context: skipAuth(),
@@ -401,11 +427,18 @@ export class AuthService {
    */
   forgetSession(): void {
     this.endSession();
+    setSignedInFlag(false);
+  }
+
+  /** The sign-in page showed the expired notice. */
+  acknowledgeExpiredNotice(): void {
+    this.expiredNoticePending.set(false);
   }
 
   /** Clears local state after an unrecoverable 401; the user comes back to where they were. */
   expireSession(): void {
     this.endSession();
+    setSignedInFlag(false);
     const current = this.router.url;
     const returnUrl =
       current && current !== '/' && !current.startsWith('/login') ? current : undefined;
@@ -443,6 +476,7 @@ export class AuthService {
       tap((user) => {
         if (epoch === this.sessionEpoch) {
           this.currentUser.set(user);
+          setSignedInFlag(true);
         }
       }),
       catchError((error: unknown) => {
@@ -470,8 +504,25 @@ export class AuthService {
     void this.router.navigateByUrl(target);
   }
 
+  /**
+   * The startup restore ended without a session. A refusal of the cookie settles whether the "session expired" notice is
+   * due: only for `Auth.SessionExpired` in a browser that had a session (V1-03, DEC-690). A network or server error
+   * settles nothing: the flag stays for the next start.
+   */
+  private noteStartupFailure(): void {
+    if (this.startupRejection === null) {
+      return;
+    }
+    const expired = this.startupRejection === 'Auth.SessionExpired' && hasSignedInFlag();
+    setSignedInFlag(false);
+    if (expired) {
+      this.expiredNoticePending.set(true);
+    }
+  }
+
   private refuseParent(): Observable<never> {
     this.endSession();
+    setSignedInFlag(false);
     const refused = new HttpErrorResponse({
       status: 403,
       error: { code: 'ParentAccount.UseParentApp' },
@@ -551,6 +602,34 @@ export function sameSubject(token: string, userId: string): boolean {
     return typeof sub === 'string' && sub.toLowerCase() === userId.toLowerCase();
   } catch {
     return false;
+  }
+}
+
+/** The problem code of an API error response, or null. */
+function problemCode(error: unknown): string | null {
+  const code = (
+    error instanceof HttpErrorResponse ? (error.error as { code?: unknown } | null) : null
+  )?.code;
+  return typeof code === 'string' ? code : 'unknown';
+}
+
+function hasSignedInFlag(): boolean {
+  try {
+    return localStorage.getItem(SIGNED_IN_FLAG) === '1';
+  } catch {
+    return false; // Storage blocked: no notice, never an error.
+  }
+}
+
+function setSignedInFlag(on: boolean): void {
+  try {
+    if (on) {
+      localStorage.setItem(SIGNED_IN_FLAG, '1');
+    } else {
+      localStorage.removeItem(SIGNED_IN_FLAG);
+    }
+  } catch {
+    // Storage blocked: the notice is a convenience.
   }
 }
 

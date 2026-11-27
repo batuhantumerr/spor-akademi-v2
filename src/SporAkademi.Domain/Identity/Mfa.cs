@@ -36,6 +36,9 @@ public enum MfaNotice
     /// <summary>A Platform Admin removed it (a lost phone).</summary>
     Reset,
     RecoveryCodeUsed,
+
+    /// <summary>The owner replaced all recovery codes (V1-03, DEC-687).</summary>
+    RecoveryCodesRegenerated,
 }
 
 /// <summary>
@@ -91,6 +94,9 @@ public sealed class MfaCredential : Entity<MfaCredentialId>
         CreatedAt = now;
         LastUsedStep = null;
     }
+
+    /// <summary>The same secret under another key (V1-03): neither the enrolment nor the replay guard changes.</summary>
+    internal void ReplaceCiphertext(string secretCiphertext) => SecretCiphertext = secretCiphertext;
 
     internal bool TryAcceptStep(long step)
     {
