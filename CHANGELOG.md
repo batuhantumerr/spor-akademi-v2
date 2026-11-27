@@ -6,6 +6,8 @@ Bu dosya [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) biçimini ve [
 
 ### Changed
 - **Dokümanlar v1.0.0'a getirildi (V1-01, #201):** `docs/proje-dokumani.md` anlık görüntü, modül sayısı (9 iş modülü + Audit, Realtime, Dashboard, Reports), §5.10 (`infra/`, OpenTofu, `apply` yok), §8, §12, Ek F (ADR-0010 kabul, ADR-0012 – ADR-0017 özeti, ADR-0006 "Amended by" notu) ve Ek G (Faz kutuları kaldırıldı, tek kaynak roadmap) düzeltildi; `docs/bulut-altyapisi.md` bildirim worker'ı ve RabbitMQ tüketicisi artık var; Pazartesi onay listesi 143 DEC ve ADR-0014 – ADR-0017 `Proposed`; v1 inceleme #16 ve #20 işaretlendi. Kod değişikliği yok.
+### Fixed
+- CI: `npm audit` picomatch kaydını (GHSA-fc5q-39xc-vjpf) artık raporlamadığı için süreli istisna listesindeki kayıt silindi; bayat kayıt kuralı (DEC-670) bütün PR'ları kırmızıya çeviriyordu. Dependabot `@playwright/test` 1.65.x'i atlar (1.65.1 de aynı reporter hatasını veriyor).
 
 ## [1.0.0] - 2026-11-18
 
