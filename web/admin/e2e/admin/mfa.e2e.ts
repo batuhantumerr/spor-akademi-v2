@@ -104,13 +104,21 @@ test('a platform admin signs in with a password and a code computed from the set
   await expect(page.getByLabel('Doğrulama kodu')).toBeVisible();
 
   // The next time step: the server accepts one either side of its own, and the setup's own code is spent.
-  const verified = page.waitForResponse(
-    (r) => r.url().endsWith('/api/v1/auth/mfa/verify') && r.request().method() === 'POST',
-  );
+  // The body is read on its way to the page (passed on unchanged): after the app navigates away the browser no longer
+  // keeps it (as signIn in support/ui.ts does).
+  let verifiedToken: string | undefined;
+  await page.route('**/api/v1/auth/mfa/verify', async (route) => {
+    const response = await route.fetch();
+    if (response.ok())
+      verifiedToken = ((await response.json()) as { accessToken: string }).accessToken;
+    await route.fulfill({ response });
+  });
   await page.getByLabel('Doğrulama kodu').fill(totpCode(secret, 1));
   await page.getByRole('button', { name: 'Doğrula' }).click();
-  platformToken = ((await (await verified).json()) as { accessToken: string }).accessToken;
   await expect(page).toHaveURL(/\/platform\/schools$/);
+  await page.unroute('**/api/v1/auth/mfa/verify');
+  expect(verifiedToken).toBeTruthy();
+  platformToken = verifiedToken!;
 
   // Two-step verification is mandatory for this role: the security page says so and offers no way to turn it off.
   await page.getByRole('link', { name: 'Güvenlik' }).click();
