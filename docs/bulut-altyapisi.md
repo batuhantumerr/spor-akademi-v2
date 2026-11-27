@@ -27,7 +27,7 @@ flowchart LR
       parent[parent: nginx]
       mig[[migrator: Container Apps Job, elle]]
       mq[rabbitmq: P5-04, isteğe bağlı]
-      nw[notifications: P5-04 yer tutucu]
+      nw[notifications: P5-04, isteğe bağlı]
     end
     pg[(PostgreSQL Flexible Server 18, B1ms, özel erişim)]
     blob[(Storage: documents, P5-06)]
@@ -79,7 +79,7 @@ flowchart LR
 | `gateway` | apps | Tek dış giriş. `/healthz` yanıtlar, `/health/*` yolunu dışarıya `404` verir. |
 | `migrator` işi | apps | Container Apps Job, elle tetiklenir (`az containerapp job start`). `ConnectionStrings__Migrator` Key Vault'tan. Bir API sürümünden önce çalıştırılır (migrator imajı, ADR-0011). |
 | `rabbitmq` | apps | Yalnız `enable_rabbitmq`. Tek kopya, Azure Files, iç TCP giriş (5672). |
-| `notifications` | apps | P5-04 işçisi için yer tutucu; `enable_notifications_worker` kapalı. |
+| `notifications` | apps | P5-04 bildirim worker'ı (`src/SporAkademi.Notifications`, kendi imajı, `/health/live` ve `/health/ready` sondaları). Yalnız `enable_notifications_worker` ile oluşur, varsayılan kapalı; `conn-rabbitmq` ve RabbitMQ gerektirir. |
 
 İmajlar CI'ın GHCR'ye bastığı `ghcr.io/<sahip>/spor-akademi-v2-{api,migrator,admin,parent}:<commit SHA>` adreslerinden gelir;
 `latest` kullanılmaz (`image_tag` zorunlu). Paketler özelse `registry_username` verilir ve `ghcr-pull-token` sırrı gerekir.
@@ -165,7 +165,7 @@ kullanıp staging'i VPS'te tutmak, (c) Azure'dan vazgeçip aynı kodu başka bir
   Azure'daki aynısı ve yönetilen hizmet kazancı yok. Container Apps compose'taki yapıya en yakınıdır ve 0'a iner.
 - **PostgreSQL B1ms Burstable:** yük testi (docs/performans.md) tek kopya için yeterli bir tabana işaret etti; B1ms ve 32 GB
   başlangıçtır, `postgres_sku_name` ile büyür. CPU kredisi biterse yavaşlar; production'da bu izlenmeli (bölüm 9).
-- **Redis varsayılan kapalı** (aşağıda). **RabbitMQ varsayılan kapalı:** tüketicisi (P5-04) henüz yok.
+- **Redis varsayılan kapalı** (aşağıda). **RabbitMQ varsayılan kapalı:** tüketici P5-03/P5-04 ile var (API'de outbox tüketicileri, e-postalar için bildirim worker'ı); ama `enable_rabbitmq` ve `enable_notifications_worker` bayrakları sahip kararına kadar kapalı kalır, kapalıyken her şey API sürecinde çalışır.
 
 ## 6. Veri konumu ve KVKK (ADR-0014)
 
