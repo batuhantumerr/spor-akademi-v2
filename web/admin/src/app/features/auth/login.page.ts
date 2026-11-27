@@ -1,4 +1,11 @@
-import { ChangeDetectionStrategy, Component, ElementRef, inject, signal } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  ElementRef,
+  effect,
+  inject,
+  signal,
+} from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import {
@@ -297,6 +304,17 @@ export class LoginPage {
   });
   /** Set once the first enrolment completed the login; the page waits behind the recovery codes. */
   private enrolled: CurrentUser | null = null;
+
+  constructor() {
+    // V1-03 (DEC-690): a reload after an idle or absolute expiry lands here without the ?expired query parameter; the
+    // service says so once. An effect, since the restore may settle after this page is already showing.
+    effect(() => {
+      if (this.auth.expiredNotice()) {
+        this.error.set(errorMessages['Auth.SessionExpired']);
+        this.auth.acknowledgeExpiredNotice();
+      }
+    });
+  }
 
   protected codeRequired(): boolean {
     const c = this.codeForm.controls.code;

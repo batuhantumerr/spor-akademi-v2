@@ -116,6 +116,37 @@ public sealed partial class User
         return Result.Success();
     }
 
+    /// <summary>
+    /// The signed-in owner replaced all recovery codes (V1-03, DEC-687; the caller checked a current code): the old ones,
+    /// used or not, are gone. Sessions stay: the owner is in one, and nothing about the sign-in changed.
+    /// </summary>
+    public Result RegenerateMfaRecoveryCodes(IReadOnlyCollection<string> recoveryCodeHashes, DateTimeOffset now)
+    {
+        ArgumentNullException.ThrowIfNull(recoveryCodeHashes);
+        if (!MfaEnabled)
+        {
+            return Result.Failure(MfaErrors.NotEnabled);
+        }
+
+        _recoveryCodes.Clear();
+        _recoveryCodes.AddRange(recoveryCodeHashes.Select(hash => new MfaRecoveryCode(Id, hash)));
+        Raise(new MfaNoticeRaised(Id, MfaNotice.RecoveryCodesRegenerated));
+        return Result.Success();
+    }
+
+    /// <summary>The same TOTP secret, encrypted under another key (V1-03, DEC-685); a quiet maintenance change.</summary>
+    public Result RewriteMfaSecret(string secretCiphertext)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(secretCiphertext);
+        if (_mfaCredential is null)
+        {
+            return Result.Failure(MfaErrors.EnrollmentNotStarted);
+        }
+
+        _mfaCredential.ReplaceCiphertext(secretCiphertext);
+        return Result.Success();
+    }
+
     /// <summary>The user turned MFA off (the caller checked a current code and that the role may do without it).</summary>
     public Result DisableMfa(DateTimeOffset now)
     {
