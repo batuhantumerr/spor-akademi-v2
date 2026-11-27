@@ -8,6 +8,9 @@ Bu dosya [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) biçimini ve [
 
 - V1-02: ADR-0011 migration ID tutarlılık kontrolü (`scripts/check-migration-ids.sh`, `images` işinde), PR şablonuna migration maddesi ve mimari testler (Audit/Realtime, Domain ve Infrastructure modül sınırları; `Guid.NewGuid`, MediatR/AutoMapper/FluentAssertions ve satır kilidi yasakları) (DEC-680 – DEC-684)
 
+### Fixed
+- CI: `npm audit` picomatch kaydını (GHSA-fc5q-39xc-vjpf) artık raporlamadığı için süreli istisna listesindeki kayıt silindi; bayat kayıt kuralı (DEC-670) bütün PR'ları kırmızıya çeviriyordu. Dependabot `@playwright/test` 1.65.x'i atlar (1.65.1 de aynı reporter hatasını veriyor).
+
 ## [1.0.0] - 2026-11-18
 
 ### Added
