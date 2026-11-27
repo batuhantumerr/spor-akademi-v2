@@ -59,7 +59,7 @@ services:
   # so a .env without RABBITMQ_PASSWORD still works for everything else; the broker itself refuses to start without it.
   # Both ports listen on 127.0.0.1 only. Testcontainers reads this image reference too.
   rabbitmq:
-    image: rabbitmq:4.4.0-management-alpine@sha256:4841f6384ef8313c3594cd3f2e9f40c10805f8a61c45f08a9a5d9ddea8199267
+    image: rabbitmq:4.4.0-management-alpine@sha256:5a0b568efe25b2f0f3bf22a63151aa78a74daea6bf821432010f776bc3050978
     profiles: ["messaging"]
     environment:
       RABBITMQ_DEFAULT_USER: spor_akademi
