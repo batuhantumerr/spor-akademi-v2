@@ -10,9 +10,9 @@ internal static class RepositorySources
     /// <summary>Every <c>.cs</c> file of a <c>src/</c> project, without build output and generated EF migrations.</summary>
     public static IEnumerable<SourceFile> Files(string project)
     {
-        var projectRoot = Path.Combine(Root, "src", project).Replace('\', '/');
+        var projectRoot = Path.Combine(Root, "src", project).Replace('\\', '/');
         var files = Directory.EnumerateFiles(projectRoot, "*.cs", SearchOption.AllDirectories)
-            .Select(path => path.Replace('\', '/'))
+            .Select(path => path.Replace('\\', '/'))
             .Where(path => !path.Contains("/obj/", StringComparison.Ordinal)
                 && !path.Contains("/bin/", StringComparison.Ordinal)
                 && !path.Contains("/Migrations/", StringComparison.Ordinal))

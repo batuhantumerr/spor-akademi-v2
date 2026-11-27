@@ -72,8 +72,7 @@ public sealed class BannedSymbolsRulesTests
         string[] lockedTables = ["students.students", "groups.groups", "enrollments.enrollments"];
         var offenders = AllCode()
             .Where(f => f.Path != "SporAkademi.Infrastructure/Enrollments/EnrollmentsPersistence.cs")
-            .Select(f => (f.Path, Code: string.Join('
-', f.Lines)))
+            .Select(f => (f.Path, Code: string.Join("\n", f.Lines)))
             .Where(f => (f.Code.Contains("FOR UPDATE", StringComparison.OrdinalIgnoreCase) || f.Code.Contains("FOR SHARE", StringComparison.OrdinalIgnoreCase))
                 && lockedTables.Any(t => f.Code.Contains(t, StringComparison.Ordinal)))
             .Select(f => f.Path)
