@@ -44,6 +44,50 @@ public sealed class RabbitMqDeliveryTests(DatabaseFixture database) : RabbitMqOu
     }
 
     [Fact]
+    [Trait("Story", "V1-04")]
+    public async Task The_consumer_span_is_in_the_trace_of_the_request_that_wrote_the_message()
+    {
+        System.Diagnostics.Activity request;
+        using (request = SporAkademi.Application.Abstractions.Observability.AppTelemetry.Source.StartActivity("test.request").ShouldNotBeNull())
+        {
+            await EnqueueAsync();
+        }
+
+        await ProcessAsync();
+
+        await EventuallyAsync(() => { lock (Activities) { return Activities.Any(a => a.OperationName == "messaging.consume"); } }, "the consumer span");
+        System.Diagnostics.Activity publish;
+        System.Diagnostics.Activity consume;
+        lock (Activities)
+        {
+            publish = Activities.Single(a => a.OperationName == "outbox.publish");
+            consume = Activities.Single(a => a.OperationName == "messaging.consume");
+        }
+
+        publish.TraceId.ShouldBe(request.TraceId);
+        publish.ParentSpanId.ShouldBe(request.SpanId);
+        consume.TraceId.ShouldBe(request.TraceId);
+        consume.ParentSpanId.ShouldBe(publish.SpanId);
+    }
+
+    [Fact]
+    [Trait("Story", "V1-04")]
+    public async Task A_message_without_a_stored_context_is_published_and_consumed()
+    {
+        await EnqueueAsync();
+        await using (var connection = new Npgsql.NpgsqlConnection(Database.MigratorConnectionString))
+        {
+            await connection.OpenAsync(Ct);
+            await using var command = new Npgsql.NpgsqlCommand("UPDATE outbox.messages SET trace_parent = NULL, trace_state = NULL", connection);
+            await command.ExecuteNonQueryAsync(Ct);
+        }
+
+        await ProcessAsync();
+
+        await EventuallyAsync(() => !Probe.Deliveries.IsEmpty, "the consumer to handle the message");
+    }
+
+    [Fact]
     public async Task A_message_delivered_twice_is_handled_once()
     {
         await EnqueueAsync();

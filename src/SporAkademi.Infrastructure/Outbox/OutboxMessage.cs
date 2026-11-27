@@ -12,8 +12,10 @@ internal sealed class OutboxMessage
 {
     public const int TypeMaxLength = 200;
     public const int LastErrorMaxLength = 500;
+    public const int TraceParentMaxLength = 55;
+    public const int TraceStateMaxLength = 512;
 
-    public OutboxMessage(Guid id, string type, string payload, Guid? tenantId, DateTimeOffset occurredAt)
+    public OutboxMessage(Guid id, string type, string payload, Guid? tenantId, DateTimeOffset occurredAt, string? traceParent = null, string? traceState = null)
     {
         Id = id;
         Type = type;
@@ -21,6 +23,8 @@ internal sealed class OutboxMessage
         TenantId = tenantId;
         OccurredAt = occurredAt;
         NextAttemptAt = occurredAt;
+        TraceParent = traceParent;
+        TraceState = traceState;
     }
 
     public Guid Id { get; private set; }
@@ -33,6 +37,15 @@ internal sealed class OutboxMessage
     public Guid? TenantId { get; private set; }
 
     public DateTimeOffset OccurredAt { get; private set; }
+
+    /// <summary>
+    /// W3C <c>traceparent</c> of the request that wrote the message (V1-04, DEC-695); <c>null</c> for rows written before
+    /// that or outside any span. Identifiers only, no personal data.
+    /// </summary>
+    public string? TraceParent { get; private set; }
+
+    /// <summary>W3C <c>tracestate</c> that came with <see cref="TraceParent"/>, when there was one.</summary>
+    public string? TraceState { get; private set; }
 
     /// <summary>Failed deliveries so far.</summary>
     public int Attempts { get; private set; }
@@ -88,6 +101,8 @@ internal sealed class OutboxMessageConfiguration : IEntityTypeConfiguration<Outb
         builder.Property(m => m.Type).HasMaxLength(OutboxMessage.TypeMaxLength);
         builder.Property(m => m.Payload).HasColumnType("jsonb");
         builder.Property(m => m.LastError).HasMaxLength(OutboxMessage.LastErrorMaxLength);
+        builder.Property(m => m.TraceParent).HasMaxLength(OutboxMessage.TraceParentMaxLength);
+        builder.Property(m => m.TraceState).HasMaxLength(OutboxMessage.TraceStateMaxLength);
 
         // The processor's claim query: due pending messages in order.
         builder.HasIndex(m => new { m.NextAttemptAt, m.Id })
