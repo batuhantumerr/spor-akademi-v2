@@ -194,7 +194,7 @@ web/parent/                    React (veli uygulaması, Faz 3, ADR-0012)
 ```
 
 - Bağımlılık: `Api → Application, Infrastructure`; `Infrastructure → Application`; `Application → Domain`.
-- Dokuz iş modülü (Tenancy, Identity, Organization, Groups, Students, Enrollments, Attendance, Billing, Announcements) ve bunları destekleyen dört klasör (Audit, Realtime, Dashboard, Reports) `Application` katmanında **klasördür**; toplam 13 klasör. Sınırlarını mimari testleri korur (Audit ve Realtime ile Domain/Infrastructure kapsamındaki boşluk için [v1-mimari-inceleme.md](v1-mimari-inceleme.md) bölüm 5, madde 10).
+- Dokuz iş modülü (Tenancy, Identity, Organization, Groups, Students, Enrollments, Attendance, Billing, Announcements) ve bunları destekleyen dört klasör (Audit, Realtime, Dashboard, Reports) `Application` katmanında **klasördür**; toplam 13 klasör. Ayrıca modül olmayan `Abstractions` klasörü ortak altyapıyı (handler arayüzleri, decorator'lar, `Result`/`Error` kullanımı) taşır. Sınırlarını mimari testleri korur (Audit ve Realtime ile Domain/Infrastructure kapsamındaki boşluk için [v1-mimari-inceleme.md](v1-mimari-inceleme.md) bölüm 5, madde 10).
 - Tek `DbContext`, modül başına PostgreSQL şeması (`students.students` vb.).
 - Modüller birbirine sadece `Contracts` (okuma arayüzleri, istisnai senkron komutlar) ve domain event'leriyle erişir; döngüsel bağımlılık yok.
 
