@@ -18,3 +18,4 @@ Refs: P1-xx, US-xx
 - [ ] Yeni uyarı yok, issue'suz `TODO` yok
 - [ ] OpenAPI ve Angular client güncel
 - [ ] Dokümanlar ve roadmap maddesi bu PR'da güncellendi
+- [ ] Migration varsa: üretilen SQL incelendi (`dotnet ef migrations script --idempotent`), `Down` yok, önceki API sürümüyle uyumlu (expand–contract, ADR-0011)
