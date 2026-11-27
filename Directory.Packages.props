@@ -33,7 +33,7 @@
     <PackageVersion Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.15" />
   </ItemGroup>
   <ItemGroup Label="Caching">
-    <PackageVersion Include="Microsoft.Extensions.Caching.Hybrid" Version="10.11.0" />
+    <PackageVersion Include="Microsoft.Extensions.Caching.Hybrid" Version="11.0.0" />
     <PackageVersion Include="Microsoft.Extensions.Caching.StackExchangeRedis" Version="10.0.14" />
     <PackageVersion Include="StackExchange.Redis" Version="2.13.23" />
   </ItemGroup>
