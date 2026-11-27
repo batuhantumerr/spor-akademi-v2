@@ -188,4 +188,46 @@ public sealed class UserMfaTests
 
         user.MfaChallenges.ShouldBeEmpty();
     }
+
+    [Fact]
+    [Trait("Story", "V1-03")]
+    public void Regenerating_replaces_every_recovery_code_and_raises_a_notice_without_ending_sessions()
+    {
+        var user = Enrolled();
+        user.UseRecoveryCode("hash-0", Now).IsSuccess.ShouldBeTrue();
+        user.ClearDomainEvents();
+        var fresh = Enumerable.Range(0, User.RecoveryCodeCount).Select(i => $"fresh-{i}").ToArray();
+
+        user.RegenerateMfaRecoveryCodes(fresh, Now).IsSuccess.ShouldBeTrue();
+
+        user.RecoveryCodesRemaining.ShouldBe(User.RecoveryCodeCount);
+        user.RecoveryCodes.Select(c => c.CodeHash).ShouldBe(fresh, ignoreOrder: true);
+        user.UseRecoveryCode("hash-1", Now).Error.ShouldBe(MfaErrors.CodeInvalid); // the old ones are gone
+        user.UseRecoveryCode("fresh-1", Now).IsSuccess.ShouldBeTrue();
+        user.DomainEvents.ShouldContain(new MfaNoticeRaised(user.Id, MfaNotice.RecoveryCodesRegenerated));
+    }
+
+    [Fact]
+    [Trait("Story", "V1-03")]
+    public void Regenerating_needs_mfa_to_be_on()
+    {
+        var user = NewAdmin();
+        user.BeginMfaEnrollment("cipher", Now);
+
+        user.RegenerateMfaRecoveryCodes(Hashes(), Now).Error.ShouldBe(MfaErrors.NotEnabled);
+    }
+
+    [Fact]
+    [Trait("Story", "V1-03")]
+    public void Rewriting_the_secret_keeps_the_enrolment_and_the_replay_guard()
+    {
+        var user = Enrolled(); // confirmed with step 100
+
+        user.RewriteMfaSecret("cipher-under-the-new-key").IsSuccess.ShouldBeTrue();
+
+        user.MfaCredential!.SecretCiphertext.ShouldBe("cipher-under-the-new-key");
+        user.MfaEnabled.ShouldBeTrue();
+        user.AcceptMfaStep(100).Error.ShouldBe(MfaErrors.CodeInvalid);
+        user.DomainEvents.ShouldBeEmpty(); // not a change the owner needs to hear about
+    }
 }

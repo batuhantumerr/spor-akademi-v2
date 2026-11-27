@@ -1,23 +1,22 @@
 import {
   ChangeDetectionStrategy,
   Component,
-  ElementRef,
   computed,
   effect,
   inject,
   input,
   output,
   signal,
-  viewChild,
 } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
-import { LucideCircleAlert, LucideCopy, LucideDownload } from '@lucide/angular';
+import { LucideCircleAlert, LucideCopy } from '@lucide/angular';
 import qrcode from 'qrcode-generator';
 import { Observable } from 'rxjs';
 
 import { ApiProblem, problemMessage, toProblem } from '../../core/api/problem';
 import { MfaEnrollmentStart } from '../../core/auth/auth.service';
 import { errorMessages, ui } from '../../core/i18n/tr';
+import { MfaRecoveryCodesComponent } from './mfa-recovery-codes.component';
 
 /** Quiet zone around a QR code, in modules (ISO/IEC 18004 asks for four). */
 const QUIET_ZONE = 4;
@@ -55,7 +54,7 @@ export function groupedSecret(secret: string): string {
 @Component({
   selector: 'app-mfa-setup',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [ReactiveFormsModule, LucideCircleAlert, LucideCopy, LucideDownload],
+  imports: [ReactiveFormsModule, LucideCircleAlert, LucideCopy, MfaRecoveryCodesComponent],
   template: `
     @if (error()) {
       <div
@@ -68,53 +67,7 @@ export function groupedSecret(secret: string): string {
     }
 
     @if (recoveryCodes(); as codes) {
-      <section aria-labelledby="mfa-codes-title">
-        <h2 id="mfa-codes-title" #codesTitle tabindex="-1" class="text-lg font-semibold">
-          {{ text.codesTitle }}
-        </h2>
-        <p class="mt-2 text-sm text-muted-foreground">{{ text.codesIntro }}</p>
-        <ul
-          class="mt-4 grid grid-cols-1 gap-2 rounded-lg border border-border bg-muted/40 p-4 font-mono text-sm sm:grid-cols-2"
-          [attr.aria-label]="text.codesList"
-        >
-          @for (code of codes; track code) {
-            <li>{{ code }}</li>
-          }
-        </ul>
-        <div class="mt-3 flex flex-wrap gap-2">
-          <button type="button" class="btn btn-secondary" (click)="copyCodes(codes)">
-            <svg lucideCopy aria-hidden="true"></svg>{{ text.codesCopy }}
-          </button>
-          <button type="button" class="btn btn-secondary" (click)="downloadCodes(codes)">
-            <svg lucideDownload aria-hidden="true"></svg>{{ text.codesDownload }}
-          </button>
-        </div>
-        <p class="mt-2 min-h-5 text-xs" role="status">
-          @if (copied() === true) {
-            <span class="text-success">{{ text.copied }}</span>
-          } @else if (copied() === false) {
-            <span class="text-destructive">{{ text.copyFailed }}</span>
-          }
-        </p>
-        <label class="mt-4 flex items-start gap-2 text-sm" for="mfa-codes-saved">
-          <input
-            id="mfa-codes-saved"
-            type="checkbox"
-            class="mt-0.5 size-4"
-            [checked]="saved()"
-            (change)="saved.set(!saved())"
-          />
-          <span>{{ text.saved }}</span>
-        </label>
-        <button
-          type="button"
-          class="btn btn-primary mt-4 w-full"
-          [disabled]="!saved()"
-          (click)="finished.emit()"
-        >
-          {{ text.continue }}
-        </button>
-      </section>
+      <app-mfa-recovery-codes [codes]="codes" (finished)="finished.emit()" />
     } @else if (secret(); as start) {
       <p class="text-sm text-muted-foreground">{{ text.intro }}</p>
       @if (qr(); as image) {
@@ -197,7 +150,6 @@ export class MfaSetupComponent {
   protected readonly error = signal<string | null>(null);
   protected readonly busy = signal(false);
   protected readonly copied = signal<boolean | null>(null);
-  protected readonly saved = signal(false);
   protected readonly grouped = computed(() => groupedSecret(this.secret()?.secret ?? ''));
   protected readonly qr = computed(() => {
     const start = this.secret();
@@ -206,7 +158,6 @@ export class MfaSetupComponent {
   protected readonly form = this.formBuilder.nonNullable.group({
     code: ['', Validators.required],
   });
-  private readonly codesTitle = viewChild<ElementRef<HTMLElement>>('codesTitle');
   private started = false;
 
   constructor() {
@@ -221,8 +172,6 @@ export class MfaSetupComponent {
         });
       }
     });
-    // The codes appear in place of the form: move focus to their heading so a screen reader announces them.
-    effect(() => this.codesTitle()?.nativeElement.focus());
   }
 
   protected showRequired(): boolean {
@@ -257,19 +206,6 @@ export class MfaSetupComponent {
 
   protected copySecret(secret: string): Promise<void> {
     return this.copy(secret);
-  }
-
-  protected copyCodes(codes: string[]): Promise<void> {
-    return this.copy(codes.join('\n'));
-  }
-
-  protected downloadCodes(codes: string[]): void {
-    const url = URL.createObjectURL(new Blob([codes.join('\n') + '\n'], { type: 'text/plain' }));
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = this.text.codesFile;
-    link.click();
-    URL.revokeObjectURL(url);
   }
 
   private async copy(value: string): Promise<void> {

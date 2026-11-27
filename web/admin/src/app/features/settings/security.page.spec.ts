@@ -104,6 +104,31 @@ describe('SecurityPage (P5-01)', () => {
     });
   });
 
+  it('regenerates the recovery codes through a dialog, tells the user and reloads (V1-03)', async () => {
+    const dialog = TestBed.inject(Dialog);
+    vi.spyOn(dialog, 'open').mockReturnValue({ closed: of(true) } as never);
+    const success = vi.spyOn(TestBed.inject(ToastService), 'success');
+    await load({ available: true, enabled: true, required: true, recoveryCodesRemaining: 2 });
+
+    button(ui.mfa.settings.regenerate)!.click();
+    await settle(fixture);
+
+    expect(dialog.open).toHaveBeenCalledTimes(1);
+    expect(success).toHaveBeenCalledWith(ui.mfa.settings.regenerated);
+    backend.expectOne('/api/v1/me/mfa').flush({
+      available: true,
+      enabled: true,
+      required: true,
+      recoveryCodesRemaining: 10,
+    });
+  });
+
+  it('offers no regeneration while two-step verification is off', async () => {
+    await load({ available: true, enabled: false, required: false, recoveryCodesRemaining: 0 });
+
+    expect(button(ui.mfa.settings.regenerate)).toBeUndefined();
+  });
+
   it('has no way to turn it off where it is mandatory', async () => {
     await load({ available: true, enabled: true, required: true, recoveryCodesRemaining: 10 });
 
