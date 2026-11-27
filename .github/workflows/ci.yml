@@ -308,6 +308,13 @@ jobs:
           docker run --rm --network smoke \
             -e ConnectionStrings__Migrator="Host=pg;Database=spor_akademi;Username=spor_akademi_migrator;Password=smokemigrator" \
             spor-akademi-migrator:ci
+          # V1-02 (DEC-680): the bundle that just ran, the idempotent SQL script from the same build and the migration
+          # files must carry the same migration IDs (ADR-0011).
+          cid=$(docker create spor-akademi-migrator:ci)
+          docker cp "$cid:/migrator/migrations.sql" "$RUNNER_TEMP/migrations.sql"
+          docker rm "$cid" >/dev/null
+          docker exec pg psql -U postgres -d spor_akademi -At -c 'select migration_id from public.__ef_migrations_history' > "$RUNNER_TEMP/applied-ids.txt"
+          bash scripts/check-migration-ids.sh "$RUNNER_TEMP/migrations.sql" "$RUNNER_TEMP/applied-ids.txt"
           # The app role must not reach the migrations history (ADR-0011).
           denied=$(docker exec pg psql -U postgres -d spor_akademi -At -c "select has_schema_privilege('spor_akademi_app','public','usage')")
           test "$denied" = "f"
