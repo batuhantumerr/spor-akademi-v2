@@ -47,7 +47,7 @@
     "@tailwindcss/postcss": "4.3.5",
     "angular-eslint": "22.8.0",
     "eslint": "^10.15.0",
-    "jsdom": "^30.0.0",
+    "jsdom": "^31.0.1",
     "ng-openapi-gen": "1.1.0",
     "postcss": "8.5.33",
     "prettier": "^3.10.1",
