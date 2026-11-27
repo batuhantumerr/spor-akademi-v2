@@ -261,7 +261,7 @@ Migration ekleyen işler (MFA → oturum süresi) art arda yapılır; RabbitMQ v
 
 `v1.0.0` (2026-11-18) sonrası ADR uyum analizi ve [v1 mimari incelemesinin](v1-mimari-inceleme.md) bölüm 5'indeki yazılımcı işleri (2026-11-27). Sahip kararları (veri konumu, hukuk, bütçe, Deploy bloğu) burada değil, onay listesinde kalır. Yeni kararlar DEC-680'den başlar.
 
-- [ ] V1-01 **Dokümanların v1.0.0'a getirilmesi** (#201).
+- [x] V1-01 **Dokümanların v1.0.0'a getirilmesi** (#201).
 - [ ] V1-02 **ADR-0011 migration denetimi ve mimari test boşlukları** (#202). (DEC-680 – DEC-684)
 - [ ] V1-03 **MFA anahtar döndürme, kurtarma kodu yenileme ve e2e kapsamı** (#203). (DEC-685 – DEC-694)
 - [ ] V1-04 **Outbox üzerinden istek izinin taşınması** (#204). (DEC-695 – DEC-699)
