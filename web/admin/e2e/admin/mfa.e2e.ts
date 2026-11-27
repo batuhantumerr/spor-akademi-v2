@@ -109,7 +109,8 @@ test('a platform admin signs in with a password and a code computed from the set
   let verifiedToken: string | undefined;
   await page.route('**/api/v1/auth/mfa/verify', async (route) => {
     const response = await route.fetch();
-    if (response.ok()) verifiedToken = ((await response.json()) as { accessToken: string }).accessToken;
+    if (response.ok())
+      verifiedToken = ((await response.json()) as { accessToken: string }).accessToken;
     await route.fulfill({ response });
   });
   await page.getByLabel('Doğrulama kodu').fill(totpCode(secret, 1));
