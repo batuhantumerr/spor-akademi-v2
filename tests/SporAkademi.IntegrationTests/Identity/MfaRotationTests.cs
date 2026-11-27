@@ -463,6 +463,21 @@ public sealed class MfaRotationTests(DatabaseFixture database) : IdentityTest(da
     }
 
     [Fact]
+    public async Task The_audit_query_filter_never_returns_entries_without_a_school()
+    {
+        await ExecuteSqlAsync(
+            $"INSERT INTO audit.audit_entries (id, tenant_id, occurred_at, action, entity_type, fields) VALUES ('{Guid.CreateVersion7()}', NULL, now(), 'Update', 'User', ARRAY[]::text[])");
+
+        // No school is current here (the filter's own comparison value is empty): the null-tenant row must not match it.
+        var (filtered, unfiltered) = await AcrossSchoolsAsync(async db => (
+            await db.Set<SporAkademi.Infrastructure.Audit.AuditEntry>().CountAsync(Ct),
+            await db.Set<SporAkademi.Infrastructure.Audit.AuditEntry>().IgnoreQueryFilters().CountAsync(Ct)));
+
+        unfiltered.ShouldBe(1);
+        filtered.ShouldBe(0);
+    }
+
+    [Fact]
     public async Task A_school_scope_cannot_write_an_audit_entry_without_a_school()
     {
         var school = await SeedSchoolAsync();

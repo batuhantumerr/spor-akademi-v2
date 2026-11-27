@@ -79,18 +79,22 @@ internal sealed partial class MfaSecretRotationJob(TenantJobRunner runner, MfaSe
                         catch (CryptographicException)
                         {
                             unreadable++;
+                            attempted.Add(MfaCredentialId.From(row.Id)); // left alone: only these stay out of the next batch
                             continue;
                         }
 
                         var replacement = protector.Protect(row.UserId, secret);
                         var id = MfaCredentialId.From(row.Id);
                         var old = row.SecretCiphertext;
-                        reencrypted += await db.Set<MfaCredential>()
+                        var changed = await db.Set<MfaCredential>()
                             .Where(c => c.Id == id && c.SecretCiphertext == old)
                             .ExecuteUpdateAsync(set => set.SetProperty(c => c.SecretCiphertext, replacement), ct);
+                        reencrypted += changed;
+                        if (changed == 0)
+                        {
+                            attempted.Add(id); // changed under us: not retried in this run
+                        }
                     }
-
-                    attempted.AddRange(batch.Select(r => MfaCredentialId.From(r.Id)));
                 }
 
                 var remaining = await db.Set<MfaCredential>().CountAsync(c => !c.SecretCiphertext.StartsWith(prefix), ct);

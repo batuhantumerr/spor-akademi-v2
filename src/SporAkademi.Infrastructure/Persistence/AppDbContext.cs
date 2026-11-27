@@ -80,7 +80,7 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options, ICurren
 
     private void ApplyAuditEntryFilter(ModelBuilder modelBuilder) =>
         // Not ITenantScoped: an entry may belong to no school (V1-03, DEC-689), which a school's scope never sees.
-        modelBuilder.Entity<Audit.AuditEntry>().HasQueryFilter(entry => entry.TenantId == CurrentTenantId);
+        modelBuilder.Entity<Audit.AuditEntry>().HasQueryFilter(entry => entry.TenantId != null && entry.TenantId == CurrentTenantId);
 
     private void ApplyTenantFilter<TEntity>(ModelBuilder modelBuilder)
         where TEntity : class, ITenantScoped =>
