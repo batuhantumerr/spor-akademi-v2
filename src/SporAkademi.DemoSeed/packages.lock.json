@@ -183,7 +183,7 @@
           "Npgsql.EntityFrameworkCore.PostgreSQL": "[10.0.4, )",
           "OpenTelemetry": "[1.21.0, )",
           "RabbitMQ.Client": "[7.2.2, )",
-          "Sentry": "[6.13.0, )",
+          "Sentry": "[7.0.0, )",
           "Serilog": "[4.4.0, )",
           "SporAkademi.Application": "[1.0.0, )",
           "StackExchange.Redis": "[2.13.23, )"
@@ -377,9 +377,9 @@
       },
       "Sentry": {
         "type": "CentralTransitive",
-        "requested": "[6.13.0, )",
-        "resolved": "6.13.0",
-        "contentHash": "TwgXw4BwBa6gYKJxTEBJWZ0y+MyBDTMzCq8ywYWUEzG9srNmKui4AMcz6vZ9BEsaZYVJxni0EIDHGho+PQXDVA=="
+        "requested": "[7.0.0, )",
+        "resolved": "7.0.0",
+        "contentHash": "aMf7k3poqjVO/Vw1DNxopP9HjCIlfNX3EgJ5pJ8jvwWTYkSXJpkQpERdKwxmQ+WdEkTtkQLdJC4xtsClG/Kk3g=="
       },
       "Serilog": {
         "type": "CentralTransitive",

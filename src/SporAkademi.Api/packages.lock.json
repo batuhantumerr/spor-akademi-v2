@@ -68,11 +68,11 @@
       },
       "Sentry.AspNetCore": {
         "type": "Direct",
-        "requested": "[6.13.0, )",
-        "resolved": "6.13.0",
-        "contentHash": "hoDoMY0PQ79KWyku3oqfMoMZwbOvftU/oqmpKZ3ClmW19tDvHOxRJ89FconrzQfylvCfQuR44rGTuYtaMiT/HA==",
+        "requested": "[7.0.0, )",
+        "resolved": "7.0.0",
+        "contentHash": "EazVsMLxwpVVzMnh7iBzl61YO65zlC519Vg9Iof5CQZgk+QdA6+UedCjD6700BdV2nuFl7SrxiHGtLimXNid7A==",
         "dependencies": {
-          "Sentry.Extensions.Logging": "6.13.0"
+          "Sentry.Extensions.Logging": "7.0.0"
         }
       },
       "Serilog.AspNetCore": {
@@ -305,10 +305,10 @@
       },
       "Sentry.Extensions.Logging": {
         "type": "Transitive",
-        "resolved": "6.13.0",
-        "contentHash": "gPZH1SrQPg2x8er0YU0b3fOoFy3Nng8krbiKBjUqVmDSWRkq0N3LdGJyBBvhmlE2cGcoAwDvYlAe19wjfX+KkQ==",
+        "resolved": "7.0.0",
+        "contentHash": "4i5HwiwmE9GMVphLLy2nPQmVibthyyfiw1DQGIXXwvomwYFxh8JRy9Mwn8cghPx9b8NAEthjnCyD0AZx923Ouw==",
         "dependencies": {
-          "Sentry": "6.13.0"
+          "Sentry": "7.0.0"
         }
       },
       "Serilog.Extensions.Hosting": {
@@ -428,7 +428,7 @@
           "Npgsql.EntityFrameworkCore.PostgreSQL": "[10.0.4, )",
           "OpenTelemetry": "[1.21.0, )",
           "RabbitMQ.Client": "[7.2.2, )",
-          "Sentry": "[6.13.0, )",
+          "Sentry": "[7.0.0, )",
           "Serilog": "[4.4.0, )",
           "SporAkademi.Application": "[1.0.0, )",
           "StackExchange.Redis": "[2.13.23, )"
@@ -622,9 +622,9 @@
       },
       "Sentry": {
         "type": "CentralTransitive",
-        "requested": "[6.13.0, )",
-        "resolved": "6.13.0",
-        "contentHash": "TwgXw4BwBa6gYKJxTEBJWZ0y+MyBDTMzCq8ywYWUEzG9srNmKui4AMcz6vZ9BEsaZYVJxni0EIDHGho+PQXDVA=="
+        "requested": "[7.0.0, )",
+        "resolved": "7.0.0",
+        "contentHash": "aMf7k3poqjVO/Vw1DNxopP9HjCIlfNX3EgJ5pJ8jvwWTYkSXJpkQpERdKwxmQ+WdEkTtkQLdJC4xtsClG/Kk3g=="
       },
       "Serilog": {
         "type": "CentralTransitive",

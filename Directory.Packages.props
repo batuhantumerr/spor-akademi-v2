@@ -56,10 +56,10 @@
     <PackageVersion Include="OpenTelemetry.Instrumentation.AspNetCore" Version="1.21.0" />
     <PackageVersion Include="OpenTelemetry.Instrumentation.Http" Version="1.21.0" />
     <!-- Error tracking (MIT); off without Sentry:Dsn (DEC-556). -->
-    <PackageVersion Include="Sentry.AspNetCore" Version="6.13.0" />
+    <PackageVersion Include="Sentry.AspNetCore" Version="7.0.0" />
     <!-- P5-04 (DEC-634): the telemetry and Sentry scrubbing both hosts share lives in Infrastructure; these were transitive already. -->
     <PackageVersion Include="OpenTelemetry" Version="1.21.0" />
-    <PackageVersion Include="Sentry" Version="6.13.0" />
+    <PackageVersion Include="Sentry" Version="7.0.0" />
     <PackageVersion Include="Serilog" Version="4.4.0" />
   </ItemGroup>
   <ItemGroup Label="Testing">
