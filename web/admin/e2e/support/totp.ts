@@ -38,3 +38,33 @@ export function totpCode(secret: string, stepOffset = 0, now = Date.now()): stri
   const binary = mac.readUInt32BE(offset) & 0x7fffffff;
   return String(binary % 1_000_000).padStart(6, '0');
 }
+
+/**
+ * Hands out codes for one setup key, each for a time step later than the one before (V1-03). The server accepts a step
+ * only once and never an older one than the last, and only within one step either side of its own clock, so a test that
+ * needs several codes in a row takes the earliest usable step and, when that lies more than one step ahead, waits for the
+ * clock to come within reach. A step is 30 seconds: three codes in a row take at most about a minute.
+ */
+export class TotpSequence {
+  private last = Number.NEGATIVE_INFINITY;
+
+  constructor(
+    private readonly secret: string,
+    /** Set when other code already used steps up to this one (unix seconds / 30). */
+    spent?: number,
+  ) {
+    if (spent !== undefined) this.last = spent;
+  }
+
+  async next(): Promise<string> {
+    const now = () => Math.floor(Date.now() / 1000 / STEP_SECONDS);
+    const step = Math.max(this.last + 1, now() - 1);
+    while (step > now() + 1) {
+      const dueAt = (step - 1) * STEP_SECONDS * 1000;
+      await new Promise((resolve) => setTimeout(resolve, Math.max(250, dueAt - Date.now() + 250)));
+    }
+    this.last = step;
+    const at = Date.now();
+    return totpCode(this.secret, step - Math.floor(at / 1000 / STEP_SECONDS), at);
+  }
+}

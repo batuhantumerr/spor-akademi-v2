@@ -3,7 +3,7 @@ import { HttpTestingController, provideHttpClientTesting } from '@angular/common
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { Router, provideRouter } from '@angular/router';
 
-import { CurrentUser } from '../../core/auth/auth.service';
+import { AuthService, CurrentUser, SIGNED_IN_FLAG } from '../../core/auth/auth.service';
 import { errorMessages, ui } from '../../core/i18n/tr';
 import { LoginPage } from './login.page';
 
@@ -188,5 +188,44 @@ describe('LoginPage two-step verification (P5-01)', () => {
       .click();
 
     expect(navigate).toHaveBeenCalledWith('/platform/schools');
+  });
+});
+
+describe('LoginPage expired session notice (V1-03)', () => {
+  beforeEach(() => {
+    Object.defineProperty(window, 'matchMedia', {
+      configurable: true,
+      value: () => ({
+        matches: false,
+        addEventListener: () => undefined,
+        removeEventListener: () => undefined,
+      }),
+    });
+    TestBed.configureTestingModule({
+      imports: [LoginPage],
+      providers: [provideRouter([]), provideHttpClient(), provideHttpClientTesting()],
+    });
+  });
+
+  it('says the session expired once the service found it so on reload, and only then', async () => {
+    const auth = TestBed.inject(AuthService);
+    const fixture = TestBed.createComponent(LoginPage);
+    fixture.detectChanges();
+    const root = fixture.nativeElement as HTMLElement;
+    expect(root.querySelector('[role="alert"]')).toBeNull();
+
+    // The startup restore settles after the page is up, as it can.
+    localStorage.setItem(SIGNED_IN_FLAG, '1');
+    const boot = auth.restoreAtBoot(5000);
+    TestBed.inject(HttpTestingController)
+      .expectOne('/api/v1/auth/refresh')
+      .flush({ code: 'Auth.SessionExpired' }, { status: 401, statusText: 'Unauthorized' });
+    await boot;
+    await settle(fixture);
+
+    expect(root.querySelector('[role="alert"]')?.textContent).toContain(
+      errorMessages['Auth.SessionExpired'],
+    );
+    expect(auth.expiredNotice()).toBe(false); // shown once
   });
 });

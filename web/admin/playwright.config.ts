@@ -162,8 +162,11 @@ export default defineConfig({
         Email__AppBaseUrl: `${appUrl}/`,
         Email__ParentAppBaseUrl: `${parentUrl}/`,
         // P4-02 (DEC-505): every browser of the suite reaches the API from one address and as few users, much faster
-        // than people do (the WCAG audit loads hundreds of screens a minute). The general limits are raised; the
-        // per-endpoint limits (sign-in, refresh, the parent API) stay as in production.
+        // than people do (the WCAG audit loads hundreds of screens a minute). The general limits are raised. The
+        // sign-in/refresh limit is raised too (DEC-701): the MFA flows sign in and refresh more than ten times a minute
+        // from one address across the browser projects; the limit itself is covered by the integration tests
+        // (AuthHardeningTests, LoginTests). The parent API limit stays as in production.
+        RateLimiting__AuthPermitsPerMinute: '100000',
         RateLimiting__UserPermitsPerMinute: '100000',
         RateLimiting__SchoolWritePermitsPerMinute: '100000',
         RateLimiting__AnonymousPermitsPerMinute: '100000',

@@ -15,6 +15,9 @@ public interface IMfaSecretProtector
 
     /// <summary>Throws <see cref="CryptographicException"/> when the ciphertext is not ours, was altered or belongs to another user.</summary>
     byte[] Unprotect(Guid userId, string ciphertext);
+
+    /// <summary>Whether the ciphertext is in the current format under the current key; if not, it is due for re-encryption (V1-03, DEC-685).</summary>
+    bool IsCurrent(string ciphertext);
 }
 
 /// <summary>Which roles must have a second factor (P5-01, DEC-604, DEC-606).</summary>
@@ -57,6 +60,10 @@ internal static class MfaCodes
         var text = Base32.Encode(RandomNumberGenerator.GetBytes(RecoveryCodeBytes));
         return string.Join('-', Enumerable.Range(0, 4).Select(i => text.Substring(i * 4, 4)));
     }
+
+    /// <summary>A full set, shown to the user once.</summary>
+    public static List<string> NewRecoveryCodes() =>
+        [.. Enumerable.Range(0, User.RecoveryCodeCount).Select(_ => NewRecoveryCode())];
 
     /// <summary>What a person types is forgiving: case, spaces and dashes do not matter.</summary>
     public static string Normalize(string? code) =>
@@ -136,7 +143,7 @@ internal sealed class MfaEnrollment(IMfaSecretProtector protector)
             return Result.Failure<MfaRecoveryCodes>(MfaErrors.CodeInvalid);
         }
 
-        var codes = Enumerable.Range(0, User.RecoveryCodeCount).Select(_ => MfaCodes.NewRecoveryCode()).ToList();
+        var codes = MfaCodes.NewRecoveryCodes();
         var confirmed = user.ConfirmMfaEnrollment(step, [.. codes.Select(c => MfaCodes.HashRecoveryCode(user.Id, MfaCodes.Normalize(c)))], now);
         return confirmed.IsSuccess
             ? Result.Success(new MfaRecoveryCodes(codes))
@@ -150,6 +157,18 @@ internal sealed class MfaCodeVerifier(IMfaSecretProtector protector)
     /// <summary>Success uses the code up. <see cref="MfaErrors.CodeInvalid"/> otherwise; the caller counts the failure.</summary>
     public Result Verify(User user, string code, DateTimeOffset now)
     {
+        var normalized = MfaCodes.Normalize(code);
+        return user.MfaCredential is { IsConfirmed: true } && !MfaCodes.LooksLikeTotp(normalized)
+            ? user.UseRecoveryCode(MfaCodes.HashRecoveryCode(user.Id, normalized), now)
+            : VerifyTotp(user, code, now);
+    }
+
+    /// <summary>
+    /// Only a code from the authenticator, never a recovery code (V1-03: regenerating recovery codes proves possession of
+    /// the device). Success uses the step up, and moves a secret that is still under an old key to the current one (DEC-685).
+    /// </summary>
+    public Result VerifyTotp(User user, string code, DateTimeOffset now)
+    {
         if (user.MfaCredential is not { IsConfirmed: true } credential)
         {
             return Result.Failure(MfaErrors.CodeInvalid);
@@ -158,7 +177,7 @@ internal sealed class MfaCodeVerifier(IMfaSecretProtector protector)
         var normalized = MfaCodes.Normalize(code);
         if (!MfaCodes.LooksLikeTotp(normalized))
         {
-            return user.UseRecoveryCode(MfaCodes.HashRecoveryCode(user.Id, normalized), now);
+            return Result.Failure(MfaErrors.CodeInvalid);
         }
 
         var secret = MfaSecrets.TryUnprotect(protector, user.Id, credential.SecretCiphertext);
@@ -167,8 +186,18 @@ internal sealed class MfaCodeVerifier(IMfaSecretProtector protector)
             return Result.Failure(MfaErrors.SecretUnreadable);
         }
 
-        return Totp.TryMatch(secret, normalized, now, out var step)
-            ? user.AcceptMfaStep(step)
-            : Result.Failure(MfaErrors.CodeInvalid);
+        if (!Totp.TryMatch(secret, normalized, now, out var step))
+        {
+            return Result.Failure(MfaErrors.CodeInvalid);
+        }
+
+        var accepted = user.AcceptMfaStep(step);
+        if (accepted.IsSuccess && !protector.IsCurrent(credential.SecretCiphertext))
+        {
+            // Lazily, on a proof that the secret is right: the key can be retired once every active user has signed in (DEC-685).
+            user.RewriteMfaSecret(protector.Protect(user.Id.Value, secret));
+        }
+
+        return accepted;
     }
 }
