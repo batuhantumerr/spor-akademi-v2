@@ -4,6 +4,9 @@ Bu dosya [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) biçimini ve [
 
 ## [Unreleased]
 
+### Added
+- **MFA anahtar döndürme, kurtarma kodu yenileme ve e2e kapsamı (V1-03):** TOTP anahtarı döndürülebilir (`Mfa:EncryptionKeyId`, `Mfa:PreviousEncryptionKeys`; `v2.<kimlik>.` biçimi, eski `v1.` hâlâ okunur; başarılı doğrulamada tembel yeniden şifreleme ve günlük `identity-mfa-secret-rotation` işi, kalanı günlüğe yazar; `infra/` değişkenleri ve runbook). Oturumdaki yönetici güncel kodla kurtarma kodlarını yeniler (`POST /me/mfa/recovery-codes`, bildirim e-postası, Güvenlik sayfası). Platform yöneticileri sayfası (`/platform/admins`) başka bir Platform Admin'in MFA'sını sıfırlatır ve bu işlem okulsuz bir denetim girdisi bırakır (`audit.audit_entries.tenant_id` boş olabilir, migration). Sayfa yenilemede süresi dolmuş oturum iletisi gösterilir (ilk ziyarette değil). MFA yaşam döngüsü, Platform Admin sıfırlaması ve oturum süresi için Playwright akışları (DEC-685 – DEC-693).
+
 ### Fixed
 - CI: `npm audit` picomatch kaydını (GHSA-fc5q-39xc-vjpf) artık raporlamadığı için süreli istisna listesindeki kayıt silindi; bayat kayıt kuralı (DEC-670) bütün PR'ları kırmızıya çeviriyordu. Dependabot `@playwright/test` 1.65.x'i atlar (1.65.1 de aynı reporter hatasını veriyor).
 
