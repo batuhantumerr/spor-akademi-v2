@@ -5,6 +5,8 @@ Bu dosya [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) biçimini ve [
 ## [Unreleased]
 
 ### Added
+- V1-04: outbox satırı mesajı üreten isteğin W3C trace context'ini saklar (`outbox.messages.trace_parent`/`trace_state`, migration `AddOutboxTraceContext`); teslim ve RabbitMQ tüketici span'leri istekle aynı izde, geç teslimler link ile (DEC-695 – DEC-699).
+
 
 - V1-02: ADR-0011 migration ID tutarlılık kontrolü (`scripts/check-migration-ids.sh`, `images` işinde), PR şablonuna migration maddesi ve mimari testler (Audit/Realtime, Domain ve Infrastructure modül sınırları; `Guid.NewGuid`, MediatR/AutoMapper/FluentAssertions ve satır kilidi yasakları) (DEC-680 – DEC-684)
 
