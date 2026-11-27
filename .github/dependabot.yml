@@ -11,6 +11,16 @@ updates:
       # Microsoft.Extensions.Caching / SignalR.StackExchangeRedis 2.x'e karşı derlenmiş; 3.x planlı bir yükseltme (#98).
       - dependency-name: StackExchange.Redis
         update-types: [version-update:semver-major]
+      # .NET 11 is a planned platform upgrade, not a weekly bump: runtime, ASP.NET Core, EF Core, the dotnet-ef tool
+      # and Microsoft.Extensions.* move together (DEC-700).
+      - dependency-name: dotnet-ef
+        update-types: [version-update:semver-major]
+      - dependency-name: "Microsoft.Extensions.*"
+        update-types: [version-update:semver-major]
+      - dependency-name: "Microsoft.AspNetCore.*"
+        update-types: [version-update:semver-major]
+      - dependency-name: "Microsoft.EntityFrameworkCore*"
+        update-types: [version-update:semver-major]
   - package-ecosystem: npm
     directory: /web/admin
     schedule: { interval: weekly, day: monday, time: "06:00", timezone: Europe/Istanbul }
@@ -19,6 +29,9 @@ updates:
     groups:
       npm-minor-and-patch: { update-types: [minor, patch] }
     ignore:
+      # Follows the ASP.NET Core server major (DEC-700).
+      - dependency-name: "@microsoft/signalr"
+        update-types: [version-update:semver-major]
       - dependency-name: "@angular/*"
         update-types: [version-update:semver-major]
       - dependency-name: "@angular-devkit/*"
@@ -44,6 +57,9 @@ updates:
     groups:
       parent-npm-minor-and-patch: { update-types: [minor, patch] }
     ignore:
+      # Follows the ASP.NET Core server major (DEC-700).
+      - dependency-name: "@microsoft/signalr"
+        update-types: [version-update:semver-major]
       # Majors are planned upgrades (ADR-0012), not weekly bumps.
       - dependency-name: react
         update-types: [version-update:semver-major]
