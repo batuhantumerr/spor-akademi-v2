@@ -118,13 +118,17 @@ Bu repoya eklenen her paket ve imaj tek tabloda. Dokümandaki baz listeden gelen
 
 ## 5. Önerilen (Proposed) kararlar
 
-[karar-gunlugu-v2.md](karar-gunlugu-v2.md)'deki bütün `Proposed` kararlar (138 DEC) ve ADR-0010, alanlara göre. Özetler günlükteki ilk cümleden kısaltılmıştır; tam metin ve gerekçe günlüktedir. DEC-097 ve DEC-098 zaten `Accepted`.
+[karar-gunlugu-v2.md](karar-gunlugu-v2.md)'deki bütün `Proposed` kararlar (143 DEC) ve ADR-0014 – ADR-0017, alanlara göre; ADR-0010 sahip onayıyla (2026-11-10) `Accepted` oldu. Özetler günlükteki ilk cümleden kısaltılmıştır; tam metin ve gerekçe günlüktedir. DEC-097 ve DEC-098 zaten `Accepted`.
 
 ### ADR
 
 | ID | Özet |
 | --- | --- |
-| ADR-0010 | Admin arayüzü UI kütüphanesi: Tailwind CSS v4 + Angular CDK + lucide, grafikler Apache ECharts ([adr/0010-ui-kutuphanesi.md](adr/0010-ui-kutuphanesi.md)). |
+| ADR-0010 | **Accepted (2026-11-10).** Admin arayüzü UI kütüphanesi: Tailwind CSS v4 + Angular CDK + lucide, grafikler Apache ECharts ([adr/0010-ui-kutuphanesi.md](adr/0010-ui-kutuphanesi.md)). |
+| ADR-0014 | **Proposed.** Gerçek verinin barındırma konumu (Türkiye / AB); karar sahipte ([adr/0014-veri-konumu.md](adr/0014-veri-konumu.md)). |
+| ADR-0015 | **Proposed.** Altyapı kodu OpenTofu + `azurerm` ([adr/0015-altyapi-kodu-araci.md](adr/0015-altyapi-kodu-araci.md)). |
+| ADR-0016 | **Proposed.** Entegrasyon event'leri için RabbitMQ ([adr/0016-entegrasyon-event-leri-rabbitmq.md](adr/0016-entegrasyon-event-leri-rabbitmq.md)). |
+| ADR-0017 | **Proposed.** Bildirim tüketicileri ayrı worker'da ([adr/0017-bildirim-worker.md](adr/0017-bildirim-worker.md)). |
 
 #### Altyapı, CI ve imajlar
 
@@ -623,7 +627,7 @@ Bulut hesabı yok: her şey yerelde ve CI'da kanıtlandı, Azure'da hiçbir şey
 4. **Yeni tablo `outbox.inbox` (migration `AddInbox`, DEC-623).** Tüketici adı, mesaj ve okul ID'si, zaman; kişisel veri yok; RLS'li platform tablosu; 14 gün saklanır (`RabbitMq:InboxRetention`).
 5. **Sıra garantisi yok (DEC-629).** Mesajlar yalnız ID taşıdığı için bugünkü handler'lar için sorun değil; sıra gerektiren bir tüketici eklenirse yeniden tasarlanır.
 6. **Ölü mektup kuyruğu elle işlenir (DEC-621, DEC-627).** Alarm var; mesajı geri yükleme yönetim arayüzünden (shovel) yapılır. Otomatik yeniden oynatma aracı yok. *Yönetici:* gerekirse küçük bir yönetim komutu eklenebilir.
-7. **Bilinen eksik (DEC-625).** İz, mesajı üreten istekten değil teslim işinden başlıyor; üretici isteğin iz bağlamını outbox satırına yazmak migration ister.
+7. **Bilinen eksik (DEC-625), V1-04 ile kapandı (DEC-695 – DEC-699).** İz artık mesajı üreten istekten başlar.
 ### P5-04 Bildirim modülünün ayrı servise çıkarılması (DEC-630 – DEC-639, ADR-0017)
 
 1. **Yalnız e-posta ayrıldı, yeni paket yok.** Yedi e-posta handler'ı `notifications` grubunda; worker (`src/SporAkademi.Notifications`) yalnız onları RabbitMQ'dan tüketir. Gerçek zamanlı push'lar API'de (hub orada, DEC-637). *Yönetici:* kullanıcıya görünen bir değişiklik yok; kazanç hata yalıtımı (yavaş ya da çöken SMTP API'yi tutmaz) ve e-postayı ayrı ölçeklemek, bedel ek bir sürekli açık konteyner ve ek işletme yükü. *Yazılımcı:* ADR-0017, "ne zaman bölünmez" bölümüyle birlikte; bu ölçekte (tek ekip, düşük hacim) bölmek bir öğrenme ve sınır çizme yatırımıdır, zorunluluk değil. Öneri: kabul, ama production'da worker'ı gerçek e-posta hacmi görülene kadar kapalı tutmak da makul (`enable_notifications_worker=false` iken her şey API'de çalışır).
