@@ -144,7 +144,7 @@ services:
   # Azurite cannot sign user delegation links for a managed identity, so locally it is reached with its well-known development
   # account (see `azurite --help`); production never uses an account key (shared keys are off on the real storage account).
   azurite:
-    image: mcr.microsoft.com/azure-storage/azurite:3.36.0@sha256:76b8127d608fab8287a14a4bfeb9a5502cdcffb4bf1e86f09f324ebb0e70edba
+    image: mcr.microsoft.com/azure-storage/azurite:3.38.0@sha256:c26024d62bf4a5b88a40968afd217234c00e1fc9a4790dc6105d1ca7979f6eec
     profiles: ["azure-storage"]
     command: ["azurite-blob", "--blobHost", "0.0.0.0", "--skipApiVersionCheck", "--disableProductStyleUrl"]
     ports:
