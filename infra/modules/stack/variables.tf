@@ -138,3 +138,14 @@ variable "extra_secret_env" {
   type    = map(string)
   default = {}
 }
+
+# V1-03 (DEC-685): MFA encryption key rotation; see the runbook in docs/bulut-altyapisi.md.
+variable "mfa_key_id" {
+  type    = string
+  default = "k1"
+}
+
+variable "mfa_previous_key_ids" {
+  type    = list(string)
+  default = []
+}

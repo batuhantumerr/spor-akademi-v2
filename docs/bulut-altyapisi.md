@@ -94,13 +94,36 @@ flowchart LR
 | `conn-app` | sahip | `Host=<postgres_fqdn>;Database=spor_akademi;Username=spor_akademi_app;Password=...;SSL Mode=Require` |
 | `conn-migrator` | sahip | Aynı, `spor_akademi_migrator` rolüyle |
 | `jwt-signing-key` | sahip | **64 karakter onaltılık (hex)**, 32 bayt rastgele: `openssl rand -hex 32` (JWT anahtarı döndürme runbook'u: DEC-518) |
-| `mfa-encryption-key` | sahip | Tam 32 bayt rastgele, 64 hex karakter (`openssl rand -hex 32`); TOTP sırlarını şifreler. **Zorunlu**: yoksa API açılmaz. Değiştirmek bütün MFA kayıtlarını okunamaz yapar (DEC-602): önce döndürme tasarlanmalı, yoksa herkesin MFA'sı Platform Admin'ce sıfırlanır. JWT anahtarından bağımsızdır |
+| `mfa-encryption-key` | sahip | Tam 32 bayt rastgele, 64 hex karakter (`openssl rand -hex 32`); TOTP sırlarını şifreler. **Zorunlu**: yoksa API açılmaz. Anahtarı doğrudan değiştirmeyin: döndürme runbook'u aşağıda (V1-03, DEC-685); eski anahtarla şifreli sırlar yeni anahtarla okunamaz. JWT anahtarından bağımsızdır |
+| `mfa-encryption-key-<id>` | sahip | İsteğe bağlı, döndürme sırasında: önceki anahtar(lar). `mfa_previous_key_ids = ["k1"]` ile bağlanır, API'ye `Mfa__PreviousEncryptionKeys__k1` olarak gider; yalnız çözer, yeni sır bununla şifrelenmez |
 | `conn-cache` | sahip | Yalnız Redis açıksa: `<host>:6380,password=...,ssl=True` |
 | `rabbitmq-password` | sahip | Yalnız RabbitMQ açıksa |
 | `conn-rabbitmq` | sahip | Yalnız RabbitMQ açıksa: `amqp://spor_akademi:<rabbitmq-password>@rabbitmq:5672/` (API ve bildirim worker'ı bunu `ConnectionStrings__RabbitMq` olarak okur) |
 | `ghcr-pull-token` | sahip | Yalnız özel paketlerde; `read:packages` |
 | e-posta, ödeme, Sentry | sahip | `extra_secret_env` değişkeniyle bağlanır (ortam değişkeni adı → sır adı) |
 | SMTP parolası | sahip | `email_secret_env` ile bağlanır (ör. `Email__Smtp__Password` → `smtp-password`); API ve bildirim worker'ı ikisi de okur. Gönderen adresi ve SMTP ana bilgisayarı `email_env` ile (sır değil) |
+
+### MFA şifreleme anahtarını döndürme (V1-03, DEC-685 – DEC-687)
+
+TOTP sırları AES-256-GCM ile şifrelenir; saklanan metin `v2.<anahtar-kimliği>.<veri>` biçimindedir, yani hangi anahtarla şifrelendiği satırın kendisinde yazar. API **şimdiki** anahtarla şifreler ve yapılandırılmış **herhangi** bir anahtarla çözer. İlk biçim (`v1.`, kimliksiz) hâlâ okunur ve ilk uygun fırsatta `v2` biçimine taşınır. Döndürme hiçbir kullanıcıdan bir şey istemez ve kesinti yaratmaz.
+
+Ne zaman: anahtar sızdı ya da sızmış olabilir, bir çalışanın Key Vault yetkisi kalktı, ya da düzenli döndürme (ör. yılda bir). Anahtar kimlikleri 1–16 küçük harf ya da rakamdır (`k1`, `k2`, `2027a`); varsayılan `k1`'dir ve hiç döndürmemiş bir kurulum bu hâliyle çalışmaya devam eder.
+
+1. **Yeni anahtarı üret ve yaz.** Eskisini silmeden önce kopyasını yeni bir sır olarak sakla:
+   ```
+   az keyvault secret show --vault-name <kv-adı> --name mfa-encryption-key --query value -o tsv \
+     | az keyvault secret set --vault-name <kv-adı> --name mfa-encryption-key-k1 --file /dev/stdin --encoding utf-8 --output none
+   az keyvault secret set --vault-name <kv-adı> --name mfa-encryption-key --value "$(openssl rand -hex 32)" --output none
+   ```
+   (Anahtar değeri ekrana, kabuk geçmişine ya da bir dosyaya düşmesin: ilk komut çıktısını doğrudan ikinciye borulur.)
+2. **Ortamın `main.tf` dosyasında** (`infra/envs/<ortam>`) `mfa_key_id = "k2"` ve `mfa_previous_key_ids = ["k1"]` yaz, `tofu apply` ile API'yi yeniden başlat (Container Apps sırrın son sürümünü yeniden başlatmada alır). Başlangıçta doğrulama: kimlikler benzersiz, anahtarlar 64 hex; değilse API açılmaz.
+3. **Bekle ya da hızlandır.** Her başarılı doğrulamada (giriş, kurtarma kodu yenileme) o kullanıcının sırrı sessizce yeni anahtara taşınır. Beklemek istemezsen `identity-mfa-secret-rotation` işi (her gün 03:00 UTC; iş panelinden elle de tetiklenebilir, tekrar çalıştırmak zararsızdır) kalanların hepsini taşır.
+4. **Kalanı oku.** İşin günlüğü iki sayı verir: `MFA secrets: N moved to the current key, M still under other keys`. `M = 0` ise eski anahtar emekli edilebilir. `M > 0` ve bir de `cannot be decrypted` uyarısı varsa o kullanıcıların sırrı hiçbir yapılandırılmış anahtarla açılmıyor (eski anahtar zaten kaybolmuş ya da veri bozulmuş): onların MFA'sını Platform Admin'in sıfırlaması gerekir (`/platform/admins` ya da okul listesi).
+5. **Eski anahtarı emekli et.** `mfa_previous_key_ids = []`, `tofu apply`; `mfa-encryption-key-k1` sırrını Key Vault'tan sil (silinen sır 90 gün geri alınabilir, soft delete). Anahtarı sızdığı için döndürdüysen bu adımı ertelemeyin: `M = 0` olur olmaz yapın.
+
+Geri alma: yanlış bir anahtar yazdıysan adım 2'yi geri al (`mfa-encryption-key`'in önceki sürümünü Key Vault'tan geri getir). Bu sürede sırrı çözülemeyen kullanıcı `Mfa.SecretUnreadable` alır; bu yanlış kod sayılmaz ve hesabı kilitlemez.
+
+Sınır: döndürme yalnız TOTP sırlarını kapsar. Kurtarma kodları zaten tek yönlü özet olarak saklanır; JWT anahtarı için ayrı runbook var (DEC-518).
 
 ## 4. Ortamlar ve çalıştırma
 
