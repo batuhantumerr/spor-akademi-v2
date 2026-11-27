@@ -2,21 +2,26 @@ using System.Text.RegularExpressions;
 
 namespace SporAkademi.ArchitectureTests;
 
-/// <summary>Source-text helpers for the V1-02 rules (DEC-680): which module a file belongs to and which module namespaces it names.</summary>
+/// <summary>Source-text helpers for the V1-02 rules (DEC-682): which module a file belongs to and which module namespaces it names.</summary>
 internal static class RepositorySources
 {
     public static string Root { get; } = FindRoot();
 
     /// <summary>Every <c>.cs</c> file of a <c>src/</c> project, without build output and generated EF migrations.</summary>
-    public static IEnumerable<SourceFile> Files(string project) =>
-        Directory.EnumerateFiles(Path.Combine(Root, "src", project), "*.cs", SearchOption.AllDirectories)
-            .Select(path => path.Replace('\\', '/'))
+    public static IEnumerable<SourceFile> Files(string project)
+    {
+        var projectRoot = Path.Combine(Root, "src", project).Replace('\', '/');
+        var files = Directory.EnumerateFiles(projectRoot, "*.cs", SearchOption.AllDirectories)
+            .Select(path => path.Replace('\', '/'))
             .Where(path => !path.Contains("/obj/", StringComparison.Ordinal)
                 && !path.Contains("/bin/", StringComparison.Ordinal)
                 && !path.Contains("/Migrations/", StringComparison.Ordinal))
-            .Select(path => new SourceFile(
-                path[(Path.Combine(Root, "src", project).Replace('\\', '/').Length + 1)..],
-                File.ReadAllText(path)));
+            .Select(path => new SourceFile(path[(projectRoot.Length + 1)..], File.ReadAllText(path)))
+            .ToList();
+
+        // A wrong root path must fail the rule, not pass it with nothing scanned.
+        return files.Count > 0 ? files : throw new InvalidOperationException($"No source files found for {project}.");
+    }
 
     /// <summary>Lines of code without <c>//</c> comments (including <c>///</c> documentation).</summary>
     public static IEnumerable<string> CodeLines(string text) =>

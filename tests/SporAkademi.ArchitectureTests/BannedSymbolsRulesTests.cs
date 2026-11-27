@@ -1,6 +1,6 @@
 namespace SporAkademi.ArchitectureTests;
 
-/// <summary>V1-02 (DEC-681): symbols and packages the project decided against (CLAUDE.md, ADR-0001, ADR-0005, DEC-049) stay out.</summary>
+/// <summary>V1-02 (DEC-683): symbols and packages the project decided against (CLAUDE.md, ADR-0001, ADR-0005, DEC-049) stay out.</summary>
 [Trait("Story", "V1-02")]
 public sealed class BannedSymbolsRulesTests
 {
@@ -68,11 +68,14 @@ public sealed class BannedSymbolsRulesTests
     public void Enrollment_row_locks_are_only_taken_through_enrollment_locks()
     {
         // Student, group and enrollment rows are locked student first, then group, only by IEnrollmentLocks (CLAUDE.md).
+        // Checked per file, so SQL split over several lines is caught too.
+        string[] lockedTables = ["students.students", "groups.groups", "enrollments.enrollments"];
         var offenders = AllCode()
             .Where(f => f.Path != "SporAkademi.Infrastructure/Enrollments/EnrollmentsPersistence.cs")
-            .Where(f => f.Lines.Any(l => (l.Contains("FOR UPDATE", StringComparison.OrdinalIgnoreCase) || l.Contains("FOR SHARE", StringComparison.OrdinalIgnoreCase))
-                && (l.Contains("students.students", StringComparison.Ordinal) || l.Contains("groups.groups", StringComparison.Ordinal)
-                    || l.Contains("enrollments.enrollments", StringComparison.Ordinal))))
+            .Select(f => (f.Path, Code: string.Join('
+', f.Lines)))
+            .Where(f => (f.Code.Contains("FOR UPDATE", StringComparison.OrdinalIgnoreCase) || f.Code.Contains("FOR SHARE", StringComparison.OrdinalIgnoreCase))
+                && lockedTables.Any(t => f.Code.Contains(t, StringComparison.Ordinal)))
             .Select(f => f.Path)
             .ToList();
 

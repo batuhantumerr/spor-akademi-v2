@@ -9,12 +9,16 @@ set -euo pipefail
 
 sql_file="${1:?usage: check-migration-ids.sh <migrations.sql> [applied-ids.txt]}"
 applied_file="${2:-}"
+if [ -n "${CI:-}" ] && [ -z "$applied_file" ]; then
+  echo "In CI the applied-ids file is required (the bundle check must not be skipped)." >&2
+  exit 1
+fi
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 migrations_dir="$root/src/SporAkademi.Infrastructure/Migrations"
 
 # <timestamp>_<Name>.cs, without the .Designer.cs companions and the model snapshot.
 files_ids=$(find "$migrations_dir" -maxdepth 1 -name '[0-9]*_*.cs' ! -name '*.Designer.cs' -printf '%f\n' | sed 's/\.cs$//' | LC_ALL=C sort)
-sql_ids=$(grep -oE "VALUES \('[0-9]{14}_[A-Za-z0-9_]+'" "$sql_file" | sed -E "s/VALUES \('//; s/'$//" | LC_ALL=C sort -u)
+sql_ids=$(grep -oE "VALUES \('[0-9]{14}_[A-Za-z0-9_]+'" "$sql_file" | sed -E "s/VALUES \('//; s/'$//" | LC_ALL=C sort -u || true)
 
 fail=0
 compare() {

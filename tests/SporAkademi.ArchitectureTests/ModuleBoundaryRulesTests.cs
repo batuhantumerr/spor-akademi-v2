@@ -1,7 +1,7 @@
 namespace SporAkademi.ArchitectureTests;
 
 /// <summary>
-/// V1-02 (DEC-680, closes the gaps of docs/v1-mimari-inceleme.md section 2): module boundaries for every Application folder
+/// V1-02 (DEC-682, closes the gaps of docs/v1-mimari-inceleme.md section 2): module boundaries for every Application folder
 /// (including Audit and Realtime) and for the Domain and Infrastructure sides. Where the code crosses on purpose (DEC-660) the
 /// crossing is a named allowlist entry below, not a weaker rule.
 /// </summary>
@@ -243,13 +243,19 @@ public sealed class ModuleBoundaryRulesTests
             .Distinct()
             .Order()];
 
-    private static IEnumerable<(string From, string To)> DomainEdges() =>
-        RepositorySources.Files("SporAkademi.Domain")
+    private static List<(string From, string To)> DomainEdges()
+    {
+        var edges = RepositorySources.Files("SporAkademi.Domain")
             .Where(file => RepositorySources.ModuleOf(file) is { } m && !SharedKernel.Contains(m))
             .SelectMany(file => RepositorySources.References(file, "Domain")
                 .Where(r => r.Module != RepositorySources.ModuleOf(file) && !SharedKernel.Contains(r.Module))
                 .Select(r => (From: RepositorySources.ModuleOf(file)!, To: r.Module)))
-            .Distinct();
+            .Distinct()
+            .ToList();
+
+        // Domain modules do reference each other (IDs); none found means the scan is broken.
+        return edges.Count > 0 ? edges : throw new InvalidOperationException("No Domain module edges found.");
+    }
 
     private static string? DomainModuleOf(string ns)
     {
