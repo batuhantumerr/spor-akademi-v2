@@ -627,7 +627,7 @@ Bulut hesabı yok: her şey yerelde ve CI'da kanıtlandı, Azure'da hiçbir şey
 4. **Yeni tablo `outbox.inbox` (migration `AddInbox`, DEC-623).** Tüketici adı, mesaj ve okul ID'si, zaman; kişisel veri yok; RLS'li platform tablosu; 14 gün saklanır (`RabbitMq:InboxRetention`).
 5. **Sıra garantisi yok (DEC-629).** Mesajlar yalnız ID taşıdığı için bugünkü handler'lar için sorun değil; sıra gerektiren bir tüketici eklenirse yeniden tasarlanır.
 6. **Ölü mektup kuyruğu elle işlenir (DEC-621, DEC-627).** Alarm var; mesajı geri yükleme yönetim arayüzünden (shovel) yapılır. Otomatik yeniden oynatma aracı yok. *Yönetici:* gerekirse küçük bir yönetim komutu eklenebilir.
-7. **Bilinen eksik (DEC-625).** İz, mesajı üreten istekten değil teslim işinden başlıyor; üretici isteğin iz bağlamını outbox satırına yazmak migration ister.
+7. **Bilinen eksik (DEC-625), V1-04 ile kapandı (DEC-695 – DEC-699).** İz artık mesajı üreten istekten başlar.
 ### P5-04 Bildirim modülünün ayrı servise çıkarılması (DEC-630 – DEC-639, ADR-0017)
 
 1. **Yalnız e-posta ayrıldı, yeni paket yok.** Yedi e-posta handler'ı `notifications` grubunda; worker (`src/SporAkademi.Notifications`) yalnız onları RabbitMQ'dan tüketir. Gerçek zamanlı push'lar API'de (hub orada, DEC-637). *Yönetici:* kullanıcıya görünen bir değişiklik yok; kazanç hata yalıtımı (yavaş ya da çöken SMTP API'yi tutmaz) ve e-postayı ayrı ölçeklemek, bedel ek bir sürekli açık konteyner ve ek işletme yükü. *Yazılımcı:* ADR-0017, "ne zaman bölünmez" bölümüyle birlikte; bu ölçekte (tek ekip, düşük hacim) bölmek bir öğrenme ve sınır çizme yatırımıdır, zorunluluk değil. Öneri: kabul, ama production'da worker'ı gerçek e-posta hacmi görülene kadar kapalı tutmak da makul (`enable_notifications_worker=false` iken her şey API'de çalışır).

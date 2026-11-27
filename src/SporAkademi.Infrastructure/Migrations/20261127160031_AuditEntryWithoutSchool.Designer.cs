@@ -13,7 +13,7 @@ using SporAkademi.Infrastructure.Persistence;
 namespace SporAkademi.Infrastructure.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    [Migration("20261127144709_AuditEntryWithoutSchool")]
+    [Migration("20261127160031_AuditEntryWithoutSchool")]
     partial class AuditEntryWithoutSchool
     {
         /// <inheritdoc />
@@ -2809,6 +2809,16 @@ namespace SporAkademi.Infrastructure.Migrations
                     b.Property<Guid?>("TenantId")
                         .HasColumnType("uuid")
                         .HasColumnName("tenant_id");
+
+                    b.Property<string>("TraceParent")
+                        .HasMaxLength(55)
+                        .HasColumnType("character varying(55)")
+                        .HasColumnName("trace_parent");
+
+                    b.Property<string>("TraceState")
+                        .HasMaxLength(512)
+                        .HasColumnType("character varying(512)")
+                        .HasColumnName("trace_state");
 
                     b.Property<string>("Type")
                         .IsRequired()
