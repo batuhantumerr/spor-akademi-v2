@@ -4,6 +4,10 @@ Bu dosya [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) biçimini ve [
 
 ## [Unreleased]
 
+### Added
+
+- V1-02: ADR-0011 migration ID tutarlılık kontrolü (`scripts/check-migration-ids.sh`, `images` işinde), PR şablonuna migration maddesi ve mimari testler (Audit/Realtime, Domain ve Infrastructure modül sınırları; `Guid.NewGuid`, MediatR/AutoMapper/FluentAssertions ve satır kilidi yasakları) (DEC-680 – DEC-684)
+
 ## [1.0.0] - 2026-11-18
 
 ### Added
