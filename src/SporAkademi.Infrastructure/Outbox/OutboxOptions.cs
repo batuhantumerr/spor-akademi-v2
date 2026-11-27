@@ -36,6 +36,12 @@ internal sealed class OutboxOptions
     /// <summary>The health check reports Degraded when a pending message has been due for longer than this.</summary>
     public TimeSpan PendingAgeWarning { get; set; } = TimeSpan.FromMinutes(15);
 
+    /// <summary>
+    /// A delivery younger than this (and on its first attempt) is a child of the request that wrote the message; an older
+    /// one is a root span that only links to it, so a late retry does not stretch the request's trace (V1-04, DEC-696).
+    /// </summary>
+    public TimeSpan TraceParentMaxAge { get; set; } = TimeSpan.FromMinutes(5);
+
     internal bool IsValid() =>
         Enum.IsDefined(Scheduler)
         && PollingInterval > TimeSpan.Zero
@@ -46,7 +52,8 @@ internal sealed class OutboxOptions
         && HandlerTimeout > TimeSpan.Zero
         && Retention > TimeSpan.Zero
         && CleanupInterval > TimeSpan.Zero
-        && PendingAgeWarning > TimeSpan.Zero;
+        && PendingAgeWarning > TimeSpan.Zero
+        && TraceParentMaxAge >= TimeSpan.Zero;
 }
 
 public enum OutboxScheduler
