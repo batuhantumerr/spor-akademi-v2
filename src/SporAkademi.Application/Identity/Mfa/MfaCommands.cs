@@ -136,7 +136,78 @@ internal sealed class DisableMfaHandler(IUserRepository users, IMfaPolicy policy
     }
 }
 
+/// <summary>
+/// Replaces the signed-in user's recovery codes with a new set, after a current code from the authenticator (V1-03,
+/// DEC-687). The old codes stop working at once, the new ones are shown once, and the owner is told by e-mail. A wrong
+/// code counts towards the lockout, so failures commit.
+/// </summary>
+public sealed record RegenerateMfaRecoveryCodesCommand(Guid UserId, string Code) : ICommand<MfaRecoveryCodes>, IKeepChangesOnFailure;
+
+internal sealed class RegenerateMfaRecoveryCodesValidator : AbstractValidator<RegenerateMfaRecoveryCodesCommand>
+{
+    public RegenerateMfaRecoveryCodesValidator() => RuleFor(c => c.Code).Code();
+}
+
+internal sealed class RegenerateMfaRecoveryCodesHandler(IUserRepository users, MfaCodeVerifier verifier, TimeProvider timeProvider)
+    : ICommandHandler<RegenerateMfaRecoveryCodesCommand, MfaRecoveryCodes>
+{
+    public async Task<Result<MfaRecoveryCodes>> Handle(RegenerateMfaRecoveryCodesCommand command, CancellationToken cancellationToken)
+    {
+        var user = await users.GetByIdAsync(UserId.From(command.UserId), cancellationToken);
+        if (user is null)
+        {
+            return Result.Failure<MfaRecoveryCodes>(UserErrors.NotFound);
+        }
+
+        if (!user.MfaEnabled)
+        {
+            return Result.Failure<MfaRecoveryCodes>(MfaErrors.NotEnabled);
+        }
+
+        var now = timeProvider.GetUtcNow();
+        var notLocked = user.CheckNotLockedOut(now);
+        if (notLocked.IsFailure)
+        {
+            return Result.Failure<MfaRecoveryCodes>(notLocked.Error);
+        }
+
+        var checkedCode = verifier.VerifyTotp(user, command.Code, now);
+        if (checkedCode.IsFailure)
+        {
+            return Result.Failure<MfaRecoveryCodes>(checkedCode.Error == MfaErrors.SecretUnreadable ? checkedCode.Error : user.RecordMfaFailure(null, now));
+        }
+
+        var codes = MfaCodes.NewRecoveryCodes();
+        var regenerated = user.RegenerateMfaRecoveryCodes([.. codes.Select(c => MfaCodes.HashRecoveryCode(user.Id, MfaCodes.Normalize(c)))], now);
+        return regenerated.IsSuccess
+            ? Result.Success(new MfaRecoveryCodes(codes))
+            : Result.Failure<MfaRecoveryCodes>(regenerated.Error);
+    }
+}
+
 // ---- Platform Admin: reset someone's MFA ----------------------------------------------------------------------------
+
+/// <summary>A Platform Admin as the platform screen lists them (V1-03, DEC-688); no hashes, tokens or secrets.</summary>
+public sealed record PlatformAdminSummary(Guid Id, string FirstName, string LastName, string Email, UserStatus Status, bool MfaEnabled);
+
+/// <summary>The Platform Admins, so that one can reset another's two-step verification from the screen (V1-03, DEC-688).</summary>
+public sealed record ListPlatformAdminsQuery : IQuery<IReadOnlyList<PlatformAdminSummary>>;
+
+internal sealed class ListPlatformAdminsHandler(IUserRepository users, ICurrentUser currentUser)
+    : IQueryHandler<ListPlatformAdminsQuery, IReadOnlyList<PlatformAdminSummary>>
+{
+    public async Task<Result<IReadOnlyList<PlatformAdminSummary>>> Handle(ListPlatformAdminsQuery query, CancellationToken cancellationToken)
+    {
+        if (currentUser.Role != Role.PlatformAdmin)
+        {
+            return Result.Failure<IReadOnlyList<PlatformAdminSummary>>(UserErrors.NotFound);
+        }
+
+        var admins = await users.ListPlatformAdminsAsync(cancellationToken);
+        return Result.Success<IReadOnlyList<PlatformAdminSummary>>(
+            [.. admins.Select(u => new PlatformAdminSummary(u.Id.Value, u.FirstName, u.LastName, u.Email.Value, u.Status, u.MfaEnabled))]);
+    }
+}
 
 /// <summary>
 /// A Platform Admin removes another user's MFA (a lost phone and no recovery code, DEC-605). <paramref name="Reason"/> is a
@@ -181,7 +252,8 @@ internal sealed class ResetMfaHandler(
         }
 
         // The change of the user's MfaEnabled flag is audited on its own (DEC-534); this names the reason (DEC-533).
-        audit.Add(new AuditRecord(AuditAction.Update, AuditEntityType.User, user.Id.Value, [nameof(User.MfaEnabled)], command.Reason));
+        // Another Platform Admin has no school, so the entry is stored without one (V1-03, DEC-689); only platform scope reads it.
+        audit.Add(new AuditRecord(AuditAction.Update, AuditEntityType.User, user.Id.Value, [nameof(User.MfaEnabled)], command.Reason, PlatformLevel: user.TenantId is null));
         return Result.Success(Unit.Value);
     }
 }

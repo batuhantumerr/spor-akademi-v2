@@ -142,6 +142,28 @@ variable "identity_client_id" {
   default     = ""
 }
 
+variable "mfa_key_id" {
+  description = "Id of the current MFA encryption key (secret mfa-encryption-key); it is written into every stored secret. Raise it (k2, k3, ...) when the key is rotated (V1-03, docs/bulut-altyapisi.md)."
+  type        = string
+  default     = "k1"
+
+  validation {
+    condition     = can(regex("^[a-z0-9]{1,16}$", var.mfa_key_id))
+    error_message = "mfa_key_id is 1 to 16 lowercase letters or digits."
+  }
+}
+
+variable "mfa_previous_key_ids" {
+  description = "Ids of earlier MFA encryption keys that must still decrypt (secrets mfa-encryption-key-<id> in Key Vault, 64 hex characters each). Remove an id once the re-encryption job reports nothing left under it."
+  type        = list(string)
+  default     = []
+
+  validation {
+    condition     = alltrue([for id in var.mfa_previous_key_ids : can(regex("^[a-z0-9]{1,16}$", id))]) && !contains(var.mfa_previous_key_ids, var.mfa_key_id) && length(distinct(var.mfa_previous_key_ids)) == length(var.mfa_previous_key_ids)
+    error_message = "Previous MFA key ids are 1 to 16 lowercase letters or digits, unique, and none is the current mfa_key_id."
+  }
+}
+
 variable "otlp_endpoint" {
   description = "OTLP collector the API sends traces and metrics to. Empty: telemetry stays off (docs/gozlemlenebilirlik.md)."
   type        = string

@@ -207,6 +207,10 @@ internal static class IdentityEmails
                 "Spor Akademi iki adımlı doğrulamanız sıfırlandı",
                 "Bir platform yöneticisi Spor Akademi hesabınızın iki adımlı doğrulamasını sıfırladı ve bütün oturumlarınız kapandı.",
                 "Telefonunuzu kaybettiğiniz için bunu siz istediyseniz bir sonraki girişinizde yeniden kurun."),
+            MfaNotice.RecoveryCodesRegenerated => (
+                "Spor Akademi kurtarma kodlarınız yenilendi",
+                "Spor Akademi hesabınızın iki adımlı doğrulama kurtarma kodları yenilendi; önceki kodların hepsi artık geçersiz.",
+                "Bunu siz yaptıysanız yeni kodları güvenli bir yerde saklayın, başka bir şey yapmanız gerekmez."),
             _ => (
                 "Spor Akademi hesabınızda kurtarma kodu kullanıldı",
                 "Spor Akademi hesabınıza giriş yapılırken iki adımlı doğrulama için bir kurtarma kodu kullanıldı; o kod artık geçersiz.",

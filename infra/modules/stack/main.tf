@@ -81,6 +81,8 @@ module "apps" {
   otlp_endpoint         = var.otlp_endpoint
   extra_env             = var.extra_env
   extra_secret_env      = var.extra_secret_env
+  mfa_key_id            = var.mfa_key_id
+  mfa_previous_key_ids  = var.mfa_previous_key_ids
 
   rabbitmq_enabled              = var.enable_rabbitmq
   rabbitmq_storage_account_name = module.data.rabbitmq_account_name

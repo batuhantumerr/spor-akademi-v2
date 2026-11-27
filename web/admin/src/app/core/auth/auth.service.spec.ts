@@ -11,6 +11,7 @@ import {
   MfaChallenge,
   REFRESH_LOCK,
   RESTORE_RETRY_DELAY_MS,
+  SIGNED_IN_FLAG,
   isMfaChallenge,
   sameSubject,
 } from './auth.service';
@@ -91,6 +92,69 @@ describe('AuthService', () => {
       expect(auth.token()).toBeNull();
       // Nothing else is sent: no logout (which would call out the other devices), only the local state ends.
       backend.expectNone('/api/v1/auth/logout');
+    });
+  });
+
+  describe('session expiry found on reload (V1-03, DEC-690)', () => {
+    const expired = { status: 401, statusText: 'Unauthorized' };
+
+    beforeEach(() => localStorage.removeItem(SIGNED_IN_FLAG));
+    afterEach(() => localStorage.removeItem(SIGNED_IN_FLAG));
+
+    async function reloadWithRefusal(body: object | null): Promise<boolean> {
+      const boot = auth.restoreAtBoot(5000);
+      backend.expectOne('/api/v1/auth/refresh').flush(body, expired);
+      return boot;
+    }
+
+    it('shows the notice when a reload finds the session expired in a browser that had one', async () => {
+      restoreSession(); // a signed-in session sets the flag
+
+      expect(await reloadWithRefusal({ code: 'Auth.SessionExpired' })).toBe(false);
+
+      expect(auth.expiredNotice()).toBe(true);
+      auth.acknowledgeExpiredNotice();
+      expect(auth.expiredNotice()).toBe(false);
+      expect(localStorage.getItem(SIGNED_IN_FLAG)).toBeNull(); // once, not on every later visit
+    });
+
+    it('shows nothing on a plain first visit, although the server answers the same way', async () => {
+      expect(await reloadWithRefusal({ code: 'Auth.SessionExpired' })).toBe(false);
+
+      expect(auth.expiredNotice()).toBe(false);
+    });
+
+    it('shows nothing after a logout on purpose', async () => {
+      restoreSession();
+      auth.logout().subscribe();
+      backend.expectOne('/api/v1/auth/logout').flush(null);
+
+      expect(await reloadWithRefusal({ code: 'Auth.SessionExpired' })).toBe(false);
+
+      expect(auth.expiredNotice()).toBe(false);
+    });
+
+    it('shows nothing for another refusal, such as a deactivated account', async () => {
+      restoreSession();
+
+      expect(await reloadWithRefusal({ code: 'Auth.AccountInactive' })).toBe(false);
+
+      expect(auth.expiredNotice()).toBe(false);
+    });
+
+    it('keeps the flag when the server is down, so the next start can still tell', async () => {
+      restoreSession();
+      vi.useFakeTimers();
+      const boot = auth.restoreAtBoot(5000);
+      backend.expectOne('/api/v1/auth/refresh').flush(null, { status: 503, statusText: 'x' });
+      await vi.advanceTimersByTimeAsync(RESTORE_RETRY_DELAY_MS);
+      backend.expectOne('/api/v1/auth/refresh').flush(null, { status: 503, statusText: 'x' });
+      vi.useRealTimers();
+
+      expect(await boot).toBe(false);
+
+      expect(auth.expiredNotice()).toBe(false);
+      expect(localStorage.getItem(SIGNED_IN_FLAG)).toBe('1');
     });
   });
 

@@ -59,6 +59,7 @@ public sealed partial class CrossTenantEndpointTests(DatabaseFixture database) :
         ["POST /api/v1/me/mfa/enrollment"] = "the caller's own account; no body",
         ["POST /api/v1/me/mfa/enrollment/confirm"] = "the caller's own account; a code only",
         ["POST /api/v1/me/mfa/disable"] = "the caller's own account; a code only",
+        ["POST /api/v1/me/mfa/recovery-codes"] = "the caller's own account; a code only",
         ["POST /api/v1/sports"] = "name only",
         ["POST /api/v1/facilities"] = "name, type, address, capacity",
         ["POST /api/v1/coaches"] = "names, e-mail, phone",

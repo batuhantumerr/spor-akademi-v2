@@ -187,6 +187,7 @@ const trUi = {
     dashboard: 'Panel',
     schools: 'Okullar',
     jobs: 'İş paneli',
+    platformAdmins: 'Platform yöneticileri',
     setup: 'Okul kurulumu',
     sports: 'Branşlar',
     facilities: 'Tesisler',
@@ -321,6 +322,15 @@ const trUi = {
       disableText: 'Kapatmak için uygulamadaki güncel kodu ya da bir kurtarma kodunu girin.',
       disableConfirm: 'Kapat',
       disabled: 'İki adımlı doğrulama kapatıldı.',
+      recoveryTitle: 'Kurtarma kodları',
+      recoveryText:
+        'Kurtarma kodlarını yenilerseniz eski kodların hepsi geçersiz olur. Yeni kodlar yalnızca bir kez gösterilir ve bilgilendirme e-postası gönderilir.',
+      regenerate: 'Kurtarma kodlarını yenile',
+      regenerateTitle: 'Kurtarma kodlarını yenile',
+      regenerateText:
+        'Devam etmek için kimlik doğrulayıcı uygulamadaki güncel altı haneli kodu girin. Kurtarma kodu burada kabul edilmez.',
+      regenerateConfirm: 'Yeni kodlar oluştur',
+      regenerated: 'Kurtarma kodları yenilendi; eskileri artık geçersiz.',
     },
     reset: {
       action: 'İki adımlı doğrulamayı sıfırla',
@@ -335,6 +345,22 @@ const trUi = {
       } as Record<string, string>,
       submit: 'Sıfırla',
       done: 'İki adımlı doğrulama sıfırlandı.',
+    },
+    platformAdmins: {
+      title: 'Platform yöneticileri',
+      description:
+        'Platform yöneticisi hesapları. Telefonunu kaybeden bir yöneticinin iki adımlı doğrulamasını buradan sıfırlayabilirsiniz; kendi hesabınızı sıfırlayamazsınız.',
+      caption: 'Platform yöneticisi listesi',
+      name: 'Ad soyad',
+      email: 'E-posta',
+      status: 'Durum',
+      mfa: 'İki adımlı doğrulama',
+      mfaOn: 'Açık',
+      mfaOff: 'Kapalı (bir sonraki girişte kurulur)',
+      self: 'Siz',
+      selfNote: 'Kendi hesabınızı sıfırlayamazsınız.',
+      empty: 'Platform yöneticisi bulunamadı.',
+      statuses: { Active: 'Aktif', Deactivated: 'Pasif' } as Record<string, string>,
     },
   },
   forgotPassword: {
