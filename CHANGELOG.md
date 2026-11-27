@@ -4,6 +4,15 @@ Bu dosya [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) biçimini ve [
 
 ## [Unreleased]
 
+### Added
+- V1-04: outbox satırı mesajı üreten isteğin W3C trace context'ini saklar (`outbox.messages.trace_parent`/`trace_state`, migration `AddOutboxTraceContext`); teslim ve RabbitMQ tüketici span'leri istekle aynı izde, geç teslimler link ile (DEC-695 – DEC-699).
+
+
+- V1-02: ADR-0011 migration ID tutarlılık kontrolü (`scripts/check-migration-ids.sh`, `images` işinde), PR şablonuna migration maddesi ve mimari testler (Audit/Realtime, Domain ve Infrastructure modül sınırları; `Guid.NewGuid`, MediatR/AutoMapper/FluentAssertions ve satır kilidi yasakları) (DEC-680 – DEC-684)
+
+### Changed
+- Dependabot .NET 11 majörlerini (dotnet-ef, `Microsoft.Extensions.*`, `Microsoft.AspNetCore.*`, EF Core, `@microsoft/signalr`) önermez; .NET 11 planlı bir yükseltmedir (DEC-700).
+- **Dokümanlar v1.0.0'a getirildi (V1-01, #201):** `docs/proje-dokumani.md` anlık görüntü, modül sayısı (9 iş modülü + Audit, Realtime, Dashboard, Reports), §5.10 (`infra/`, OpenTofu, `apply` yok), §8, §12, Ek F (ADR-0010 kabul, ADR-0012 – ADR-0017 özeti, ADR-0006 "Amended by" notu) ve Ek G (Faz kutuları kaldırıldı, tek kaynak roadmap) düzeltildi; `docs/bulut-altyapisi.md` bildirim worker'ı ve RabbitMQ tüketicisi artık var; Pazartesi onay listesi 143 DEC ve ADR-0014 – ADR-0017 `Proposed`; v1 inceleme #16 ve #20 işaretlendi. Kod değişikliği yok.
 ### Fixed
 - CI: `npm audit` picomatch kaydını (GHSA-fc5q-39xc-vjpf) artık raporlamadığı için süreli istisna listesindeki kayıt silindi; bayat kayıt kuralı (DEC-670) bütün PR'ları kırmızıya çeviriyordu. Dependabot `@playwright/test` 1.65.x'i atlar (1.65.1 de aynı reporter hatasını veriyor).
 
