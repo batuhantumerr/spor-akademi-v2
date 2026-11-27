@@ -200,11 +200,11 @@ Boyut: **S** < 1 gün, **M** 1–3 gün, **L** > 3 gün ya da dış bağımlıl�
 | 13 | O | **iyzico gerçek sandbox koşusu** ve detay yanıtı imzası doğrulaması (DEC-345): adaptör yalnız sahte HTTP ile test edildi. | Sahip + yazılımcı | S |
 | 14 | O | **E2E'de MFA ve oturum süresi akışı** (bölüm 4, madde 8). | Yazılımcı | M |
 | 15 | O | **Gerçek ekran okuyucuyla elle WCAG turu** (`erisilebilirlik-denetimi.md`): otomatik tarama var, insan turu yok. | Sahip | S |
-| 16 | D | **`npm audit` istisnası: picomatch ReDoS (GHSA-fc5q-39xc-vjpf), bitiş 2026-12-17.** `.github/npm-audit-allowlist.json`'daki tek kayıt (#177); yamalı sürüm yoksa kayıt süresi dolunca CI kırılır. O gün yamalı sürüme geçilmeli ya da süre bilinçli uzatılmalı. | Yazılımcı (takvim: sahip) | S |
+| 16 | D | **Çözüldü (#200).** ~~`npm audit` istisnası: picomatch ReDoS (GHSA-fc5q-39xc-vjpf), bitiş 2026-12-17.~~ `npm audit` artık bulguyu raporlamadığı için PR #200 `.github/npm-audit-allowlist.json` kaydını kaldırdı. Eski açıklama: `.github/npm-audit-allowlist.json`'daki tek kayıt (#177); yamalı sürüm yoksa kayıt süresi dolunca CI kırılır. O gün yamalı sürüme geçilmeli ya da süre bilinçli uzatılmalı. | Yazılımcı (takvim: sahip) | S |
 | 17 | D | **Tek kod tabanı, iki istemci yığını** (bölüm 3, madde 10) ve tema token kopyası. | Sahip (karar) | L |
 | 18 | D | **Okul başına alt alan adı (ADR-0013) ertelendi;** çok okul büyürse tenant'ın token'dan çözülmesi sınırlayıcı olabilir. | Sahip | M |
 | 19 | D | **Özel uç nokta (private endpoint)** Key Vault ve belge deposu için (DEC-641, ~7 USD/ay); şimdilik RBAC + kısa ömürlü SAS ile kabul. | Sahip + yazılımcı | M |
-| 20 | D | **Proje dokümanı 5.10 ve 8 güncel değil** (bölüm 4, madde 7); sürüm hazırlığında topluca (5.12 #174 ile geldi; ADR dizinine 0017 bu PR'da eklendi). | Yazılımcı | S |
+| 20 | D | **Yapıldı (V1-01, #201).** Proje dokümanı üst satır, 5.1, 5.10, 8, 12, Ek F ve Ek G güncellendi; `bulut-altyapisi.md` ve Pazartesi onay listesindeki sayılar düzeltildi. Eski açıklama: **Proje dokümanı 5.10 ve 8 güncel değil** (bölüm 4, madde 7); sürüm hazırlığında topluca (5.12 #174 ile geldi; ADR dizinine 0017 bu PR'da eklendi). | Yazılımcı | S |
 
 Gerçek veri için **asgari yol** (K'lerin hepsi): 1 → 2 → 3 (staging dahil) → 4 → 5 → 6. O'lar ilk production ayında,
 D'ler isteğe göre. Hiçbir madde yeni özellik gerektirmiyor; en büyük belirsizlik kod değil, 1–3 numaralı kararlar.
