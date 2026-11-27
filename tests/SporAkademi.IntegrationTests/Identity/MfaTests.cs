@@ -105,7 +105,7 @@ public sealed class MfaTests(DatabaseFixture database) : IdentityTest(database)
 
         // The secret is stored encrypted, bound to the user.
         var stored = await LoadMfaAsync(platform.Id);
-        stored.Ciphertext.ShouldStartWith("v1.");
+        stored.Ciphertext.ShouldStartWith("v2.k1."); // V1-03: the key id is part of the text (DEC-685)
         stored.Ciphertext.ShouldNotContain(secret);
         stored.Confirmed.ShouldBeFalse();
 

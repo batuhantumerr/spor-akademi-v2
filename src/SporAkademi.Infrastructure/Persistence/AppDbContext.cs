@@ -74,7 +74,13 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options, ICurren
         {
             ApplyTenantFilterMethod.MakeGenericMethod(entityType.ClrType).Invoke(this, [modelBuilder]);
         }
+
+        ApplyAuditEntryFilter(modelBuilder);
     }
+
+    private void ApplyAuditEntryFilter(ModelBuilder modelBuilder) =>
+        // Not ITenantScoped: an entry may belong to no school (V1-03, DEC-689), which a school's scope never sees.
+        modelBuilder.Entity<Audit.AuditEntry>().HasQueryFilter(entry => entry.TenantId == CurrentTenantId);
 
     private void ApplyTenantFilter<TEntity>(ModelBuilder modelBuilder)
         where TEntity : class, ITenantScoped =>

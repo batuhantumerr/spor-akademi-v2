@@ -6,6 +6,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Npgsql;
 using SporAkademi.Infrastructure.Audit;
+using SporAkademi.Infrastructure.Identity;
 using SporAkademi.Infrastructure.Jobs;
 using SporAkademi.Infrastructure.Outbox;
 using SporAkademi.IntegrationTests.Infrastructure;
@@ -59,9 +60,9 @@ public sealed class JobServerTests(DatabaseFixture database) : OutboxTest(databa
         using var client = Host.CreateClient();
         var storage = Host.Services.GetRequiredService<JobStorage>();
 
-        await WaitUntilAsync(() => RecurringJobIds(storage).Count == 8);
+        await WaitUntilAsync(() => RecurringJobIds(storage).Count == 9);
 
-        RecurringJobIds(storage).ShouldBe([OutboxJobs.CleanupJobId, OutboxJobs.ProcessJobId, RefreshTokenCleanupJob.JobId, DuesReminderJob.JobId, StudentAnonymizationJob.JobId, OnlinePaymentReconcileJob.JobId, BillingPeriodCloseJob.JobId, AuditRetentionJob.JobId], ignoreOrder: true);
+        RecurringJobIds(storage).ShouldBe([OutboxJobs.CleanupJobId, OutboxJobs.ProcessJobId, RefreshTokenCleanupJob.JobId, DuesReminderJob.JobId, StudentAnonymizationJob.JobId, OnlinePaymentReconcileJob.JobId, BillingPeriodCloseJob.JobId, AuditRetentionJob.JobId, MfaSecretRotationJob.JobId], ignoreOrder: true);
         var health = Host.Services.GetRequiredService<HealthCheckService>();
         await WaitUntilAsync(async () => (await health.CheckHealthAsync(c => c.Name == "jobs", Ct)).Status == HealthStatus.Healthy);
     }
@@ -113,7 +114,7 @@ public sealed class JobServerTests(DatabaseFixture database) : OutboxTest(databa
         var storage = other.Services.GetRequiredService<JobStorage>();
         using var client = other.CreateClient();
 
-        await WaitUntilAsync(() => RecurringJobIds(storage).SetEquals([RefreshTokenCleanupJob.JobId, DuesReminderJob.JobId, StudentAnonymizationJob.JobId, OnlinePaymentReconcileJob.JobId, BillingPeriodCloseJob.JobId, AuditRetentionJob.JobId]));
+        await WaitUntilAsync(() => RecurringJobIds(storage).SetEquals([RefreshTokenCleanupJob.JobId, DuesReminderJob.JobId, StudentAnonymizationJob.JobId, OnlinePaymentReconcileJob.JobId, BillingPeriodCloseJob.JobId, AuditRetentionJob.JobId, MfaSecretRotationJob.JobId]));
     }
 
     [Fact]

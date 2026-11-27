@@ -87,6 +87,14 @@ internal static partial class IdentityEndpoints
             .ProducesProblem(StatusCodes.Status409Conflict)
             .ProducesProblem(StatusCodes.Status422UnprocessableEntity)
             .ProducesProblem(StatusCodes.Status429TooManyRequests);
+        me.MapPost("/recovery-codes", RegenerateRecoveryCodes)
+            .RequireRateLimiting(AuthRateLimiting.Policy)
+            .Produces<MfaRecoveryCodes>()
+            .ProducesProblem(StatusCodes.Status400BadRequest)
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status422UnprocessableEntity)
+            .ProducesProblem(StatusCodes.Status429TooManyRequests);
         me.MapPost("/disable", DisableMfa)
             .RequireRateLimiting(AuthRateLimiting.Policy)
             .Produces(StatusCodes.Status204NoContent)
@@ -173,6 +181,13 @@ internal static partial class IdentityEndpoints
         ICurrentUser currentUser,
         CancellationToken cancellationToken) =>
         (await handler.Handle(new ConfirmMfaEnrollmentCommand(currentUser.UserId!.Value, request.Code), cancellationToken)).OkOrProblem();
+
+    private static async Task<IResult> RegenerateRecoveryCodes(
+        MfaCodeRequest request,
+        ICommandHandler<RegenerateMfaRecoveryCodesCommand, MfaRecoveryCodes> handler,
+        ICurrentUser currentUser,
+        CancellationToken cancellationToken) =>
+        (await handler.Handle(new RegenerateMfaRecoveryCodesCommand(currentUser.UserId!.Value, request.Code), cancellationToken)).OkOrProblem();
 
     private static async Task<IResult> DisableMfa(
         MfaCodeRequest request,

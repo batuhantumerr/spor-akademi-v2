@@ -2708,7 +2708,7 @@ namespace SporAkademi.Infrastructure.Migrations
                         .HasColumnType("character varying(32)")
                         .HasColumnName("reason");
 
-                    b.Property<Guid>("TenantId")
+                    b.Property<Guid?>("TenantId")
                         .HasColumnType("uuid")
                         .HasColumnName("tenant_id");
 
@@ -3288,7 +3288,6 @@ namespace SporAkademi.Infrastructure.Migrations
                         .WithMany()
                         .HasForeignKey("TenantId")
                         .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired()
                         .HasConstraintName("fk_audit_entries_school_tenant_id");
                 });
 
