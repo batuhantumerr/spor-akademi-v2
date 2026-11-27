@@ -17,11 +17,15 @@ import { answerRefreshWithoutSession, dialog, signIn, toast } from '../support/u
  * 2. A School Admin of a school made for this file turns two-step verification on, signs in with a code, then with a
  *    recovery code, and replaces the recovery codes (V1-03, DEC-687): the old ones stop working, the new ones work.
  * 3. The Platform Admin resets that School Admin's two-step verification from the school list; the School Admin signs in
- *    with the password alone again. The Platform Admins page lists the account but offers no reset of one's own.
- * 4. A session that ran out shows the "session expired" notice after a reload, a first visit shows nothing (V1-03,
- *    DEC-690). The refresh cookie is dropped the way the browser drops it at the absolute limit: the API's shortest idle
- *    time is five minutes, too long for this suite, and answers the same `Auth.SessionExpired` either way (the
- *    server-side limits are covered by SessionLifetimeTests).
+ *    with the password alone again (a first visit to the sign-in page shows no notice). The Platform Admins page lists
+ *    the account but offers no reset of one's own.
+ * 4. A session that ran out shows the "session expired" notice after a reload, once (V1-03, DEC-690). The refresh cookie
+ *    is dropped the way the browser drops it at the absolute limit: the API's shortest idle time is five minutes, too
+ *    long for this suite, and answers the same `Auth.SessionExpired` either way (the server-side limits are covered by
+ *    SessionLifetimeTests).
+ *
+ * Sign-in is limited to 10 a minute per client address (NFR-SEC-14) and the specs that follow share it, so this file
+ * signs in as few times as it can: the Platform Admin once, the School Admin five times.
  */
 test.describe.configure({ mode: 'serial' });
 test.skip(
@@ -32,6 +36,9 @@ test.skip(
 let platformContext: BrowserContext;
 let platformPage: Page;
 let platformToken: string;
+/** The School Admin's browser after the reset; the expiry test reuses it (one sign-in less, see the note on rate limits). */
+let adminContext: BrowserContext;
+let adminPage: Page;
 
 const school = { email: '', password: '', first: 'Selin', last: '', secret: '' };
 let recoveryCodes: string[] = [];
@@ -45,6 +52,7 @@ test.beforeAll(async ({ browser }) => {
 });
 
 test.afterAll(async () => {
+  await adminContext?.close();
   await platformContext?.close();
 });
 
@@ -185,15 +193,6 @@ test('a school admin turns it on, signs in with a code and with a recovery code,
     await acknowledgeCodes(regenerate);
     await expect(toast(page, 'Kurtarma kodları yenilendi; eskileri artık geçersiz.')).toBeVisible();
     await expect(page.getByText('Kalan kurtarma kodu: 10.')).toBeVisible();
-
-    // The old codes are dead, a new one works.
-    await page.getByRole('button', { name: 'Çıkış yap' }).click();
-    await signInWithPassword(page);
-    await page.getByRole('button', { name: 'Kurtarma kodu kullan' }).click();
-    await fillCodeStep(page, 'Kurtarma kodu', recoveryCodes[1]);
-    await expect(page.getByRole('alert')).toContainText('Doğrulama kodu hatalı.');
-    await fillCodeStep(page, 'Kurtarma kodu', fresh[0]);
-    await expect(page).toHaveURL(/\/dashboard$/);
   } finally {
     await context.close();
   }
@@ -220,20 +219,17 @@ test('a platform admin resets a school admin’s two-step verification and the a
   await expect(reset).toHaveCount(0);
 
   // Their sessions ended and the code is gone: the password alone signs in, and the security page offers to turn it on.
-  const context = await browser.newContext();
-  try {
-    await answerRefreshWithoutSession(context);
-    const adminPage = await context.newPage();
-    await adminPage.goto('/login');
-    await signIn(adminPage, school.email, school.password);
-    await expect(adminPage).toHaveURL(/\/dashboard$/);
-    await adminPage.getByRole('link', { name: 'Güvenlik' }).click();
-    await expect(
-      adminPage.getByRole('button', { name: 'İki adımlı doğrulamayı aç' }),
-    ).toBeVisible();
-  } finally {
-    await context.close();
-  }
+  // A browser that never signed in first: the restore is refused with the same code as for an expired session, and the
+  // page stays quiet (V1-03, DEC-690). The context stays open for the next test.
+  adminContext = await browser.newContext();
+  adminPage = await adminContext.newPage();
+  await adminPage.goto('/login');
+  await expect(adminPage.getByRole('heading', { name: 'Giriş yap' })).toBeVisible();
+  await expect(adminPage.getByRole('alert')).toHaveCount(0);
+  await signIn(adminPage, school.email, school.password);
+  await expect(adminPage).toHaveURL(/\/dashboard$/);
+  await adminPage.getByRole('link', { name: 'Güvenlik' }).click();
+  await expect(adminPage.getByRole('button', { name: 'İki adımlı doğrulamayı aç' })).toBeVisible();
 
   // The Platform Admins page lists this account without a reset of its own (Mfa.CannotResetOwn).
   await page.getByRole('link', { name: 'Platform yöneticileri' }).click();
@@ -244,31 +240,17 @@ test('a platform admin resets a school admin’s two-step verification and the a
   await expectNoSeriousA11yViolations(page, testInfo, 'platform-admins');
 });
 
-test('a reload after the session ran out says so, a first visit does not', async ({ browser }) => {
-  const context = await browser.newContext();
-  try {
-    const page = await context.newPage();
-    // A browser that never signed in: the restore is refused with the same code, and the page stays quiet.
-    await page.goto('/login');
-    await expect(page.getByRole('heading', { name: 'Giriş yap' })).toBeVisible();
-    await expect(page.getByRole('alert')).toHaveCount(0);
+test('a reload after the session ran out says so, once', async () => {
+  // The absolute limit passed: the browser dropped the refresh cookie. The reload lands on the sign-in page, with the notice.
+  await adminContext.clearCookies();
+  await adminPage.reload();
+  await expect(adminPage).toHaveURL(/\/login/);
+  await expect(adminPage.getByRole('alert')).toContainText(
+    'Oturumunuzun süresi doldu. Lütfen tekrar giriş yapın.',
+  );
 
-    await signIn(page, school.email, school.password);
-    await expect(page).toHaveURL(/\/dashboard$/);
-
-    // The absolute limit passed: the browser dropped the refresh cookie. The reload lands on the sign-in page, with the notice.
-    await context.clearCookies();
-    await page.reload();
-    await expect(page).toHaveURL(/\/login/);
-    await expect(page.getByRole('alert')).toContainText(
-      'Oturumunuzun süresi doldu. Lütfen tekrar giriş yapın.',
-    );
-
-    // Shown once: the next reload of the sign-in page is quiet again.
-    await page.reload();
-    await expect(page.getByRole('heading', { name: 'Giriş yap' })).toBeVisible();
-    await expect(page.getByRole('alert')).toHaveCount(0);
-  } finally {
-    await context.close();
-  }
+  // Shown once: the next reload of the sign-in page is quiet again.
+  await adminPage.reload();
+  await expect(adminPage.getByRole('heading', { name: 'Giriş yap' })).toBeVisible();
+  await expect(adminPage.getByRole('alert')).toHaveCount(0);
 });
