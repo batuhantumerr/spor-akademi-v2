@@ -45,6 +45,67 @@ public sealed class OutboxTraceContextTests(DatabaseFixture database) : OutboxTe
         var delivery = _spans.Single(s => s.OperationName == "outbox.deliver");
         delivery.TraceId.ShouldBe(request.TraceId);
         delivery.ParentSpanId.ShouldBe(request.SpanId);
+        delivery.Links.ShouldBeEmpty(); // the parent already is the request
+    }
+
+    [Fact]
+    public async Task A_delivery_at_exactly_the_maximum_age_is_still_a_child()
+    {
+        var request = await EnqueueInRequestAsync();
+        Api.Clock.Advance(TimeSpan.FromMinutes(5));
+
+        await ProcessAsync();
+
+        var delivery = _spans.Single(s => s.OperationName == "outbox.deliver");
+        delivery.ParentSpanId.ShouldBe(request.SpanId);
+    }
+
+    [Fact]
+    public async Task A_delivery_one_tick_past_the_maximum_age_is_only_linked()
+    {
+        var request = await EnqueueInRequestAsync();
+        Api.Clock.Advance(TimeSpan.FromMinutes(5) + TimeSpan.FromTicks(1));
+
+        await ProcessAsync();
+
+        var delivery = _spans.Single(s => s.OperationName == "outbox.deliver");
+        delivery.ParentSpanId.ShouldBe(default);
+        delivery.Links.Single().Context.SpanId.ShouldBe(request.SpanId);
+    }
+
+    [Fact]
+    public async Task A_retry_is_linked_to_the_request_and_not_its_child()
+    {
+        Probe.FailNext(1);
+        var request = await EnqueueInRequestAsync();
+
+        await ProcessAsync(); // first attempt: child, fails
+        Api.Clock.Advance(MaxRetryDelay);
+        await ProcessAsync(); // retry within the maximum age
+
+        var deliveries = _spans.Where(s => s.OperationName == "outbox.deliver").ToList();
+        deliveries.Count.ShouldBe(2);
+        deliveries[0].ParentSpanId.ShouldBe(request.SpanId);
+        deliveries[1].ParentSpanId.ShouldBe(default);
+        deliveries[1].TraceId.ShouldNotBe(request.TraceId);
+        deliveries[1].Links.Single().Context.SpanId.ShouldBe(request.SpanId);
+    }
+
+    [Fact]
+    public async Task An_invalid_trace_state_does_not_lose_the_link()
+    {
+        var request = await EnqueueInRequestAsync();
+        await using (var connection = new Npgsql.NpgsqlConnection(Database.MigratorConnectionString))
+        {
+            await connection.OpenAsync(Ct);
+            await using var command = new Npgsql.NpgsqlCommand("UPDATE outbox.messages SET trace_state = 'not a valid state'", connection);
+            await command.ExecuteNonQueryAsync(Ct);
+        }
+
+        Api.Clock.Advance(TimeSpan.FromHours(1));
+        await ProcessAsync();
+
+        var delivery = _spans.Single(s => s.OperationName == "outbox.deliver");
         delivery.Links.Single().Context.SpanId.ShouldBe(request.SpanId);
     }
 
@@ -60,6 +121,7 @@ public sealed class OutboxTraceContextTests(DatabaseFixture database) : OutboxTe
         delivery.TraceId.ShouldNotBe(request.TraceId);
         delivery.ParentSpanId.ShouldBe(default);
         delivery.Links.Single().Context.TraceId.ShouldBe(request.TraceId);
+        delivery.Links.Single().Context.SpanId.ShouldBe(request.SpanId);
     }
 
     [Fact]

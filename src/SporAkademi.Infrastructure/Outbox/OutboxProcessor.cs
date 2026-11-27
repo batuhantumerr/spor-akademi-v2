@@ -105,7 +105,7 @@ internal sealed partial class OutboxProcessor(
     /// <returns><c>false</c> when the batch should stop (the broker is unreachable).</returns>
     private async Task<bool> DeliverAsync(OutboxMessage message, CancellationToken cancellationToken)
     {
-        using var activity = StartDeliveryActivity("outbox.deliver", ActivityKind.Internal, message);
+        using var activity = StartDeliveryActivity(message);
         activity?.SetTag("spor_akademi.outbox.message_type", MessageTypeLabel(message));
         activity?.SetTag("spor_akademi.outbox.attempt", message.Attempts + 1);
 
@@ -186,7 +186,7 @@ internal sealed partial class OutboxProcessor(
     /// </summary>
     private async Task<bool> PublishAsync(OutboxMessage message, OutboxMessageType type, CancellationToken cancellationToken)
     {
-        using var activity = StartDeliveryActivity("outbox.publish", ActivityKind.Producer, message);
+        using var activity = AppTelemetry.StartActivity("outbox.publish", ActivityKind.Producer);
         activity?.SetTag("spor_akademi.messaging.message_type", type.Name);
         try
         {
@@ -223,22 +223,27 @@ internal sealed partial class OutboxProcessor(
     /// V1-04 (DEC-695, DEC-696): the delivery span of a message that stored its request's trace context. A first, prompt
     /// delivery is a child of that request (one trace from request to consumer); a retry or a late delivery is a new root
     /// (or a child of the job that runs it) with an <see cref="ActivityLink"/> to the request, so it never shows as part of
-    /// a request that ended long before. Rows without a (valid) context behave as before.
+    /// a request that ended long before. Rows without a (valid) context behave as before. The publish span is always a child
+    /// of this span, so the broker headers carry the trace of the delivery.
     /// </summary>
-    private Activity? StartDeliveryActivity(string name, ActivityKind kind, OutboxMessage message)
+    private Activity? StartDeliveryActivity(OutboxMessage message)
     {
-        if (message.TraceParent is null
-            || !ActivityContext.TryParse(message.TraceParent, message.TraceState, isRemote: true, out var origin))
+        const string name = "outbox.deliver";
+        if (message.TraceParent is null || !TryParseOrigin(message, out var origin))
         {
-            return AppTelemetry.StartActivity(name, kind);
+            return AppTelemetry.StartActivity(name);
         }
 
-        var links = new[] { new ActivityLink(origin) };
         var prompt = message.Attempts == 0 && clock.GetUtcNow() - message.OccurredAt <= Options.TraceParentMaxAge;
         return prompt
-            ? AppTelemetry.Source.StartActivity(name, kind, origin, links: links)
-            : AppTelemetry.Source.StartActivity(name, kind, Activity.Current?.Context ?? default, links: links);
+            ? AppTelemetry.Source.StartActivity(name, ActivityKind.Internal, origin)
+            : AppTelemetry.Source.StartActivity(name, ActivityKind.Internal, Activity.Current?.Context ?? default, links: [new ActivityLink(origin)]);
     }
+
+    /// <summary>A bad <c>tracestate</c> does not lose the link: the <c>traceparent</c> is parsed again without it.</summary>
+    private static bool TryParseOrigin(OutboxMessage message, out ActivityContext origin) =>
+        ActivityContext.TryParse(message.TraceParent, message.TraceState, isRemote: true, out origin)
+        || ActivityContext.TryParse(message.TraceParent, null, isRemote: true, out origin);
 
     /// <summary>A later failure of an abandoned handler is observed here, so it is not reported as unobserved.</summary>
     private static void ObserveAbandoned(Task? handling)

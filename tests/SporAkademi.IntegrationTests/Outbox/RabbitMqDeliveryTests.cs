@@ -64,8 +64,15 @@ public sealed class RabbitMqDeliveryTests(DatabaseFixture database) : RabbitMqOu
             consume = Activities.Single(a => a.OperationName == "messaging.consume");
         }
 
+        System.Diagnostics.Activity deliver;
+        lock (Activities)
+        {
+            deliver = Activities.Single(a => a.OperationName == "outbox.deliver");
+        }
+
+        deliver.ParentSpanId.ShouldBe(request.SpanId);
         publish.TraceId.ShouldBe(request.TraceId);
-        publish.ParentSpanId.ShouldBe(request.SpanId);
+        publish.ParentSpanId.ShouldBe(deliver.SpanId);
         consume.TraceId.ShouldBe(request.TraceId);
         consume.ParentSpanId.ShouldBe(publish.SpanId);
     }
