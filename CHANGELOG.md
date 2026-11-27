@@ -7,6 +7,9 @@ Bu dosya [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) biçimini ve [
 ### Added
 - V1-04: outbox satırı mesajı üreten isteğin W3C trace context'ini saklar (`outbox.messages.trace_parent`/`trace_state`, migration `AddOutboxTraceContext`); teslim ve RabbitMQ tüketici span'leri istekle aynı izde, geç teslimler link ile (DEC-695 – DEC-699).
 
+### Fixed
+- CI: `npm audit` picomatch kaydını (GHSA-fc5q-39xc-vjpf) artık raporlamadığı için süreli istisna listesindeki kayıt silindi; bayat kayıt kuralı (DEC-670) bütün PR'ları kırmızıya çeviriyordu. Dependabot `@playwright/test` 1.65.x'i atlar (1.65.1 de aynı reporter hatasını veriyor).
+
 ## [1.0.0] - 2026-11-18
 
 ### Added
