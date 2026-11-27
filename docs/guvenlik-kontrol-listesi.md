@@ -253,6 +253,8 @@ Durum: **zaten sabit.** `ci.yml` başında `TRIVY_VERSION` / `TRIVY_SHA256` ve `
 
 Karar kayıtları DEC-600 – DEC-609. Özet: Platform Admin'in girişi iki adımlıdır ve kurulum girişten önce şarttır; Okul Admini isteğe bağlı açar. Anahtar AES-256-GCM ile şifreli, kurtarma kodları hash'li, yanlış kodlar hesap kilit sayacında, her değişiklik hesabın e-postasına bildirilir.
 
+**V1-03 (DEC-685 – DEC-690).** Anahtar döndürülebilir: şimdiki anahtar yeni sırları şifreler, `Mfa:PreviousEncryptionKeys` yalnız çözer, metin anahtar kimliğini taşır; başarılı doğrulamada tembel, ayrıca günlük işle açık yeniden şifreleme, kalan sayısı günlükte (runbook: [bulut-altyapisi.md](bulut-altyapisi.md)). Kurtarma kodları, authenticator kodu girilerek yenilenir (eskiler geçersiz, hesaba e-posta). Platform Admin'ler listesinden başka bir Platform Admin'in MFA'sı sıfırlanabilir (kendi hesabı hâlâ yasak) ve bu işlem okulsuz bir denetim girdisi bırakır (okullar göremez, `audit.audit_entries.tenant_id` boş; okuyan arayüz yok). **Bilinen sınır:** o girdileri görmek için veritabanı sahibi rolü gerekir. Testler: `IntegrationTests/Identity/MfaRotationTests`, `Domain.UnitTests/Identity/UserMfaTests`, e2e `admin/mfa.e2e.ts`.
+
 **Tüm Platform Admin'ler telefonunu ve kurtarma kodlarını kaybederse** (başka Platform Admin yoksa) API'de yol yoktur; veritabanı sahibi (migrator) rolüyle şu betik çalıştırılır. Sır, kodlar, bekleyen girişler ve oturumlar silinir; hesap bir sonraki girişte yeniden kurar. İşlemi kimin, ne zaman yaptığı kayda geçmesi için sahibi bir değişiklik talebine bağlar.
 
 ```sql

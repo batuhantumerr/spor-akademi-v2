@@ -61,6 +61,7 @@ function menuFor(role: Role | null): NavSection[] {
         {
           items: [
             { label: ui.nav.schools, path: '/platform/schools', icon: LucideBuilding },
+            { label: ui.nav.platformAdmins, path: '/platform/admins', icon: LucideShieldCheck },
             { label: ui.nav.jobs, path: '/platform/jobs', icon: LucideListChecks },
             { label: ui.nav.security, path: '/security', icon: LucideKeyRound },
           ],

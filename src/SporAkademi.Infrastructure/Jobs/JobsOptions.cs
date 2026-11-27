@@ -43,6 +43,9 @@ public sealed class JobsOptions
     /// <summary>P4-05 (DEC-536): audit entries past the two-year retention, 02:30 UTC, after the anonymization run.</summary>
     public string AuditRetentionCron { get; set; } = "30 2 * * *";
 
+    /// <summary>V1-03 (DEC-685): MFA secrets still under an earlier key move to the current one, 03:00 UTC, after the audit retention run.</summary>
+    public string MfaSecretRotationCron { get; set; } = "0 3 * * *";
+
     /// <summary>One outbox run delivers batches until one is not full, at most this many.</summary>
     public int MaxOutboxBatchesPerRun { get; set; } = 50;
 
@@ -64,6 +67,7 @@ public sealed class JobsOptions
         && IsCron(DuesReminderCron)
         && IsCron(BillingPeriodCloseCron)
         && IsCron(AuditRetentionCron)
+        && IsCron(MfaSecretRotationCron)
         && MaxOutboxBatchesPerRun is > 0 and <= 10_000
         && HeartbeatWarning > TimeSpan.Zero
         && Dashboard.SessionLifetime > TimeSpan.Zero

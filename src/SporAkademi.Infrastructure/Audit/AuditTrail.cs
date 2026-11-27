@@ -35,7 +35,7 @@ internal sealed class AuditTrailBuffer(ICurrentUser currentUser, TimeProvider ti
 
     public SchoolId? CurrentSchool => currentUser.TenantId is { } tenant ? SchoolId.From(tenant) : null;
 
-    public AuditEntry Entry(SchoolId school, AuditRecord record) => new(
+    public AuditEntry Entry(SchoolId? school, AuditRecord record) => new(
         school,
         timeProvider.GetUtcNow(),
         currentUser.UserId,
@@ -73,7 +73,7 @@ internal sealed class AuditTrail(AuditTrailBuffer buffer, AppDbContext db) : IAu
         await db.Database.ExecuteSqlAsync(
             $"""
             INSERT INTO audit.audit_entries (id, tenant_id, occurred_at, user_id, user_role, action, entity_type, entity_id, fields, reason, correlation_id)
-            VALUES ({e.Id}, {e.TenantId.Value}, {e.OccurredAt}, {e.UserId}, {e.UserRole}, {e.Action.ToString()}, {e.EntityType.ToString()},
+            VALUES ({e.Id}, {school.Value}, {e.OccurredAt}, {e.UserId}, {e.UserRole}, {e.Action.ToString()}, {e.EntityType.ToString()},
                     {e.EntityId}, {e.Fields}, {e.Reason}, {e.CorrelationId})
             """,
             cancellationToken);
@@ -184,6 +184,11 @@ internal sealed class PersonalDataAuditInterceptor(AuditTrailBuffer buffer) : Sa
                 change.Action = record.Action;
                 change.Reason = record.Reason;
                 change.Fields.UnionWith(record.Fields);
+            }
+            else if (record.PlatformLevel)
+            {
+                // A record of no school (V1-03, DEC-689): row level security lets only work without a school write it.
+                context.Add(buffer.Entry(null, record));
             }
             else if (buffer.CurrentSchool is { } school)
             {

@@ -96,6 +96,9 @@ public interface IUserRepository
 
     Task<IReadOnlyDictionary<SchoolId, SchoolAdminSummary>> GetFirstSchoolAdminsAsync(IReadOnlyCollection<SchoolId> schoolIds, CancellationToken cancellationToken);
 
+    /// <summary>The Platform Admins (accounts without a school) by last name, then first name, untracked (V1-03, DEC-688).</summary>
+    Task<IReadOnlyList<User>> ListPlatformAdminsAsync(CancellationToken cancellationToken);
+
     Task<IReadOnlySet<Guid>> GetActiveCoachIdsAsync(SchoolId schoolId, IReadOnlyCollection<Guid> coachIds, CancellationToken cancellationToken);
 
     /// <summary>A parent account of <paramref name="schoolId"/> with its tokens, tracked; other roles and schools are not found.</summary>

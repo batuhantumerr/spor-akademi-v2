@@ -12,10 +12,10 @@ namespace SporAkademi.Infrastructure.Audit;
 /// application role cannot change or delete them (DEC-535), and the retention function removes them after two years
 /// (DEC-536).
 /// </summary>
-internal sealed class AuditEntry : ITenantScoped
+internal sealed class AuditEntry
 {
     public AuditEntry(
-        SchoolId tenantId,
+        SchoolId? tenantId,
         DateTimeOffset occurredAt,
         Guid? userId,
         string? userRole,
@@ -47,7 +47,8 @@ internal sealed class AuditEntry : ITenantScoped
 
     public Guid Id { get; private set; }
 
-    public SchoolId TenantId { get; private set; }
+    /// <summary>The school of the record; <c>null</c> for a record that belongs to no school (another Platform Admin, V1-03, DEC-689): only work without a school can read those.</summary>
+    public SchoolId? TenantId { get; private set; }
 
     public DateTimeOffset OccurredAt { get; private set; }
 

@@ -193,6 +193,7 @@ export const enUi: UiText = {
     dashboard: 'Dashboard',
     schools: 'Schools',
     jobs: 'Jobs dashboard',
+    platformAdmins: 'Platform administrators',
     setup: 'School setup',
     sports: 'Sports',
     facilities: 'Facilities',
@@ -325,6 +326,15 @@ export const enUi: UiText = {
       disableText: 'To turn it off, enter the current code from the app or a recovery code.',
       disableConfirm: 'Turn off',
       disabled: 'Two-step verification is off.',
+      recoveryTitle: 'Recovery codes',
+      recoveryText:
+        'If you regenerate the recovery codes, all the old ones stop working. The new codes are shown only once and a notification e-mail is sent.',
+      regenerate: 'Regenerate recovery codes',
+      regenerateTitle: 'Regenerate recovery codes',
+      regenerateText:
+        'To continue, enter the current six-digit code from your authenticator app. A recovery code isn’t accepted here.',
+      regenerateConfirm: 'Generate new codes',
+      regenerated: 'Recovery codes regenerated; the old ones no longer work.',
     },
     reset: {
       action: 'Reset two-step verification',
@@ -339,6 +349,22 @@ export const enUi: UiText = {
       } as Record<string, string>,
       submit: 'Reset',
       done: 'Two-step verification has been reset.',
+    },
+    platformAdmins: {
+      title: 'Platform administrators',
+      description:
+        'Platform administrator accounts. Reset the two-step verification of an administrator who lost their phone here; you can’t reset your own.',
+      caption: 'List of platform administrators',
+      name: 'Name',
+      email: 'E-mail',
+      status: 'Status',
+      mfa: 'Two-step verification',
+      mfaOn: 'On',
+      mfaOff: 'Off (set up at the next sign-in)',
+      self: 'You',
+      selfNote: 'You can’t reset your own account.',
+      empty: 'No platform administrators found.',
+      statuses: { Active: 'Active', Deactivated: 'Inactive' } as Record<string, string>,
     },
   },
   forgotPassword: {
