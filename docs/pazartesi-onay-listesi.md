@@ -118,13 +118,17 @@ Bu repoya eklenen her paket ve imaj tek tabloda. Dokümandaki baz listeden gelen
 
 ## 5. Önerilen (Proposed) kararlar
 
-[karar-gunlugu-v2.md](karar-gunlugu-v2.md)'deki bütün `Proposed` kararlar (138 DEC) ve ADR-0010, alanlara göre. Özetler günlükteki ilk cümleden kısaltılmıştır; tam metin ve gerekçe günlüktedir. DEC-097 ve DEC-098 zaten `Accepted`.
+[karar-gunlugu-v2.md](karar-gunlugu-v2.md)'deki bütün `Proposed` kararlar (143 DEC) ve ADR-0014 – ADR-0017, alanlara göre; ADR-0010 sahip onayıyla (2026-11-10) `Accepted` oldu. Özetler günlükteki ilk cümleden kısaltılmıştır; tam metin ve gerekçe günlüktedir. DEC-097 ve DEC-098 zaten `Accepted`.
 
 ### ADR
 
 | ID | Özet |
 | --- | --- |
-| ADR-0010 | Admin arayüzü UI kütüphanesi: Tailwind CSS v4 + Angular CDK + lucide, grafikler Apache ECharts ([adr/0010-ui-kutuphanesi.md](adr/0010-ui-kutuphanesi.md)). |
+| ADR-0010 | **Accepted (2026-11-10).** Admin arayüzü UI kütüphanesi: Tailwind CSS v4 + Angular CDK + lucide, grafikler Apache ECharts ([adr/0010-ui-kutuphanesi.md](adr/0010-ui-kutuphanesi.md)). |
+| ADR-0014 | **Proposed.** Gerçek verinin barındırma konumu (Türkiye / AB); karar sahipte ([adr/0014-veri-konumu.md](adr/0014-veri-konumu.md)). |
+| ADR-0015 | **Proposed.** Altyapı kodu OpenTofu + `azurerm` ([adr/0015-altyapi-kodu-araci.md](adr/0015-altyapi-kodu-araci.md)). |
+| ADR-0016 | **Proposed.** Entegrasyon event'leri için RabbitMQ ([adr/0016-entegrasyon-event-leri-rabbitmq.md](adr/0016-entegrasyon-event-leri-rabbitmq.md)). |
+| ADR-0017 | **Proposed.** Bildirim tüketicileri ayrı worker'da ([adr/0017-bildirim-worker.md](adr/0017-bildirim-worker.md)). |
 
 #### Altyapı, CI ve imajlar
 
