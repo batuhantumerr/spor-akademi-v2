@@ -441,6 +441,28 @@ public sealed class MfaRotationTests(DatabaseFixture database) : IdentityTest(da
     }
 
     [Fact]
+    public async Task Platform_admins_are_listed_for_the_platform_screen_and_only_to_a_platform_admin()
+    {
+        var school = await SeedSchoolAsync();
+        await SeedUserAsync("school@example.com", UserRole.SchoolAdmin, school);
+        await SeedUserAsync("platform@example.com", UserRole.PlatformAdmin, null);
+        await SeedUserAsync("other@example.com", UserRole.PlatformAdmin, null);
+        var (platform, _) = await EnrolPlatformAdminAsync("platform@example.com");
+
+        var list = await SendAsync(HttpMethod.Get, "/api/v1/platform/admins", platform.AccessToken);
+
+        list.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var admins = (await BodyAsync(list)).EnumerateArray().ToList();
+        admins.Select(a => a.GetProperty("email").GetString()).ShouldBe(["other@example.com", "platform@example.com"], ignoreOrder: true);
+        admins.Single(a => a.GetProperty("email").GetString() == "platform@example.com").GetProperty("mfaEnabled").GetBoolean().ShouldBeTrue();
+        admins.Single(a => a.GetProperty("email").GetString() == "other@example.com").GetProperty("mfaEnabled").GetBoolean().ShouldBeFalse();
+        admins.SelectMany(a => a.EnumerateObject().Select(p => p.Name)).Distinct().ShouldBe(["id", "firstName", "lastName", "email", "status", "mfaEnabled"], ignoreOrder: true);
+        var schoolAdmin = await LoginOkAsync("school@example.com");
+        (await SendAsync(HttpMethod.Get, "/api/v1/platform/admins", schoolAdmin.AccessToken)).StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+        (await Http.GetAsync(new Uri("/api/v1/platform/admins", UriKind.Relative), Ct)).StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
+    }
+
+    [Fact]
     public async Task A_school_scope_cannot_write_an_audit_entry_without_a_school()
     {
         var school = await SeedSchoolAsync();

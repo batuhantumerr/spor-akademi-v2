@@ -9,6 +9,7 @@ import { PageHeaderComponent } from '../../shared/ui/page-header.component';
 import { ToastService } from '../../shared/ui/toast.service';
 import { MfaSetupComponent } from '../auth/mfa-setup.component';
 import { DISABLE_MFA_TITLE_ID, DisableMfaDialog } from './disable-mfa.dialog';
+import { REGENERATE_CODES_TITLE_ID, RegenerateCodesDialog } from './regenerate-codes.dialog';
 
 /**
  * P5-01: the signed-in admin's two-step verification (TOTP). A School Admin turns it on and off; for a Platform Admin it
@@ -71,6 +72,14 @@ import { DISABLE_MFA_TITLE_ID, DisableMfaDialog } from './disable-mfa.dialog';
               </button>
             }
           </div>
+          @if (s.enabled) {
+            <!-- V1-03 (DEC-687): replacing the recovery codes, after a current code from the app. -->
+            <h3 class="mt-6 text-sm font-semibold">{{ text.recoveryTitle }}</h3>
+            <p class="mt-1 text-sm text-muted-foreground">{{ text.recoveryText }}</p>
+            <button type="button" class="btn btn-secondary mt-3" (click)="regenerate()">
+              {{ text.regenerate }}
+            </button>
+          }
         }
       </section>
     }
@@ -110,6 +119,17 @@ export class SecurityPage {
     this.enrolling.set(false);
     this.toasts.success(this.text.enabled);
     this.load();
+  }
+
+  protected async regenerate(): Promise<void> {
+    const ref = this.dialog.open<boolean>(RegenerateCodesDialog, {
+      ariaLabelledBy: REGENERATE_CODES_TITLE_ID,
+      backdropClass: ['bg-slate-900/60'],
+    });
+    if ((await firstValueFrom(ref.closed)) === true) {
+      this.toasts.success(this.text.regenerated);
+      this.load();
+    }
   }
 
   protected async disable(): Promise<void> {

@@ -104,6 +104,13 @@ internal static partial class IdentityEndpoints
             .ProducesProblem(StatusCodes.Status422UnprocessableEntity)
             .ProducesProblem(StatusCodes.Status429TooManyRequests);
 
+        // V1-03 (DEC-688): the Platform Admins, for the screen that resets another one's MFA.
+        app.MapGet("/api/v1/platform/admins", ListPlatformAdmins)
+            .RequireAuthorization(policy => policy.RequireRole(nameof(Role.PlatformAdmin)))
+            .Produces<IReadOnlyList<PlatformAdminSummary>>()
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .ProducesProblem(StatusCodes.Status403Forbidden);
+
         // A lost phone and no recovery code (DEC-605): a Platform Admin takes MFA off another account.
         app.MapPost("/api/v1/platform/users/{userId:guid}/mfa/reset", ResetMfa)
             .RequireAuthorization(policy => policy.RequireRole(nameof(Role.PlatformAdmin)))
@@ -195,6 +202,11 @@ internal static partial class IdentityEndpoints
         ICurrentUser currentUser,
         CancellationToken cancellationToken) =>
         (await handler.Handle(new DisableMfaCommand(currentUser.UserId!.Value, request.Code), cancellationToken)).NoContentOrProblem();
+
+    private static async Task<IResult> ListPlatformAdmins(
+        IQueryHandler<ListPlatformAdminsQuery, IReadOnlyList<PlatformAdminSummary>> handler,
+        CancellationToken cancellationToken) =>
+        (await handler.Handle(new ListPlatformAdminsQuery(), cancellationToken)).OkOrProblem();
 
     private static async Task<IResult> ResetMfa(
         Guid userId,

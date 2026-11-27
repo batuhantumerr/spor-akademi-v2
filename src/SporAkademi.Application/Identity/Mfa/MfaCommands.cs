@@ -187,6 +187,28 @@ internal sealed class RegenerateMfaRecoveryCodesHandler(IUserRepository users, M
 
 // ---- Platform Admin: reset someone's MFA ----------------------------------------------------------------------------
 
+/// <summary>A Platform Admin as the platform screen lists them (V1-03, DEC-688); no hashes, tokens or secrets.</summary>
+public sealed record PlatformAdminSummary(Guid Id, string FirstName, string LastName, string Email, UserStatus Status, bool MfaEnabled);
+
+/// <summary>The Platform Admins, so that one can reset another's two-step verification from the screen (V1-03, DEC-688).</summary>
+public sealed record ListPlatformAdminsQuery : IQuery<IReadOnlyList<PlatformAdminSummary>>;
+
+internal sealed class ListPlatformAdminsHandler(IUserRepository users, ICurrentUser currentUser)
+    : IQueryHandler<ListPlatformAdminsQuery, IReadOnlyList<PlatformAdminSummary>>
+{
+    public async Task<Result<IReadOnlyList<PlatformAdminSummary>>> Handle(ListPlatformAdminsQuery query, CancellationToken cancellationToken)
+    {
+        if (currentUser.Role != Role.PlatformAdmin)
+        {
+            return Result.Failure<IReadOnlyList<PlatformAdminSummary>>(UserErrors.NotFound);
+        }
+
+        var admins = await users.ListPlatformAdminsAsync(cancellationToken);
+        return Result.Success<IReadOnlyList<PlatformAdminSummary>>(
+            [.. admins.Select(u => new PlatformAdminSummary(u.Id.Value, u.FirstName, u.LastName, u.Email.Value, u.Status, u.MfaEnabled))]);
+    }
+}
+
 /// <summary>
 /// A Platform Admin removes another user's MFA (a lost phone and no recovery code, DEC-605). <paramref name="Reason"/> is a
 /// <see cref="MfaResetReason"/> name and goes to the audit log; the user's sessions end and they are told by e-mail.

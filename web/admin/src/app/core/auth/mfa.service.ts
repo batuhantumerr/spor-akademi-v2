@@ -14,6 +14,16 @@ export interface MfaStatus {
   recoveryCodesRemaining: number;
 }
 
+/** A Platform Admin as the platform screen lists them (V1-03). */
+export interface PlatformAdminSummary {
+  id: string;
+  firstName: string;
+  lastName: string;
+  email: string;
+  status: string;
+  mfaEnabled: boolean;
+}
+
 /** Why a Platform Admin resets someone's two-step verification; a fixed list that goes to the audit log. */
 export type MfaResetReason = 'LostDevice' | 'SuspectedCompromise' | 'Other';
 
@@ -39,6 +49,21 @@ export class MfaService {
 
   disable(code: string): Observable<void> {
     return this.http.post<void>('/api/v1/me/mfa/disable', { code });
+  }
+
+  /**
+   * V1-03: replaces the recovery codes after a current code from the authenticator app (a recovery code is refused).
+   * The old codes stop working at once; the new ones are returned once.
+   */
+  regenerateRecoveryCodes(code: string): Observable<string[]> {
+    return this.http
+      .post<{ codes: string[] }>('/api/v1/me/mfa/recovery-codes', { code })
+      .pipe(map((response) => response.codes));
+  }
+
+  /** Platform Admin only: the Platform Admins, so one can reset another's two-step verification (V1-03). */
+  platformAdmins(): Observable<PlatformAdminSummary[]> {
+    return this.http.get<PlatformAdminSummary[]>('/api/v1/platform/admins');
   }
 
   /** Platform Admin only: removes another user's two-step verification (a lost phone). */
